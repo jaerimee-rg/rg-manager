@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchWithAuth } from '../utils/api';
+import { moveItem } from '../utils/reorder';
 import { useAuth } from '../context/AuthContext';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { useIsMobile } from '../hooks/useMediaQuery';
@@ -33,6 +34,7 @@ function Dashboard() {
   const [allAttendance, setAllAttendance] = useState([]);
   const [allStudents, setAllStudents] = useState([]);
   const [attendanceModal, setAttendanceModal] = useState(null);
+  const [draggedIndex, setDraggedIndex] = useState(null);
 
   const getDefaultDateRange = () => {
     const endDate = new Date();
@@ -274,20 +276,34 @@ function Dashboard() {
     return `${month}/${day}(${weekday})`;
   };
 
-  const getAttendanceColor = (count, total) => {
-    if (count === 0) return 'var(--color-gray-200)';
-    const ratio = total > 0 ? count / total : 0;
-    if (ratio >= 0.8) return 'var(--color-success)';
-    if (ratio >= 0.5) return 'var(--color-warning)';
-    return 'var(--color-danger)';
+  const handleDragStart = (e, index) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
   };
 
-  const getAttendanceBgColor = (count, total) => {
-    if (count === 0) return 'var(--color-gray-100)';
-    const ratio = total > 0 ? count / total : 0;
-    if (ratio >= 0.8) return 'var(--color-success-bg)';
-    if (ratio >= 0.5) return 'var(--color-warning-bg)';
-    return 'var(--color-danger-bg)';
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) return;
+    setAttendanceByClass(moveItem(attendanceByClass, draggedIndex, index));
+    setDraggedIndex(index);
+  };
+
+  const handleDragEnd = async () => {
+    if (draggedIndex !== null) {
+      try {
+        const classIds = attendanceByClass.map(item => item.class.id);
+        await fetchWithAuth('/api/classes/reorder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ classIds })
+        });
+      } catch (error) {
+        console.error('순서 업데이트 실패:', error);
+        alert('순서 업데이트에 실패했습니다.');
+        await loadData();
+      }
+    }
+    setDraggedIndex(null);
   };
 
   const handleAttendanceClick = (classItem, date) => {
@@ -340,6 +356,107 @@ function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Attendance by Class */}
+      <div className="card" style={{ marginBottom: 'var(--spacing-lg)' }}>
+        <div className="card-header" style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center' }}>
+          <h3 className="card-title">수업별 출석 현황</h3>
+          <DateRangePicker
+            startDate={startDate}
+            endDate={endDate}
+            onDateChange={(newStartDate, newEndDate) => {
+              setStartDate(newStartDate);
+              setEndDate(newEndDate);
+            }}
+            isMobile={isMobile}
+            label={isMobile ? "기간 선택" : "기간"}
+          />
+        </div>
+
+        {classes.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon">📚</div>
+            <div className="empty-state-title">등록된 수업이 없습니다</div>
+            <div className="empty-state-description">수업을 등록하면 출석 현황을 확인할 수 있습니다.</div>
+          </div>
+        ) : (
+          <>
+            <div className="table-container" style={{ marginTop: 'var(--spacing-lg)' }}>
+              <table style={{ minWidth: '600px' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '40px' }}></th>
+                    <th style={{ minWidth: '120px' }}>수업명</th>
+                    <th style={{ minWidth: '80px', textAlign: 'center' }}>등록</th>
+                    {attendanceByClass.length > 0 && attendanceByClass[0].dailyAttendance.map((day, idx) => (
+                      <th key={idx} style={{ minWidth: '70px', textAlign: 'center' }}>
+                        {formatDate(day.date)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {attendanceByClass.map((item, classIdx) => (
+                    <tr
+                      key={item.class.id}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, classIdx)}
+                      onDragOver={(e) => handleDragOver(e, classIdx)}
+                      onDragEnd={handleDragEnd}
+                      style={{
+                        opacity: draggedIndex === classIdx ? 0.5 : 1,
+                        backgroundColor: draggedIndex === classIdx ? 'var(--color-primary-bg)' : 'transparent'
+                      }}
+                    >
+                      <td>
+                        <span style={{ cursor: 'grab', color: 'var(--color-gray-400)', fontSize: '1rem' }}>⋮⋮</span>
+                      </td>
+                      <td>
+                        <div style={{ fontWeight: 600, color: 'var(--color-gray-900)' }}>{item.class.name}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)' }}>
+                          {item.class.schedule}
+                        </div>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <span className="badge badge-gray">{item.enrolledStudents}명</span>
+                      </td>
+                      {item.dailyAttendance.map((day, dayIdx) => (
+                        <td key={dayIdx} style={{ textAlign: 'center' }}>
+                          <span
+                            onClick={day.count > 0 ? () => handleAttendanceClick(item.class, day.date) : undefined}
+                            title={day.count > 0 ? '클릭하여 출석 학생 보기' : undefined}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: '4px 8px',
+                              borderRadius: 'var(--radius-sm)',
+                              backgroundColor: day.count > 0 ? 'var(--color-primary-bg)' : 'var(--color-gray-100)',
+                              color: day.count > 0 ? 'var(--color-primary)' : 'var(--color-gray-400)',
+                              fontWeight: 600,
+                              fontSize: '0.8125rem',
+                              minWidth: '36px',
+                              cursor: day.count > 0 ? 'pointer' : 'default',
+                              transition: 'opacity 0.2s'
+                            }}
+                            onMouseEnter={day.count > 0 ? (e) => { e.currentTarget.style.opacity = '0.7'; } : undefined}
+                            onMouseLeave={day.count > 0 ? (e) => { e.currentTarget.style.opacity = '1'; } : undefined}
+                          >
+                            {day.count > 0 ? `${day.count}` : '-'}
+                          </span>
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ marginTop: 'var(--spacing-md)', fontSize: '0.8125rem', color: 'var(--color-gray-500)' }}>
+              ⋮⋮ 핸들을 드래그하여 수업 순서를 변경할 수 있습니다.
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2" style={{ marginBottom: 'var(--spacing-lg)' }}>
@@ -677,110 +794,6 @@ function Dashboard() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        )}
-      </div>
-
-      {/* Attendance by Class */}
-      <div className="card">
-        <div className="card-header" style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center' }}>
-          <h3 className="card-title">수업별 출석 현황</h3>
-          <DateRangePicker
-            startDate={startDate}
-            endDate={endDate}
-            onDateChange={(newStartDate, newEndDate) => {
-              setStartDate(newStartDate);
-              setEndDate(newEndDate);
-            }}
-            isMobile={isMobile}
-            label={isMobile ? "기간 선택" : "기간"}
-          />
-        </div>
-
-        {classes.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">📚</div>
-            <div className="empty-state-title">등록된 수업이 없습니다</div>
-            <div className="empty-state-description">수업을 등록하면 출석 현황을 확인할 수 있습니다.</div>
-          </div>
-        ) : (
-          <>
-            <div className="table-container" style={{ marginTop: 'var(--spacing-lg)' }}>
-              <table style={{ minWidth: '600px' }}>
-                <thead>
-                  <tr>
-                    <th style={{ minWidth: '120px' }}>수업명</th>
-                    <th style={{ minWidth: '80px', textAlign: 'center' }}>등록</th>
-                    {attendanceByClass.length > 0 && attendanceByClass[0].dailyAttendance.map((day, idx) => (
-                      <th key={idx} style={{ minWidth: '70px', textAlign: 'center' }}>
-                        {formatDate(day.date)}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {attendanceByClass.map((item, classIdx) => (
-                    <tr key={classIdx}>
-                      <td>
-                        <div style={{ fontWeight: 600, color: 'var(--color-gray-900)' }}>{item.class.name}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)' }}>
-                          {item.class.schedule}
-                        </div>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <span className="badge badge-gray">{item.enrolledStudents}명</span>
-                      </td>
-                      {item.dailyAttendance.map((day, dayIdx) => (
-                        <td key={dayIdx} style={{ textAlign: 'center' }}>
-                          <span
-                            onClick={day.count > 0 ? () => handleAttendanceClick(item.class, day.date) : undefined}
-                            title={day.count > 0 ? '클릭하여 출석 학생 보기' : undefined}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              padding: '4px 8px',
-                              borderRadius: 'var(--radius-sm)',
-                              backgroundColor: getAttendanceBgColor(day.count, item.enrolledStudents),
-                              color: day.count === 0 ? 'var(--color-gray-400)' : getAttendanceColor(day.count, item.enrolledStudents),
-                              fontWeight: 600,
-                              fontSize: '0.8125rem',
-                              minWidth: '36px',
-                              cursor: day.count > 0 ? 'pointer' : 'default',
-                              transition: 'opacity 0.2s'
-                            }}
-                            onMouseEnter={day.count > 0 ? (e) => { e.currentTarget.style.opacity = '0.7'; } : undefined}
-                            onMouseLeave={day.count > 0 ? (e) => { e.currentTarget.style.opacity = '1'; } : undefined}
-                          >
-                            {day.count > 0 ? `${day.count}` : '-'}
-                          </span>
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Legend */}
-            <div className="legend" style={{ marginTop: 'var(--spacing-lg)' }}>
-              <div className="legend-item">
-                <div className="legend-color" style={{ backgroundColor: 'var(--color-success)' }}></div>
-                <span>80% 이상</span>
-              </div>
-              <div className="legend-item">
-                <div className="legend-color" style={{ backgroundColor: 'var(--color-warning)' }}></div>
-                <span>50-80%</span>
-              </div>
-              <div className="legend-item">
-                <div className="legend-color" style={{ backgroundColor: 'var(--color-danger)' }}></div>
-                <span>50% 미만</span>
-              </div>
-              <div className="legend-item">
-                <div className="legend-color" style={{ backgroundColor: 'var(--color-gray-200)' }}></div>
-                <span>출석 없음</span>
-              </div>
-            </div>
-          </>
         )}
       </div>
 

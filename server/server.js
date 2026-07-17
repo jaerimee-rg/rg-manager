@@ -17,6 +17,9 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5001;
 
+// 프록시(Vercel/Render) 뒤에서 클라이언트 IP·프로토콜을 올바르게 인식
+app.set('trust proxy', 1);
+
 // 보안 헤더
 app.use(helmet({
   contentSecurityPolicy: false, // React SPA와 호환
@@ -99,6 +102,11 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/dist/index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`서버가 포트 ${PORT}에서 실행 중입니다.`);
-});
+// Vercel 서버리스 환경에서는 listen 대신 앱을 export하여 함수로 실행
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`서버가 포트 ${PORT}에서 실행 중입니다.`);
+  });
+}
+
+export default app;

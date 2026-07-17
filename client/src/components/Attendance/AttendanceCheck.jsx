@@ -205,6 +205,20 @@ function AttendanceCheck() {
     );
   }, [students, selectedClass]);
 
+  // 현재 수업의 모든 학생이 출석 체크되어 있는지 여부
+  const allChecked =
+    filteredStudents.length > 0 &&
+    filteredStudents.every((student) => checkedStudents.has(student.id));
+
+  const toggleAllAttendance = () => {
+    if (allChecked) {
+      setCheckedStudents(new Set());
+    } else {
+      setCheckedStudents(new Set(filteredStudents.map((student) => student.id)));
+    }
+    setHasChanges(true);
+  };
+
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     const month = date.getMonth() + 1;
@@ -460,9 +474,20 @@ function AttendanceCheck() {
                 {filteredStudents.length}명
               </span>
             </h3>
-            {hasChanges && (
-              <span className="badge badge-warning">변경사항 있음</span>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+              {hasChanges && (
+                <span className="badge badge-warning">변경사항 있음</span>
+              )}
+              {filteredStudents.length > 0 && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={toggleAllAttendance}
+                  data-testid="toggle-all-attendance"
+                >
+                  {allChecked ? '전체 해제' : '전체 출석'}
+                </button>
+              )}
+            </div>
           </div>
 
           {filteredStudents.length === 0 ? (
