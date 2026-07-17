@@ -306,6 +306,28 @@ function Dashboard() {
     setDraggedIndex(null);
   };
 
+  // iOS Safari 등 터치 기기는 HTML5 drag 이벤트를 지원하지 않으므로 터치 이벤트로 처리
+  const handleTouchStart = (index) => {
+    setDraggedIndex(index);
+  };
+
+  const handleTouchMove = (e) => {
+    if (draggedIndex === null) return;
+    const touch = e.touches[0];
+    const target = document.elementFromPoint(touch.clientX, touch.clientY);
+    const row = target && target.closest('tr[data-row-index]');
+    if (!row) return;
+    const index = parseInt(row.dataset.rowIndex, 10);
+    if (!Number.isNaN(index) && index !== draggedIndex) {
+      setAttendanceByClass(moveItem(attendanceByClass, draggedIndex, index));
+      setDraggedIndex(index);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    handleDragEnd();
+  };
+
   const handleAttendanceClick = (classItem, date) => {
     const matchingRecords = allAttendance.filter(
       a => a.classId === classItem.id && a.date === date
@@ -399,6 +421,7 @@ function Dashboard() {
                   {attendanceByClass.map((item, classIdx) => (
                     <tr
                       key={item.class.id}
+                      data-row-index={classIdx}
                       draggable
                       onDragStart={(e) => handleDragStart(e, classIdx)}
                       onDragOver={(e) => handleDragOver(e, classIdx)}
@@ -409,7 +432,25 @@ function Dashboard() {
                       }}
                     >
                       <td>
-                        <span style={{ cursor: 'grab', color: 'var(--color-gray-400)', fontSize: '1rem' }}>⋮⋮</span>
+                        <span
+                          onTouchStart={() => handleTouchStart(classIdx)}
+                          onTouchMove={handleTouchMove}
+                          onTouchEnd={handleTouchEnd}
+                          style={{
+                            cursor: 'grab',
+                            color: 'var(--color-gray-400)',
+                            fontSize: '1rem',
+                            touchAction: 'none',
+                            WebkitUserSelect: 'none',
+                            userSelect: 'none',
+                            WebkitTouchCallout: 'none',
+                            display: 'inline-block',
+                            padding: '12px',
+                            margin: '-12px'
+                          }}
+                        >
+                          ⋮⋮
+                        </span>
                       </td>
                       <td>
                         <div style={{ fontWeight: 600, color: 'var(--color-gray-900)' }}>{item.class.name}</div>

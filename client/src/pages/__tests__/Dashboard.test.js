@@ -107,6 +107,41 @@ describe('Dashboard - 수업별 출석 현황', () => {
     });
   });
 
+  it('터치 드래그(모바일)로 수업 순서를 변경하면 reorder API를 호출한다', async () => {
+    await renderDashboard();
+    const firstHandle = screen.getByText('초급반').closest('tr').querySelector('td span');
+    const secondRow = screen.getByText('고급반').closest('tr');
+
+    // jsdom은 elementFromPoint를 지원하지 않으므로 손가락 아래 요소를 직접 지정
+    document.elementFromPoint = jest.fn(() => secondRow);
+
+    fireEvent.touchStart(firstHandle, { touches: [{ clientX: 10, clientY: 10 }] });
+    fireEvent.touchMove(firstHandle, { touches: [{ clientX: 10, clientY: 60 }] });
+    fireEvent.touchEnd(firstHandle);
+
+    await waitFor(() => {
+      expect(fetchWithAuth).toHaveBeenCalledWith(
+        '/api/classes/reorder',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ classIds: [2, 1] }),
+        })
+      );
+    });
+  });
+
+  it('터치로 누르면 해당 행이 선택 상태(하이라이트)가 된다', async () => {
+    await renderDashboard();
+    const firstRow = screen.getByText('초급반').closest('tr');
+    const firstHandle = firstRow.querySelector('td span');
+
+    fireEvent.touchStart(firstHandle, { touches: [{ clientX: 10, clientY: 10 }] });
+    expect(firstRow.style.opacity).toBe('0.5');
+
+    fireEvent.touchEnd(firstHandle);
+    await waitFor(() => expect(firstRow.style.opacity).toBe('1'));
+  });
+
   it('드래그 중 행 순서가 화면에서 즉시 바뀐다', async () => {
     await renderDashboard();
     const firstRow = screen.getByText('초급반').closest('tr');
