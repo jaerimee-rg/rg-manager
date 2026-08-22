@@ -451,10 +451,10 @@ export const deleteMessage = async (req, res) => {
 };
 
 /**
- * 내가 보낸 답변의 내용을 고친다.
+ * 우리 쪽이 내보낸 답변(내 답변·AI 답변)의 내용을 고친다.
  *
- * 학부모 질문과 AI 답변은 고칠 수 없다 — 상대가 한 말이나 'AI 답변'으로 표시된
- * 문장을 바꾸면 대화 기록이 사실과 달라진다. 그쪽은 삭제만 허용한다.
+ * 학부모 질문은 고칠 수 없다 — 상대가 하지 않은 말이 상대 이름으로 남는다.
+ * 고친 내용은 "(수정됨)" 으로 표시해 원문 그대로가 아님을 남긴다.
  */
 export const updateMessage = async (req, res) => {
   try {
@@ -478,16 +478,23 @@ export const updateMessage = async (req, res) => {
       return res.status(404).json({ error: '메시지를 찾을 수 없습니다.' });
     }
 
-    if (target.role !== 'admin') {
-      return res.status(400).json({ error: '내가 보낸 답변만 수정할 수 있습니다.' });
+    if (target.role !== 'admin' && target.role !== 'bot') {
+      return res.status(400).json({ error: '학부모가 보낸 질문은 수정할 수 없습니다.' });
     }
 
-    const updated = await ChatMessage.updateContent(target.id, message.trim());
+    // AI 답변을 사람이 고쳤다면 그 질문은 처리된 것이므로 미답변에서 뺀다.
+    const markAnswered = target.role === 'bot';
+    const updated = await ChatMessage.updateContent(target.id, message.trim(), { markAnswered });
+
+    if (markAnswered) {
+      await ChatSession.recount(target.sessionId);
+    }
 
     res.json({
       id: updated.id,
       role: updated.role,
       content: updated.content,
+      answered: updated.answered,
       editedAt: updated.editedAt,
       createdAt: updated.createdAt
     });

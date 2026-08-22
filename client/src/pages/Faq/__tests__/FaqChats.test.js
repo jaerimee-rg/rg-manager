@@ -233,14 +233,42 @@ describe('FaqChats — 메시지 수정 / 스크롤', () => {
     });
   };
 
-  it('내가 보낸 답변에만 수정 버튼이 있다', async () => {
+  it('학부모 질문에는 수정 버튼이 없다', async () => {
     await open();
 
-    // 관리자 답변 1건에만 수정 버튼이 붙는다 (학부모 질문에는 없음)
+    // THREAD 는 학부모 질문 1 + 내 답변 1 → 수정 버튼은 내 답변에만
     const editButtons = await screen.findAllByRole('button', { name: '메시지 수정' });
     expect(editButtons).toHaveLength(1);
     // 삭제는 모든 메시지에 있다
     expect(screen.getAllByRole('button', { name: '메시지 삭제' })).toHaveLength(2);
+  });
+
+  it('AI 답변에도 수정 버튼이 있다', async () => {
+    const withBot = {
+      ...THREAD,
+      messages: [
+        THREAD.messages[0],
+        {
+          id: 3,
+          role: 'bot',
+          content: '죄송합니다. 찾지 못했습니다.',
+          answered: false,
+          status: 'no_faq',
+          createdAt: '2026-08-22T10:02:00.000Z',
+          matchedFaqs: []
+        }
+      ]
+    };
+    fetchWithAuth.mockImplementation((url) => {
+      if (url.includes('/messages')) return jsonResponse(withBot);
+      return routeFetch(url);
+    });
+
+    await open();
+
+    // 학부모 질문 1 + AI 답변 1 → AI 답변에만 수정 버튼
+    const editButtons = await screen.findAllByRole('button', { name: '메시지 수정' });
+    expect(editButtons).toHaveLength(1);
   });
 
   it('수정을 누르면 기존 내용이 채워진 입력창이 열린다', async () => {

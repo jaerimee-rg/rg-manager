@@ -58,13 +58,16 @@ class ChatMessage {
     return result.rows.length > 0 ? result.rows[0] : null;
   }
 
-  static async updateContent(messageId, content) {
+  // markAnswered: AI 답변을 사람이 고쳤다면 그 대화는 처리된 것으로 본다.
+  static async updateContent(messageId, content, { markAnswered = false } = {}) {
     const result = await pool.query(
       `UPDATE chat_messages
-       SET content = $1, "editedAt" = $2
-       WHERE id = $3
+       SET content = $1,
+           "editedAt" = $2,
+           answered = CASE WHEN $3 THEN TRUE ELSE answered END
+       WHERE id = $4
        RETURNING *`,
-      [content, new Date().toISOString(), messageId]
+      [content, new Date().toISOString(), markAnswered, messageId]
     );
     return result.rows.length > 0 ? result.rows[0] : null;
   }

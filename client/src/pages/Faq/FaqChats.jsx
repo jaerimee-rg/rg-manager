@@ -432,7 +432,7 @@ function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
                 · {formatDateTime(m.createdAt)}
               </span>
               {m.editedAt && <span className="chat-msg-edited">(수정됨)</span>}
-              {m.role === 'admin' && editingMessageId !== m.id && (
+              {m.role !== 'parent' && editingMessageId !== m.id && (
                 <button
                   type="button"
                   className="chat-msg-action"

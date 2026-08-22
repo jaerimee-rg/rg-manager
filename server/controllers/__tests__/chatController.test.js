@@ -597,18 +597,7 @@ describe('chatController (관리자 대화 조회)', () => {
       await updateMessage(req, res);
 
       expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ error: '내가 보낸 답변만 수정할 수 있습니다.' });
-      expect(ChatMessage.updateContent).not.toHaveBeenCalled();
-    });
-
-    it('AI 답변도 수정할 수 없다', async () => {
-      ChatMessage.getWithOwner.mockResolvedValue({
-        id: 77, sessionId: 5, ownerUserId: 7, role: 'bot'
-      });
-
-      await updateMessage(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ error: '학부모가 보낸 질문은 수정할 수 없습니다.' });
       expect(ChatMessage.updateContent).not.toHaveBeenCalled();
     });
 
@@ -619,10 +608,36 @@ describe('chatController (관리자 대화 조회)', () => {
 
       await updateMessage(req, res);
 
-      expect(ChatMessage.updateContent).toHaveBeenCalledWith(77, '수정한 답변');
+      expect(ChatMessage.updateContent).toHaveBeenCalledWith(77, '수정한 답변', {
+        markAnswered: false
+      });
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({ content: '수정한 답변', editedAt: 'now' })
       );
+      // 내 답변 수정은 집계에 영향이 없다
+      expect(ChatSession.recount).not.toHaveBeenCalled();
+    });
+
+    it('AI 답변도 수정할 수 있다', async () => {
+      ChatMessage.getWithOwner.mockResolvedValue({
+        id: 77, sessionId: 5, ownerUserId: 7, role: 'bot'
+      });
+
+      await updateMessage(req, res);
+
+      expect(ChatMessage.updateContent).toHaveBeenCalledWith(77, '수정한 답변', {
+        markAnswered: true
+      });
+    });
+
+    it('AI 답변을 고치면 미답변에서 빠지도록 집계를 다시 계산한다', async () => {
+      ChatMessage.getWithOwner.mockResolvedValue({
+        id: 77, sessionId: 5, ownerUserId: 7, role: 'bot'
+      });
+
+      await updateMessage(req, res);
+
+      expect(ChatSession.recount).toHaveBeenCalledWith(5);
     });
 
     it('앞뒤 공백은 잘라서 저장한다', async () => {
@@ -633,7 +648,9 @@ describe('chatController (관리자 대화 조회)', () => {
 
       await updateMessage(req, res);
 
-      expect(ChatMessage.updateContent).toHaveBeenCalledWith(77, '수정한 답변');
+      expect(ChatMessage.updateContent).toHaveBeenCalledWith(77, '수정한 답변', {
+        markAnswered: false
+      });
     });
   });
 
