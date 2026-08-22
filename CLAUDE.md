@@ -121,22 +121,30 @@ When modifying forms/lists, ensure mobile view uses:
 - When a class is deleted, it's removed from all student `classIds` arrays
 - Class enrollment managed via PUT requests to `/api/students/:id`
 
-## Deployment (Render)
+## Deployment (Vercel)
 
-**Build Command**:
-```bash
-cd client && rm -rf node_modules package-lock.json && npm install && npm run build && cd ../server && npm install
-```
+Production runs on Vercel at **https://rg-manager.vercel.app**, deployed automatically
+on every push to `main` via the GitHub integration. Render is no longer used.
 
-**Start Command**:
-```bash
-cd server && node server.js
-```
+**How it is wired** (`vercel.json`):
+- `/api/*` → `server/server.js` as a serverless function (`@vercel/node`)
+- everything else → the static React build (`client/dist`)
 
-**Important Files**:
-- `client/.npmrc` - Resolves rollup dependencies on Linux (required for Render)
-- `server/server.js` - Configured to serve static files from `../client/dist`
-- Database file (`attendance.db`) auto-creates on first run
+**Environment variables** (Vercel → Project → Settings → Environment Variables, Production):
+- `DATABASE_URL`, `JWT_SECRET`, `NODE_ENV`
+- `KAKAO_CLIENT_ID`, `KAKAO_CLIENT_SECRET`, `KAKAO_REDIRECT_URI`
+- `APP_URL` — outward URL used for KakaoTalk message links
+- `GEMINI_API_KEY` — FAQ chatbot answers
+
+`APP_URL` and `KAKAO_REDIRECT_URI` must both match the live domain. They are resolved in
+`server/utils/appUrl.js`, which derives `KAKAO_REDIRECT_URI` from `APP_URL` when it is not
+set explicitly. `KAKAO_REDIRECT_URI` must also be registered in the Kakao developer console.
+
+**Notes**:
+- `server/server.js` skips `app.listen` when `process.env.VERCEL` is set and exports the app
+- `initDatabase()` runs on module load, so schema migrations apply on the first cold start
+- There is no migration tool — add `ADD COLUMN IF NOT EXISTS` / `CREATE TABLE IF NOT EXISTS`
+  statements to `server/database.js` so they are safe to re-run
 
 ## Key Patterns & Conventions
 

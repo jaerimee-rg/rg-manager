@@ -21,7 +21,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// 프록시(Vercel/Render) 뒤에서 클라이언트 IP·프로토콜을 올바르게 인식
+// 프록시(Vercel) 뒤에서 클라이언트 IP·프로토콜을 올바르게 인식
 app.set('trust proxy', 1);
 
 // 보안 헤더
