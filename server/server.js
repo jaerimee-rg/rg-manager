@@ -1,3 +1,4 @@
+import './loadEnv.js';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -10,6 +11,8 @@ import attendanceRoutes from './routes/attendance.js';
 import authRoutes from './routes/auth.js';
 import logRoutes from './routes/logs.js';
 import competitionRoutes from './routes/competitions.js';
+import faqRoutes from './routes/faqs.js';
+import chatRoutes from './routes/chat.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -66,6 +69,15 @@ const apiLimiter = rateLimit({
   legacyHeaders: false
 });
 
+// 레이트 리미팅 - 공개 채팅(비로그인)은 더 엄격하게
+const publicChatLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { error: '요청이 많습니다. 잠시 후 다시 시도해주세요.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 // HTTPS 리다이렉션 (프로덕션)
 if (process.env.NODE_ENV === 'production') {
   app.use((req, res, next) => {
@@ -85,6 +97,7 @@ app.get('/api', (req, res) => {
   res.json({ message: '리듬체조 출석 관리 API' });
 });
 
+app.use('/api/chat/public', publicChatLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/signup', authLimiter);
 app.use('/api/auth/kakao', authLimiter);
@@ -96,6 +109,8 @@ app.use('/api/classes', classRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/logs', logRoutes);
 app.use('/api/competitions', competitionRoutes);
+app.use('/api/faqs', faqRoutes);
+app.use('/api/chat', chatRoutes);
 
 // Handle React routing - serve index.html for all non-API routes
 app.get('*', (req, res) => {

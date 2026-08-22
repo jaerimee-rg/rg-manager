@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals';
 import { safeJsonParse } from '../safeJsonParse.js';
 
 describe('safeJsonParse', () => {

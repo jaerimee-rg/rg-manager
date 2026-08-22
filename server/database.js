@@ -233,6 +233,87 @@ const initDatabase = async () => {
       )
     `);
 
+    // FAQ 테이블
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS faqs (
+        id SERIAL PRIMARY KEY,
+        "userId" INTEGER NOT NULL,
+        question TEXT NOT NULL,
+        answer TEXT NOT NULL,
+        "displayOrder" INTEGER DEFAULT 0,
+        "isPublished" BOOLEAN DEFAULT TRUE,
+        "createdAt" TEXT NOT NULL,
+        "updatedAt" TEXT NOT NULL,
+        FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    await client.query('CREATE INDEX IF NOT EXISTS idx_faqs_user ON faqs ("userId", "isPublished")');
+
+    // 학부모 질문 채팅 채널 (사용자당 1개)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS chat_channels (
+        id SERIAL PRIMARY KEY,
+        "userId" INTEGER NOT NULL,
+        "publicId" TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        greeting TEXT,
+        "fallbackMessage" TEXT,
+        "isActive" BOOLEAN DEFAULT TRUE,
+        "createdAt" TEXT NOT NULL,
+        "updatedAt" TEXT NOT NULL,
+        FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    await client.query('CREATE INDEX IF NOT EXISTS idx_chat_channels_user ON chat_channels ("userId")');
+
+    // 학부모 단위 대화 세션
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS chat_sessions (
+        id SERIAL PRIMARY KEY,
+        "channelId" INTEGER NOT NULL,
+        "visitorKey" TEXT NOT NULL,
+        "visitorName" TEXT NOT NULL,
+        "messageCount" INTEGER DEFAULT 0,
+        "unansweredCount" INTEGER DEFAULT 0,
+        "lastMessageAt" TEXT,
+        "createdAt" TEXT NOT NULL,
+        FOREIGN KEY ("channelId") REFERENCES chat_channels(id) ON DELETE CASCADE
+      )
+    `);
+
+    try {
+      await client.query(`
+        ALTER TABLE chat_sessions
+        ADD CONSTRAINT chat_sessions_unique UNIQUE ("channelId", "visitorKey")
+      `);
+    } catch (e) {
+      // constraint가 이미 존재하면 무시
+    }
+
+    await client.query('CREATE INDEX IF NOT EXISTS idx_chat_sessions_channel ON chat_sessions ("channelId", "lastMessageAt" DESC)');
+
+    // 채팅 메시지
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id SERIAL PRIMARY KEY,
+        "sessionId" INTEGER NOT NULL,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        answered BOOLEAN,
+        "matchedFaqIds" TEXT,
+        status TEXT DEFAULT 'ok',
+        "inputTokens" INTEGER,
+        "outputTokens" INTEGER,
+        "latencyMs" INTEGER,
+        "createdAt" TEXT NOT NULL,
+        FOREIGN KEY ("sessionId") REFERENCES chat_sessions(id) ON DELETE CASCADE
+      )
+    `);
+
+    await client.query('CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages ("sessionId", "createdAt")');
+
     // 기본 관리자 계정 생성 (최초 1회만, 기존 계정이 없을 때)
     const adminCheck = await client.query('SELECT * FROM users WHERE username = $1', ['admin']);
     if (adminCheck.rows.length === 0) {

@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAQ 챗봇 학부모 채팅</title>
+<style>
+:root{
+  --color-primary:#3182F6; --color-primary-dark:#1B64DA; --color-primary-bg:#EBF4FF;
+  --color-success:#00C471; --color-success-bg:#E8FAF0;
+  --color-danger:#FF4848; --color-danger-bg:#FFEDED;
+  --color-warning:#FF9F00; --color-warning-bg:#FFF4E0;
+  --color-gray-100:#F2F4F6; --color-gray-200:#E5E8EB; --color-gray-300:#D1D6DB;
+  --color-gray-400:#B0B8C1; --color-gray-500:#8B95A1; --color-gray-600:#6B7684;
+  --color-gray-700:#4E5968; --color-gray-800:#333D4B; --color-gray-900:#191F28;
+  --bg-primary:#F2F4F6; --bg-secondary:#FFFFFF; --bg-tertiary:#F7F8FA;
+  --radius-sm:8px; --radius-md:12px; --radius-lg:16px; --radius-full:9999px;
+  --shadow-md:0 2px 8px rgba(0,0,0,.08); --shadow-lg:0 8px 32px rgba(0,0,0,.18);
+  --font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-family);background:var(--color-gray-200);color:var(--color-gray-900);line-height:1.5;font-size:15px;letter-spacing:-.3px;-webkit-font-smoothing:antialiased;min-height:100vh}
+
+/* 목업 크롬 */
+.mock-bar{background:var(--color-gray-900);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:.8125rem}
+.mock-bar strong{font-weight:700}
+.mock-bar .spacer{flex:1}
+.mock-bar a{color:#9DC4FF;text-decoration:none;font-weight:600}
+.mock-bar a:hover{text-decoration:underline}
+.mock-note{background:#FFF9E6;border-bottom:1px solid #F5E3A8;color:#7A5D00;font-size:.8125rem;padding:8px 16px;text-align:center}
+
+.stage{display:flex;gap:28px;justify-content:center;align-items:flex-start;padding:28px 16px 60px;flex-wrap:wrap}
+
+/* 상태 선택 패널 */
+.panel{background:#fff;border-radius:var(--radius-lg);padding:20px;width:280px;box-shadow:var(--shadow-md)}
+.panel h3{font-size:.9375rem;font-weight:700;margin-bottom:4px}
+.panel p{font-size:.8125rem;color:var(--color-gray-500);margin-bottom:14px;line-height:1.6}
+.state-btn{display:block;width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--color-gray-200);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:8px;cursor:pointer;font:inherit}
+.state-btn:hover{border-color:var(--color-primary)}
+.state-btn.on{background:var(--color-primary-bg);border-color:var(--color-primary)}
+.state-btn .t{font-weight:700;font-size:.875rem;display:block}
+.state-btn .d{font-size:.75rem;color:var(--color-gray-500);display:block;margin-top:2px}
+.panel .divider{height:1px;background:var(--color-gray-100);margin:16px 0}
+.tip{font-size:.75rem;color:var(--color-gray-500);line-height:1.7}
+.tip code{background:var(--color-gray-100);padding:1px 5px;border-radius:4px;font-size:.7rem}
+
+/* 휴대폰 프레임 */
+.phone{width:390px;height:800px;background:#000;border-radius:44px;padding:11px;box-shadow:var(--shadow-lg);flex-shrink:0}
+.screen{width:100%;height:100%;background:var(--bg-primary);border-radius:34px;overflow:hidden;display:flex;flex-direction:column;position:relative}
+.statusbar{background:#fff;padding:10px 22px 4px;display:flex;justify-content:space-between;font-size:.75rem;font-weight:600;color:var(--color-gray-800)}
+.urlbar{background:#fff;padding:4px 14px 10px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--color-gray-100)}
+.urlbar .u{flex:1;background:var(--color-gray-100);border-radius:var(--radius-full);padding:6px 12px;font-size:.6875rem;color:var(--color-gray-600);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 채팅 헤더 */
+.chat-header{background:#fff;padding:14px 18px;border-bottom:1px solid var(--color-gray-100)}
+.chat-header .title{font-size:1.0625rem;font-weight:700;display:flex;align-items:center;gap:8px}
+.chat-header .sub{font-size:.75rem;color:var(--color-gray-500);margin-top:3px}
+.badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:var(--radius-full);font-size:.6875rem;font-weight:600}
+.badge-primary{background:var(--color-primary-bg);color:var(--color-primary)}
+.badge-gray{background:var(--color-gray-100);color:var(--color-gray-600)}
+
+/* 메시지 영역 */
+.messages{flex:1;min-height:0;overflow-y:auto;padding:18px 16px 8px;display:flex;flex-direction:column;gap:14px}
+.day{align-self:center;background:rgba(0,0,0,.06);color:var(--color-gray-600);font-size:.6875rem;font-weight:600;padding:4px 12px;border-radius:var(--radius-full)}
+.row{display:flex;flex-direction:column;max-width:80%}
+.row.bot{align-self:flex-start}
+.row.me{align-self:flex-end;align-items:flex-end}
+.who{font-size:.6875rem;color:var(--color-gray-500);margin-bottom:4px;display:flex;align-items:center;gap:5px}
+.avatar{width:18px;height:18px;border-radius:50%;background:var(--color-primary);color:#fff;font-size:.5625rem;display:inline-flex;align-items:center;justify-content:center;font-weight:700}
+.bubble{padding:11px 14px;border-radius:var(--radius-lg);font-size:.9375rem;line-height:1.55;white-space:pre-wrap;word-break:break-word;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.row.bot .bubble{background:#fff;border-top-left-radius:4px;color:var(--color-gray-900)}
+.row.me .bubble{background:var(--color-primary);color:#fff;border-top-right-radius:4px}
+.row.fallback .bubble{background:var(--color-warning-bg);border:1px solid #F5E3A8;color:#7A5D00}
+.time{font-size:.625rem;color:var(--color-gray-400);margin-top:4px}
+
+/* 추천 질문 */
+.suggest{display:flex;flex-direction:column;gap:7px;align-self:flex-start;max-width:88%}
+.suggest .label{font-size:.6875rem;color:var(--color-gray-500);font-weight:600}
+.sug{background:#fff;border:1px solid var(--color-gray-200);color:var(--color-gray-800);border-radius:var(--radius-full);padding:9px 14px;font-size:.8125rem;font-weight:600;cursor:pointer;font-family:inherit;text-align:left}
+.sug:hover{border-color:var(--color-primary);color:var(--color-primary)}
+
+/* 타이핑 */
+.typing{display:flex;gap:4px;padding:14px}
+.typing i{width:6px;height:6px;border-radius:50%;background:var(--color-gray-400);animation:blink 1.2s infinite}
+.typing i:nth-child(2){animation-delay:.2s}
+.typing i:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,60%,100%{opacity:.3}30%{opacity:1}}
+
+/* 입력창 */
+.composer{background:#fff;border-top:1px solid var(--color-gray-100);padding:10px 12px 14px;flex-shrink:0}
+.composer .box{display:flex;gap:8px;align-items:flex-end}
+.composer textarea{flex:1;border:1px solid var(--color-gray-200);border-radius:var(--radius-lg);padding:11px 14px;font:inherit;font-size:.9375rem;resize:none;height:44px;max-height:100px;line-height:1.4;font-family:inherit}
+.composer textarea:focus{outline:none;border-color:var(--color-primary)}
+.send{width:44px;height:44px;border-radius:50%;border:none;background:var(--color-primary);color:#fff;font-size:1.1rem;cursor:pointer;flex-shrink:0}
+.send:disabled{background:var(--color-gray-300);cursor:not-allowed}
+.composer .meta{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-top:7px;padding:0 4px}
+.notice{flex:1;font-size:.625rem;color:var(--color-gray-400);line-height:1.4}
+.counter{font-size:.6875rem;color:var(--color-gray-400);flex-shrink:0;margin-left:8px}
+.counter.over{color:var(--color-danger);font-weight:700}
+
+
+/* 입장 화면 (대화명 입력) */
+.entry{flex:1;display:flex;flex-direction:column;justify-content:center;padding:28px 22px;gap:0;overflow-y:auto}
+.entry-card{background:#fff;border-radius:var(--radius-lg);padding:24px 20px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.entry-emoji{font-size:2rem;margin-bottom:10px}
+.entry-title{font-size:1.1875rem;font-weight:700;margin-bottom:6px}
+.entry-desc{font-size:.875rem;color:var(--color-gray-600);line-height:1.6;margin-bottom:20px}
+.entry-label{display:block;font-size:.8125rem;font-weight:700;color:var(--color-gray-700);margin-bottom:6px}
+.entry-label .req{color:var(--color-danger)}
+#nameInput{width:100%;padding:13px 14px;border:1px solid var(--color-gray-300);border-radius:var(--radius-md);font:inherit;font-size:.9375rem;font-family:inherit}
+#nameInput:focus{outline:none;border-color:var(--color-primary)}
+.entry-hint{font-size:.75rem;color:var(--color-gray-500);line-height:1.6;margin-top:8px}
+.entry-err{font-size:.75rem;color:var(--color-danger);font-weight:600;margin-top:8px;min-height:16px}
+.entry-btn{width:100%;margin-top:6px;padding:14px;border:none;border-radius:var(--radius-md);background:var(--color-primary);color:#fff;font:inherit;font-size:.9375rem;font-weight:700;cursor:pointer}
+.entry-btn:hover:not(:disabled){background:var(--color-primary-dark)}
+.entry-btn:disabled{background:var(--color-gray-300);cursor:not-allowed}
+.entry-note{font-size:.6875rem;color:var(--color-gray-400);line-height:1.5;margin-top:14px;text-align:center}
+
+/* 빈/오류 상태 */
+.state-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 32px;text-align:center;gap:10px}
+.state-screen .emoji{font-size:2.5rem}
+.state-screen .t{font-size:1.0625rem;font-weight:700}
+.state-screen .d{font-size:.875rem;color:var(--color-gray-500);line-height:1.6}
+.hidden{display:none !important}
+
+/* ── 실제 모바일 대응: 휴대폰 프레임을 벗고 전체 화면으로 ── */
+@media (max-width: 900px){
+  .stage{flex-direction:column;align-items:stretch;gap:0;padding:0}
+  .panel{width:100%;border-radius:0;order:2;box-shadow:none;border-top:1px solid var(--color-gray-200);padding:16px}
+  .panel h3{font-size:.875rem}
+  .panel p{margin-bottom:10px}
+  .state-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .state-btn{margin-bottom:0}
+  .phone{order:1;width:100%;height:auto;min-height:70vh;min-height:70dvh;background:none;border-radius:0;padding:0;box-shadow:none}
+  .screen{border-radius:0;min-height:70vh;min-height:70dvh}
+  .statusbar{display:none}
+  .urlbar{padding:8px 12px}
+  .messages{padding:14px 12px 6px}
+  .row{max-width:86%}
+  .mock-bar{font-size:.75rem;padding:8px 12px;gap:8px}
+  .mock-note{font-size:.75rem;text-align:left;line-height:1.5}
+}
+@media (max-width: 400px){
+  .row{max-width:90%}
+  .bubble{font-size:.875rem}
+  .composer{padding:8px 10px calc(12px + env(safe-area-inset-bottom))}
+}
+</style>
+</head>
+<body>
+
+<div class="mock-bar">
+  <strong>FAQ 챗봇 목업</strong>
+  <span>학부모 화면 (공개 링크 · 로그인 불필요)</span>
+  <div class="spacer"></div>
+  <a href="./admin.html">← 관리자 화면 목업</a>
+</div>
+<div class="mock-note">실제 동작하지 않는 화면 목업입니다. 답변은 미리 넣어둔 예시 FAQ로 매칭되며 AI 호출은 이루어지지 않습니다.</div>
+
+<div class="stage">
+  <!-- 상태 패널 -->
+  <div class="panel">
+    <h3>화면 상태</h3>
+    <p>학부모가 링크로 접속했을 때 나올 수 있는 4가지 상태입니다.</p>
+    <div class="state-grid">
+    <button class="state-btn on" onclick="setState('normal',this)">
+      <span class="t">① 정상</span><span class="d">대화명 입력 → 질문·답변 (누르면 처음부터)</span>
+    </button>
+    <button class="state-btn" onclick="setState('empty',this)">
+      <span class="t">② 준비 중</span><span class="d">공개 FAQ 0건 — AI 호출 없이 안내</span>
+    </button>
+    <button class="state-btn" onclick="setState('inactive',this)">
+      <span class="t">③ 접수 중단</span><span class="d">관리자가 채널을 비활성화</span>
+    </button>
+    <button class="state-btn" onclick="setState('notfound',this)">
+      <span class="t">④ 잘못된 링크</span><span class="d">존재하지 않는 주소 (404)</span>
+    </button>
+    </div>
+
+    <div class="divider"></div>
+    <div class="tip">
+      <strong>직접 해보세요</strong><br>
+      · 대화명을 입력하고 시작해 보세요<br>
+      · 추천 질문을 눌러보세요<br>
+      · <code>보강</code>, <code>준비물</code>, <code>참가비</code> 를 물어보면 답변합니다<br>
+      · 그 외 질문(예: <code>우리 아이 몇 등이에요?</code>)은 <b>안내 문구</b>가 나옵니다<br>
+      · 500자를 넘기면 전송이 막힙니다
+    </div>
+  </div>
+
+  <!-- 휴대폰 -->
+  <div class="phone">
+    <div class="screen">
+      <div class="statusbar"><span>9:41</span><span>■■■ ⚡ 100%</span></div>
+      <div class="urlbar"><span>🔒</span><div class="u">rg-manager.app/chat/K3jd82nfAsdk29fjLm3xQw</div></div>
+
+      <!-- ① 정상 -->
+      <!-- ①-a 입장: 대화명 입력 -->
+      <div id="viewEntry" class="entry">
+        <div class="entry-card">
+          <div class="entry-emoji">🤸</div>
+          <div class="entry-title">리듬체조 문의</div>
+          <div class="entry-desc">등록된 FAQ를 바탕으로 AI가 답변해 드려요.<br>대화명을 입력하고 시작해 주세요.</div>
+          <label class="entry-label" for="nameInput">대화명 <span class="req">*</span></label>
+          <input id="nameInput" type="text" maxlength="20" placeholder="예) 김OO 어머님" oninput="onName()" onkeydown="if(event.key==='Enter')startChat()">
+          <div class="entry-hint">실명 대신 “○○ 어머님”처럼 알아보기 쉬운 표시명을 권장합니다. 관리자 화면에 이 이름으로 표시됩니다.</div>
+          <div class="entry-err" id="nameErr"></div>
+          <button class="entry-btn" id="startBtn" onclick="startChat()" disabled>질문 시작하기</button>
+          <div class="entry-note">입력하신 내용은 학원 관리자에게 전달·저장됩니다.</div>
+        </div>
+      </div>
+
+      <!-- ① 채팅 -->
+      <div id="viewChat" style="display:none;flex-direction:column;flex:1;min-height:0">
+        <div class="chat-header">
+          <div class="title">리듬체조 문의 <span class="badge badge-primary">AI 자동 응답</span></div>
+          <div class="sub" id="chatSub">등록된 FAQ를 바탕으로 답변해 드려요</div>
+        </div>
+
+        <div class="messages" id="messages">
+          <div class="day">2026년 8월 22일</div>
+          <div class="row bot">
+            <div class="who"><span class="avatar">AI</span> 안내 도우미</div>
+            <div class="bubble">안녕하세요! 궁금한 점을 남겨주시면 등록된 FAQ를 바탕으로 안내해 드립니다.</div>
+            <div class="time">오전 9:40</div>
+          </div>
+          <div class="suggest" id="suggest">
+            <span class="label">이런 질문을 많이 하셨어요</span>
+            <button class="sug" onclick="ask('토요일 수업은 몇 시인가요?')">토요일 수업은 몇 시인가요?</button>
+            <button class="sug" onclick="ask('결석하면 보강이 되나요?')">결석하면 보강이 되나요?</button>
+            <button class="sug" onclick="ask('수업 준비물이 뭔가요?')">수업 준비물이 뭔가요?</button>
+          </div>
+        </div>
+
+        <div class="composer">
+          <div class="box">
+            <textarea id="input" placeholder="궁금한 점을 입력해 주세요" oninput="onInput()" onkeydown="onKey(event)"></textarea>
+            <button class="send" id="sendBtn" onclick="send()" disabled>↑</button>
+          </div>
+          <div class="meta">
+            <span class="notice">AI가 등록된 FAQ만 참고해 답변합니다. 입력하신 내용은 학원 관리자에게 전달·저장됩니다.</span>
+            <span class="counter" id="counter">0/500</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ② 준비 중 -->
+      <div id="viewEmpty" class="state-screen hidden">
+        <div class="emoji">🛠️</div>
+        <div class="t">준비 중입니다</div>
+        <div class="d">아직 등록된 FAQ가 없어요.<br>궁금한 점은 담당 선생님께 직접 문의해 주세요.</div>
+      </div>
+
+      <!-- ③ 접수 중단 -->
+      <div id="viewInactive" class="state-screen hidden">
+        <div class="emoji">💤</div>
+        <div class="t">현재 문의를 받고 있지 않습니다</div>
+        <div class="d">문의 접수가 일시 중단되었습니다.<br>담당 선생님께 직접 연락해 주세요.</div>
+      </div>
+
+      <!-- ④ 404 -->
+      <div id="viewNotFound" class="state-screen hidden">
+        <div class="emoji">🔍</div>
+        <div class="t">채팅방을 찾을 수 없습니다</div>
+        <div class="d">주소가 정확한지 확인해 주세요.<br>링크가 변경되었을 수 있습니다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* 목업용 FAQ 세트 — 실제로는 서버가 프롬프트에 넣어 AI가 판단합니다 */
+const FAQS = [
+  {id:1, keys:['토요일','토요','수업 시간','몇 시','시간'],
+   a:'토요일 초등부 수업은 오전 10시부터 11시 30분까지입니다.\n유치부는 오전 9시부터 9시 50분까지 진행합니다.'},
+  {id:7, keys:['보강','결석','빠지'],
+   a:'결석 시 같은 주 내 1회 보강이 가능합니다.\n결석 전날까지 담당 선생님께 미리 알려주세요.'},
+  {id:12, keys:['참가비','대회비','납부','언제 내'],
+   a:'대회 참가비는 참가 확정 후 대회 2주 전까지 납부해 주시면 됩니다.\n계좌는 개별 안내드립니다.'},
+  {id:15, keys:['준비물','챙길','가져'],
+   a:'레오타드, 무릎 보호대, 개인 물통을 준비해 주세요.\n수구(볼·리본)는 학원에서 대여해 드립니다.'}
+];
+const FALLBACK = '죄송합니다. 등록된 FAQ에서 관련 내용을 찾지 못했습니다. 자세한 내용은 담당 선생님께 문의해 주세요.';
+
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function now(){const d=new Date();const h=d.getHours();const m=String(d.getMinutes()).padStart(2,'0');
+  return (h<12?'오전 ':'오후 ')+((h%12)||12)+':'+m;}
+
+function match(q){
+  const text = q.replace(/\s/g,'');
+  for (const f of FAQS){ if (f.keys.some(k=>text.includes(k.replace(/\s/g,'')))) return f; }
+  return null;
+}
+
+function scrollBottom(){const m=document.getElementById('messages');m.scrollTop=m.scrollHeight;}
+
+function addMe(text){
+  const m=document.getElementById('messages');
+  m.insertAdjacentHTML('beforeend',
+    '<div class="row me"><div class="who">'+esc(visitorName || '나')+'</div>'
+    +'<div class="bubble">'+esc(text)+'</div><div class="time">'+now()+'</div></div>');
+  scrollBottom();
+}
+
+function addTyping(){
+  const m=document.getElementById('messages');
+  m.insertAdjacentHTML('beforeend',
+    '<div class="row bot" id="typing"><div class="who"><span class="avatar">AI</span> 답변을 작성하고 있어요</div>'
+    +'<div class="bubble typing"><i></i><i></i><i></i></div></div>');
+  scrollBottom();
+}
+
+function addBot(text, fallback, faqId){
+  const t=document.getElementById('typing'); if(t) t.remove();
+  const m=document.getElementById('messages');
+  m.insertAdjacentHTML('beforeend',
+    '<div class="row bot'+(fallback?' fallback':'')+'">'
+    +'<div class="who"><span class="avatar">AI</span> 안내 도우미</div>'
+    +'<div class="bubble">'+esc(text)+'</div>'
+    +'<div class="time">'+now()+(faqId?' · FAQ #'+faqId+' 기준':'')+'</div></div>');
+  scrollBottom();
+}
+
+let visitorName = '';
+let started = false;
+const INITIAL_MESSAGES = null; // 로드 후 채워짐
+
+function onName(){
+  const v = document.getElementById('nameInput').value.trim();
+  document.getElementById('startBtn').disabled = v.length === 0;
+  document.getElementById('nameErr').textContent = '';
+}
+
+function startChat(){
+  const v = document.getElementById('nameInput').value.trim();
+  const err = document.getElementById('nameErr');
+  if (!v){ err.textContent = '대화명을 입력해 주세요.'; return; }
+  if (v.length > 20){ err.textContent = '대화명은 20자 이내로 입력해 주세요.'; return; }
+  visitorName = v;
+  started = true;
+  document.getElementById('viewEntry').style.display = 'none';
+  document.getElementById('viewChat').style.display = 'flex';
+  const label = /님$/.test(v) ? v : v + '님';
+  document.getElementById('chatSub').textContent = label + '으로 대화 중 · 등록된 FAQ 기준으로 안내드려요';
+  document.getElementById('input').focus();
+}
+
+function resetChat(){
+  started = false;
+  visitorName = '';
+  busy = false;
+  document.getElementById('messages').innerHTML = window.__initialMessages;
+  document.getElementById('input').value = '';
+  document.getElementById('nameInput').value = '';
+  document.getElementById('nameErr').textContent = '';
+  document.getElementById('startBtn').disabled = true;
+  document.getElementById('chatSub').textContent = '등록된 FAQ를 바탕으로 답변해 드려요';
+  onInput();
+  document.getElementById('viewChat').style.display = 'none';
+  document.getElementById('viewEntry').style.display = 'flex';
+}
+
+let busy = false;
+function ask(text){
+  if (busy) return;
+  const sug = document.getElementById('suggest');
+  if (sug) sug.remove();
+  busy = true;
+  document.getElementById('sendBtn').disabled = true;
+  addMe(text);
+  addTyping();
+  setTimeout(()=>{
+    const hit = match(text);
+    if (hit) addBot(hit.a, false, hit.id);
+    else addBot(FALLBACK, true, null);
+    busy = false;
+    onInput();
+  }, 1100);
+}
+
+function send(){
+  const el = document.getElementById('input');
+  const v = el.value.trim();
+  if (!v || v.length > 500) return;
+  el.value = '';
+  onInput();
+  ask(v);
+}
+
+function onInput(){
+  const el = document.getElementById('input');
+  const len = el.value.length;
+  const c = document.getElementById('counter');
+  c.textContent = len + '/500';
+  c.classList.toggle('over', len > 500);
+  document.getElementById('sendBtn').disabled = busy || len === 0 || len > 500;
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+}
+
+function onKey(e){
+  if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); send(); }
+}
+
+function setState(s, btn){
+  document.querySelectorAll('.state-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  ['viewEmpty','viewInactive','viewNotFound'].forEach(id=>{
+    document.getElementById(id).classList.add('hidden');
+  });
+  document.getElementById('viewEntry').style.display = 'none';
+  document.getElementById('viewChat').style.display = 'none';
+
+  if (s === 'normal'){ resetChat(); return; }
+  const map = {empty:'viewEmpty', inactive:'viewInactive', notfound:'viewNotFound'};
+  document.getElementById(map[s]).classList.remove('hidden');
+}
+
+// 초기 메시지 보관 (상태 ① 재선택 시 복원)
+window.__initialMessages = document.getElementById('messages').innerHTML;
+</script>
+</body>
+</html>

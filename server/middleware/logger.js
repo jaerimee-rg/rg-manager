@@ -68,6 +68,16 @@ const saveLog = async (req, action, target, responseData) => {
       details = `대회명: ${req.body.name}`;
     } else if (action === 'DELETE_COMPETITION' && target) {
       details = `ID: ${target}`;
+    } else if (action === 'CREATE_FAQ' && responseData) {
+      details = `질문: ${responseData.question}`;
+    } else if (action === 'UPDATE_FAQ' && req.body) {
+      details = `질문: ${req.body.question}`;
+    } else if (action === 'DELETE_FAQ' && target) {
+      details = `ID: ${target}`;
+    } else if (action === 'UPDATE_CHAT_CHANNEL' && req.body) {
+      details = `채널명: ${req.body.name}`;
+    } else if (action === 'DELETE_CHAT_SESSION' && req.params) {
+      details = `세션 ID: ${req.params.id}`;
     } else if (action === 'ADD_COMPETITION_STUDENT' && req.body) {
       details = `학생 ID: ${req.body.studentId}`;
     } else if (action === 'REMOVE_COMPETITION_STUDENT' && req.params) {

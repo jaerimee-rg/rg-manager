@@ -18,6 +18,8 @@ import StudentCompetitions from './pages/StudentCompetitions';
 import KakaoCallback from './pages/KakaoCallback';
 import RegisterName from './pages/RegisterName';
 import Settings from './pages/Settings';
+import FaqList from './pages/Faq/FaqList';
+import PublicChat from './pages/PublicChat';
 
 // Admin components
 import AdminRoute from './components/admin/AdminRoute';
@@ -29,6 +31,7 @@ import AdminAttendance from './pages/admin/AdminAttendance';
 import AdminUsers from './pages/admin/AdminUsers';
 import AdminLogs from './pages/admin/AdminLogs';
 import AdminNotifications from './pages/admin/AdminNotifications';
+import AdminFaq from './pages/admin/AdminFaq';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -98,9 +101,13 @@ function App() {
   // 관리자 페이지 여부 확인
   const isAdminPage = location.pathname.startsWith('/admin');
 
+  // 학부모 공개 채팅은 앱 헤더 없이 단독 화면으로 보여준다
+  const isPublicChatPage = location.pathname.startsWith('/chat/');
+
   if (!user) {
     return (
       <Routes>
+        <Route path="/chat/:publicId" element={<PublicChat />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Navigate to="/login" />} />
         <Route path="/oauth/kakao/callback" element={<KakaoCallback />} />
@@ -118,8 +125,17 @@ function App() {
     { path: '/attendance', label: '출석 체크', icon: '✓' },
     { path: '/student-attendance', label: '학생별 출석', icon: '📋' },
     { path: '/student-competitions', label: '학생별 대회', icon: '🎖️' },
+    { path: '/faq', label: 'FAQ', icon: '💬' },
   ];
 
+
+  if (isPublicChatPage) {
+    return (
+      <Routes>
+        <Route path="/chat/:publicId" element={<PublicChat />} />
+      </Routes>
+    );
+  }
 
   // 관리자 페이지일 경우 별도 레이아웃 사용
   if (isAdminPage) {
@@ -142,6 +158,7 @@ function App() {
           <Route path="users" element={<AdminUsers />} />
           <Route path="logs" element={<AdminLogs />} />
           <Route path="notifications" element={<AdminNotifications />} />
+          <Route path="faq" element={<AdminFaq />} />
         </Route>
         <Route path="*" element={<Navigate to="/admin/students" />} />
       </Routes>
@@ -257,6 +274,9 @@ function App() {
           <Route path="/attendance" element={<ProtectedRoute><AttendanceCheck /></ProtectedRoute>} />
           <Route path="/student-attendance" element={<ProtectedRoute><StudentAttendance /></ProtectedRoute>} />
           <Route path="/student-competitions" element={<ProtectedRoute><StudentCompetitions /></ProtectedRoute>} />
+          <Route path="/faq" element={<ProtectedRoute><FaqList /></ProtectedRoute>} />
+          <Route path="/faq/chats" element={<ProtectedRoute><FaqList initialTab="chats" /></ProtectedRoute>} />
+          <Route path="/chat/:publicId" element={<PublicChat />} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
