@@ -35,6 +35,15 @@ const THREAD = {
       status: 'ok',
       createdAt: '2026-08-22T10:00:00.000Z',
       matchedFaqs: []
+    },
+    {
+      id: 2,
+      role: 'admin',
+      content: '네 가능합니다',
+      answered: true,
+      status: 'ok',
+      createdAt: '2026-08-22T10:01:00.000Z',
+      matchedFaqs: []
     }
   ]
 };
@@ -49,6 +58,7 @@ const routeFetch = (url) => {
   if (url.includes('/messages')) return jsonResponse(THREAD);
   if (url.includes('/viewing')) return jsonResponse({ adminViewingAt: 'now' });
   if (url.endsWith('/ai')) return jsonResponse({ aiEnabled: false });
+  if (url.includes('/messages/')) return jsonResponse({ id: 2, content: '고친 답변', editedAt: 'now' });
   return jsonResponse({});
 };
 
@@ -205,5 +215,107 @@ describe('FaqChats — 대화별 AI 끄기 / 메시지 삭제', () => {
     expect(
       fetchWithAuth.mock.calls.some(([u, o]) => o?.method === 'DELETE' && u.includes('/messages/'))
     ).toBe(false);
+  });
+});
+
+describe('FaqChats — 메시지 수정 / 스크롤', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    window.confirm = jest.fn(() => true);
+    fetchWithAuth.mockImplementation((url) => routeFetch(url));
+  });
+
+  const open = async () => {
+    render(<FaqChats channel={channel} onToggleAi={jest.fn().mockResolvedValue(true)} />);
+    const item = await screen.findByText('민수 어머니');
+    await act(async () => {
+      fireEvent.click(item);
+    });
+  };
+
+  it('내가 보낸 답변에만 수정 버튼이 있다', async () => {
+    await open();
+
+    // 관리자 답변 1건에만 수정 버튼이 붙는다 (학부모 질문에는 없음)
+    const editButtons = await screen.findAllByRole('button', { name: '메시지 수정' });
+    expect(editButtons).toHaveLength(1);
+    // 삭제는 모든 메시지에 있다
+    expect(screen.getAllByRole('button', { name: '메시지 삭제' })).toHaveLength(2);
+  });
+
+  it('수정을 누르면 기존 내용이 채워진 입력창이 열린다', async () => {
+    await open();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '메시지 수정' }));
+    });
+
+    expect(screen.getByLabelText('답변 수정')).toHaveValue('네 가능합니다');
+  });
+
+  it('고친 내용을 PATCH 로 저장한다', async () => {
+    await open();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '메시지 수정' }));
+    });
+    fireEvent.change(screen.getByLabelText('답변 수정'), { target: { value: '고친 답변' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    });
+
+    const call = fetchWithAuth.mock.calls.find(([, o]) => o?.method === 'PATCH');
+    expect(call[0]).toBe(`/api/chat/sessions/${SESSION.id}/messages/2`);
+    expect(JSON.parse(call[1].body)).toEqual({ message: '고친 답변' });
+  });
+
+  it('취소하면 저장하지 않는다', async () => {
+    await open();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '메시지 수정' }));
+    });
+    fireEvent.change(screen.getByLabelText('답변 수정'), { target: { value: '고친 답변' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '취소' }));
+    });
+
+    expect(fetchWithAuth.mock.calls.some(([, o]) => o?.method === 'PATCH')).toBe(false);
+    expect(screen.queryByLabelText('답변 수정')).not.toBeInTheDocument();
+  });
+
+  it('빈 내용으로는 저장할 수 없다', async () => {
+    await open();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '메시지 수정' }));
+    });
+    fireEvent.change(screen.getByLabelText('답변 수정'), { target: { value: '   ' } });
+
+    expect(screen.getByRole('button', { name: '저장' })).toBeDisabled();
+  });
+
+  it('대화를 열면 메시지 목록을 맨 아래로 내린다', async () => {
+    await open();
+
+    const scroller = document.querySelector('.chat-thread-scroll');
+    expect(scroller).toBeInTheDocument();
+    // jsdom 은 레이아웃이 없어 scrollHeight 가 0이므로, 스크롤 시도 자체를 확인한다
+    expect(scroller.scrollTop).toBe(scroller.scrollHeight);
+  });
+
+  it('수정된 답변에는 수정됨 표시가 붙는다', async () => {
+    const edited = {
+      ...THREAD,
+      messages: [{ ...THREAD.messages[1], editedAt: '2026-08-22T10:05:00.000Z' }]
+    };
+    fetchWithAuth.mockImplementation((url) => {
+      if (url.includes('/messages')) return jsonResponse(edited);
+      return routeFetch(url);
+    });
+
+    await open();
+
+    expect(await screen.findByText('(수정됨)')).toBeInTheDocument();
   });
 });

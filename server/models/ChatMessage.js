@@ -58,6 +58,17 @@ class ChatMessage {
     return result.rows.length > 0 ? result.rows[0] : null;
   }
 
+  static async updateContent(messageId, content) {
+    const result = await pool.query(
+      `UPDATE chat_messages
+       SET content = $1, "editedAt" = $2
+       WHERE id = $3
+       RETURNING *`,
+      [content, new Date().toISOString(), messageId]
+    );
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
   static async delete(messageId) {
     const result = await pool.query('DELETE FROM chat_messages WHERE id = $1 RETURNING id', [
       messageId

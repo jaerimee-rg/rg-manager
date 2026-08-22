@@ -349,6 +349,7 @@ export const getSessionMessages = async (req, res) => {
         answered: m.answered,
         status: m.status,
         createdAt: m.createdAt,
+        editedAt: m.editedAt,
         matchedFaqs: (m.matchedFaqIds || [])
           .filter((id) => faqMap.has(id))
           .map((id) => ({ id, question: faqMap.get(id) }))
@@ -442,6 +443,53 @@ export const deleteMessage = async (req, res) => {
             unansweredCount: session.unansweredCount
           }
         : null
+    });
+  } catch (error) {
+    console.error('대화 내역 처리 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/**
+ * 내가 보낸 답변의 내용을 고친다.
+ *
+ * 학부모 질문과 AI 답변은 고칠 수 없다 — 상대가 한 말이나 'AI 답변'으로 표시된
+ * 문장을 바꾸면 대화 기록이 사실과 달라진다. 그쪽은 삭제만 허용한다.
+ */
+export const updateMessage = async (req, res) => {
+  try {
+    const { id: userId, role } = req.user;
+    const { message } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: '답변 내용을 입력해주세요.' });
+    }
+    if (message.trim().length > MESSAGE_MAX) {
+      return res.status(400).json({ error: `답변은 ${MESSAGE_MAX}자 이내로 입력해주세요.` });
+    }
+
+    const target = await ChatMessage.getWithOwner(req.params.messageId);
+
+    if (
+      !target ||
+      String(target.sessionId) !== String(req.params.id) ||
+      (role !== 'admin' && target.ownerUserId !== userId)
+    ) {
+      return res.status(404).json({ error: '메시지를 찾을 수 없습니다.' });
+    }
+
+    if (target.role !== 'admin') {
+      return res.status(400).json({ error: '내가 보낸 답변만 수정할 수 있습니다.' });
+    }
+
+    const updated = await ChatMessage.updateContent(target.id, message.trim());
+
+    res.json({
+      id: updated.id,
+      role: updated.role,
+      content: updated.content,
+      editedAt: updated.editedAt,
+      createdAt: updated.createdAt
     });
   } catch (error) {
     console.error('대화 내역 처리 오류:', error);

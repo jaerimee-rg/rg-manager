@@ -353,6 +353,12 @@ const initDatabase = async () => {
       ADD COLUMN IF NOT EXISTS "kakaoNotifiedAt" TEXT
     `);
 
+    // 관리자가 보낸 답변을 수정한 시각 (수정됨 표시용)
+    await client.query(`
+      ALTER TABLE chat_messages
+      ADD COLUMN IF NOT EXISTS "editedAt" TEXT
+    `);
+
     // 이 대화에서만 AI 자동 답변을 끄는 설정 (채널 전체 설정과 별개)
     await client.query(`
       ALTER TABLE chat_sessions

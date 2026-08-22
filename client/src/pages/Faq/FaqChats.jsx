@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { fetchWithAuth } from '../../utils/api';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import DateRangePicker from '../../components/common/DateRangePicker';
@@ -44,6 +44,15 @@ function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
   const [aiSaving, setAiSaving] = useState(false);
   const [sessionAiSaving, setSessionAiSaving] = useState(false);
   const [deletingMessageId, setDeletingMessageId] = useState(null);
+  const [editingMessageId, setEditingMessageId] = useState(null);
+  const [editDraft, setEditDraft] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // 메시지 목록 스크롤 (데스크톱은 스레드 내부, 모바일은 시트 본문이 스크롤한다)
+  const scrollRef = useRef(null);
+  const sheetBodyRef = useRef(null);
+  // 사용자가 위로 올려 지난 대화를 읽는 중이면 새 메시지가 와도 끌어내리지 않는다
+  const stickToBottomRef = useRef(true);
 
   // 답변 전송 중에는 폴링이 끼어들지 않도록 최신 값을 ref 로 들고 있는다.
   const replyingRef = useRef(false);
@@ -105,6 +114,22 @@ function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  const getScroller = useCallback(
+    () => (isMobile ? sheetBodyRef.current : scrollRef.current),
+    [isMobile]
+  );
+
+  const scrollToBottom = useCallback(() => {
+    const el = getScroller();
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [getScroller]);
+
+  const handleScroll = () => {
+    const el = getScroller();
+    if (!el) return;
+    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight <= 80;
+  };
 
   const loadThread = useCallback(async (sessionId) => {
     try {
@@ -174,6 +199,26 @@ function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
     return () => clearInterval(timer);
   }, [viewingSessionId, loadThread]);
 
+  const openedSessionId = thread?.session?.id;
+  const messageCount = thread?.messages?.length ?? 0;
+  const prevCountRef = useRef(0);
+
+  // 대화를 열면 항상 마지막 메시지가 보이도록 맨 아래에서 시작한다.
+  useLayoutEffect(() => {
+    if (!openedSessionId) return;
+    stickToBottomRef.current = true;
+    prevCountRef.current = 0;
+    scrollToBottom();
+  }, [openedSessionId, sheetOpen, isMobile, scrollToBottom]);
+
+  // 폴링·답변으로 메시지가 늘어난 경우: 지난 대화를 읽는 중이면 방해하지 않는다.
+  useLayoutEffect(() => {
+    if (messageCount > prevCountRef.current && stickToBottomRef.current) {
+      scrollToBottom();
+    }
+    prevCountRef.current = messageCount;
+  }, [messageCount, scrollToBottom]);
+
   const handleReply = async (e) => {
     e.preventDefault();
     const message = reply.trim();
@@ -188,6 +233,7 @@ function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
 
       if (response.ok) {
         setReply('');
+        stickToBottomRef.current = true;
         await loadThread(thread.session.id);
         await loadSessions(0, false);
       }
@@ -231,6 +277,39 @@ function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
       console.error('대화별 AI 설정 실패:', error);
     } finally {
       setSessionAiSaving(false);
+    }
+  };
+
+  const startEditMessage = (message) => {
+    setEditingMessageId(message.id);
+    setEditDraft(message.content);
+  };
+
+  const cancelEditMessage = () => {
+    setEditingMessageId(null);
+    setEditDraft('');
+  };
+
+  const handleSaveMessage = async (messageId) => {
+    const content = editDraft.trim();
+    if (!thread || !content || savingEdit) return;
+
+    setSavingEdit(true);
+    try {
+      const response = await fetchWithAuth(
+        `/api/chat/sessions/${thread.session.id}/messages/${messageId}`,
+        { method: 'PATCH', body: JSON.stringify({ message: content }) }
+      );
+
+      if (!response.ok) return;
+
+      cancelEditMessage();
+      await loadThread(thread.session.id);
+      await loadSessions(0, false);
+    } catch (error) {
+      console.error('메시지 수정 실패:', error);
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -337,6 +416,7 @@ function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
 
         {renderSessionAiSwitch()}
 
+        <div className="chat-thread-scroll" ref={scrollRef} onScroll={handleScroll}>
         {thread.messages.map((m) => (
           <div
             key={m.id}
@@ -351,9 +431,21 @@ function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
                   : 'AI 답변'}{' '}
                 · {formatDateTime(m.createdAt)}
               </span>
+              {m.editedAt && <span className="chat-msg-edited">(수정됨)</span>}
+              {m.role === 'admin' && editingMessageId !== m.id && (
+                <button
+                  type="button"
+                  className="chat-msg-action"
+                  aria-label="메시지 수정"
+                  title="메시지 수정"
+                  onClick={() => startEditMessage(m)}
+                >
+                  수정
+                </button>
+              )}
               <button
                 type="button"
-                className="chat-msg-delete"
+                className="chat-msg-action chat-msg-delete"
                 aria-label="메시지 삭제"
                 title="메시지 삭제"
                 disabled={deletingMessageId === m.id}
@@ -362,7 +454,45 @@ function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
                 삭제
               </button>
             </div>
-            <div className="chat-bubble">{m.content}</div>
+            {editingMessageId === m.id ? (
+              <div className="chat-msg-edit">
+                <textarea
+                  value={editDraft}
+                  onChange={(e) => setEditDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSaveMessage(m.id);
+                    }
+                    if (e.key === 'Escape') cancelEditMessage();
+                  }}
+                  rows={2}
+                  maxLength={500}
+                  autoFocus
+                  aria-label="답변 수정"
+                />
+                <div className="chat-msg-edit-actions">
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={!editDraft.trim() || savingEdit}
+                    onClick={() => handleSaveMessage(m.id)}
+                  >
+                    {savingEdit ? '저장 중...' : '저장'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={cancelEditMessage}
+                    disabled={savingEdit}
+                  >
+                    취소
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="chat-bubble">{m.content}</div>
+            )}
             {m.matchedFaqs && m.matchedFaqs.length > 0 && (
               <div className="chat-msg-src">
                 근거
@@ -384,6 +514,8 @@ function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
             )}
           </div>
         ))}
+
+        </div>
 
         <form className="chat-reply" onSubmit={handleReply}>
           <textarea
@@ -517,7 +649,7 @@ function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
               삭제
             </button>
           </div>
-          <div className="chat-sheet-body">
+          <div className="chat-sheet-body" ref={sheetBodyRef} onScroll={handleScroll}>
             <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
               <span className="badge badge-gray">메시지 {thread.session.messageCount}</span>
               {thread.session.unansweredCount > 0 && (

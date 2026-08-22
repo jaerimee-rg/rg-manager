@@ -273,7 +273,11 @@ app.use('/api/chat', chatRoutes);
 | PUT | `/api/chat/channel/ai` | `{ aiEnabled }` — 대화 내역 화면의 AI 자동 답변 토글 |
 | POST | `/api/chat/sessions/:id/viewing` | `{ active }` — 관리자 접속 상태 갱신(20초 주기). 살아있는 동안 AI 답변 중지 |
 | PUT | `/api/chat/sessions/:id/ai` | `{ aiEnabled }` — 이 대화에서만 AI 자동 답변 on/off |
+| PATCH | `/api/chat/sessions/:id/messages/:messageId` | `{ message }` — 내가 보낸 답변(`role='admin'`)만 수정. `editedAt` 기록 |
 | DELETE | `/api/chat/sessions/:id/messages/:messageId` | 메시지 한 건 삭제. 삭제 후 메시지 수·미답변 수를 재계산 |
+
+학부모 질문과 AI 답변은 **수정할 수 없다** — 상대가 한 말이나 'AI 답변'으로 표시된 문장을
+바꾸면 대화 기록이 사실과 달라진다. 그쪽은 삭제만 허용한다.
 
 AI 자동 답변은 세 단계로 꺼진다 — 채널 전체(`chat_channels.aiEnabled`), 대화별(`chat_sessions.aiEnabled`),
 관리자 접속 중 자동 일시중지(`adminViewingAt`). 봇 메시지의 `status` 로 어느 이유였는지 구분한다:

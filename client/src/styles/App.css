@@ -2160,7 +2160,29 @@ tbody tr:last-child td {
   background: var(--bg-secondary);
   border-radius: var(--radius-lg);
   padding: var(--spacing-xl);
+  /* 채팅창처럼 메시지 영역만 스크롤하고 입력창은 아래에 붙어 있게 한다 */
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 260px);
   min-height: 420px;
+}
+
+/* 메시지 목록 — 여기만 스크롤한다 */
+.chat-thread-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: var(--spacing-xs);
+}
+
+/* 모바일은 시트 본문이 스크롤하므로 내부 스크롤을 두지 않는다 */
+@media (max-width: 768px) {
+  .chat-thread-scroll {
+    overflow-y: visible;
+    flex: none;
+    min-height: 0;
+    padding-right: 0;
+  }
 }
 
 .chat-thread-head {
@@ -2202,8 +2224,8 @@ tbody tr:last-child td {
   margin-bottom: var(--spacing-xs);
 }
 
-/* 메시지 삭제 — 평소엔 숨어 있다가 해당 메시지에 올렸을 때만 보인다 */
-.chat-msg-delete {
+/* 메시지 수정·삭제 — 평소엔 숨어 있다가 해당 메시지에 올렸을 때만 보인다 */
+.chat-msg-action {
   border: none;
   background: none;
   padding: 0 2px;
@@ -2214,24 +2236,46 @@ tbody tr:last-child td {
   transition: opacity 0.15s, color 0.15s;
 }
 
-.chat-msg:hover .chat-msg-delete,
-.chat-msg-delete:focus-visible {
+.chat-msg:hover .chat-msg-action,
+.chat-msg-action:focus-visible {
   opacity: 1;
+}
+
+.chat-msg-action:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
 }
 
 .chat-msg-delete:hover {
   color: var(--color-danger);
-  text-decoration: underline;
 }
 
-.chat-msg-delete:disabled {
+.chat-msg-action:disabled {
   cursor: wait;
   opacity: 0.5;
 }
 
+.chat-msg-edited {
+  font-size: 0.6875rem;
+  color: var(--color-gray-400);
+}
+
+/* 메시지 인라인 수정 */
+.chat-msg-edit textarea {
+  width: 100%;
+  min-width: 240px;
+  resize: vertical;
+}
+
+.chat-msg-edit-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+}
+
 /* 터치 기기는 hover 가 없으므로 항상 보여준다 */
 @media (hover: none) {
-  .chat-msg-delete {
+  .chat-msg-action {
     opacity: 1;
   }
 }

@@ -39,6 +39,7 @@ jest.unstable_mockModule('../../models/ChatMessage.js', () => ({
     listBySession: jest.fn(),
     recentHistory: jest.fn(),
     getWithOwner: jest.fn(),
+    updateContent: jest.fn(),
     delete: jest.fn()
   }
 }));
@@ -69,6 +70,7 @@ const {
   setAdminViewing,
   setSessionAi,
   deleteMessage,
+  updateMessage,
   replyToSession,
   deleteSession
 } = await import('../chatController.js');
@@ -531,6 +533,107 @@ describe('chatController (관리자 대화 조회)', () => {
 
       expect(ChatSession.setAiEnabled).toHaveBeenCalledWith(5, false);
       expect(res.json).toHaveBeenCalledWith({ aiEnabled: false });
+    });
+  });
+
+  describe('updateMessage', () => {
+    beforeEach(() => {
+      req.params = { id: '5', messageId: '77' };
+      req.body = { message: '수정한 답변' };
+      ChatMessage.updateContent.mockResolvedValue({
+        id: 77,
+        role: 'admin',
+        content: '수정한 답변',
+        editedAt: 'now',
+        createdAt: 'before'
+      });
+    });
+
+    it('빈 내용은 400 을 반환한다', async () => {
+      req.body = { message: '   ' };
+
+      await updateMessage(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(ChatMessage.updateContent).not.toHaveBeenCalled();
+    });
+
+    it('500자를 넘으면 400 을 반환한다', async () => {
+      req.body = { message: 'ㄱ'.repeat(501) };
+
+      await updateMessage(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(ChatMessage.updateContent).not.toHaveBeenCalled();
+    });
+
+    it('다른 사용자의 메시지는 수정할 수 없다', async () => {
+      ChatMessage.getWithOwner.mockResolvedValue({
+        id: 77, sessionId: 5, ownerUserId: 99, role: 'admin'
+      });
+
+      await updateMessage(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(ChatMessage.updateContent).not.toHaveBeenCalled();
+    });
+
+    it('다른 대화의 메시지 번호를 끼워 넣으면 거부한다', async () => {
+      ChatMessage.getWithOwner.mockResolvedValue({
+        id: 77, sessionId: 6, ownerUserId: 7, role: 'admin'
+      });
+
+      await updateMessage(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(ChatMessage.updateContent).not.toHaveBeenCalled();
+    });
+
+    it('학부모 질문은 수정할 수 없다', async () => {
+      ChatMessage.getWithOwner.mockResolvedValue({
+        id: 77, sessionId: 5, ownerUserId: 7, role: 'parent'
+      });
+
+      await updateMessage(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ error: '내가 보낸 답변만 수정할 수 있습니다.' });
+      expect(ChatMessage.updateContent).not.toHaveBeenCalled();
+    });
+
+    it('AI 답변도 수정할 수 없다', async () => {
+      ChatMessage.getWithOwner.mockResolvedValue({
+        id: 77, sessionId: 5, ownerUserId: 7, role: 'bot'
+      });
+
+      await updateMessage(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(ChatMessage.updateContent).not.toHaveBeenCalled();
+    });
+
+    it('내가 보낸 답변은 고치고 수정 시각을 남긴다', async () => {
+      ChatMessage.getWithOwner.mockResolvedValue({
+        id: 77, sessionId: 5, ownerUserId: 7, role: 'admin'
+      });
+
+      await updateMessage(req, res);
+
+      expect(ChatMessage.updateContent).toHaveBeenCalledWith(77, '수정한 답변');
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ content: '수정한 답변', editedAt: 'now' })
+      );
+    });
+
+    it('앞뒤 공백은 잘라서 저장한다', async () => {
+      ChatMessage.getWithOwner.mockResolvedValue({
+        id: 77, sessionId: 5, ownerUserId: 7, role: 'admin'
+      });
+      req.body = { message: '  수정한 답변  ' };
+
+      await updateMessage(req, res);
+
+      expect(ChatMessage.updateContent).toHaveBeenCalledWith(77, '수정한 답변');
     });
   });
 
