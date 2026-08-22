@@ -64,6 +64,48 @@ class ChatSession {
     return result.rows.length > 0 ? result.rows[0] : null;
   }
 
+  // 이 대화에서만 AI 자동 답변을 끄고 켠다
+  static async setAiEnabled(sessionId, enabled) {
+    const result = await pool.query(
+      `UPDATE chat_sessions
+       SET "aiEnabled" = $1
+       WHERE id = $2
+       RETURNING *`,
+      [enabled !== false, sessionId]
+    );
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  // 메시지를 지운 뒤 집계를 다시 계산한다 (빼기 방식은 어긋나면 복구되지 않는다).
+  // 미답변은 "마지막 관리자 답변 이후의 미답변 봇 메시지" — recordAdminReply 와 같은 기준이다.
+  static async recount(sessionId) {
+    const result = await pool.query(
+      `UPDATE chat_sessions s
+       SET "messageCount" = c.total,
+           "unansweredCount" = c.unanswered,
+           "lastMessageAt" = c."lastMessageAt"
+       FROM (
+         SELECT
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (
+             WHERE role = 'bot'
+               AND answered IS FALSE
+               AND id > COALESCE((
+                 SELECT MAX(id) FROM chat_messages
+                  WHERE "sessionId" = $1 AND role = 'admin'
+               ), 0)
+           )::int AS unanswered,
+           MAX("createdAt") AS "lastMessageAt"
+         FROM chat_messages
+         WHERE "sessionId" = $1
+       ) c
+       WHERE s.id = $1
+       RETURNING s.*`,
+      [sessionId]
+    );
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
   // 새 문의 카카오 알림을 보낸 시각 (쿨다운 판정용)
   static async recordKakaoNotified(sessionId) {
     const result = await pool.query(

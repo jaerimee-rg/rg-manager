@@ -353,6 +353,12 @@ const initDatabase = async () => {
       ADD COLUMN IF NOT EXISTS "kakaoNotifiedAt" TEXT
     `);
 
+    // 이 대화에서만 AI 자동 답변을 끄는 설정 (채널 전체 설정과 별개)
+    await client.query(`
+      ALTER TABLE chat_sessions
+      ADD COLUMN IF NOT EXISTS "aiEnabled" BOOLEAN DEFAULT TRUE
+    `);
+
     // 새 문의가 들어왔을 때 카카오 알림 사용 여부
     await client.query(`
       ALTER TABLE chat_channels

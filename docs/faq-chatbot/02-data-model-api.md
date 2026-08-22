@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
   "lastAdminReplyAt" TEXT,
   "adminViewingAt" TEXT,
   "kakaoNotifiedAt" TEXT,
+  "aiEnabled" BOOLEAN DEFAULT TRUE,
   "createdAt" TEXT NOT NULL,
   FOREIGN KEY ("channelId") REFERENCES chat_channels(id) ON DELETE CASCADE
 );
@@ -108,6 +109,7 @@ CREATE INDEX IF NOT EXISTS idx_chat_sessions_channel
 | `unansweredCount` | 안내 문구로 응답된 횟수. 미답변 필터에 사용 |
 | `adminViewingAt` | 관리자가 이 대화창을 열어둔 마지막 시각. 45초 안이면 AI 자동 답변을 멈춘다 |
 | `kakaoNotifiedAt` | 마지막 카카오 알림 발송 시각. 5분 쿨다운으로 연속 문의에 중복 발송을 막는다 |
+| `aiEnabled` | 이 대화에서만 AI 자동 답변을 끈다. 채널 설정(`chat_channels.aiEnabled`)과 AND 로 판정 |
 
 ### 1.4 `chat_messages` — 메시지
 
@@ -270,6 +272,12 @@ app.use('/api/chat', chatRoutes);
 | PUT | `/api/chat/channel` | `{ name, greeting, fallbackMessage, pendingMessage, isActive, aiEnabled, kakaoNotify }` 수정 |
 | PUT | `/api/chat/channel/ai` | `{ aiEnabled }` — 대화 내역 화면의 AI 자동 답변 토글 |
 | POST | `/api/chat/sessions/:id/viewing` | `{ active }` — 관리자 접속 상태 갱신(20초 주기). 살아있는 동안 AI 답변 중지 |
+| PUT | `/api/chat/sessions/:id/ai` | `{ aiEnabled }` — 이 대화에서만 AI 자동 답변 on/off |
+| DELETE | `/api/chat/sessions/:id/messages/:messageId` | 메시지 한 건 삭제. 삭제 후 메시지 수·미답변 수를 재계산 |
+
+AI 자동 답변은 세 단계로 꺼진다 — 채널 전체(`chat_channels.aiEnabled`), 대화별(`chat_sessions.aiEnabled`),
+관리자 접속 중 자동 일시중지(`adminViewingAt`). 봇 메시지의 `status` 로 어느 이유였는지 구분한다:
+`ai_off` / `session_ai_off` / `admin_viewing`.
 
 ### 카카오 알림 (관리자 전용, `/api/notifications`)
 

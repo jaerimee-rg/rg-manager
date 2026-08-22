@@ -42,6 +42,8 @@ function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
   const [replying, setReplying] = useState(false);
   const [aiPaused, setAiPaused] = useState(false);
   const [aiSaving, setAiSaving] = useState(false);
+  const [sessionAiSaving, setSessionAiSaving] = useState(false);
+  const [deletingMessageId, setDeletingMessageId] = useState(null);
 
   // 답변 전송 중에는 폴링이 끼어들지 않도록 최신 값을 ref 로 들고 있는다.
   const replyingRef = useRef(false);
@@ -207,6 +209,52 @@ function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
     }
   };
 
+  // 이 대화에서만 AI 자동 답변을 끈다 (채널 전체 설정과 별개)
+  const handleToggleSessionAi = async (nextEnabled) => {
+    if (!thread || sessionAiSaving) return;
+
+    setSessionAiSaving(true);
+    try {
+      const response = await fetchWithAuth(`/api/chat/sessions/${thread.session.id}/ai`, {
+        method: 'PUT',
+        body: JSON.stringify({ aiEnabled: nextEnabled })
+      });
+
+      if (!response.ok) return;
+
+      // 서버가 저장한 값으로 맞춘다.
+      const data = await response.json();
+      setThread((prev) =>
+        prev ? { ...prev, session: { ...prev.session, aiEnabled: data.aiEnabled } } : prev
+      );
+    } catch (error) {
+      console.error('대화별 AI 설정 실패:', error);
+    } finally {
+      setSessionAiSaving(false);
+    }
+  };
+
+  const handleDeleteMessage = async (messageId) => {
+    if (!thread || !confirm('이 메시지를 삭제하시겠습니까?')) return;
+
+    setDeletingMessageId(messageId);
+    try {
+      const response = await fetchWithAuth(
+        `/api/chat/sessions/${thread.session.id}/messages/${messageId}`,
+        { method: 'DELETE' }
+      );
+
+      if (!response.ok) return;
+
+      await loadThread(thread.session.id);
+      await loadSessions(0, false);
+    } catch (error) {
+      console.error('메시지 삭제 실패:', error);
+    } finally {
+      setDeletingMessageId(null);
+    }
+  };
+
   const openSession = async (session) => {
     setSelectedId(session.id);
     setReply('');
@@ -228,6 +276,37 @@ function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
     } catch (error) {
       console.error('대화 삭제 실패:', error);
     }
+  };
+
+  // 이 대화 전용 AI 스위치. 채널 전체가 꺼져 있으면 켤 수 없다는 것도 함께 알려준다.
+  const renderSessionAiSwitch = () => {
+    if (!thread) return null;
+
+    const channelOff = channel ? channel.aiEnabled === false : false;
+    const sessionOn = thread.session.aiEnabled !== false;
+
+    return (
+      <div className={`chat-session-ai ${sessionOn && !channelOff ? '' : 'off'}`}>
+        <label className="chat-switch">
+          <input
+            type="checkbox"
+            checked={sessionOn && !channelOff}
+            disabled={sessionAiSaving || channelOff}
+            onChange={(e) => handleToggleSessionAi(e.target.checked)}
+          />
+          이 대화에 AI 답변
+        </label>
+        <span className="chat-session-ai-desc">
+          {channelOff
+            ? '채널 전체 AI 답변이 꺼져 있습니다.'
+            : !sessionOn
+            ? '이 학부모에게는 AI가 답하지 않습니다. 직접 답변해 주세요.'
+            : aiPaused
+            ? '대화창을 열어둔 동안에는 잠시 멈춥니다.'
+            : '이 학부모의 질문에 AI가 답합니다.'}
+        </span>
+      </div>
+    );
   };
 
   const renderThread = (withHeader) => {
@@ -256,18 +335,32 @@ function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
           </div>
         )}
 
+        {renderSessionAiSwitch()}
+
         {thread.messages.map((m) => (
           <div
             key={m.id}
             className={`chat-msg ${m.role} ${m.role === 'bot' && m.answered === false ? 'unanswered' : ''}`}
           >
             <div className="chat-msg-who">
-              {m.role === 'parent'
-                ? thread.session.visitorName
-                : m.role === 'admin'
-                ? '내 답변'
-                : 'AI 답변'}{' '}
-              · {formatDateTime(m.createdAt)}
+              <span>
+                {m.role === 'parent'
+                  ? thread.session.visitorName
+                  : m.role === 'admin'
+                  ? '내 답변'
+                  : 'AI 답변'}{' '}
+                · {formatDateTime(m.createdAt)}
+              </span>
+              <button
+                type="button"
+                className="chat-msg-delete"
+                aria-label="메시지 삭제"
+                title="메시지 삭제"
+                disabled={deletingMessageId === m.id}
+                onClick={() => handleDeleteMessage(m.id)}
+              >
+                삭제
+              </button>
             </div>
             <div className="chat-bubble">{m.content}</div>
             {m.matchedFaqs && m.matchedFaqs.length > 0 && (
@@ -282,6 +375,8 @@ function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
               <div className="chat-msg-src">
                 {m.status === 'ai_off'
                   ? '⏳ AI 자동 답변이 꺼져 있습니다 — 직접 답변해 주세요'
+                  : m.status === 'session_ai_off'
+                  ? '🙅 이 대화는 AI 답변을 꺼두었습니다 — 직접 답변해 주세요'
                   : m.status === 'admin_viewing'
                   ? '👀 대화창을 열어둔 상태라 AI가 답하지 않았습니다 — 직접 답변해 주세요'
                   : '⚠️ 관련 FAQ 없음 — FAQ 등록을 검토하세요'}

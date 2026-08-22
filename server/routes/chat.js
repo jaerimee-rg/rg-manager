@@ -10,6 +10,8 @@ import {
   getSessions,
   getSessionMessages,
   setAdminViewing,
+  setSessionAi,
+  deleteMessage,
   replyToSession,
   deleteSession
 } from '../controllers/chatController.js';
@@ -31,6 +33,8 @@ router.put('/channel/ai', verifyToken, logAction('UPDATE_CHAT_AI'), updateAiEnab
 router.get('/sessions', verifyToken, getSessions);
 router.get('/sessions/:id/messages', verifyToken, getSessionMessages);
 router.post('/sessions/:id/viewing', verifyToken, setAdminViewing);
+router.put('/sessions/:id/ai', verifyToken, logAction('UPDATE_CHAT_SESSION_AI'), setSessionAi);
+router.delete('/sessions/:id/messages/:messageId', verifyToken, logAction('DELETE_CHAT_MESSAGE'), deleteMessage);
 router.post('/sessions/:id/reply', verifyToken, logAction('REPLY_CHAT_SESSION'), replyToSession);
 router.delete('/sessions/:id', verifyToken, logAction('DELETE_CHAT_SESSION'), deleteSession);
 

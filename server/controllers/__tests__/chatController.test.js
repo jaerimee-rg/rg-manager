@@ -22,6 +22,8 @@ jest.unstable_mockModule('../../models/ChatSession.js', () => ({
     listByChannel: jest.fn(),
     getWithOwner: jest.fn(),
     setAdminViewing: jest.fn(),
+    setAiEnabled: jest.fn(),
+    recount: jest.fn(),
     recordKakaoNotified: jest.fn(),
     delete: jest.fn()
   }
@@ -35,7 +37,9 @@ jest.unstable_mockModule('../../models/ChatMessage.js', () => ({
   default: {
     create: jest.fn(),
     listBySession: jest.fn(),
-    recentHistory: jest.fn()
+    recentHistory: jest.fn(),
+    getWithOwner: jest.fn(),
+    delete: jest.fn()
   }
 }));
 
@@ -63,6 +67,8 @@ const {
   postMessage,
   getSessionMessages,
   setAdminViewing,
+  setSessionAi,
+  deleteMessage,
   replyToSession,
   deleteSession
 } = await import('../chatController.js');
@@ -389,6 +395,58 @@ describe('chatController (공개 채팅)', () => {
       expect(ChatSession.recordKakaoNotified).not.toHaveBeenCalled();
     });
 
+    it('이 대화의 AI 답변을 꺼두면 AI를 호출하지 않는다', async () => {
+      ChatSession.getByVisitorKey.mockResolvedValue({
+        id: 11,
+        visitorName: '학부모',
+        aiEnabled: false
+      });
+      ChatMessage.create.mockResolvedValue({ id: 400, createdAt: 'now' });
+      req.body = { visitorKey: 'v1', message: '질문' };
+
+      await postMessage(req, res);
+
+      expect(generateAnswer).not.toHaveBeenCalled();
+      expect(res.json.mock.calls[0][0].pending).toBe(true);
+      // 채널은 켜져 있으므로 대화 단위로 껐다는 것을 구분해 남긴다
+      expect(ChatMessage.create).toHaveBeenLastCalledWith(
+        11,
+        expect.objectContaining({ role: 'bot', status: 'session_ai_off' })
+      );
+    });
+
+    it('채널 전체가 꺼져 있으면 ai_off 로 남긴다', async () => {
+      ChatChannel.getByPublicId.mockResolvedValue({ ...activeChannel, aiEnabled: false });
+      ChatSession.getByVisitorKey.mockResolvedValue({
+        id: 11,
+        visitorName: '학부모',
+        aiEnabled: false
+      });
+      ChatMessage.create.mockResolvedValue({ id: 401, createdAt: 'now' });
+      req.body = { visitorKey: 'v1', message: '질문' };
+
+      await postMessage(req, res);
+
+      expect(ChatMessage.create).toHaveBeenLastCalledWith(
+        11,
+        expect.objectContaining({ status: 'ai_off' })
+      );
+    });
+
+    it('대화별 설정이 켜져 있으면 평소대로 AI가 답한다', async () => {
+      ChatSession.getByVisitorKey.mockResolvedValue({
+        id: 11,
+        visitorName: '학부모',
+        aiEnabled: true
+      });
+      generateAnswer.mockResolvedValue({ answered: true, answer: 'ok', usedFaqIds: [3], status: 'ok' });
+      req.body = { visitorKey: 'v1', message: '질문' };
+
+      await postMessage(req, res);
+
+      expect(generateAnswer).toHaveBeenCalled();
+    });
+
     it('질문 저장 전에 이전 대화 맥락을 읽는다', async () => {
       generateAnswer.mockResolvedValue({ answered: true, answer: 'ok', usedFaqIds: [3], status: 'ok' });
       req.body = { visitorKey: 'v1', message: '질문' };
@@ -439,6 +497,98 @@ describe('chatController (관리자 대화 조회)', () => {
     const payload = res.json.mock.calls[0][0];
     expect(payload.session.visitorName).toBe('김OO 어머님');
     expect(payload.messages[1].matchedFaqs).toEqual([{ id: 3, question: '토요일 수업은?' }]);
+  });
+
+  describe('setSessionAi', () => {
+    beforeEach(() => {
+      req.params = { id: '5' };
+      req.body = { aiEnabled: false };
+    });
+
+    it('다른 사용자의 대화는 바꿀 수 없다', async () => {
+      ChatSession.getWithOwner.mockResolvedValue({ id: 5, ownerUserId: 99 });
+
+      await setSessionAi(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(ChatSession.setAiEnabled).not.toHaveBeenCalled();
+    });
+
+    it('불리언이 아니면 400 을 반환한다', async () => {
+      req.body = { aiEnabled: 'false' };
+
+      await setSessionAi(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(ChatSession.setAiEnabled).not.toHaveBeenCalled();
+    });
+
+    it('이 대화의 AI 답변만 끈다', async () => {
+      ChatSession.getWithOwner.mockResolvedValue({ id: 5, ownerUserId: 7 });
+      ChatSession.setAiEnabled.mockResolvedValue({ id: 5, aiEnabled: false });
+
+      await setSessionAi(req, res);
+
+      expect(ChatSession.setAiEnabled).toHaveBeenCalledWith(5, false);
+      expect(res.json).toHaveBeenCalledWith({ aiEnabled: false });
+    });
+  });
+
+  describe('deleteMessage', () => {
+    beforeEach(() => {
+      req.params = { id: '5', messageId: '77' };
+      ChatSession.recount.mockResolvedValue({ id: 5, messageCount: 3, unansweredCount: 0 });
+    });
+
+    it('다른 사용자의 메시지는 지울 수 없다', async () => {
+      ChatMessage.getWithOwner.mockResolvedValue({ id: 77, sessionId: 5, ownerUserId: 99 });
+
+      await deleteMessage(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(ChatMessage.delete).not.toHaveBeenCalled();
+    });
+
+    it('없는 메시지는 404 를 반환한다', async () => {
+      ChatMessage.getWithOwner.mockResolvedValue(null);
+
+      await deleteMessage(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(ChatMessage.delete).not.toHaveBeenCalled();
+    });
+
+    it('다른 대화의 메시지 번호를 끼워 넣으면 거부한다', async () => {
+      ChatMessage.getWithOwner.mockResolvedValue({ id: 77, sessionId: 6, ownerUserId: 7 });
+
+      await deleteMessage(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(ChatMessage.delete).not.toHaveBeenCalled();
+    });
+
+    it('본인 대화의 메시지를 지우고 집계를 다시 계산한다', async () => {
+      ChatMessage.getWithOwner.mockResolvedValue({ id: 77, sessionId: 5, ownerUserId: 7 });
+
+      await deleteMessage(req, res);
+
+      expect(ChatMessage.delete).toHaveBeenCalledWith(77);
+      expect(ChatSession.recount).toHaveBeenCalledWith(5);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          session: { id: 5, messageCount: 3, unansweredCount: 0 }
+        })
+      );
+    });
+
+    it('관리자는 다른 사용자의 대화 메시지도 지울 수 있다', async () => {
+      req.user = { id: 1, role: 'admin' };
+      ChatMessage.getWithOwner.mockResolvedValue({ id: 77, sessionId: 5, ownerUserId: 99 });
+
+      await deleteMessage(req, res);
+
+      expect(ChatMessage.delete).toHaveBeenCalledWith(77);
+    });
   });
 
   describe('setAdminViewing', () => {

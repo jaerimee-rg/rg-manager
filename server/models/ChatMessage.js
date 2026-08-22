@@ -45,6 +45,26 @@ class ChatMessage {
     return result.rows.map((m) => ({ ...m, matchedFaqIds: safeJsonParse(m.matchedFaqIds, []) }));
   }
 
+  // 메시지 + 대화 소유자를 함께 조회해 삭제 권한 확인에 쓴다
+  static async getWithOwner(messageId) {
+    const result = await pool.query(
+      `SELECT m.*, s."channelId", c."userId" AS "ownerUserId"
+       FROM chat_messages m
+       JOIN chat_sessions s ON s.id = m."sessionId"
+       JOIN chat_channels c ON c.id = s."channelId"
+       WHERE m.id = $1`,
+      [messageId]
+    );
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  static async delete(messageId) {
+    const result = await pool.query('DELETE FROM chat_messages WHERE id = $1 RETURNING id', [
+      messageId
+    ]);
+    return result.rows.length > 0;
+  }
+
   // AI 에 넘길 최근 대화 맥락 (기본 6턴)
   static async recentHistory(sessionId, limit = 6) {
     const result = await pool.query(

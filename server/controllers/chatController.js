@@ -204,7 +204,11 @@ export const postMessage = async (req, res) => {
 
     const question = message.trim();
     const fallback = channel.fallbackMessage || DEFAULT_FALLBACK;
-    const aiEnabled = channel.aiEnabled !== false;
+
+    // 채널 전체 설정과 이 대화의 설정 중 하나라도 꺼져 있으면 AI 를 쓰지 않는다.
+    const channelAiEnabled = channel.aiEnabled !== false;
+    const sessionAiEnabled = session.aiEnabled !== false;
+    const aiEnabled = channelAiEnabled && sessionAiEnabled;
 
     // 관리자가 이 대화창을 열어두고 있으면 AI 가 끼어들지 않고 직접 답변하도록 둔다.
     const adminViewing = isAdminViewing(session.adminViewingAt);
@@ -227,7 +231,11 @@ export const postMessage = async (req, res) => {
         content: pending,
         answered: false,
         matchedFaqIds: [],
-        status: adminViewing ? 'admin_viewing' : 'ai_off'
+        status: adminViewing
+          ? 'admin_viewing'
+          : channelAiEnabled
+          ? 'session_ai_off'
+          : 'ai_off'
       });
 
       await ChatSession.recordMessages(session.id, { unanswered: true });
@@ -330,6 +338,7 @@ export const getSessionMessages = async (req, res) => {
         visitorName: session.visitorName,
         messageCount: session.messageCount,
         unansweredCount: session.unansweredCount,
+        aiEnabled: session.aiEnabled !== false,
         createdAt: session.createdAt,
         lastMessageAt: session.lastMessageAt
       },
@@ -368,6 +377,72 @@ export const setAdminViewing = async (req, res) => {
     const updated = await ChatSession.setAdminViewing(session.id, active !== false);
 
     res.json({ adminViewingAt: updated ? updated.adminViewingAt : null });
+  } catch (error) {
+    console.error('대화 내역 처리 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/**
+ * 이 대화에서만 AI 자동 답변을 끄고 켠다 (채널 전체 설정과 별개).
+ */
+export const setSessionAi = async (req, res) => {
+  try {
+    const { id: userId, role } = req.user;
+    const { aiEnabled } = req.body;
+
+    if (typeof aiEnabled !== 'boolean') {
+      return res.status(400).json({ error: '잘못된 요청입니다.' });
+    }
+
+    const session = await ChatSession.getWithOwner(req.params.id);
+    if (!session || (role !== 'admin' && session.ownerUserId !== userId)) {
+      return res.status(404).json({ error: '대화를 찾을 수 없습니다.' });
+    }
+
+    const updated = await ChatSession.setAiEnabled(session.id, aiEnabled);
+
+    res.json({ aiEnabled: updated ? updated.aiEnabled !== false : aiEnabled });
+  } catch (error) {
+    console.error('대화 내역 처리 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/**
+ * 대화 안의 메시지 한 건을 지운다.
+ * 대화 전체 삭제(deleteSession)와 같은 권한 기준을 쓴다.
+ */
+export const deleteMessage = async (req, res) => {
+  try {
+    const { id: userId, role } = req.user;
+
+    const message = await ChatMessage.getWithOwner(req.params.messageId);
+
+    // 다른 대화의 메시지 id 를 끼워 넣어도 통하지 않도록 대화 번호까지 확인한다.
+    if (
+      !message ||
+      String(message.sessionId) !== String(req.params.id) ||
+      (role !== 'admin' && message.ownerUserId !== userId)
+    ) {
+      return res.status(404).json({ error: '메시지를 찾을 수 없습니다.' });
+    }
+
+    await ChatMessage.delete(message.id);
+
+    // 지운 뒤 메시지 수·미답변 수를 다시 계산한다.
+    const session = await ChatSession.recount(message.sessionId);
+
+    res.json({
+      message: '메시지가 삭제되었습니다.',
+      session: session
+        ? {
+            id: session.id,
+            messageCount: session.messageCount,
+            unansweredCount: session.unansweredCount
+          }
+        : null
+    });
   } catch (error) {
     console.error('대화 내역 처리 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });

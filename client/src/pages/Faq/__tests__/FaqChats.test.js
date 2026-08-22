@@ -25,7 +25,7 @@ const SESSION = {
 };
 
 const THREAD = {
-  session: SESSION,
+  session: { ...SESSION, aiEnabled: true },
   messages: [
     {
       id: 1,
@@ -48,6 +48,7 @@ const routeFetch = (url) => {
   }
   if (url.includes('/messages')) return jsonResponse(THREAD);
   if (url.includes('/viewing')) return jsonResponse({ adminViewingAt: 'now' });
+  if (url.endsWith('/ai')) return jsonResponse({ aiEnabled: false });
   return jsonResponse({});
 };
 
@@ -127,5 +128,82 @@ describe('FaqChats — 관리자 접속 중 AI 일시중지', () => {
     render(<FaqChats channel={{ ...channel, aiEnabled: false }} onToggleAi={jest.fn()} />);
 
     expect(await screen.findByText(/꺼짐 — 접수된 질문에 직접 답변해 주세요/)).toBeInTheDocument();
+  });
+});
+
+describe('FaqChats — 대화별 AI 끄기 / 메시지 삭제', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    window.confirm = jest.fn(() => true);
+    fetchWithAuth.mockImplementation((url) => routeFetch(url));
+  });
+
+  const open = async () => {
+    render(<FaqChats channel={channel} onToggleAi={jest.fn().mockResolvedValue(true)} />);
+    const item = await screen.findByText('민수 어머니');
+    await act(async () => {
+      fireEvent.click(item);
+    });
+  };
+
+  it('대화창 안에 이 대화 전용 AI 스위치를 보여준다', async () => {
+    await open();
+
+    expect(await screen.findByLabelText('이 대화에 AI 답변')).toBeChecked();
+  });
+
+  it('스위치를 끄면 이 대화만 AI를 끈다', async () => {
+    await open();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('이 대화에 AI 답변'));
+    });
+
+    const call = fetchWithAuth.mock.calls.find(([u]) => u === `/api/chat/sessions/${SESSION.id}/ai`);
+    expect(call[1].method).toBe('PUT');
+    expect(JSON.parse(call[1].body)).toEqual({ aiEnabled: false });
+  });
+
+  it('채널 전체가 꺼져 있으면 대화 스위치를 만질 수 없다', async () => {
+    render(
+      <FaqChats channel={{ ...channel, aiEnabled: false }} onToggleAi={jest.fn()} />
+    );
+    const item = await screen.findByText('민수 어머니');
+    await act(async () => {
+      fireEvent.click(item);
+    });
+
+    const box = screen.getByLabelText('이 대화에 AI 답변');
+    expect(box).toBeDisabled();
+    expect(screen.getByText(/채널 전체 AI 답변이 꺼져 있습니다/)).toBeInTheDocument();
+  });
+
+  it('메시지를 삭제하면 해당 메시지만 지운다', async () => {
+    await open();
+
+    const deleteButtons = await screen.findAllByRole('button', { name: '메시지 삭제' });
+    await act(async () => {
+      fireEvent.click(deleteButtons[0]);
+    });
+
+    expect(window.confirm).toHaveBeenCalled();
+    const call = fetchWithAuth.mock.calls.find(
+      ([u, o]) => o?.method === 'DELETE' && u.includes('/messages/')
+    );
+    expect(call[0]).toBe(`/api/chat/sessions/${SESSION.id}/messages/1`);
+  });
+
+  it('확인을 취소하면 삭제하지 않는다', async () => {
+    window.confirm = jest.fn(() => false);
+    await open();
+
+    const deleteButtons = await screen.findAllByRole('button', { name: '메시지 삭제' });
+    await act(async () => {
+      fireEvent.click(deleteButtons[0]);
+    });
+
+    expect(
+      fetchWithAuth.mock.calls.some(([u, o]) => o?.method === 'DELETE' && u.includes('/messages/'))
+    ).toBe(false);
   });
 });
