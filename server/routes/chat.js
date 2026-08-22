@@ -2,12 +2,14 @@ import express from 'express';
 import {
   getChannel,
   updateChannel,
+  updateAiEnabled,
   getPublicChannel,
   startSession,
   getPublicMessages,
   postMessage,
   getSessions,
   getSessionMessages,
+  setAdminViewing,
   replyToSession,
   deleteSession
 } from '../controllers/chatController.js';
@@ -25,8 +27,10 @@ router.post('/public/:publicId/messages', postMessage);
 // 관리자 (인증 필요)
 router.get('/channel', verifyToken, getChannel);
 router.put('/channel', verifyToken, logAction('UPDATE_CHAT_CHANNEL'), updateChannel);
+router.put('/channel/ai', verifyToken, logAction('UPDATE_CHAT_AI'), updateAiEnabled);
 router.get('/sessions', verifyToken, getSessions);
 router.get('/sessions/:id/messages', verifyToken, getSessionMessages);
+router.post('/sessions/:id/viewing', verifyToken, setAdminViewing);
 router.post('/sessions/:id/reply', verifyToken, logAction('REPLY_CHAT_SESSION'), replyToSession);
 router.delete('/sessions/:id', verifyToken, logAction('DELETE_CHAT_SESSION'), deleteSession);
 

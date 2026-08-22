@@ -51,12 +51,12 @@ class ChatChannel {
   }
 
   static async update(userId, data) {
-    const { name, greeting, fallbackMessage, pendingMessage, isActive, aiEnabled } = data;
+    const { name, greeting, fallbackMessage, pendingMessage, isActive, aiEnabled, kakaoNotify } = data;
     const result = await pool.query(
       `UPDATE chat_channels
        SET name = $1, greeting = $2, "fallbackMessage" = $3, "pendingMessage" = $4,
-           "isActive" = $5, "aiEnabled" = $6, "updatedAt" = $7
-       WHERE "userId" = $8
+           "isActive" = $5, "aiEnabled" = $6, "kakaoNotify" = $7, "updatedAt" = $8
+       WHERE "userId" = $9
        RETURNING *`,
       [
         name,
@@ -65,9 +65,22 @@ class ChatChannel {
         pendingMessage,
         isActive !== false,
         aiEnabled !== false,
+        kakaoNotify !== false,
         new Date().toISOString(),
         userId
       ]
+    );
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  // AI 자동 답변만 빠르게 켜고 끈다 (대화 내역 화면의 토글용)
+  static async setAiEnabled(userId, aiEnabled) {
+    const result = await pool.query(
+      `UPDATE chat_channels
+       SET "aiEnabled" = $1, "updatedAt" = $2
+       WHERE "userId" = $3
+       RETURNING *`,
+      [aiEnabled !== false, new Date().toISOString(), userId]
     );
     return result.rows.length > 0 ? result.rows[0] : null;
   }

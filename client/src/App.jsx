@@ -33,24 +33,28 @@ import AdminLogs from './pages/admin/AdminLogs';
 import AdminNotifications from './pages/admin/AdminNotifications';
 import AdminFaq from './pages/admin/AdminFaq';
 
+function AuthLoading() {
+  return (
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      minHeight: '100vh',
+      backgroundColor: 'var(--bg-primary)'
+    }}>
+      <div style={{ textAlign: 'center' }}>
+        <div className="skeleton" style={{ width: 48, height: 48, borderRadius: '50%', margin: '0 auto 16px' }}></div>
+        <div style={{ color: 'var(--color-gray-500)', fontSize: '0.9375rem' }}>로딩 중...</div>
+      </div>
+    </div>
+  );
+}
+
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: '100vh',
-        backgroundColor: 'var(--bg-primary)'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div className="skeleton" style={{ width: 48, height: 48, borderRadius: '50%', margin: '0 auto 16px' }}></div>
-          <div style={{ color: 'var(--color-gray-500)', fontSize: '0.9375rem' }}>로딩 중...</div>
-        </div>
-      </div>
-    );
+    return <AuthLoading />;
   }
 
   if (!user) {
@@ -63,7 +67,7 @@ function ProtectedRoute({ children }) {
 function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isMobile = useIsMobile();
-  const { user, logout } = useAuth();
+  const { user, loading, logout } = useAuth();
   const location = useLocation();
 
   // 메뉴 열릴 때 body 스크롤 방지
@@ -104,10 +108,25 @@ function App() {
   // 학부모 공개 채팅은 앱 헤더 없이 단독 화면으로 보여준다
   const isPublicChatPage = location.pathname.startsWith('/chat/');
 
-  if (!user) {
+  // 로그인과 무관한 화면이므로 인증 확인을 기다리지 않는다.
+  if (isPublicChatPage) {
     return (
       <Routes>
         <Route path="/chat/:publicId" element={<PublicChat />} />
+      </Routes>
+    );
+  }
+
+  // 저장된 토큰을 확인하는 동안에는 라우팅을 판단하지 않는다.
+  // 이때 비로그인 라우트를 그리면 아래 "*" 가 주소를 /login 으로 바꿔버려
+  // 새로고침·북마크로 들어온 딥링크(/admin, /students ...)가 사라진다.
+  if (loading) {
+    return <AuthLoading />;
+  }
+
+  if (!user) {
+    return (
+      <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Navigate to="/login" />} />
         <Route path="/oauth/kakao/callback" element={<KakaoCallback />} />
@@ -128,14 +147,6 @@ function App() {
     { path: '/faq', label: 'FAQ', icon: '💬' },
   ];
 
-
-  if (isPublicChatPage) {
-    return (
-      <Routes>
-        <Route path="/chat/:publicId" element={<PublicChat />} />
-      </Routes>
-    );
-  }
 
   // 관리자 페이지일 경우 별도 레이아웃 사용
   if (isAdminPage) {

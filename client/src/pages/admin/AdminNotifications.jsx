@@ -2,6 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { fetchWithAuth } from '../../utils/api';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 
+const MESSAGE_TYPES = {
+  ATTENDANCE: { label: '출석 알림', badge: 'badge-primary' },
+  FAQ_INQUIRY: { label: '문의 알림', badge: 'badge-success' },
+  CUSTOM: { label: '직접 발송', badge: 'badge-gray' }
+};
+
+const messageTypeLabel = (type) => MESSAGE_TYPES[type]?.label || '커스텀';
+const messageTypeBadge = (type) => MESSAGE_TYPES[type]?.badge || 'badge-gray';
+
 function AdminNotifications() {
   const [logs, setLogs] = useState([]);
   const [kakaoUsers, setKakaoUsers] = useState([]);
@@ -11,28 +20,71 @@ function AdminNotifications() {
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendForm, setSendForm] = useState({ recipientId: '', message: '' });
   const [sendLoading, setSendLoading] = useState(false);
+  const [settings, setSettings] = useState([]);
+  const [savingEvent, setSavingEvent] = useState(null);
+  const [typeFilter, setTypeFilter] = useState('all');
 
   useEffect(() => {
     loadData();
   }, []);
 
+  // 유형 필터가 바뀌면 목록만 다시 불러온다.
+  useEffect(() => {
+    loadLogs(typeFilter);
+  }, [typeFilter]);
+
+  const loadLogs = async (filter = typeFilter) => {
+    try {
+      const query = filter && filter !== 'all' ? `?eventType=${filter}` : '';
+      const response = await fetchWithAuth(`/api/notifications/logs${query}`);
+      const data = await response.json();
+      setLogs(data.logs || []);
+      setTotal(data.total || 0);
+    } catch (error) {
+      console.error('알림 목록 로드 실패:', error);
+    }
+  };
+
   const loadData = async () => {
     try {
-      const [logsRes, usersRes] = await Promise.all([
-        fetchWithAuth('/api/auth/kakao/messages'),
-        fetchWithAuth('/api/auth/kakao/users')
+      const [usersRes, settingsRes] = await Promise.all([
+        fetchWithAuth('/api/auth/kakao/users'),
+        fetchWithAuth('/api/notifications/settings')
       ]);
 
-      const logsData = await logsRes.json();
       const usersData = await usersRes.json();
+      const settingsData = await settingsRes.json();
 
-      setLogs(logsData.logs || []);
-      setTotal(logsData.total || 0);
       setKakaoUsers(usersData || []);
+      setSettings(Array.isArray(settingsData) ? settingsData : []);
     } catch (error) {
       console.error('데이터 로드 실패:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleEvent = async (eventType, enabled) => {
+    setSavingEvent(eventType);
+    try {
+      const response = await fetchWithAuth(`/api/notifications/settings/${eventType}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSettings(data);
+      } else {
+        alert(data.error || '알림 설정 변경에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('알림 설정 변경 실패:', error);
+      alert('알림 설정 변경에 실패했습니다.');
+    } finally {
+      setSavingEvent(null);
     }
   };
 
@@ -69,7 +121,7 @@ function AdminNotifications() {
         alert('메시지가 전송되었습니다.');
         setShowSendModal(false);
         setSendForm({ recipientId: '', message: '' });
-        loadData();
+        loadLogs();
       } else {
         alert(data.error || '메시지 전송에 실패했습니다.');
       }
@@ -195,6 +247,52 @@ function AdminNotifications() {
         </div>
       )}
 
+      {/* 이벤트별 알림 on/off */}
+      <div className="card" style={{ marginBottom: 'var(--spacing-lg)' }}>
+        <div className="card-header">
+          <h3 className="card-title">알림 이벤트</h3>
+          <span style={{ fontSize: '0.8125rem', color: 'var(--color-gray-500)' }}>
+            끄면 모든 사용자에게 발송되지 않습니다
+          </span>
+        </div>
+
+        <div style={{ marginTop: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
+          {settings.map((setting) => (
+            <div key={setting.eventType} className="notif-event">
+              <div className="notif-event-text">
+                <div className="notif-event-label">
+                  {setting.label}
+                  {!setting.enabled && (
+                    <span className="badge badge-gray" style={{ marginLeft: 8 }}>
+                      꺼짐
+                    </span>
+                  )}
+                </div>
+                <div className="notif-event-desc">{setting.description}</div>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={setting.enabled}
+                aria-label={setting.label}
+                className={`notif-toggle ${setting.enabled ? 'on' : ''}`}
+                disabled={savingEvent === setting.eventType}
+                onClick={() => handleToggleEvent(setting.eventType, !setting.enabled)}
+              >
+                <span className="notif-toggle-knob" />
+              </button>
+            </div>
+          ))}
+
+          {settings.length === 0 && !loading && (
+            <div style={{ color: 'var(--color-gray-500)', fontSize: '0.875rem' }}>
+              알림 설정을 불러오지 못했습니다.
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Stats */}
       <div className="card" style={{ marginBottom: 'var(--spacing-lg)' }}>
         <div style={{
@@ -232,6 +330,19 @@ function AdminNotifications() {
               {logs.length}건
             </span>
           </h3>
+          <select
+            aria-label="알림 유형 필터"
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            style={{ width: 'auto', minWidth: 140 }}
+          >
+            <option value="all">전체 유형</option>
+            {settings.map((setting) => (
+              <option key={setting.eventType} value={setting.eventType}>
+                {setting.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         {loading ? (
@@ -269,8 +380,8 @@ function AdminNotifications() {
                           </span>
                         </td>
                         <td>
-                          <span className={`badge ${log.messageType === 'ATTENDANCE' ? 'badge-primary' : 'badge-gray'}`}>
-                            {log.messageType === 'ATTENDANCE' ? '출석 알림' : '커스텀'}
+                          <span className={`badge ${messageTypeBadge(log.messageType)}`}>
+                            {messageTypeLabel(log.messageType)}
                           </span>
                         </td>
                         <td>{log.senderName || '-'}</td>
@@ -331,8 +442,8 @@ function AdminNotifications() {
                   >
                     <div className="list-item-content" style={{ width: '100%' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                        <span className={`badge ${log.messageType === 'ATTENDANCE' ? 'badge-primary' : 'badge-gray'}`}>
-                          {log.messageType === 'ATTENDANCE' ? '출석 알림' : '커스텀'}
+                        <span className={`badge ${messageTypeBadge(log.messageType)}`}>
+                          {messageTypeLabel(log.messageType)}
                         </span>
                         {log.success ? (
                           <span className="badge badge-success">성공</span>

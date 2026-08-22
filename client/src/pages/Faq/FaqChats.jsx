@@ -1,9 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchWithAuth } from '../../utils/api';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import DateRangePicker from '../../components/common/DateRangePicker';
 
 const PAGE_SIZE = 20;
+
+// 서버의 presence 유효 시간(45초)보다 짧게 보내 한 번 실패해도 끊기지 않게 한다.
+const PRESENCE_INTERVAL_MS = 20000;
+// 대화창을 열어둔 동안 새 질문을 바로 확인할 수 있도록 하는 갱신 주기
+const THREAD_POLL_MS = 5000;
 
 const formatDateTime = (iso) => {
   if (!iso) return '-';
@@ -19,7 +24,7 @@ const monthAgo = () => {
   return d.toISOString().split('T')[0];
 };
 
-function FaqChats({ filterUserId, onCountChange }) {
+function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
   const isMobile = useIsMobile();
 
   const [sessions, setSessions] = useState([]);
@@ -35,6 +40,12 @@ function FaqChats({ filterUserId, onCountChange }) {
   const [loading, setLoading] = useState(false);
   const [reply, setReply] = useState('');
   const [replying, setReplying] = useState(false);
+  const [aiPaused, setAiPaused] = useState(false);
+  const [aiSaving, setAiSaving] = useState(false);
+
+  // 답변 전송 중에는 폴링이 끼어들지 않도록 최신 값을 ref 로 들고 있는다.
+  const replyingRef = useRef(false);
+  replyingRef.current = replying;
 
   const buildQuery = useCallback(
     (nextOffset) => {
@@ -93,9 +104,18 @@ function FaqChats({ filterUserId, onCountChange }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  const loadThread = async (sessionId) => {
+  const loadThread = useCallback(async (sessionId) => {
     try {
       const response = await fetchWithAuth(`/api/chat/sessions/${sessionId}/messages`);
+
+      // 다른 곳에서 삭제된 대화라면 선택을 풀어 폴링·presence 를 멈춘다.
+      if (response.status === 404) {
+        setThread(null);
+        setSelectedId(null);
+        setSheetOpen(false);
+        return null;
+      }
+
       if (!response.ok) return null;
       const data = await response.json();
       setThread(data);
@@ -104,7 +124,53 @@ function FaqChats({ filterUserId, onCountChange }) {
       console.error('대화 상세 로드 실패:', error);
       return null;
     }
-  };
+  }, []);
+
+  // 모바일은 상세 시트가 열려 있을 때만 "보고 있는 중"으로 본다.
+  const viewingSessionId = thread && (!isMobile || sheetOpen) ? thread.session.id : null;
+
+  // 대화창을 열어둔 동안 서버에 presence 를 알린다 → 그동안 AI 자동 답변이 멈춘다.
+  useEffect(() => {
+    if (!viewingSessionId) return undefined;
+
+    const ping = async (active) => {
+      try {
+        await fetchWithAuth(`/api/chat/sessions/${viewingSessionId}/viewing`, {
+          method: 'POST',
+          body: JSON.stringify({ active })
+        });
+      } catch (error) {
+        console.error('대화 접속 상태 전송 실패:', error);
+      }
+    };
+
+    ping(true);
+    setAiPaused(true);
+
+    const timer = setInterval(() => {
+      // 다른 탭을 보고 있으면 자리를 비운 것으로 두어 AI 가 다시 답하게 한다.
+      if (document.hidden) return;
+      ping(true);
+    }, PRESENCE_INTERVAL_MS);
+
+    return () => {
+      clearInterval(timer);
+      setAiPaused(false);
+      ping(false);
+    };
+  }, [viewingSessionId]);
+
+  // 열어둔 대화에 새 질문이 들어오면 바로 보이도록 주기적으로 갱신한다.
+  useEffect(() => {
+    if (!viewingSessionId) return undefined;
+
+    const timer = setInterval(() => {
+      if (document.hidden || replyingRef.current) return;
+      loadThread(viewingSessionId);
+    }, THREAD_POLL_MS);
+
+    return () => clearInterval(timer);
+  }, [viewingSessionId, loadThread]);
 
   const handleReply = async (e) => {
     e.preventDefault();
@@ -127,6 +193,17 @@ function FaqChats({ filterUserId, onCountChange }) {
       console.error('답변 전송 실패:', error);
     } finally {
       setReplying(false);
+    }
+  };
+
+  const handleToggleAi = async (nextEnabled) => {
+    if (!onToggleAi || aiSaving) return;
+
+    setAiSaving(true);
+    try {
+      await onToggleAi(nextEnabled);
+    } finally {
+      setAiSaving(false);
     }
   };
 
@@ -205,6 +282,8 @@ function FaqChats({ filterUserId, onCountChange }) {
               <div className="chat-msg-src">
                 {m.status === 'ai_off'
                   ? '⏳ AI 자동 답변이 꺼져 있습니다 — 직접 답변해 주세요'
+                  : m.status === 'admin_viewing'
+                  ? '👀 대화창을 열어둔 상태라 AI가 답하지 않았습니다 — 직접 답변해 주세요'
                   : '⚠️ 관련 FAQ 없음 — FAQ 등록을 검토하세요'}
               </div>
             )}
@@ -233,8 +312,32 @@ function FaqChats({ filterUserId, onCountChange }) {
     );
   };
 
+  const aiEnabled = channel ? channel.aiEnabled !== false : true;
+
   return (
     <div>
+      {channel && (
+        <div className={`chat-ai-bar ${aiEnabled ? '' : 'off'}`}>
+          <label className="chat-switch">
+            <input
+              type="checkbox"
+              checked={aiEnabled}
+              disabled={aiSaving || !onToggleAi}
+              onChange={(e) => handleToggleAi(e.target.checked)}
+            />
+            AI 자동 답변
+          </label>
+          <span className="chat-ai-bar-desc">
+            {!aiEnabled
+              ? '꺼짐 — 접수된 질문에 직접 답변해 주세요.'
+              : aiPaused
+              ? '대화창을 열어둔 동안 잠시 멈춰 있습니다. 직접 답변해 주세요.'
+              : '학부모 질문에 AI가 바로 답변합니다.'}
+          </span>
+          {aiEnabled && aiPaused && <span className="badge badge-gray">일시중지</span>}
+        </div>
+      )}
+
       <div className="chat-filters">
         <label className="chat-switch">
           <input

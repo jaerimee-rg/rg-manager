@@ -1,9 +1,29 @@
+import { jest } from '@jest/globals';
 import jwt from 'jsonwebtoken';
-import User from '../../models/User.js';
-import * as authController from '../authController.js';
 
-// Mock User model
-jest.mock('../../models/User.js');
+// 네이티브 ESM 에서는 jest.mock 이 동작하지 않아 unstable_mockModule 을 쓴다.
+jest.unstable_mockModule('../../models/User.js', () => ({
+  default: {
+    create: jest.fn(),
+    delete: jest.fn(),
+    getAll: jest.fn(),
+    getById: jest.fn(),
+    getByCredentials: jest.fn(),
+    getByUsername: jest.fn(),
+    getByKakaoId: jest.fn(),
+    createWithKakao: jest.fn(),
+    update: jest.fn(),
+    updateUsername: jest.fn(),
+    updateKakaoInfo: jest.fn(),
+    updateKakaoTokens: jest.fn(),
+    getKakaoTokens: jest.fn(),
+    updateMessageConsent: jest.fn(),
+    transferData: jest.fn()
+  }
+}));
+
+const User = (await import('../../models/User.js')).default;
+const authController = await import('../authController.js');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
@@ -166,23 +186,122 @@ describe('authController', () => {
   });
 
   describe('updateUser', () => {
-    it('should update user when admin', async () => {
-      const updatedUser = { id: 1, username: 'updated', role: 'user' };
+    const target = { id: 1, username: 'before', role: 'user' };
 
-      req.user = { role: 'admin' };
+    beforeEach(() => {
+      req.user = { id: 9, role: 'admin' };
       req.params = { id: '1' };
-      req.body = { username: 'updated' };
+      User.getById.mockResolvedValue(target);
+      User.getByUsername.mockResolvedValue(null);
+    });
+
+    it('관리자는 사용자 이름을 바꿀 수 있다', async () => {
+      const updatedUser = { id: 1, username: 'after', role: 'user' };
+      req.body = { username: 'after' };
       User.update.mockResolvedValue(updatedUser);
 
       await authController.updateUser(req, res);
 
-      expect(User.update).toHaveBeenCalledWith('1', req.body);
+      expect(User.update).toHaveBeenCalledWith(1, {
+        username: 'after',
+        password: undefined,
+        role: 'user'
+      });
       expect(res.json).toHaveBeenCalledWith(updatedUser);
+    });
+
+    it('이름 앞뒤 공백은 잘라서 저장한다', async () => {
+      req.body = { username: '  이재림  ' };
+      User.update.mockResolvedValue({ id: 1, username: '이재림' });
+
+      await authController.updateUser(req, res);
+
+      expect(User.update).toHaveBeenCalledWith(1, expect.objectContaining({ username: '이재림' }));
+    });
+
+    it('빈 이름은 400 을 반환한다', async () => {
+      req.body = { username: '   ' };
+
+      await authController.updateUser(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ error: '사용자 이름을 입력해주세요.' });
+      expect(User.update).not.toHaveBeenCalled();
+    });
+
+    it('30자를 넘는 이름은 400 을 반환한다', async () => {
+      req.body = { username: 'ㄱ'.repeat(31) };
+
+      await authController.updateUser(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(User.update).not.toHaveBeenCalled();
+    });
+
+    it('다른 사용자가 쓰는 이름이면 400 을 반환한다', async () => {
+      req.body = { username: '이재림' };
+      User.getByUsername.mockResolvedValue({ id: 2, username: '이재림' });
+
+      await authController.updateUser(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ error: '이미 사용 중인 이름입니다.' });
+      expect(User.update).not.toHaveBeenCalled();
+    });
+
+    it('이름을 그대로 두면 중복 확인을 하지 않는다', async () => {
+      req.body = { username: 'before', role: 'admin' };
+      User.update.mockResolvedValue({ id: 1, username: 'before', role: 'admin' });
+
+      await authController.updateUser(req, res);
+
+      expect(User.getByUsername).not.toHaveBeenCalled();
+      expect(User.update).toHaveBeenCalledWith(1, expect.objectContaining({ role: 'admin' }));
+    });
+
+    it('이름을 보내지 않으면 기존 이름을 유지한다', async () => {
+      req.body = { role: 'admin' };
+      User.update.mockResolvedValue({ id: 1, username: 'before', role: 'admin' });
+
+      await authController.updateUser(req, res);
+
+      expect(User.update).toHaveBeenCalledWith(1, expect.objectContaining({ username: 'before' }));
+    });
+
+    it('없는 사용자는 404 를 반환한다', async () => {
+      req.body = { username: 'after' };
+      User.getById.mockResolvedValue(null);
+
+      await authController.updateUser(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(User.update).not.toHaveBeenCalled();
+    });
+
+    it('허용되지 않은 역할은 400 을 반환한다', async () => {
+      req.body = { username: 'after', role: 'superuser' };
+
+      await authController.updateUser(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ error: '잘못된 역할입니다.' });
+      expect(User.update).not.toHaveBeenCalled();
+    });
+
+    it('저장 직전에 이름을 뺏기면(unique 위반) 400 으로 안내한다', async () => {
+      req.body = { username: 'after' };
+      const conflict = new Error('duplicate key');
+      conflict.code = '23505';
+      User.update.mockRejectedValue(conflict);
+
+      await authController.updateUser(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ error: '이미 사용 중인 이름입니다.' });
     });
 
     it('should return 403 when not admin', async () => {
       req.user = { role: 'user' };
-      req.params = { id: '1' };
 
       await authController.updateUser(req, res);
 
@@ -192,9 +311,7 @@ describe('authController', () => {
     });
 
     it('should handle update errors', async () => {
-      req.user = { role: 'admin' };
-      req.params = { id: '1' };
-      req.body = { username: 'updated' };
+      req.body = { username: 'after' };
       User.update.mockRejectedValue(new Error('Update failed'));
 
       await authController.updateUser(req, res);

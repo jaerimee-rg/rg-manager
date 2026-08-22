@@ -13,6 +13,7 @@ import logRoutes from './routes/logs.js';
 import competitionRoutes from './routes/competitions.js';
 import faqRoutes from './routes/faqs.js';
 import chatRoutes from './routes/chat.js';
+import notificationRoutes from './routes/notifications.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -111,6 +112,7 @@ app.use('/api/logs', logRoutes);
 app.use('/api/competitions', competitionRoutes);
 app.use('/api/faqs', faqRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Handle React routing - serve index.html for all non-API routes
 app.get('*', (req, res) => {

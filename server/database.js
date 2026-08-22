@@ -341,6 +341,43 @@ const initDatabase = async () => {
       ADD COLUMN IF NOT EXISTS "lastAdminReplyAt" TEXT
     `);
 
+    // 관리자가 이 대화를 열어둔 시각 — 열려 있는 동안 AI 자동 답변을 멈춘다
+    await client.query(`
+      ALTER TABLE chat_sessions
+      ADD COLUMN IF NOT EXISTS "adminViewingAt" TEXT
+    `);
+
+    // 새 문의 카카오 알림을 보낸 시각 (연속 질문에 중복 발송하지 않기 위해)
+    await client.query(`
+      ALTER TABLE chat_sessions
+      ADD COLUMN IF NOT EXISTS "kakaoNotifiedAt" TEXT
+    `);
+
+    // 새 문의가 들어왔을 때 카카오 알림 사용 여부
+    await client.query(`
+      ALTER TABLE chat_channels
+      ADD COLUMN IF NOT EXISTS "kakaoNotify" BOOLEAN DEFAULT TRUE
+    `);
+
+    // 카카오 알림을 이벤트 단위로 켜고 끄는 전역 설정 (관리자 전용)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS notification_settings (
+        "eventType" TEXT PRIMARY KEY,
+        enabled BOOLEAN NOT NULL DEFAULT TRUE,
+        "updatedAt" TEXT NOT NULL,
+        "updatedBy" INTEGER,
+        FOREIGN KEY ("updatedBy") REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    // 알 수 없는 이벤트가 조용히 막히지 않도록 기본값(켜짐)으로 미리 채워둔다.
+    await client.query(
+      `INSERT INTO notification_settings ("eventType", enabled, "updatedAt")
+       VALUES ('ATTENDANCE', TRUE, $1), ('FAQ_INQUIRY', TRUE, $1), ('CUSTOM', TRUE, $1)
+       ON CONFLICT ("eventType") DO NOTHING`,
+      [new Date().toISOString()]
+    );
+
     // 기본 관리자 계정 생성 (최초 1회만, 기존 계정이 없을 때)
     const adminCheck = await client.query('SELECT * FROM users WHERE username = $1', ['admin']);
     if (adminCheck.rows.length === 0) {

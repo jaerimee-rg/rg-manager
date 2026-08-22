@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS chat_channels (
   "pendingMessage" TEXT,
   "isActive" BOOLEAN DEFAULT TRUE,
   "aiEnabled" BOOLEAN DEFAULT TRUE,
+  "kakaoNotify" BOOLEAN DEFAULT TRUE,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL,
   FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE CASCADE
@@ -68,7 +69,8 @@ CREATE INDEX IF NOT EXISTS idx_chat_channels_user ON chat_channels ("userId");
 | `fallbackMessage` | 답변 불가 시 안내 문구. 기본값은 FR-42 문구 |
 | `isActive` | false면 링크 접속 시 "문의를 받고 있지 않습니다" |
 | `aiEnabled` | false면 AI를 호출하지 않고 접수 안내만 남긴다(관리자가 직접 답변) |
-| `pendingMessage` | `aiEnabled=false`일 때 학부모에게 보여줄 접수 안내 문구 |
+| `pendingMessage` | AI가 답하지 않을 때(`aiEnabled=false` 또는 관리자 접속 중) 학부모에게 보여줄 접수 안내 문구 |
+| `kakaoNotify` | true면 새 문의가 들어올 때 채널 주인에게 카카오톡 알림을 보낸다 |
 
 > MVP에서는 사용자당 채널 1개(최초 진입 시 자동 생성). 스키마는 1:N을 허용하므로 이후 확장 가능.
 
@@ -83,6 +85,9 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
   "messageCount" INTEGER DEFAULT 0,
   "unansweredCount" INTEGER DEFAULT 0,
   "lastMessageAt" TEXT,
+  "lastAdminReplyAt" TEXT,
+  "adminViewingAt" TEXT,
+  "kakaoNotifiedAt" TEXT,
   "createdAt" TEXT NOT NULL,
   FOREIGN KEY ("channelId") REFERENCES chat_channels(id) ON DELETE CASCADE
 );
@@ -101,6 +106,8 @@ CREATE INDEX IF NOT EXISTS idx_chat_sessions_channel
 | `visitorKey` | 학부모 브라우저 `localStorage`의 UUID. 개인정보 아님 |
 | `visitorName` | 학부모가 입장 시 입력한 대화명(**필수**, 1~20자) |
 | `unansweredCount` | 안내 문구로 응답된 횟수. 미답변 필터에 사용 |
+| `adminViewingAt` | 관리자가 이 대화창을 열어둔 마지막 시각. 45초 안이면 AI 자동 답변을 멈춘다 |
+| `kakaoNotifiedAt` | 마지막 카카오 알림 발송 시각. 5분 쿨다운으로 연속 문의에 중복 발송을 막는다 |
 
 ### 1.4 `chat_messages` — 메시지
 
@@ -260,7 +267,21 @@ app.use('/api/chat', chatRoutes);
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | GET | `/api/chat/channel` | 내 채널 조회. 없으면 **자동 생성 후 반환** |
-| PUT | `/api/chat/channel` | `{ name, greeting, fallbackMessage, pendingMessage, isActive, aiEnabled }` 수정 |
+| PUT | `/api/chat/channel` | `{ name, greeting, fallbackMessage, pendingMessage, isActive, aiEnabled, kakaoNotify }` 수정 |
+| PUT | `/api/chat/channel/ai` | `{ aiEnabled }` — 대화 내역 화면의 AI 자동 답변 토글 |
+| POST | `/api/chat/sessions/:id/viewing` | `{ active }` — 관리자 접속 상태 갱신(20초 주기). 살아있는 동안 AI 답변 중지 |
+
+### 카카오 알림 (관리자 전용, `/api/notifications`)
+
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| GET | `/api/notifications/settings` | 이벤트별 알림 on/off 목록 |
+| PUT | `/api/notifications/settings/:eventType` | `{ enabled }` — 해당 이벤트 알림 전역 on/off |
+| GET | `/api/notifications/logs` | 발송 이력. `?eventType=` 로 유형 필터, `?limit=`(최대 200) `?offset=` |
+
+이벤트: `ATTENDANCE`(출석 체크 알림), `FAQ_INQUIRY`(새 문의 알림), `CUSTOM`(관리자 직접 발송).
+설정은 `notification_settings` 테이블에 저장하며, `utils/kakaoMessage.js` 의 각 발송 함수 진입점에서 확인한다.
+설정 행이 없거나 조회에 실패하면 **켜짐으로 간주**해 알림이 조용히 끊기지 않도록 한다.
 | POST | `/api/chat/channel/regenerate` | `publicId` 재발급 (선택 기능) |
 
 **GET 응답 200**

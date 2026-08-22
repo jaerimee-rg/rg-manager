@@ -21,8 +21,14 @@ jest.unstable_mockModule('../../models/ChatSession.js', () => ({
     countTodayQuestions: jest.fn(),
     listByChannel: jest.fn(),
     getWithOwner: jest.fn(),
+    setAdminViewing: jest.fn(),
+    recordKakaoNotified: jest.fn(),
     delete: jest.fn()
   }
+}));
+
+jest.unstable_mockModule('../../utils/kakaoMessage.js', () => ({
+  sendFaqInquiryKakaoMessage: jest.fn()
 }));
 
 jest.unstable_mockModule('../../models/ChatMessage.js', () => ({
@@ -50,11 +56,13 @@ const ChatSession = (await import('../../models/ChatSession.js')).default;
 const ChatMessage = (await import('../../models/ChatMessage.js')).default;
 const Faq = (await import('../../models/Faq.js')).default;
 const { generateAnswer } = await import('../../utils/aiAnswer.js');
+const { sendFaqInquiryKakaoMessage } = await import('../../utils/kakaoMessage.js');
 const {
   getPublicChannel,
   startSession,
   postMessage,
   getSessionMessages,
+  setAdminViewing,
   replyToSession,
   deleteSession
 } = await import('../chatController.js');
@@ -68,7 +76,8 @@ const activeChannel = {
   fallbackMessage: '등록된 FAQ에서 찾지 못했습니다.',
   pendingMessage: '접수되었습니다. 확인 후 답변드릴게요.',
   isActive: true,
-  aiEnabled: true
+  aiEnabled: true,
+  kakaoNotify: true
 };
 
 describe('chatController (공개 채팅)', () => {
@@ -151,6 +160,8 @@ describe('chatController (공개 채팅)', () => {
       ChatMessage.create.mockResolvedValue({ id: 100, createdAt: 'now' });
       ChatSession.recordMessages.mockResolvedValue({});
       Faq.getPublishedByUserId.mockResolvedValue([{ id: 3, question: 'Q', answer: 'A' }]);
+      sendFaqInquiryKakaoMessage.mockResolvedValue({ success: true });
+      ChatSession.recordKakaoNotified.mockResolvedValue({});
     });
 
     it('500자를 넘으면 400 을 반환한다', async () => {
@@ -258,6 +269,126 @@ describe('chatController (공개 채팅)', () => {
       );
     });
 
+    it('관리자가 대화창을 보고 있으면 AI 가 답하지 않고 접수 안내만 남긴다', async () => {
+      ChatSession.getByVisitorKey.mockResolvedValue({
+        id: 11,
+        visitorName: '학부모',
+        adminViewingAt: new Date().toISOString()
+      });
+      ChatMessage.create.mockResolvedValue({ id: 300, createdAt: 'now' });
+      req.body = { visitorKey: 'v1', message: '지금 계신가요?' };
+
+      await postMessage(req, res);
+
+      expect(generateAnswer).not.toHaveBeenCalled();
+
+      const payload = res.json.mock.calls[0][0];
+      expect(payload.pending).toBe(true);
+      expect(payload.reply).toBe(activeChannel.pendingMessage);
+      expect(ChatMessage.create).toHaveBeenLastCalledWith(
+        11,
+        expect.objectContaining({ role: 'bot', status: 'admin_viewing' })
+      );
+    });
+
+    it('관리자 접속이 오래 전이면 AI 가 정상 답변한다', async () => {
+      ChatSession.getByVisitorKey.mockResolvedValue({
+        id: 11,
+        visitorName: '학부모',
+        adminViewingAt: new Date(Date.now() - 10 * 60 * 1000).toISOString()
+      });
+      generateAnswer.mockResolvedValue({
+        answered: true,
+        answer: '오전 10시입니다.',
+        usedFaqIds: [3],
+        status: 'ok'
+      });
+      req.body = { visitorKey: 'v1', message: '수업 시간은?' };
+
+      await postMessage(req, res);
+
+      expect(generateAnswer).toHaveBeenCalled();
+      expect(res.json.mock.calls[0][0].answered).toBe(true);
+    });
+
+    it('새 문의가 들어오면 채널 주인에게 카카오 알림을 보낸다', async () => {
+      ChatSession.getByVisitorKey.mockResolvedValue({ id: 11, visitorName: '민수 어머니' });
+      generateAnswer.mockResolvedValue({ answered: true, answer: 'ok', usedFaqIds: [3], status: 'ok' });
+      req.body = { visitorKey: 'v1', message: '주차 가능한가요?' };
+
+      await postMessage(req, res);
+
+      expect(sendFaqInquiryKakaoMessage).toHaveBeenCalledWith({
+        userId: activeChannel.userId,
+        channelName: activeChannel.name,
+        visitorName: '민수 어머니',
+        question: '주차 가능한가요?'
+      });
+      expect(ChatSession.recordKakaoNotified).toHaveBeenCalledWith(11);
+    });
+
+    it('알림을 끈 채널에는 카카오 알림을 보내지 않는다', async () => {
+      ChatChannel.getByPublicId.mockResolvedValue({ ...activeChannel, kakaoNotify: false });
+      generateAnswer.mockResolvedValue({ answered: true, answer: 'ok', usedFaqIds: [3], status: 'ok' });
+      req.body = { visitorKey: 'v1', message: '질문' };
+
+      await postMessage(req, res);
+
+      expect(sendFaqInquiryKakaoMessage).not.toHaveBeenCalled();
+    });
+
+    it('쿨다운 안이면 연속 질문에 카카오 알림을 다시 보내지 않는다', async () => {
+      ChatSession.getByVisitorKey.mockResolvedValue({
+        id: 11,
+        visitorName: '학부모',
+        kakaoNotifiedAt: new Date().toISOString()
+      });
+      generateAnswer.mockResolvedValue({ answered: true, answer: 'ok', usedFaqIds: [3], status: 'ok' });
+      req.body = { visitorKey: 'v1', message: '하나 더 질문이요' };
+
+      await postMessage(req, res);
+
+      expect(sendFaqInquiryKakaoMessage).not.toHaveBeenCalled();
+    });
+
+    it('관리자가 보고 있으면 이미 확인 중이므로 카카오 알림을 보내지 않는다', async () => {
+      ChatSession.getByVisitorKey.mockResolvedValue({
+        id: 11,
+        visitorName: '학부모',
+        adminViewingAt: new Date().toISOString()
+      });
+      ChatMessage.create.mockResolvedValue({ id: 301, createdAt: 'now' });
+      req.body = { visitorKey: 'v1', message: '질문' };
+
+      await postMessage(req, res);
+
+      expect(sendFaqInquiryKakaoMessage).not.toHaveBeenCalled();
+    });
+
+    it('카카오 알림이 실패해도 학부모 답변은 정상 응답한다', async () => {
+      ChatSession.getByVisitorKey.mockResolvedValue({ id: 11, visitorName: '학부모' });
+      sendFaqInquiryKakaoMessage.mockRejectedValue(new Error('kakao down'));
+      generateAnswer.mockResolvedValue({ answered: true, answer: 'ok', usedFaqIds: [3], status: 'ok' });
+      req.body = { visitorKey: 'v1', message: '질문' };
+
+      await postMessage(req, res);
+
+      expect(res.status).not.toHaveBeenCalledWith(500);
+      expect(res.json.mock.calls[0][0].answered).toBe(true);
+      expect(ChatSession.recordKakaoNotified).not.toHaveBeenCalled();
+    });
+
+    it('카카오 알림이 건너뛰어졌으면 쿨다운을 걸지 않는다', async () => {
+      ChatSession.getByVisitorKey.mockResolvedValue({ id: 11, visitorName: '학부모' });
+      sendFaqInquiryKakaoMessage.mockResolvedValue({ success: false, skipped: true });
+      generateAnswer.mockResolvedValue({ answered: true, answer: 'ok', usedFaqIds: [3], status: 'ok' });
+      req.body = { visitorKey: 'v1', message: '질문' };
+
+      await postMessage(req, res);
+
+      expect(ChatSession.recordKakaoNotified).not.toHaveBeenCalled();
+    });
+
     it('질문 저장 전에 이전 대화 맥락을 읽는다', async () => {
       generateAnswer.mockResolvedValue({ answered: true, answer: 'ok', usedFaqIds: [3], status: 'ok' });
       req.body = { visitorKey: 'v1', message: '질문' };
@@ -308,6 +439,43 @@ describe('chatController (관리자 대화 조회)', () => {
     const payload = res.json.mock.calls[0][0];
     expect(payload.session.visitorName).toBe('김OO 어머님');
     expect(payload.messages[1].matchedFaqs).toEqual([{ id: 3, question: '토요일 수업은?' }]);
+  });
+
+  describe('setAdminViewing', () => {
+    it('다른 사용자의 대화에는 접속 상태를 남길 수 없다', async () => {
+      ChatSession.getWithOwner.mockResolvedValue({ id: 5, ownerUserId: 99 });
+      req.params = { id: '5' };
+      req.body = { active: true };
+
+      await setAdminViewing(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(ChatSession.setAdminViewing).not.toHaveBeenCalled();
+    });
+
+    it('대화창을 열면 접속 시각을 기록한다', async () => {
+      ChatSession.getWithOwner.mockResolvedValue({ id: 5, ownerUserId: 7 });
+      ChatSession.setAdminViewing.mockResolvedValue({ id: 5, adminViewingAt: '2026-08-22T10:00:00.000Z' });
+      req.params = { id: '5' };
+      req.body = { active: true };
+
+      await setAdminViewing(req, res);
+
+      expect(ChatSession.setAdminViewing).toHaveBeenCalledWith(5, true);
+      expect(res.json).toHaveBeenCalledWith({ adminViewingAt: '2026-08-22T10:00:00.000Z' });
+    });
+
+    it('대화창을 닫으면 접속 시각을 비운다', async () => {
+      ChatSession.getWithOwner.mockResolvedValue({ id: 5, ownerUserId: 7 });
+      ChatSession.setAdminViewing.mockResolvedValue({ id: 5, adminViewingAt: null });
+      req.params = { id: '5' };
+      req.body = { active: false };
+
+      await setAdminViewing(req, res);
+
+      expect(ChatSession.setAdminViewing).toHaveBeenCalledWith(5, false);
+      expect(res.json).toHaveBeenCalledWith({ adminViewingAt: null });
+    });
   });
 
   describe('replyToSession', () => {

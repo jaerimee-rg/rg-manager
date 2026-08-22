@@ -1,8 +1,19 @@
-import Student from '../../models/Student.js';
-import * as studentController from '../studentController.js';
+import { jest } from '@jest/globals';
 
-// Mock Student model
-jest.mock('../../models/Student.js');
+// 네이티브 ESM 에서는 jest.mock 이 동작하지 않아 unstable_mockModule 을 쓴다.
+jest.unstable_mockModule('../../models/Student.js', () => ({
+  default: {
+    getAll: jest.fn(),
+    getById: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+    getByClassId: jest.fn()
+  }
+}));
+
+const Student = (await import('../../models/Student.js')).default;
+const studentController = await import('../studentController.js');
 
 describe('studentController', () => {
   let req, res;

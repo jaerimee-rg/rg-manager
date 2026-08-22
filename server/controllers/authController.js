@@ -4,6 +4,9 @@ import jwt from 'jsonwebtoken';
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 const JWT_EXPIRES_IN = '30d'; // 로그아웃 전까지 유지 (30일)
 
+export const USERNAME_MAX = 30;
+const USER_ROLES = ['user', 'admin'];
+
 // 카카오 OAuth 설정 (환경 변수에서 로드)
 const KAKAO_CLIENT_ID = process.env.KAKAO_CLIENT_ID;
 const KAKAO_CLIENT_SECRET = process.env.KAKAO_CLIENT_SECRET;
@@ -86,10 +89,54 @@ export const updateUser = async (req, res) => {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ error: '권한이 없습니다.' });
     }
-    const { id } = req.params;
-    const updatedUser = await User.update(id, req.body);
+
+    const userId = parseInt(req.params.id, 10);
+    if (Number.isNaN(userId)) {
+      return res.status(400).json({ error: '잘못된 사용자입니다.' });
+    }
+
+    const target = await User.getById(userId);
+    if (!target) {
+      return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+    }
+
+    const { username, password, role } = req.body;
+
+    // 보내지 않은 항목은 기존 값을 유지한다.
+    const nextUsername = (username === undefined ? target.username : String(username)).trim();
+    const nextRole = role === undefined ? target.role : role;
+
+    if (!nextUsername) {
+      return res.status(400).json({ error: '사용자 이름을 입력해주세요.' });
+    }
+    if (nextUsername.length > USERNAME_MAX) {
+      return res.status(400).json({ error: `사용자 이름은 ${USERNAME_MAX}자 이내로 입력해주세요.` });
+    }
+    if (!USER_ROLES.includes(nextRole)) {
+      return res.status(400).json({ error: '잘못된 역할입니다.' });
+    }
+
+    // 이름을 바꿀 때만 중복을 확인한다 (자기 자신은 제외).
+    if (nextUsername !== target.username) {
+      const existing = await User.getByUsername(nextUsername);
+      if (existing && existing.id !== userId) {
+        return res.status(400).json({ error: '이미 사용 중인 이름입니다.' });
+      }
+    }
+
+    const updatedUser = await User.update(userId, {
+      username: nextUsername,
+      password,
+      role: nextRole
+    });
+
     res.json(updatedUser);
   } catch (error) {
+    // 중복 확인과 UPDATE 사이에 같은 이름이 선점된 경우 (unique_violation)
+    if (error.code === '23505') {
+      return res.status(400).json({ error: '이미 사용 중인 이름입니다.' });
+    }
+    console.error('사용자 수정 오류:', error);
     res.status(500).json({ error: '사용자 수정 중 오류가 발생했습니다.' });
   }
 };

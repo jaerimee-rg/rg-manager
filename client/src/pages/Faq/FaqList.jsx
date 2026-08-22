@@ -128,6 +128,30 @@ function FaqList({ initialTab = 'faq', basePath = '/faq' }) {
     }
   };
 
+  // 대화 내역 화면에서 AI 자동 답변만 빠르게 켜고 끈다.
+  const handleToggleAi = async (aiEnabled) => {
+    try {
+      const response = await fetchWithAuth('/api/chat/channel/ai', {
+        method: 'PUT',
+        body: JSON.stringify({ aiEnabled })
+      });
+
+      if (!response.ok) {
+        showToast('설정 변경에 실패했습니다');
+        return false;
+      }
+
+      const data = await response.json();
+      setChannel((prev) => ({ ...data, faqCount: prev?.faqCount }));
+      showToast(aiEnabled ? 'AI 자동 답변을 켰습니다' : 'AI 자동 답변을 껐습니다');
+      return true;
+    } catch (error) {
+      console.error('AI 자동 답변 설정 실패:', error);
+      showToast('설정 변경에 실패했습니다');
+      return false;
+    }
+  };
+
   const handleDelete = async (id) => {
     if (!confirm('정말 삭제하시겠습니까?')) return;
 
@@ -272,7 +296,11 @@ function FaqList({ initialTab = 'faq', basePath = '/faq' }) {
       </div>
 
       {tab === 'chats' ? (
-        <FaqChats onCountChange={setUnansweredCount} />
+        <FaqChats
+          onCountChange={setUnansweredCount}
+          channel={channel}
+          onToggleAi={handleToggleAi}
+        />
       ) : (
         <>
           <div className="faq-toolbar">

@@ -15,7 +15,15 @@ class KakaoMessageLog {
     return result.rows[0];
   }
 
-  static async getAll(limit = 100, offset = 0) {
+  static async getAll(limit = 100, offset = 0, messageType = null) {
+    const params = [limit, offset];
+    let where = '';
+
+    if (messageType) {
+      params.push(messageType);
+      where = `WHERE kml."messageType" = $${params.length}`;
+    }
+
     const result = await pool.query(
       `SELECT
         kml.*,
@@ -25,15 +33,20 @@ class KakaoMessageLog {
        FROM kakao_message_logs kml
        LEFT JOIN users sender ON kml."senderId" = sender.id
        LEFT JOIN users recipient ON kml."recipientId" = recipient.id
+       ${where}
        ORDER BY kml."createdAt" DESC
        LIMIT $1 OFFSET $2`,
-      [limit, offset]
+      params
     );
     return result.rows;
   }
 
-  static async getCount() {
-    const result = await pool.query('SELECT COUNT(*) FROM kakao_message_logs');
+  static async getCount(messageType = null) {
+    const result = messageType
+      ? await pool.query('SELECT COUNT(*) FROM kakao_message_logs WHERE "messageType" = $1', [
+          messageType
+        ])
+      : await pool.query('SELECT COUNT(*) FROM kakao_message_logs');
     return parseInt(result.rows[0].count);
   }
 

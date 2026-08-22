@@ -1987,6 +1987,97 @@ tbody tr:last-child td {
   flex-wrap: wrap;
 }
 
+/* 관리자 알림 화면: 이벤트별 on/off */
+.notif-event {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+}
+
+.notif-event-text {
+  min-width: 0;
+}
+
+.notif-event-label {
+  font-weight: 600;
+  color: var(--color-gray-900);
+  font-size: 0.9375rem;
+}
+
+.notif-event-desc {
+  font-size: 0.8125rem;
+  color: var(--color-gray-500);
+  line-height: 1.5;
+  margin-top: 2px;
+}
+
+.notif-toggle {
+  position: relative;
+  flex-shrink: 0;
+  width: 52px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-gray-300);
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.2s;
+}
+
+.notif-toggle.on {
+  background: var(--color-primary);
+}
+
+.notif-toggle:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.notif-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: left 0.2s;
+}
+
+.notif-toggle.on .notif-toggle-knob {
+  left: 26px;
+}
+
+/* AI 자동 답변 토글 바 (대화 내역 상단) */
+.chat-ai-bar {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  flex-wrap: wrap;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.chat-ai-bar.off {
+  background: var(--color-warning-bg);
+  border-color: #F0DFA8;
+}
+
+.chat-ai-bar-desc {
+  font-size: 0.8125rem;
+  color: var(--color-gray-600);
+  line-height: 1.5;
+}
+
 .chat-switch {
   display: inline-flex;
   align-items: center;

@@ -52,6 +52,30 @@ class ChatSession {
     return result.rows[0];
   }
 
+  // 관리자가 대화창을 열고 있는 동안 주기적으로 갱신한다 (닫으면 active=false 로 비운다)
+  static async setAdminViewing(sessionId, active) {
+    const result = await pool.query(
+      `UPDATE chat_sessions
+       SET "adminViewingAt" = $1
+       WHERE id = $2
+       RETURNING *`,
+      [active ? new Date().toISOString() : null, sessionId]
+    );
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  // 새 문의 카카오 알림을 보낸 시각 (쿨다운 판정용)
+  static async recordKakaoNotified(sessionId) {
+    const result = await pool.query(
+      `UPDATE chat_sessions
+       SET "kakaoNotifiedAt" = $1
+       WHERE id = $2
+       RETURNING *`,
+      [new Date().toISOString(), sessionId]
+    );
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
   // 오늘 이 채널에 들어온 학부모 질문 수 (일일 한도 확인용)
   static async countTodayQuestions(channelId) {
     const startOfDay = new Date();

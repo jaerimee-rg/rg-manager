@@ -1,9 +1,36 @@
 import User from '../models/User.js';
 import KakaoMessageLog from '../models/KakaoMessageLog.js';
+import NotificationSetting, { NOTIFICATION_EVENTS } from '../models/NotificationSetting.js';
 
 const KAKAO_CLIENT_ID = process.env.KAKAO_CLIENT_ID;
 const KAKAO_CLIENT_SECRET = process.env.KAKAO_CLIENT_SECRET;
 const APP_URL = process.env.APP_URL || 'https://rg-manager.onrender.com';
+
+// 학부모 요청 처리 중에 보내는 알림이 카카오 응답을 무한정 기다리지 않도록 하는 상한
+const KAKAO_SEND_TIMEOUT_MS = 5000;
+
+/**
+ * 관리자가 이 이벤트의 알림을 꺼두었는지 확인한다.
+ * 설정 조회가 실패하면 알림을 막지 않고 보내는 쪽(기존 동작)을 택한다.
+ */
+async function isEventEnabled(eventType) {
+  try {
+    return await NotificationSetting.isEnabled(eventType);
+  } catch (error) {
+    console.error('알림 설정 조회 실패, 발송을 계속합니다:', error);
+    return true;
+  }
+}
+
+const disabledResult = (eventType) => {
+  const label = NOTIFICATION_EVENTS.find((e) => e.eventType === eventType)?.label || eventType;
+  return {
+    success: false,
+    error: `'${label}'이 꺼져 있습니다. 관리자 > 알림에서 켤 수 있습니다.`,
+    skipped: true,
+    disabled: true,
+  };
+};
 
 /**
  * 카카오 액세스 토큰 갱신
@@ -103,6 +130,8 @@ export async function sendAttendanceKakaoMessage({
   presentStudentIds,
 }) {
   try {
+    if (!(await isEventEnabled('ATTENDANCE'))) return disabledResult('ATTENDANCE');
+
     const accessToken = await getValidAccessToken(userId);
 
     if (!accessToken) {
@@ -179,6 +208,88 @@ export async function sendAttendanceKakaoMessage({
 }
 
 /**
+ * 학부모 FAQ 문의가 들어왔을 때 채널 주인에게 카카오톡 알림 전송 (나에게 보내기)
+ *
+ * 학부모가 기다리는 요청 안에서 호출되므로 카카오 API 가 늦어져도 채팅이 막히지 않도록
+ * 타임아웃을 두고, 실패는 로그만 남기고 조용히 넘어간다.
+ */
+export async function sendFaqInquiryKakaoMessage({
+  userId,
+  channelName,
+  visitorName,
+  question,
+}) {
+  try {
+    if (!(await isEventEnabled('FAQ_INQUIRY'))) return disabledResult('FAQ_INQUIRY');
+
+    const accessToken = await getValidAccessToken(userId);
+
+    if (!accessToken) {
+      return {
+        success: false,
+        error: '유효한 카카오 토큰이 없거나 메시지 알림에 동의하지 않았습니다.',
+        skipped: true,
+      };
+    }
+
+    // 카카오 텍스트 템플릿은 200자 제한이 있어 질문이 길면 잘라서 보낸다.
+    const preview = question.length > 100 ? `${question.slice(0, 100)}…` : question;
+    const chatUrl = `${APP_URL}/faq/chats`;
+
+    const templateObject = {
+      object_type: 'text',
+      text: `💬 새 문의가 도착했습니다\n\n📮 ${channelName}\n🙋 ${visitorName}\n\n"${preview}"`,
+      link: {
+        web_url: chatUrl,
+        mobile_web_url: chatUrl,
+      },
+      button_title: '문의 확인하기',
+    };
+
+    const response = await fetch('https://kapi.kakao.com/v2/api/talk/memo/default/send', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
+      },
+      body: new URLSearchParams({
+        template_object: JSON.stringify(templateObject),
+      }),
+      signal: AbortSignal.timeout(KAKAO_SEND_TIMEOUT_MS),
+    });
+
+    const result = await response.json();
+    const messageContent = templateObject.text;
+
+    if (result.result_code === 0) {
+      await KakaoMessageLog.create({
+        senderId: userId,
+        recipientId: userId,
+        messageType: 'FAQ_INQUIRY',
+        messageContent,
+        success: true,
+        errorMessage: null,
+      });
+      return { success: true };
+    }
+
+    console.error('FAQ 문의 카카오 알림 전송 실패:', result);
+    await KakaoMessageLog.create({
+      senderId: userId,
+      recipientId: userId,
+      messageType: 'FAQ_INQUIRY',
+      messageContent,
+      success: false,
+      errorMessage: result.msg || '메시지 전송 실패',
+    });
+    return { success: false, error: result.msg || '메시지 전송 실패' };
+  } catch (error) {
+    console.error('FAQ 문의 카카오 알림 전송 오류:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * 관리자가 특정 사용자에게 커스텀 메시지 전송
  */
 export async function sendCustomKakaoMessage({
@@ -187,6 +298,8 @@ export async function sendCustomKakaoMessage({
   message,
 }) {
   try {
+    if (!(await isEventEnabled('CUSTOM'))) return disabledResult('CUSTOM');
+
     // 수신자의 토큰으로 메시지 전송 (나에게 보내기 API 사용)
     const accessToken = await getValidAccessToken(recipientId, false);
 
@@ -251,4 +364,8 @@ export async function sendCustomKakaoMessage({
   }
 }
 
-export default { sendAttendanceKakaoMessage, sendCustomKakaoMessage };
+export default {
+  sendAttendanceKakaoMessage,
+  sendFaqInquiryKakaoMessage,
+  sendCustomKakaoMessage,
+};

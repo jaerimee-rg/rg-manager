@@ -7,6 +7,7 @@ function ChannelSettingsModal({ channel, onClose, onSaved }) {
   const [pendingMessage, setPendingMessage] = useState(channel?.pendingMessage || '');
   const [isActive, setIsActive] = useState(channel ? channel.isActive : true);
   const [aiEnabled, setAiEnabled] = useState(channel ? channel.aiEnabled !== false : true);
+  const [kakaoNotify, setKakaoNotify] = useState(channel ? channel.kakaoNotify !== false : true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -22,7 +23,8 @@ function ChannelSettingsModal({ channel, onClose, onSaved }) {
       fallbackMessage,
       pendingMessage,
       isActive,
-      aiEnabled
+      aiEnabled,
+      kakaoNotify
     });
     setSaving(false);
     if (!ok) setError('저장에 실패했습니다. 잠시 후 다시 시도해주세요.');
@@ -79,6 +81,22 @@ function ChannelSettingsModal({ channel, onClose, onSaved }) {
             />
           </div>
         )}
+
+        <div className="faq-setting-block">
+          <label className="faq-check">
+            <input
+              type="checkbox"
+              checked={kakaoNotify}
+              onChange={(e) => setKakaoNotify(e.target.checked)}
+            />
+            새 문의 카카오톡 알림
+          </label>
+          <div className="faq-setting-desc">
+            {kakaoNotify
+              ? '학부모 질문이 들어오면 카카오톡으로 알려드립니다. (카카오 로그인 + 알림 동의 필요)'
+              : '새 문의가 들어와도 카카오톡 알림을 보내지 않습니다.'}
+          </div>
+        </div>
 
         <label className="faq-check">
           <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />

@@ -166,6 +166,27 @@ export const AuthProvider = ({ children }) => {
     return data.user;
   };
 
+  // 내 정보가 다른 화면(관리자 사용자 관리 등)에서 바뀐 뒤 다시 읽어온다.
+  const refreshUser = async () => {
+    const currentToken = token || getToken();
+    if (!currentToken) return null;
+
+    try {
+      const response = await fetch('/api/auth/verify', {
+        headers: { Authorization: `Bearer ${currentToken}` }
+      });
+      if (!response.ok) return null;
+
+      const data = await response.json();
+      setUser(data.user);
+      saveUser(data.user);
+      return data.user;
+    } catch (error) {
+      console.error('사용자 정보 갱신 실패:', error);
+      return null;
+    }
+  };
+
   const value = {
     user,
     token,
@@ -175,7 +196,8 @@ export const AuthProvider = ({ children }) => {
     loading,
     getKakaoLoginUrl,
     kakaoLogin,
-    updateUserName
+    updateUserName,
+    refreshUser
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

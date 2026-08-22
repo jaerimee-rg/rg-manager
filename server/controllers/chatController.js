@@ -3,6 +3,8 @@ import ChatSession from '../models/ChatSession.js';
 import ChatMessage from '../models/ChatMessage.js';
 import Faq from '../models/Faq.js';
 import { generateAnswer } from '../utils/aiAnswer.js';
+import { sendFaqInquiryKakaoMessage } from '../utils/kakaoMessage.js';
+import { isAdminViewing, isKakaoNotifyCooling } from '../utils/chatPresence.js';
 
 export const MESSAGE_MAX = 500;
 export const VISITOR_NAME_MAX = 20;
@@ -11,6 +13,33 @@ const SUGGESTED_COUNT = 3;
 const DAILY_LIMIT = Number(process.env.FAQ_CHAT_DAILY_LIMIT || 200);
 
 const notFound = (res) => res.status(404).json({ error: '채팅방을 찾을 수 없습니다.' });
+
+/**
+ * 새 문의를 채널 주인에게 카카오톡으로 알린다.
+ *
+ * 학부모 답변을 막으면 안 되므로 어떤 실패도 밖으로 던지지 않는다.
+ * 연속 질문에 알림이 쏟아지지 않도록 대화 단위 쿨다운을 둔다.
+ */
+const notifyNewInquiry = async ({ channel, session, question }) => {
+  try {
+    if (channel.kakaoNotify === false) return;
+    if (isKakaoNotifyCooling(session.kakaoNotifiedAt)) return;
+
+    const result = await sendFaqInquiryKakaoMessage({
+      userId: channel.userId,
+      channelName: channel.name,
+      visitorName: session.visitorName,
+      question
+    });
+
+    // 토큰이 없어 건너뛴 경우는 쿨다운을 걸지 않는다 (나중에 연동하면 바로 받도록).
+    if (result?.success) {
+      await ChatSession.recordKakaoNotified(session.id);
+    }
+  } catch (error) {
+    console.error('FAQ 문의 알림 처리 오류:', error);
+  }
+};
 
 /* ─────────── 관리자: 채널 ─────────── */
 
@@ -30,7 +59,8 @@ export const getChannel = async (req, res) => {
 export const updateChannel = async (req, res) => {
   try {
     const { id: userId, username } = req.user;
-    const { name, greeting, fallbackMessage, pendingMessage, isActive, aiEnabled } = req.body;
+    const { name, greeting, fallbackMessage, pendingMessage, isActive, aiEnabled, kakaoNotify } =
+      req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({ error: '채팅창 이름을 입력해주세요.' });
@@ -43,8 +73,29 @@ export const updateChannel = async (req, res) => {
       fallbackMessage: (fallbackMessage || '').trim() || DEFAULT_FALLBACK,
       pendingMessage: (pendingMessage || '').trim() || DEFAULT_PENDING,
       isActive,
-      aiEnabled
+      aiEnabled,
+      kakaoNotify
     });
+
+    res.json(channel);
+  } catch (error) {
+    console.error('채팅 채널 처리 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+// 대화 내역 화면의 AI 자동 답변 토글 (다른 설정은 건드리지 않는다)
+export const updateAiEnabled = async (req, res) => {
+  try {
+    const { id: userId, username } = req.user;
+    const { aiEnabled } = req.body;
+
+    if (typeof aiEnabled !== 'boolean') {
+      return res.status(400).json({ error: '잘못된 요청입니다.' });
+    }
+
+    await ChatChannel.getOrCreate(userId, username);
+    const channel = await ChatChannel.setAiEnabled(userId, aiEnabled);
 
     res.json(channel);
   } catch (error) {
@@ -155,19 +206,28 @@ export const postMessage = async (req, res) => {
     const fallback = channel.fallbackMessage || DEFAULT_FALLBACK;
     const aiEnabled = channel.aiEnabled !== false;
 
+    // 관리자가 이 대화창을 열어두고 있으면 AI 가 끼어들지 않고 직접 답변하도록 둔다.
+    const adminViewing = isAdminViewing(session.adminViewingAt);
+
     // 새 질문을 저장하기 전에 이전 맥락을 확보한다.
     const history = await ChatMessage.recentHistory(session.id, HISTORY_TURNS);
     await ChatMessage.create(session.id, { role: 'parent', content: question });
 
-    // AI 자동 답변을 꺼두면 호출하지 않고 접수 안내만 남긴다 (관리자가 직접 답변)
-    if (!aiEnabled) {
+    // 관리자가 보고 있으면 알림은 불필요하므로 그때만 건너뛴다.
+    if (!adminViewing) {
+      await notifyNewInquiry({ channel, session, question });
+    }
+
+    // AI 자동 답변이 꺼져 있거나 관리자가 대화창을 보고 있으면
+    // AI 를 호출하지 않고 접수 안내만 남긴다 (관리자가 직접 답변).
+    if (!aiEnabled || adminViewing) {
       const pending = channel.pendingMessage || DEFAULT_PENDING;
       const savedPending = await ChatMessage.create(session.id, {
         role: 'bot',
         content: pending,
         answered: false,
         matchedFaqIds: [],
-        status: 'ai_off'
+        status: adminViewing ? 'admin_viewing' : 'ai_off'
       });
 
       await ChatSession.recordMessages(session.id, { unanswered: true });
@@ -285,6 +345,29 @@ export const getSessionMessages = async (req, res) => {
           .map((id) => ({ id, question: faqMap.get(id) }))
       }))
     });
+  } catch (error) {
+    console.error('대화 내역 처리 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/**
+ * 관리자가 대화창을 열어둔 동안 주기적으로 호출된다.
+ * presence 가 살아있는 동안 그 대화에는 AI 자동 답변이 나가지 않는다.
+ */
+export const setAdminViewing = async (req, res) => {
+  try {
+    const { id: userId, role } = req.user;
+    const { active } = req.body;
+
+    const session = await ChatSession.getWithOwner(req.params.id);
+    if (!session || (role !== 'admin' && session.ownerUserId !== userId)) {
+      return res.status(404).json({ error: '대화를 찾을 수 없습니다.' });
+    }
+
+    const updated = await ChatSession.setAdminViewing(session.id, active !== false);
+
+    res.json({ adminViewingAt: updated ? updated.adminViewingAt : null });
   } catch (error) {
     console.error('대화 내역 처리 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });

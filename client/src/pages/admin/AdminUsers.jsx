@@ -8,12 +8,14 @@ function AdminUsers() {
   const [formData, setFormData] = useState({ username: '', password: '', role: 'user' });
   const [isEditing, setIsEditing] = useState(false);
   const [editId, setEditId] = useState(null);
+  const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
   const isMobile = useIsMobile();
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferFrom, setTransferFrom] = useState('');
   const [transferTo, setTransferTo] = useState('');
   const [transferLoading, setTransferLoading] = useState(false);
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
 
   useEffect(() => {
     loadUsers();
@@ -31,24 +33,45 @@ function AdminUsers() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!isEditing || saving) return;
+
+    const username = formData.username.trim();
+    if (!username) {
+      setFormError('사용자 이름을 입력해주세요.');
+      return;
+    }
+
+    setSaving(true);
+    setFormError('');
     try {
-      if (isEditing) {
-        const response = await fetchWithAuth(`/api/auth/users/${editId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData)
-        });
-        if (response.ok) {
-          await loadUsers();
-          setIsEditing(false);
-          setEditId(null);
-          alert('사용자 정보가 수정되었습니다.');
-        }
+      const response = await fetchWithAuth(`/api/auth/users/${editId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...formData, username })
+      });
+
+      const data = await response.json();
+
+      // 실패하면 입력값을 지우지 않고 이유를 보여준다.
+      if (!response.ok) {
+        setFormError(data.error || '사용자 정보 저장에 실패했습니다.');
+        return;
       }
-      setFormData({ username: '', password: '', role: 'user' });
+
+      await loadUsers();
+
+      // 내 이름을 바꿨다면 헤더 등에 남아 있는 예전 이름도 갱신한다.
+      if (user && editId === user.id) {
+        await refreshUser();
+      }
+
+      handleCancel();
+      alert('사용자 정보가 수정되었습니다.');
     } catch (error) {
       console.error('사용자 저장 실패:', error);
-      alert('사용자 정보 저장에 실패했습니다.');
+      setFormError('사용자 정보 저장에 실패했습니다.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -60,6 +83,7 @@ function AdminUsers() {
     });
     setIsEditing(true);
     setEditId(targetUser.id);
+    setFormError('');
   };
 
   const handleDelete = async (id) => {
@@ -83,6 +107,7 @@ function AdminUsers() {
     setIsEditing(false);
     setEditId(null);
     setFormData({ username: '', password: '', role: 'user' });
+    setFormError('');
   };
 
   const formatDate = (dateString) => {
@@ -205,8 +230,8 @@ function AdminUsers() {
                   value={formData.username}
                   onChange={(e) => setFormData({...formData, username: e.target.value})}
                   required
-                  disabled={isEditing}
-                  style={{ backgroundColor: 'var(--color-gray-100)' }}
+                  maxLength={30}
+                  autoFocus
                 />
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
@@ -230,6 +255,19 @@ function AdminUsers() {
               </div>
             </div>
 
+            {formError && (
+              <div
+                role="alert"
+                style={{
+                  marginTop: 'var(--spacing-lg)',
+                  color: 'var(--color-danger)',
+                  fontSize: '0.875rem'
+                }}
+              >
+                {formError}
+              </div>
+            )}
+
             <div style={{
               display: 'flex',
               gap: 'var(--spacing-md)',
@@ -237,8 +275,8 @@ function AdminUsers() {
               paddingTop: 'var(--spacing-xl)',
               borderTop: '1px solid var(--color-gray-200)'
             }}>
-              <button type="submit" className="btn btn-primary">
-                수정 완료
+              <button type="submit" className="btn btn-primary" disabled={saving}>
+                {saving ? '저장 중...' : '수정 완료'}
               </button>
               <button
                 type="button"
