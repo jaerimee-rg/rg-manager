@@ -1,5 +1,6 @@
 import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
+import { KAKAO_REDIRECT_URI } from '../utils/appUrl.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 const JWT_EXPIRES_IN = '30d'; // 로그아웃 전까지 유지 (30일)
@@ -10,11 +11,7 @@ const USER_ROLES = ['user', 'admin'];
 // 카카오 OAuth 설정 (환경 변수에서 로드)
 const KAKAO_CLIENT_ID = process.env.KAKAO_CLIENT_ID;
 const KAKAO_CLIENT_SECRET = process.env.KAKAO_CLIENT_SECRET;
-const KAKAO_REDIRECT_URI = process.env.KAKAO_REDIRECT_URI || (
-  process.env.NODE_ENV === 'production'
-    ? 'https://rg-manager.onrender.com/oauth/kakao/callback'
-    : 'http://localhost:3000/oauth/kakao/callback'
-);
+
 
 export const login = async (req, res) => {
   try {
@@ -426,17 +423,22 @@ export const updateUsername = async (req, res) => {
     const userId = req.user.id;
     const { username } = req.body;
 
-    if (!username || username.trim().length === 0) {
+    const nextUsername = (username || '').trim();
+
+    if (!nextUsername) {
       return res.status(400).json({ error: '이름을 입력해주세요.' });
+    }
+    if (nextUsername.length > USERNAME_MAX) {
+      return res.status(400).json({ error: `이름은 ${USERNAME_MAX}자 이내로 입력해주세요.` });
     }
 
     // 중복 확인
-    const existingUser = await User.getByUsername(username.trim());
+    const existingUser = await User.getByUsername(nextUsername);
     if (existingUser && existingUser.id !== userId) {
       return res.status(400).json({ error: '이미 사용 중인 이름입니다.' });
     }
 
-    const user = await User.updateUsername(userId, username.trim());
+    const user = await User.updateUsername(userId, nextUsername);
 
     if (!user) {
       return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
@@ -447,8 +449,12 @@ export const updateUsername = async (req, res) => {
       user
     });
   } catch (error) {
+    // 확인과 UPDATE 사이에 같은 이름이 선점된 경우 (unique_violation)
+    if (error.code === '23505') {
+      return res.status(400).json({ error: '이미 사용 중인 이름입니다.' });
+    }
     console.error('이름 설정 오류:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: '이름 변경 중 오류가 발생했습니다.' });
   }
 };
 

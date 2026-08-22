@@ -491,7 +491,42 @@ describe('authController', () => {
       });
     });
 
-    it('should return 404 if user not found', async () => {
+    it('30자를 넘는 이름은 400 을 반환한다', async () => {
+      req.user = { id: 1 };
+      req.body = { username: 'ㄱ'.repeat(31) };
+
+      await authController.updateUsername(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(User.updateUsername).not.toHaveBeenCalled();
+    });
+
+    it('앞뒤 공백은 잘라서 저장한다', async () => {
+      req.user = { id: 1 };
+      req.body = { username: '  이재림  ' };
+      User.getByUsername.mockResolvedValue(null);
+      User.updateUsername.mockResolvedValue({ id: 1, username: '이재림' });
+
+      await authController.updateUsername(req, res);
+
+      expect(User.updateUsername).toHaveBeenCalledWith(1, '이재림');
+    });
+
+    it('저장 직전에 이름을 뺏기면 400 으로 안내한다', async () => {
+      req.user = { id: 1 };
+      req.body = { username: '이재림' };
+      User.getByUsername.mockResolvedValue(null);
+      const conflict = new Error('duplicate key');
+      conflict.code = '23505';
+      User.updateUsername.mockRejectedValue(conflict);
+
+      await authController.updateUsername(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ error: '이미 사용 중인 이름입니다.' });
+    });
+
+      it('should return 404 if user not found', async () => {
       req.user = { id: 999 };
       req.body = { username: 'newname' };
       User.getByUsername.mockResolvedValue(null);

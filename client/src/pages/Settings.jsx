@@ -5,11 +5,17 @@ import { fetchWithAuth } from '../utils/api';
 import { useIsMobile } from '../hooks/useMediaQuery';
 
 function Settings() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUserName } = useAuth();
   const navigate = useNavigate();
   const [kakaoMessageConsent, setKakaoMessageConsent] = useState(false);
   const [loading, setLoading] = useState(false);
   const isMobile = useIsMobile();
+
+  // 표시 이름 변경 (카카오 계정은 가입 시 자동 이름이 붙어 특히 필요하다)
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [nameError, setNameError] = useState('');
+  const [savingName, setSavingName] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -30,6 +36,44 @@ function Settings() {
       }
     } catch (error) {
       console.error('설정 로드 실패:', error);
+    }
+  };
+
+  const startEditName = () => {
+    setNameInput(user?.username || '');
+    setNameError('');
+    setEditingName(true);
+  };
+
+  const cancelEditName = () => {
+    setEditingName(false);
+    setNameError('');
+  };
+
+  const handleSaveName = async (e) => {
+    e.preventDefault();
+    if (savingName) return;
+
+    const nextName = nameInput.trim();
+    if (!nextName) {
+      setNameError('이름을 입력해주세요.');
+      return;
+    }
+    if (nextName === user?.username) {
+      cancelEditName();
+      return;
+    }
+
+    setSavingName(true);
+    setNameError('');
+    try {
+      await updateUserName(nextName);
+      setEditingName(false);
+    } catch (error) {
+      // 실패 시 입력값을 지우지 않고 이유만 보여준다.
+      setNameError(error.message || '이름 변경에 실패했습니다.');
+    } finally {
+      setSavingName(false);
     }
   };
 
@@ -77,7 +121,53 @@ function Settings() {
             alignItems: 'center'
           }}>
             <span style={{ color: 'var(--color-gray-500)', fontWeight: 500 }}>사용자명</span>
-            <span style={{ fontWeight: 600, color: 'var(--color-gray-900)' }}>{user?.username}</span>
+            {editingName ? (
+              <form onSubmit={handleSaveName}>
+                <div style={{ display: 'flex', gap: 'var(--spacing-sm)', flexWrap: 'wrap' }}>
+                  <input
+                    type="text"
+                    value={nameInput}
+                    onChange={(e) => setNameInput(e.target.value)}
+                    maxLength={30}
+                    autoFocus
+                    aria-label="사용자명"
+                    style={{ flex: 1, minWidth: 140 }}
+                  />
+                  <button type="submit" className="btn btn-primary btn-sm" disabled={savingName}>
+                    {savingName ? '저장 중...' : '저장'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={cancelEditName}
+                    disabled={savingName}
+                  >
+                    취소
+                  </button>
+                </div>
+                {nameError && (
+                  <div
+                    role="alert"
+                    style={{
+                      marginTop: 'var(--spacing-sm)',
+                      color: 'var(--color-danger)',
+                      fontSize: '0.8125rem'
+                    }}
+                  >
+                    {nameError}
+                  </div>
+                )}
+              </form>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
+                <span style={{ fontWeight: 600, color: 'var(--color-gray-900)' }}>
+                  {user?.username}
+                </span>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={startEditName}>
+                  이름 변경
+                </button>
+              </div>
+            )}
           </div>
           <div style={{
             display: 'grid',

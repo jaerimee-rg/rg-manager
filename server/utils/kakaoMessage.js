@@ -1,10 +1,11 @@
 import User from '../models/User.js';
 import KakaoMessageLog from '../models/KakaoMessageLog.js';
 import NotificationSetting, { NOTIFICATION_EVENTS } from '../models/NotificationSetting.js';
+import { APP_URL } from './appUrl.js';
 
 const KAKAO_CLIENT_ID = process.env.KAKAO_CLIENT_ID;
 const KAKAO_CLIENT_SECRET = process.env.KAKAO_CLIENT_SECRET;
-const APP_URL = process.env.APP_URL || 'https://rg-manager.onrender.com';
+
 
 // 학부모 요청 처리 중에 보내는 알림이 카카오 응답을 무한정 기다리지 않도록 하는 상한
 const KAKAO_SEND_TIMEOUT_MS = 5000;
