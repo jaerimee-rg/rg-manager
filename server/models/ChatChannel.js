@@ -29,14 +29,18 @@ class ChatChannel {
 
   static async create(userId, name) {
     const now = new Date().toISOString();
+    // 동시 요청이 각각 채널을 만들지 않도록 사용자당 1개로 고정한다
     const result = await pool.query(
       `INSERT INTO chat_channels
          ("userId", "publicId", name, greeting, "fallbackMessage", "pendingMessage", "isActive", "aiEnabled", "createdAt", "updatedAt")
        VALUES ($1, $2, $3, $4, $5, $6, TRUE, TRUE, $7, $7)
+       ON CONFLICT ("userId") DO NOTHING
        RETURNING *`,
       [userId, generatePublicId(), name, DEFAULT_GREETING, DEFAULT_FALLBACK, DEFAULT_PENDING, now]
     );
-    return result.rows[0];
+
+    // 이미 다른 요청이 만들었다면 그 채널을 돌려준다
+    return result.rows.length > 0 ? result.rows[0] : this.getByUserId(userId);
   }
 
   // 채널이 없으면 만들어서 돌려준다 (FR-20)

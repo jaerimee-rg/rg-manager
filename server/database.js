@@ -268,6 +268,16 @@ const initDatabase = async () => {
 
     await client.query('CREATE INDEX IF NOT EXISTS idx_chat_channels_user ON chat_channels ("userId")');
 
+    // 사용자당 채널은 1개 (동시 요청으로 중복 생성되는 것을 막는다)
+    try {
+      await client.query(`
+        ALTER TABLE chat_channels
+        ADD CONSTRAINT chat_channels_user_unique UNIQUE ("userId")
+      `);
+    } catch (e) {
+      // constraint가 이미 존재하면 무시
+    }
+
     // 학부모 단위 대화 세션
     await client.query(`
       CREATE TABLE IF NOT EXISTS chat_sessions (
