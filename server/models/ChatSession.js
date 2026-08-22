@@ -36,6 +36,22 @@ class ChatSession {
     return result.rows[0];
   }
 
+  // 관리자가 직접 답변하면 해당 대화는 처리된 것으로 본다
+  static async recordAdminReply(sessionId) {
+    const now = new Date().toISOString();
+    const result = await pool.query(
+      `UPDATE chat_sessions
+       SET "messageCount" = "messageCount" + 1,
+           "unansweredCount" = 0,
+           "lastMessageAt" = $1,
+           "lastAdminReplyAt" = $1
+       WHERE id = $2
+       RETURNING *`,
+      [now, sessionId]
+    );
+    return result.rows[0];
+  }
+
   // 오늘 이 채널에 들어온 학부모 질문 수 (일일 한도 확인용)
   static async countTodayQuestions(channelId) {
     const startOfDay = new Date();

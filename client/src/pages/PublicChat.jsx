@@ -45,11 +45,67 @@ function PublicChat() {
   const [starting, setStarting] = useState(false);
 
   const messagesRef = useRef(null);
+  const sendingRef = useRef(false);
+  const composerRef = useRef(null);
 
   useEffect(() => {
     document.title = '문의하기';
     loadChannel();
   }, [publicId]);
+
+  // 모바일 키보드가 올라와도 채팅 화면이 전체 화면을 유지하도록
+  // visualViewport 크기에 맞춰 컨테이너 높이·위치를 고정한다.
+  useEffect(() => {
+    const root = document.documentElement;
+    const viewport = window.visualViewport;
+
+    const syncViewport = () => {
+      const height = viewport ? viewport.height : window.innerHeight;
+      const top = viewport ? viewport.offsetTop : 0;
+      root.style.setProperty('--pchat-vh', `${height}px`);
+      root.style.setProperty('--pchat-top', `${top}px`);
+      if (messagesRef.current) {
+        messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+      }
+    };
+
+    syncViewport();
+    document.body.classList.add('pchat-lock');
+    viewport?.addEventListener('resize', syncViewport);
+    viewport?.addEventListener('scroll', syncViewport);
+    window.addEventListener('resize', syncViewport);
+    window.addEventListener('orientationchange', syncViewport);
+
+    return () => {
+      document.body.classList.remove('pchat-lock');
+      root.style.removeProperty('--pchat-vh');
+      root.style.removeProperty('--pchat-top');
+      viewport?.removeEventListener('resize', syncViewport);
+      viewport?.removeEventListener('scroll', syncViewport);
+      window.removeEventListener('resize', syncViewport);
+      window.removeEventListener('orientationchange', syncViewport);
+    };
+  }, []);
+
+  // 관리자가 남긴 답변을 받아오기 위한 주기적 갱신
+  useEffect(() => {
+    if (status !== 'chat') return undefined;
+
+    const timer = setInterval(() => {
+      if (document.hidden || sendingRef.current) return;
+      refreshMessages();
+    }, 8000);
+
+    const onVisible = () => {
+      if (!document.hidden && !sendingRef.current) refreshMessages();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [status, publicId, visitorKey]);
 
   useEffect(() => {
     if (messagesRef.current) {
@@ -87,6 +143,25 @@ function PublicChat() {
     } catch (error) {
       console.error('채팅방 로드 실패:', error);
       setStatus('notfound');
+    }
+  };
+
+  const refreshMessages = async () => {
+    try {
+      const response = await fetch(
+        `/api/chat/public/${publicId}/messages?visitorKey=${encodeURIComponent(visitorKey)}`
+      );
+      if (!response.ok) return;
+
+      const data = await response.json();
+      if (!Array.isArray(data.messages)) return;
+
+      // 전송 중에는 낙관적으로 그린 메시지를 덮어쓰지 않는다
+      if (sendingRef.current) return;
+      setMessages(data.messages);
+      if (data.visitorName) setVisitorName(data.visitorName);
+    } catch (error) {
+      // 폴링 실패는 조용히 무시한다 (다음 주기에 재시도)
     }
   };
 
@@ -133,6 +208,7 @@ function PublicChat() {
     if (!question || question.length > MESSAGE_MAX || sending) return;
 
     setInput('');
+    sendingRef.current = true;
     setSending(true);
     setMessages((prev) => [
       ...prev,
@@ -184,6 +260,7 @@ function PublicChat() {
         }
       ]);
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   };
@@ -266,11 +343,17 @@ function PublicChat() {
       <header className="pchat-header">
         <div className="pchat-header-title">
           {channel?.name || '문의하기'}
-          <span className="badge badge-primary" style={{ marginLeft: 8 }}>AI 자동 응답</span>
+          {channel?.aiEnabled === false ? (
+            <span className="badge badge-gray" style={{ marginLeft: 8 }}>선생님 직접 답변</span>
+          ) : (
+            <span className="badge badge-primary" style={{ marginLeft: 8 }}>AI 자동 응답</span>
+          )}
         </div>
         <div className="pchat-header-sub">
           {visitorName ? `${/님$/.test(visitorName) ? visitorName : `${visitorName}님`}으로 대화 중 · ` : ''}
-          등록된 FAQ 기준으로 안내드려요
+          {channel?.aiEnabled === false
+            ? '남겨주시면 선생님이 확인 후 답변드려요'
+            : '등록된 FAQ 기준으로 안내드려요'}
         </div>
       </header>
 
@@ -297,7 +380,7 @@ function PublicChat() {
           </div>
         )}
 
-        {!channel?.hasFaq && (
+        {!channel?.hasFaq && channel?.aiEnabled !== false && (
           <div className="pchat-row bot">
             <div className="pchat-bubble pchat-bubble-warn">
               아직 등록된 FAQ가 없어요. 궁금한 점은 담당 선생님께 직접 문의해 주세요.
@@ -307,14 +390,22 @@ function PublicChat() {
 
         {messages.map((m) => (
           <div key={m.id} className={`pchat-row ${m.role === 'parent' ? 'me' : 'bot'}`}>
-            {m.role === 'parent' ? (
-              <div className="pchat-who">{visitorName}</div>
-            ) : (
+            {m.role === 'parent' && <div className="pchat-who">{visitorName}</div>}
+            {m.role === 'bot' && (
               <div className="pchat-who">
                 <span className="pchat-avatar">AI</span> 안내 도우미
               </div>
             )}
-            <div className={`pchat-bubble ${m.answered === false ? 'pchat-bubble-warn' : ''}`}>
+            {m.role === 'admin' && (
+              <div className="pchat-who">
+                <span className="pchat-avatar teacher">선</span> 선생님
+              </div>
+            )}
+            <div
+              className={`pchat-bubble ${
+                m.role === 'admin' ? 'pchat-bubble-admin' : ''
+              } ${m.role === 'bot' && m.answered === false ? 'pchat-bubble-warn' : ''}`}
+            >
               {m.content}
             </div>
             <div className="pchat-time">{formatTime(m.createdAt)}</div>
@@ -324,7 +415,8 @@ function PublicChat() {
         {sending && (
           <div className="pchat-row bot">
             <div className="pchat-who">
-              <span className="pchat-avatar">AI</span> 답변을 작성하고 있어요
+              <span className="pchat-avatar">AI</span>
+              {channel?.aiEnabled === false ? ' 접수하고 있어요' : ' 답변을 작성하고 있어요'}
             </div>
             <div className="pchat-bubble pchat-typing">
               <i></i>
@@ -338,9 +430,18 @@ function PublicChat() {
       <div className="pchat-composer">
         <div className="pchat-composer-box">
           <textarea
+            ref={composerRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            onFocus={() => {
+              // 키보드가 올라온 뒤 마지막 메시지가 가려지지 않도록
+              setTimeout(() => {
+                if (messagesRef.current) {
+                  messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+                }
+              }, 300);
+            }}
             placeholder="궁금한 점을 입력해 주세요"
             rows={1}
           />
@@ -355,7 +456,9 @@ function PublicChat() {
         </div>
         <div className="pchat-composer-meta">
           <span className="pchat-notice">
-            AI가 등록된 FAQ만 참고해 답변합니다. 입력하신 내용은 학원 관리자에게 전달·저장됩니다.
+            {channel?.aiEnabled === false
+              ? '선생님이 확인 후 답변드립니다. 입력하신 내용은 학원 관리자에게 전달·저장됩니다.'
+              : 'AI가 등록된 FAQ만 참고해 답변합니다. 입력하신 내용은 학원 관리자에게 전달·저장됩니다.'}
           </span>
           <span className={`pchat-counter ${input.length > MESSAGE_MAX ? 'over' : ''}`}>
             {input.length}/{MESSAGE_MAX}

@@ -8,6 +8,7 @@ import {
   postMessage,
   getSessions,
   getSessionMessages,
+  replyToSession,
   deleteSession
 } from '../controllers/chatController.js';
 import { verifyToken } from '../middleware/auth.js';
@@ -26,6 +27,7 @@ router.get('/channel', verifyToken, getChannel);
 router.put('/channel', verifyToken, logAction('UPDATE_CHAT_CHANNEL'), updateChannel);
 router.get('/sessions', verifyToken, getSessions);
 router.get('/sessions/:id/messages', verifyToken, getSessionMessages);
+router.post('/sessions/:id/reply', verifyToken, logAction('REPLY_CHAT_SESSION'), replyToSession);
 router.delete('/sessions/:id', verifyToken, logAction('DELETE_CHAT_SESSION'), deleteSession);
 
 export default router;

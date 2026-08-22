@@ -2607,3 +2607,102 @@ tbody tr:last-child td {
     padding: var(--spacing-xl);
   }
 }
+
+/* ===================================
+   FAQ 챗봇 — 관리자 답변 / AI 토글 / 모바일 키보드 대응
+   =================================== */
+
+/* 관리자 답변 입력 */
+.chat-reply {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xl);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-gray-100);
+}
+
+.chat-reply textarea {
+  width: 100%;
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  font: inherit;
+  /* 16px 미만이면 iOS Safari가 포커스 시 화면을 확대한다 */
+  font-size: 16px;
+  font-family: inherit;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.chat-reply textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.chat-reply .btn {
+  align-self: flex-end;
+}
+
+/* 관리자가 보낸 메시지 */
+.chat-msg.admin {
+  margin-left: auto;
+  align-items: flex-start;
+}
+
+.chat-msg.admin .chat-bubble {
+  background: var(--color-success);
+  color: #fff;
+  border-top-right-radius: 4px;
+}
+
+/* 채널 설정 - AI 토글 블록 */
+.faq-setting-block {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.faq-setting-desc {
+  font-size: 0.8125rem;
+  color: var(--color-gray-500);
+  line-height: 1.6;
+  margin-top: var(--spacing-sm);
+}
+
+/* 학부모 화면: 선생님 답변 */
+.pchat-avatar.teacher {
+  background: var(--color-success);
+}
+
+.pchat-bubble-admin {
+  background: var(--color-success-bg);
+  border: 1px solid #BFF0D8;
+  color: #1B7A4B;
+}
+
+/* 모바일 키보드가 올라와도 채팅이 전체 화면을 유지하도록 고정 */
+body.pchat-lock {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  overscroll-behavior: none;
+}
+
+.pchat {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--pchat-top, 0px);
+  height: var(--pchat-vh, 100dvh);
+}
+
+/* iOS Safari 확대 방지 */
+.pchat-composer-box textarea {
+  font-size: 16px;
+}
+
+.pchat-entry-card input[type='text'] {
+  font-size: 16px;
+}

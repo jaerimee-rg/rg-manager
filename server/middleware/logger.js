@@ -76,6 +76,8 @@ const saveLog = async (req, action, target, responseData) => {
       details = `ID: ${target}`;
     } else if (action === 'UPDATE_CHAT_CHANNEL' && req.body) {
       details = `채널명: ${req.body.name}`;
+    } else if (action === 'REPLY_CHAT_SESSION' && req.params) {
+      details = `세션 ID: ${req.params.id}`;
     } else if (action === 'DELETE_CHAT_SESSION' && req.params) {
       details = `세션 ID: ${req.params.id}`;
     } else if (action === 'ADD_COMPETITION_STUDENT' && req.body) {

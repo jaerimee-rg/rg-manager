@@ -49,7 +49,9 @@ CREATE TABLE IF NOT EXISTS chat_channels (
   name TEXT NOT NULL,
   greeting TEXT,
   "fallbackMessage" TEXT,
+  "pendingMessage" TEXT,
   "isActive" BOOLEAN DEFAULT TRUE,
+  "aiEnabled" BOOLEAN DEFAULT TRUE,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL,
   FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE CASCADE
@@ -65,6 +67,8 @@ CREATE INDEX IF NOT EXISTS idx_chat_channels_user ON chat_channels ("userId");
 | `greeting` | 첫 인사말. 기본값 `"안녕하세요! 궁금한 점을 남겨주시면 등록된 FAQ를 바탕으로 안내해 드립니다."` |
 | `fallbackMessage` | 답변 불가 시 안내 문구. 기본값은 FR-42 문구 |
 | `isActive` | false면 링크 접속 시 "문의를 받고 있지 않습니다" |
+| `aiEnabled` | false면 AI를 호출하지 않고 접수 안내만 남긴다(관리자가 직접 답변) |
+| `pendingMessage` | `aiEnabled=false`일 때 학부모에게 보여줄 접수 안내 문구 |
 
 > MVP에서는 사용자당 채널 1개(최초 진입 시 자동 생성). 스키마는 1:N을 허용하므로 이후 확장 가능.
 
@@ -104,11 +108,11 @@ CREATE INDEX IF NOT EXISTS idx_chat_sessions_channel
 CREATE TABLE IF NOT EXISTS chat_messages (
   id SERIAL PRIMARY KEY,
   "sessionId" INTEGER NOT NULL,
-  role TEXT NOT NULL,                 -- 'parent' | 'bot'
+  role TEXT NOT NULL,                 -- 'parent' | 'bot' | 'admin'
   content TEXT NOT NULL,
   answered BOOLEAN,                   -- role='bot'일 때만 의미. false = 미답변
   "matchedFaqIds" TEXT,               -- JSON 배열 문자열. 예: "[3,7]"
-  status TEXT DEFAULT 'ok',           -- 'ok' | 'ai_error' | 'rate_limited' | 'no_faq'
+  status TEXT DEFAULT 'ok',           -- 'ok' | 'ai_error' | 'rate_limited' | 'no_faq' | 'ai_off'
   "inputTokens" INTEGER,
   "outputTokens" INTEGER,
   "latencyMs" INTEGER,
@@ -256,7 +260,7 @@ app.use('/api/chat', chatRoutes);
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | GET | `/api/chat/channel` | 내 채널 조회. 없으면 **자동 생성 후 반환** |
-| PUT | `/api/chat/channel` | `{ name, greeting, fallbackMessage, isActive }` 수정 |
+| PUT | `/api/chat/channel` | `{ name, greeting, fallbackMessage, pendingMessage, isActive, aiEnabled }` 수정 |
 | POST | `/api/chat/channel/regenerate` | `publicId` 재발급 (선택 기능) |
 
 **GET 응답 200**
@@ -349,6 +353,7 @@ app.use('/api/chat', chatRoutes);
 |---|---|---|
 | GET | `/api/chat/sessions` | 세션 목록. `?unansweredOnly=true`, `?startDate=`, `?endDate=`, `?limit=20&offset=0`, `?filterUserId=`(admin) |
 | GET | `/api/chat/sessions/:id/messages` | 세션 상세 메시지 (근거 FAQ 포함) |
+| POST | `/api/chat/sessions/:id/reply` | **관리자 답변 전송** `{ message }` (≤500자) → `role='admin'` 메시지 생성, 미답변 0으로 초기화 |
 | DELETE | `/api/chat/sessions/:id` | 세션 삭제 (메시지 CASCADE) |
 | GET | `/api/chat/stats` | 요약 통계: 총 질문 수, 미답변 수, 최근 7일 추이 (선택) |
 

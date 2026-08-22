@@ -1,4 +1,4 @@
-import ChatChannel, { DEFAULT_FALLBACK } from '../models/ChatChannel.js';
+import ChatChannel, { DEFAULT_FALLBACK, DEFAULT_PENDING } from '../models/ChatChannel.js';
 import ChatSession from '../models/ChatSession.js';
 import ChatMessage from '../models/ChatMessage.js';
 import Faq from '../models/Faq.js';
@@ -30,7 +30,7 @@ export const getChannel = async (req, res) => {
 export const updateChannel = async (req, res) => {
   try {
     const { id: userId, username } = req.user;
-    const { name, greeting, fallbackMessage, isActive } = req.body;
+    const { name, greeting, fallbackMessage, pendingMessage, isActive, aiEnabled } = req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({ error: '채팅창 이름을 입력해주세요.' });
@@ -41,7 +41,9 @@ export const updateChannel = async (req, res) => {
       name: name.trim(),
       greeting: (greeting || '').trim(),
       fallbackMessage: (fallbackMessage || '').trim() || DEFAULT_FALLBACK,
-      isActive
+      pendingMessage: (pendingMessage || '').trim() || DEFAULT_PENDING,
+      isActive,
+      aiEnabled
     });
 
     res.json(channel);
@@ -65,6 +67,7 @@ export const getPublicChannel = async (req, res) => {
       name: channel.name,
       greeting: channel.greeting,
       isActive: channel.isActive,
+      aiEnabled: channel.aiEnabled !== false,
       hasFaq: faqs.length > 0,
       suggestedQuestions: faqs.slice(0, SUGGESTED_COUNT).map((f) => f.question)
     });
@@ -150,10 +153,34 @@ export const postMessage = async (req, res) => {
 
     const question = message.trim();
     const fallback = channel.fallbackMessage || DEFAULT_FALLBACK;
+    const aiEnabled = channel.aiEnabled !== false;
 
     // 새 질문을 저장하기 전에 이전 맥락을 확보한다.
     const history = await ChatMessage.recentHistory(session.id, HISTORY_TURNS);
     await ChatMessage.create(session.id, { role: 'parent', content: question });
+
+    // AI 자동 답변을 꺼두면 호출하지 않고 접수 안내만 남긴다 (관리자가 직접 답변)
+    if (!aiEnabled) {
+      const pending = channel.pendingMessage || DEFAULT_PENDING;
+      const savedPending = await ChatMessage.create(session.id, {
+        role: 'bot',
+        content: pending,
+        answered: false,
+        matchedFaqIds: [],
+        status: 'ai_off'
+      });
+
+      await ChatSession.recordMessages(session.id, { unanswered: true });
+
+      return res.json({
+        answered: false,
+        pending: true,
+        reply: pending,
+        matchedFaqIds: [],
+        messageId: savedPending.id,
+        createdAt: savedPending.createdAt
+      });
+    }
 
     const faqs = await Faq.getPublishedByUserId(channel.userId);
     const result = await generateAnswer({ faqs, history, question });
@@ -257,6 +284,44 @@ export const getSessionMessages = async (req, res) => {
           .filter((id) => faqMap.has(id))
           .map((id) => ({ id, question: faqMap.get(id) }))
       }))
+    });
+  } catch (error) {
+    console.error('대화 내역 처리 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+export const replyToSession = async (req, res) => {
+  try {
+    const { id: userId, role } = req.user;
+    const { message } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: '답변 내용을 입력해주세요.' });
+    }
+    if (message.trim().length > MESSAGE_MAX) {
+      return res.status(400).json({ error: `답변은 ${MESSAGE_MAX}자 이내로 입력해주세요.` });
+    }
+
+    const session = await ChatSession.getWithOwner(req.params.id);
+    if (!session || (role !== 'admin' && session.ownerUserId !== userId)) {
+      return res.status(404).json({ error: '대화를 찾을 수 없습니다.' });
+    }
+
+    const saved = await ChatMessage.create(session.id, {
+      role: 'admin',
+      content: message.trim(),
+      answered: true,
+      status: 'ok'
+    });
+
+    await ChatSession.recordAdminReply(session.id);
+
+    res.status(201).json({
+      id: saved.id,
+      role: 'admin',
+      content: saved.content,
+      createdAt: saved.createdAt
     });
   } catch (error) {
     console.error('대화 내역 처리 오류:', error);

@@ -41,6 +41,8 @@
 | 답변 없을 때 | AI가 `answered: false` 반환 → 서버가 고정 안내 문구로 대체 | 환각(hallucination) 차단 |
 | AI 제공자 | **Google Gemini** (`@google/genai`, 기본 모델 `gemini-2.5-flash`) | API 키는 루트 `.env`의 `GEMINI_API_KEY` |
 | 대화 열람 | 관리자 화면 `/faq/chats`, 관리자 전용 `/admin/faq` | 요구사항 6번 |
+| 관리자 답변 | 대화 상세에서 직접 답변 전송 (학부모 화면에 "선생님" 말풍선) | 2026-08-22 추가 |
+| AI 자동 답변 | 채널 설정에서 on/off. 끄면 접수 안내만 남기고 관리자가 직접 답변 | 2026-08-22 추가 |
 
 ## 확정이 필요한 사항 (문서에는 권장안으로 기술)
 

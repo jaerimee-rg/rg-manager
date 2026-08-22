@@ -4,7 +4,9 @@ function ChannelSettingsModal({ channel, onClose, onSaved }) {
   const [name, setName] = useState(channel?.name || '');
   const [greeting, setGreeting] = useState(channel?.greeting || '');
   const [fallbackMessage, setFallbackMessage] = useState(channel?.fallbackMessage || '');
+  const [pendingMessage, setPendingMessage] = useState(channel?.pendingMessage || '');
   const [isActive, setIsActive] = useState(channel ? channel.isActive : true);
+  const [aiEnabled, setAiEnabled] = useState(channel ? channel.aiEnabled !== false : true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -14,7 +16,14 @@ function ChannelSettingsModal({ channel, onClose, onSaved }) {
 
     setSaving(true);
     setError('');
-    const ok = await onSaved({ name: name.trim(), greeting, fallbackMessage, isActive });
+    const ok = await onSaved({
+      name: name.trim(),
+      greeting,
+      fallbackMessage,
+      pendingMessage,
+      isActive,
+      aiEnabled
+    });
     setSaving(false);
     if (!ok) setError('저장에 실패했습니다. 잠시 후 다시 시도해주세요.');
   };
@@ -34,14 +43,42 @@ function ChannelSettingsModal({ channel, onClose, onSaved }) {
           <textarea value={greeting} onChange={(e) => setGreeting(e.target.value)} rows={3} />
         </div>
 
-        <div className="form-group">
-          <label className="form-label">답변할 수 없을 때 안내 문구</label>
-          <textarea
-            value={fallbackMessage}
-            onChange={(e) => setFallbackMessage(e.target.value)}
-            rows={3}
-          />
+        <div className="faq-setting-block">
+          <label className="faq-check">
+            <input
+              type="checkbox"
+              checked={aiEnabled}
+              onChange={(e) => setAiEnabled(e.target.checked)}
+            />
+            AI 자동 답변 사용
+          </label>
+          <div className="faq-setting-desc">
+            {aiEnabled
+              ? '학부모 질문에 등록된 FAQ를 근거로 AI가 바로 답변합니다.'
+              : 'AI가 답변하지 않습니다. 질문이 접수되면 대화 내역에서 직접 답변해 주세요.'}
+          </div>
         </div>
+
+        {aiEnabled ? (
+          <div className="form-group">
+            <label className="form-label">답변할 수 없을 때 안내 문구</label>
+            <textarea
+              value={fallbackMessage}
+              onChange={(e) => setFallbackMessage(e.target.value)}
+              rows={3}
+            />
+          </div>
+        ) : (
+          <div className="form-group">
+            <label className="form-label">질문 접수 안내 문구</label>
+            <textarea
+              value={pendingMessage}
+              onChange={(e) => setPendingMessage(e.target.value)}
+              rows={3}
+              placeholder="문의가 접수되었습니다. 선생님이 확인 후 답변드릴게요."
+            />
+          </div>
+        )}
 
         <label className="faq-check">
           <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />

@@ -99,6 +99,9 @@ FAQ 규모가 학원당 수십~수백 건이므로 **모든 공개 FAQ를 프롬
    ├─ 세션 조회 (channelId + visitorKey)
    ├─ 질문 저장 (role='parent')
    │
+   ├─ 채널의 aiEnabled=false 이면 → 접수 안내 문구 (status='ai_off', AI 호출 없음)
+   │                                  미답변으로 집계 → 관리자가 직접 답변
+   │
    ├─ 공개 FAQ 조회 (userId, isPublished=true)
    │     └─ 0건이면 → 안내 문구 (status='no_faq', AI 호출 없음)
    │
@@ -298,11 +301,12 @@ const reply = result.answered ? result.answer : channel.fallbackMessage;
 
 ### 6.2 비용 통제 장치
 
-1. 공개 FAQ 0건이면 API 호출 안 함 (FR-46)
-2. 채널당 일일 질문 상한 (`FAQ_CHAT_DAILY_LIMIT`, 기본 200)
-3. IP당 15분 30건 레이트 리밋
-4. 질문 500자 제한, 대화 맥락 6턴 제한
-5. `maxOutputTokens: 1024`, `thinkingBudget: 0`
+1. **AI 자동 답변 끄기(`aiEnabled=false`)** — 문의가 많거나 직접 응대하고 싶을 때 호출 자체를 차단 (FR-58)
+2. 공개 FAQ 0건이면 API 호출 안 함 (FR-46)
+3. 채널당 일일 질문 상한 (`FAQ_CHAT_DAILY_LIMIT`, 기본 200)
+4. IP당 15분 30건 레이트 리밋
+5. 질문 500자 제한, 대화 맥락 6턴 제한
+6. `maxOutputTokens: 1024`, `thinkingLevel: 'low'`
 6. FAQ 블록 정렬 고정 → 반복 요청 시 암묵적 컨텍스트 캐시 적중 가능(2.5 계열). 명시적 캐싱(`ai.caches`)은 최소 토큰 요건이 있어 이 규모에서는 보통 불필요하다.
 
 ---

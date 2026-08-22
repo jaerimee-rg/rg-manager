@@ -252,6 +252,12 @@ function FaqList({ initialTab = 'faq', basePath = '/faq' }) {
         </div>
       )}
 
+      {channel && channel.isActive && channel.aiEnabled === false && (
+        <div className="faq-inactive-notice">
+          AI 자동 답변이 꺼져 있습니다. 접수된 질문은 대화 내역에서 직접 답변해 주세요.
+        </div>
+      )}
+
       {/* 탭 */}
       <div className="faq-tabs">
         <button className={tab === 'faq' ? 'on' : ''} onClick={() => changeTab('faq')}>

@@ -33,6 +33,8 @@ function FaqChats({ filterUserId, onCountChange }) {
   const [thread, setThread] = useState(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [reply, setReply] = useState('');
+  const [replying, setReplying] = useState(false);
 
   const buildQuery = useCallback(
     (nextOffset) => {
@@ -91,17 +93,48 @@ function FaqChats({ filterUserId, onCountChange }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  const openSession = async (session) => {
-    setSelectedId(session.id);
+  const loadThread = async (sessionId) => {
     try {
-      const response = await fetchWithAuth(`/api/chat/sessions/${session.id}/messages`);
-      if (!response.ok) return;
+      const response = await fetchWithAuth(`/api/chat/sessions/${sessionId}/messages`);
+      if (!response.ok) return null;
       const data = await response.json();
       setThread(data);
-      if (isMobile) setSheetOpen(true);
+      return data;
     } catch (error) {
       console.error('대화 상세 로드 실패:', error);
+      return null;
     }
+  };
+
+  const handleReply = async (e) => {
+    e.preventDefault();
+    const message = reply.trim();
+    if (!message || replying || !thread) return;
+
+    setReplying(true);
+    try {
+      const response = await fetchWithAuth(`/api/chat/sessions/${thread.session.id}/reply`, {
+        method: 'POST',
+        body: JSON.stringify({ message })
+      });
+
+      if (response.ok) {
+        setReply('');
+        await loadThread(thread.session.id);
+        await loadSessions(0, false);
+      }
+    } catch (error) {
+      console.error('답변 전송 실패:', error);
+    } finally {
+      setReplying(false);
+    }
+  };
+
+  const openSession = async (session) => {
+    setSelectedId(session.id);
+    setReply('');
+    const data = await loadThread(session.id);
+    if (data && isMobile) setSheetOpen(true);
   };
 
   const handleDelete = async (sessionId) => {
@@ -147,9 +180,17 @@ function FaqChats({ filterUserId, onCountChange }) {
         )}
 
         {thread.messages.map((m) => (
-          <div key={m.id} className={`chat-msg ${m.role} ${m.answered === false ? 'unanswered' : ''}`}>
+          <div
+            key={m.id}
+            className={`chat-msg ${m.role} ${m.role === 'bot' && m.answered === false ? 'unanswered' : ''}`}
+          >
             <div className="chat-msg-who">
-              {m.role === 'parent' ? thread.session.visitorName : 'AI 답변'} · {formatDateTime(m.createdAt)}
+              {m.role === 'parent'
+                ? thread.session.visitorName
+                : m.role === 'admin'
+                ? '내 답변'
+                : 'AI 답변'}{' '}
+              · {formatDateTime(m.createdAt)}
             </div>
             <div className="chat-bubble">{m.content}</div>
             {m.matchedFaqs && m.matchedFaqs.length > 0 && (
@@ -160,11 +201,34 @@ function FaqChats({ filterUserId, onCountChange }) {
                 ))}
               </div>
             )}
-            {m.answered === false && (
-              <div className="chat-msg-src">⚠️ 관련 FAQ 없음 — FAQ 등록을 검토하세요</div>
+            {m.role === 'bot' && m.answered === false && (
+              <div className="chat-msg-src">
+                {m.status === 'ai_off'
+                  ? '⏳ AI 자동 답변이 꺼져 있습니다 — 직접 답변해 주세요'
+                  : '⚠️ 관련 FAQ 없음 — FAQ 등록을 검토하세요'}
+              </div>
             )}
           </div>
         ))}
+
+        <form className="chat-reply" onSubmit={handleReply}>
+          <textarea
+            value={reply}
+            onChange={(e) => setReply(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleReply(e);
+              }
+            }}
+            placeholder="학부모에게 보낼 답변을 입력하세요"
+            rows={2}
+            maxLength={500}
+          />
+          <button type="submit" className="btn btn-primary" disabled={!reply.trim() || replying}>
+            {replying ? '전송 중...' : '답변 보내기'}
+          </button>
+        </form>
       </>
     );
   };

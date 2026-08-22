@@ -314,6 +314,23 @@ const initDatabase = async () => {
 
     await client.query('CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages ("sessionId", "createdAt")');
 
+    // AI 자동 답변 on/off 및 접수 안내 문구
+    await client.query(`
+      ALTER TABLE chat_channels
+      ADD COLUMN IF NOT EXISTS "aiEnabled" BOOLEAN DEFAULT TRUE
+    `);
+
+    await client.query(`
+      ALTER TABLE chat_channels
+      ADD COLUMN IF NOT EXISTS "pendingMessage" TEXT
+    `);
+
+    // 관리자 답변 시각 (대화 목록 정렬·표시용)
+    await client.query(`
+      ALTER TABLE chat_sessions
+      ADD COLUMN IF NOT EXISTS "lastAdminReplyAt" TEXT
+    `);
+
     // 기본 관리자 계정 생성 (최초 1회만, 기존 계정이 없을 때)
     const adminCheck = await client.query('SELECT * FROM users WHERE username = $1', ['admin']);
     if (adminCheck.rows.length === 0) {

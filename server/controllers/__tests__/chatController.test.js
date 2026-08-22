@@ -8,7 +8,8 @@ jest.unstable_mockModule('../../models/ChatChannel.js', () => ({
     update: jest.fn()
   },
   DEFAULT_GREETING: '안녕하세요!',
-  DEFAULT_FALLBACK: '기본 안내 문구'
+  DEFAULT_FALLBACK: '기본 안내 문구',
+  DEFAULT_PENDING: '기본 접수 문구'
 }));
 
 jest.unstable_mockModule('../../models/ChatSession.js', () => ({
@@ -16,6 +17,7 @@ jest.unstable_mockModule('../../models/ChatSession.js', () => ({
     getByVisitorKey: jest.fn(),
     upsert: jest.fn(),
     recordMessages: jest.fn(),
+    recordAdminReply: jest.fn(),
     countTodayQuestions: jest.fn(),
     listByChannel: jest.fn(),
     getWithOwner: jest.fn(),
@@ -53,6 +55,7 @@ const {
   startSession,
   postMessage,
   getSessionMessages,
+  replyToSession,
   deleteSession
 } = await import('../chatController.js');
 
@@ -63,7 +66,9 @@ const activeChannel = {
   name: '리듬체조 문의',
   greeting: '안녕하세요!',
   fallbackMessage: '등록된 FAQ에서 찾지 못했습니다.',
-  isActive: true
+  pendingMessage: '접수되었습니다. 확인 후 답변드릴게요.',
+  isActive: true,
+  aiEnabled: true
 };
 
 describe('chatController (공개 채팅)', () => {
@@ -230,6 +235,29 @@ describe('chatController (공개 채팅)', () => {
       );
     });
 
+    it('AI 자동 답변이 꺼져 있으면 AI를 호출하지 않고 접수 안내만 남긴다', async () => {
+      ChatChannel.getByPublicId.mockResolvedValue({ ...activeChannel, aiEnabled: false });
+      ChatMessage.create.mockResolvedValue({ id: 200, createdAt: 'now' });
+      req.body = { visitorKey: 'v1', message: '보강 되나요?' };
+
+      await postMessage(req, res);
+
+      expect(generateAnswer).not.toHaveBeenCalled();
+      expect(Faq.getPublishedByUserId).not.toHaveBeenCalled();
+
+      const payload = res.json.mock.calls[0][0];
+      expect(payload.pending).toBe(true);
+      expect(payload.answered).toBe(false);
+      expect(payload.reply).toBe(activeChannel.pendingMessage);
+
+      // 관리자가 답변해야 하므로 미답변으로 집계한다
+      expect(ChatSession.recordMessages).toHaveBeenCalledWith(11, { unanswered: true });
+      expect(ChatMessage.create).toHaveBeenLastCalledWith(
+        11,
+        expect.objectContaining({ role: 'bot', status: 'ai_off' })
+      );
+    });
+
     it('질문 저장 전에 이전 대화 맥락을 읽는다', async () => {
       generateAnswer.mockResolvedValue({ answered: true, answer: 'ok', usedFaqIds: [3], status: 'ok' });
       req.body = { visitorKey: 'v1', message: '질문' };
@@ -280,6 +308,58 @@ describe('chatController (관리자 대화 조회)', () => {
     const payload = res.json.mock.calls[0][0];
     expect(payload.session.visitorName).toBe('김OO 어머님');
     expect(payload.messages[1].matchedFaqs).toEqual([{ id: 3, question: '토요일 수업은?' }]);
+  });
+
+  describe('replyToSession', () => {
+    it('빈 답변은 400 을 반환한다', async () => {
+      req.body = { message: '   ' };
+
+      await replyToSession(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(ChatMessage.create).not.toHaveBeenCalled();
+    });
+
+    it('500자를 넘는 답변은 400 을 반환한다', async () => {
+      req.body = { message: 'ㄱ'.repeat(501) };
+
+      await replyToSession(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('다른 사용자의 대화에는 답변할 수 없다', async () => {
+      ChatSession.getWithOwner.mockResolvedValue({ id: 11, ownerUserId: 99 });
+      req.body = { message: '답변' };
+
+      await replyToSession(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(ChatMessage.create).not.toHaveBeenCalled();
+    });
+
+    it('본인 대화에는 admin 메시지를 남기고 미답변을 해제한다', async () => {
+      ChatSession.getWithOwner.mockResolvedValue({ id: 11, ownerUserId: 7 });
+      ChatMessage.create.mockResolvedValue({ id: 55, content: '보강 가능합니다.', createdAt: 'now' });
+      req.body = { message: '  보강 가능합니다.  ' };
+
+      await replyToSession(req, res);
+
+      expect(ChatMessage.create).toHaveBeenCalledWith(11, {
+        role: 'admin',
+        content: '보강 가능합니다.',
+        answered: true,
+        status: 'ok'
+      });
+      expect(ChatSession.recordAdminReply).toHaveBeenCalledWith(11);
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith({
+        id: 55,
+        role: 'admin',
+        content: '보강 가능합니다.',
+        createdAt: 'now'
+      });
+    });
   });
 
   it('다른 사용자의 대화는 삭제할 수 없다', async () => {

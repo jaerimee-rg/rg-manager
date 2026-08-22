@@ -5,6 +5,8 @@ export const DEFAULT_GREETING =
   '안녕하세요! 궁금한 점을 남겨주시면 등록된 FAQ를 바탕으로 안내해 드립니다.';
 export const DEFAULT_FALLBACK =
   '죄송합니다. 등록된 FAQ에서 관련 내용을 찾지 못했습니다. 자세한 내용은 담당 선생님께 문의해 주세요.';
+export const DEFAULT_PENDING =
+  '문의가 접수되었습니다. 선생님이 확인 후 답변드릴게요.';
 
 class ChatChannel {
   static async getByUserId(userId) {
@@ -28,10 +30,11 @@ class ChatChannel {
   static async create(userId, name) {
     const now = new Date().toISOString();
     const result = await pool.query(
-      `INSERT INTO chat_channels ("userId", "publicId", name, greeting, "fallbackMessage", "isActive", "createdAt", "updatedAt")
-       VALUES ($1, $2, $3, $4, $5, TRUE, $6, $6)
+      `INSERT INTO chat_channels
+         ("userId", "publicId", name, greeting, "fallbackMessage", "pendingMessage", "isActive", "aiEnabled", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, TRUE, TRUE, $7, $7)
        RETURNING *`,
-      [userId, generatePublicId(), name, DEFAULT_GREETING, DEFAULT_FALLBACK, now]
+      [userId, generatePublicId(), name, DEFAULT_GREETING, DEFAULT_FALLBACK, DEFAULT_PENDING, now]
     );
     return result.rows[0];
   }
@@ -44,13 +47,23 @@ class ChatChannel {
   }
 
   static async update(userId, data) {
-    const { name, greeting, fallbackMessage, isActive } = data;
+    const { name, greeting, fallbackMessage, pendingMessage, isActive, aiEnabled } = data;
     const result = await pool.query(
       `UPDATE chat_channels
-       SET name = $1, greeting = $2, "fallbackMessage" = $3, "isActive" = $4, "updatedAt" = $5
-       WHERE "userId" = $6
+       SET name = $1, greeting = $2, "fallbackMessage" = $3, "pendingMessage" = $4,
+           "isActive" = $5, "aiEnabled" = $6, "updatedAt" = $7
+       WHERE "userId" = $8
        RETURNING *`,
-      [name, greeting, fallbackMessage, isActive !== false, new Date().toISOString(), userId]
+      [
+        name,
+        greeting,
+        fallbackMessage,
+        pendingMessage,
+        isActive !== false,
+        aiEnabled !== false,
+        new Date().toISOString(),
+        userId
+      ]
     );
     return result.rows.length > 0 ? result.rows[0] : null;
   }
