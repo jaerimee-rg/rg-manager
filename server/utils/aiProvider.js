@@ -3,6 +3,14 @@
 
 // 관리자 설정을 담아 두는 app_settings 키
 export const AI_PROVIDER_KEY = 'ai_provider';
+export const AI_TIMEOUT_KEY = 'ai_timeout_ms';
+export const aiModelKey = (provider) => `ai_model_${provider}`;
+export const aiEffortKey = (provider) => `ai_effort_${provider}`;
+
+// 응답 대기 시간. Vercel 함수 실행 한도보다 길게 잡으면 플랫폼이 먼저 끊는다.
+export const DEFAULT_TIMEOUT_MS = 20000;
+export const MIN_TIMEOUT_MS = 5000;
+export const MAX_TIMEOUT_MS = 60000;
 
 export const DEFAULT_PROVIDER = 'gemini';
 
@@ -14,7 +22,14 @@ export const AI_PROVIDERS = [
     // 로컬 .env 와 Vercel 에 OEPNAI_API_KEY(오타) 로 등록돼 있어 두 이름을 모두 읽는다.
     envKeys: ['OPENAI_API_KEY', 'OEPNAI_API_KEY'],
     modelEnvKey: 'OPENAI_FAQ_MODEL',
-    defaultModel: 'gpt-4.1-mini'
+    defaultModel: 'gpt-4.1-mini',
+    // 고르기 쉽게 흔히 쓰는 것만 담아 둔다. 목록에 없는 모델도 직접 입력할 수 있다.
+    modelOptions: ['gpt-4.1-mini', 'gpt-4.1', 'gpt-4o-mini', 'gpt-4o', 'gpt-5-mini', 'gpt-5'],
+    // reasoning_effort. 추론 계열 모델만 받는다 (안 받으면 빼고 다시 보낸다).
+    effortOptions: ['minimal', 'low', 'medium', 'high'],
+    effortEnvKey: 'OPENAI_FAQ_EFFORT',
+    effortLabel: '추론 강도 (reasoning_effort)',
+    effortHelp: '추론 계열 모델(o·gpt-5 계열)에만 적용됩니다. 받지 않는 모델이면 자동으로 빼고 요청합니다.'
   },
   {
     id: 'gemini',
@@ -22,7 +37,13 @@ export const AI_PROVIDERS = [
     description: 'Google Gemini 모델로 FAQ 를 고릅니다.',
     envKeys: ['GEMINI_API_KEY'],
     modelEnvKey: 'FAQ_CHAT_MODEL',
-    defaultModel: 'gemini-3.6-flash'
+    defaultModel: 'gemini-3.6-flash',
+    modelOptions: ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'],
+    // thinkingLevel. 모델에 따라 지원 여부가 다르다 (안 받으면 빼고 다시 보낸다).
+    effortOptions: ['low', 'high'],
+    effortEnvKey: 'FAQ_CHAT_THINKING_LEVEL',
+    effortLabel: '사고 수준 (thinkingLevel)',
+    effortHelp: '모델이 지원하지 않으면 자동으로 빼고 요청합니다.'
   }
 ];
 
@@ -79,12 +100,49 @@ export const resolveUsableProvider = (preferred) => {
   return usable.id;
 };
 
+/**
+ * 환경변수 기본값. 관리자가 아직 저장한 적 없을 때 쓴다.
+ * (DB 에 값이 있으면 그쪽이 이긴다 — aiSettings.js 참고)
+ */
+export const envModel = (id) => {
+  const info = getProviderInfo(id);
+  if (!info) return null;
+  return process.env[info.modelEnvKey] || info.defaultModel;
+};
+
+export const envEffort = (id) => {
+  const info = getProviderInfo(id);
+  if (!info) return null;
+  const fromEnv = process.env[info.effortEnvKey];
+  return isValidEffort(id, fromEnv) ? fromEnv : null;
+};
+
+// 모델 이름은 자유 입력이라 최소한만 확인한다 (API 가 최종 판단자다).
+export const isValidModel = (value) =>
+  typeof value === 'string' && /^[A-Za-z0-9._:-]{1,80}$/.test(value.trim());
+
+// 빈 값은 "모델에 맡김" 이라는 뜻으로 허용한다.
+export const isValidEffort = (providerId, value) => {
+  if (value === null || value === undefined || value === '') return true;
+  const info = getProviderInfo(providerId);
+  return Boolean(info) && info.effortOptions.includes(value);
+};
+
+export const isValidTimeout = (value) =>
+  Number.isInteger(value) && value >= MIN_TIMEOUT_MS && value <= MAX_TIMEOUT_MS;
+
 // 설정 화면에 내려줄 목록 (API 키 값은 제외)
-export const describeProviders = () =>
-  AI_PROVIDERS.map(({ id, label, description }) => ({
-    id,
-    label,
-    description,
-    model: resolveModel(id),
-    configured: isProviderConfigured(id)
+export const describeProviders = (saved = {}) =>
+  AI_PROVIDERS.map((info) => ({
+    id: info.id,
+    label: info.label,
+    description: info.description,
+    configured: isProviderConfigured(info.id),
+    model: saved.models?.[info.id] || envModel(info.id),
+    defaultModel: info.defaultModel,
+    modelOptions: info.modelOptions,
+    effort: saved.efforts?.[info.id] ?? envEffort(info.id) ?? '',
+    effortOptions: info.effortOptions,
+    effortLabel: info.effortLabel,
+    effortHelp: info.effortHelp
   }));

@@ -3086,3 +3086,234 @@ body.pchat-lock {
 @media (max-width: 768px) {
   .rt-embed-frame { height: 240px; }
 }
+
+/* ─────────── 관리자 AI 설정 ─────────── */
+
+.ai-setting-intro {
+  color: var(--color-gray-600);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  margin: var(--spacing-lg) 0;
+}
+
+.ai-setting-provider-name {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+}
+
+.ai-setting-provider-desc {
+  color: var(--color-gray-600);
+  font-size: 0.875rem;
+  margin-top: 4px;
+}
+
+.ai-setting-provider-model {
+  color: var(--color-gray-500);
+  font-size: 0.8125rem;
+  margin-top: 6px;
+  word-break: break-all;
+}
+
+.ai-setting-warning {
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border: 1px solid var(--color-warning, #d97706);
+  border-radius: var(--radius-md);
+  color: var(--color-gray-800);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.ai-setting-detail {
+  margin-top: var(--spacing-xl);
+  padding: var(--spacing-lg);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+}
+
+.ai-setting-detail legend {
+  padding: 0 8px;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  color: var(--color-gray-800);
+}
+
+.form-help {
+  margin-top: 6px;
+  font-size: 0.8125rem;
+  color: var(--color-gray-500);
+  line-height: 1.5;
+}
+
+.ai-setting-note {
+  color: var(--color-gray-500);
+  font-size: 0.8125rem;
+  margin-top: var(--spacing-md);
+  line-height: 1.6;
+}
+
+.ai-setting-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-xl);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-gray-200);
+}
+
+/* ─────────── AI 호출 로그 ─────────── */
+
+.llm-log-toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--spacing-lg);
+  flex-wrap: wrap;
+  margin-bottom: var(--spacing-lg);
+}
+
+.llm-log-count {
+  margin-left: auto;
+  color: var(--color-gray-500);
+  font-size: 0.875rem;
+}
+
+.llm-log-table th.num,
+.llm-log-table td.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.llm-log-table tbody tr {
+  cursor: pointer;
+}
+
+.llm-log-table tbody tr:hover {
+  background-color: var(--color-gray-50);
+}
+
+.llm-log-table td {
+  white-space: nowrap;
+}
+
+.llm-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.llm-log-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.llm-log-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  font-size: 0.875rem;
+}
+
+.llm-log-card-mid {
+  margin-top: 4px;
+  color: var(--color-gray-700);
+  font-size: 0.875rem;
+}
+
+.llm-log-card-sub {
+  margin-top: 2px;
+  color: var(--color-gray-500);
+  font-size: 0.8125rem;
+}
+
+.llm-log-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-lg);
+  color: var(--color-gray-600);
+  font-size: 0.875rem;
+}
+
+/* 상세 모달 */
+.llm-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--spacing-lg);
+}
+
+.llm-modal {
+  width: 100%;
+  max-width: 860px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.llm-modal-body {
+  overflow: auto;
+  padding: var(--spacing-lg);
+}
+
+.llm-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--color-gray-200);
+  color: var(--color-gray-600);
+  font-size: 0.875rem;
+}
+
+.llm-detail-error {
+  margin-top: var(--spacing-md);
+  padding: 10px 12px;
+  border: 1px solid var(--color-danger, #dc2626);
+  border-radius: var(--radius-md);
+  color: var(--color-gray-800);
+  font-size: 0.8125rem;
+  word-break: break-all;
+}
+
+.llm-detail-section {
+  margin-top: var(--spacing-lg);
+}
+
+.llm-detail-section h4 {
+  margin: 0 0 6px;
+  font-size: 0.875rem;
+  color: var(--color-gray-700);
+}
+
+.llm-detail-section pre {
+  margin: 0;
+  padding: 12px;
+  max-height: 260px;
+  overflow: auto;
+  background-color: var(--color-gray-50);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

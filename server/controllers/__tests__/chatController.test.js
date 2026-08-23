@@ -60,7 +60,20 @@ jest.unstable_mockModule('../../utils/aiAnswer.js', () => ({
 jest.unstable_mockModule('../../utils/aiSettings.js', () => ({
   getSelectedProvider: jest.fn().mockResolvedValue('gemini'),
   getEffectiveProvider: jest.fn().mockResolvedValue('gemini'),
-  setSelectedProvider: jest.fn()
+  getAiConfig: jest.fn().mockResolvedValue({
+    provider: 'gemini',
+    model: 'gemini-3.6-flash',
+    effort: null,
+    timeoutMs: 20000
+  }),
+  setSelectedProvider: jest.fn(),
+  getSavedTuning: jest.fn(),
+  saveTuning: jest.fn()
+}));
+
+// 호출 이력 저장은 답변 흐름을 막지 않는다. 테스트에서는 기록만 확인한다.
+jest.unstable_mockModule('../../models/LlmCallLog.js', () => ({
+  default: { create: jest.fn().mockResolvedValue({ id: 1 }) }
 }));
 
 const ChatChannel = (await import('../../models/ChatChannel.js')).default;

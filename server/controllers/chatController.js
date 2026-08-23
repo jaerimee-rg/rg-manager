@@ -3,7 +3,8 @@ import ChatSession from '../models/ChatSession.js';
 import ChatMessage from '../models/ChatMessage.js';
 import Faq from '../models/Faq.js';
 import { generateAnswer } from '../utils/aiAnswer.js';
-import { getEffectiveProvider } from '../utils/aiSettings.js';
+import { getAiConfig } from '../utils/aiSettings.js';
+import LlmCallLog from '../models/LlmCallLog.js';
 import { sendFaqInquiryKakaoMessage } from '../utils/kakaoMessage.js';
 import { isAdminViewing, isKakaoNotifyCooling } from '../utils/chatPresence.js';
 
@@ -265,10 +266,29 @@ export const postMessage = async (req, res) => {
     }
 
     const faqs = await Faq.getPublishedByUserId(channel.userId);
-    // 어떤 AI 를 쓸지는 관리자 설정(설정 > AI 제공자)이 정한다.
-    // 그 제공자의 키가 이 환경에 없으면 키가 있는 쪽으로 넘어간다.
-    const provider = await getEffectiveProvider();
-    const result = await generateAnswer({ faqs, history, question, provider });
+    // 제공자·모델·추론 강도·대기 시간은 모두 관리자 설정(설정 > AI)이 정한다.
+    // 고른 제공자의 키가 이 환경에 없으면 키가 있는 쪽으로 넘어간다.
+    const aiConfig = await getAiConfig();
+    const result = await generateAnswer({ faqs, history, question, ...aiConfig });
+
+    // 호출 이력을 남긴다. 이력 저장이 실패해도 학부모 답변은 그대로 나가야 한다.
+    LlmCallLog.create({
+      userId: channel.userId,
+      sessionId: session.id,
+      visitorName: session.visitorName,
+      promptId: result.promptId,
+      provider: result.provider,
+      model: result.model,
+      status: result.status,
+      answered: result.answered,
+      inputTokens: result.inputTokens ?? null,
+      outputTokens: result.outputTokens ?? null,
+      latencyMs: result.latencyMs ?? null,
+      systemPrompt: result.systemPrompt ?? null,
+      userPrompt: result.userPrompt ?? question,
+      response: result.rawResponse ?? null,
+      errorMessage: result.errorMessage ?? null
+    }).catch((error) => console.error('AI 호출 이력 저장 실패:', error?.message || error));
 
     // 최종 문구는 서버가 결정한다. answered=false 면 AI 문장을 쓰지 않는다.
     const reply = result.answered ? result.answer : fallback;

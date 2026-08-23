@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { fetchWithAuth } from '../../utils/api';
 import DateRangePicker from '../../components/common/DateRangePicker';
 import { useIsMobile } from '../../hooks/useMediaQuery';
+import AdminLlmLogs from './AdminLlmLogs';
 
 function AdminLogs() {
   const formatDateOnly = (date) => {
@@ -28,11 +29,25 @@ function AdminLogs() {
   const [allLogs, setAllLogs] = useState([]);
   const [startDate, setStartDate] = useState(thisMonth.start);
   const [endDate, setEndDate] = useState(thisMonth.end);
+  const [tab, setTab] = useState('activity');
+  const [users, setUsers] = useState([]);
   const isMobile = useIsMobile();
 
   useEffect(() => {
     loadLogs();
+    loadUsers();
   }, []);
+
+  // AI 호출 이력의 강사 필터에 쓴다.
+  const loadUsers = async () => {
+    try {
+      const response = await fetchWithAuth('/api/auth/users');
+      const data = await response.json();
+      setUsers(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('사용자 목록 로드 실패:', error);
+    }
+  };
 
   useEffect(() => {
     filterLogs();
@@ -98,8 +113,24 @@ function AdminLogs() {
     <div className="animate-fadeIn">
       {/* Page Header */}
       <div className="page-header">
-        <h2 className="page-title">시스템 로그</h2>
+        <h2 className="page-title">로그</h2>
       </div>
+
+      <div className="faq-tabs">
+        <button className={tab === 'activity' ? 'on' : ''} onClick={() => setTab('activity')}>
+          활동 로그
+        </button>
+        <button className={tab === 'llm' ? 'on' : ''} onClick={() => setTab('llm')}>
+          AI 호출 로그
+        </button>
+      </div>
+
+      {tab === 'llm' ? (
+        <div className="card">
+          <AdminLlmLogs users={users} />
+        </div>
+      ) : (
+      <>
 
       {/* Filter Card */}
       <div className="card">
@@ -277,6 +308,8 @@ function AdminLogs() {
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }

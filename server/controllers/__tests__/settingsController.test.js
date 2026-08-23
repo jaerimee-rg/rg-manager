@@ -3,12 +3,18 @@ import { jest } from '@jest/globals';
 jest.unstable_mockModule('../../utils/aiSettings.js', () => ({
   getSelectedProvider: jest.fn(),
   getEffectiveProvider: jest.fn(),
-  setSelectedProvider: jest.fn()
+  setSelectedProvider: jest.fn(),
+  getSavedTuning: jest.fn(),
+  saveTuning: jest.fn()
 }));
 
-const { getSelectedProvider, getEffectiveProvider, setSelectedProvider } = await import(
-  '../../utils/aiSettings.js'
-);
+const {
+  getSelectedProvider,
+  getEffectiveProvider,
+  setSelectedProvider,
+  getSavedTuning,
+  saveTuning
+} = await import('../../utils/aiSettings.js');
 const { getAiSetting, updateAiSetting } = await import('../settingsController.js');
 
 const mockRes = () => {
@@ -30,6 +36,7 @@ describe('settingsController — AI 제공자', () => {
     });
     getSelectedProvider.mockResolvedValue('gemini');
     getEffectiveProvider.mockResolvedValue('gemini');
+    getSavedTuning.mockResolvedValue({ models: {}, efforts: {}, timeoutMs: null });
   });
 
   afterEach(() => {
@@ -109,6 +116,103 @@ describe('settingsController — AI 제공자', () => {
       expect(setSelectedProvider).toHaveBeenCalledWith('openai', 1);
       expect(res.status).not.toHaveBeenCalledWith(400);
       expect(res.json.mock.calls[0][0].provider).toBe('openai');
+    });
+  });
+
+  describe('모델·추론 강도·대기 시간', () => {
+    const adminReq = (body) => ({ user: { id: 1, role: 'admin' }, body });
+
+    beforeEach(() => {
+      process.env.GEMINI_API_KEY = 'g-key';
+    });
+
+    it('제공자별 모델과 선택지를 함께 내려준다', async () => {
+      const res = mockRes();
+
+      await getAiSetting({ user: { id: 1, role: 'admin' }, query: {} }, res);
+
+      const openai = res.json.mock.calls[0][0].providers.find((p) => p.id === 'openai');
+      expect(openai.modelOptions).toContain('gpt-4.1-mini');
+      expect(openai.effortOptions).toEqual(['minimal', 'low', 'medium', 'high']);
+      expect(openai.defaultModel).toBe('gpt-4.1-mini');
+    });
+
+    it('저장된 모델이 있으면 환경변수 기본값 대신 그것을 보여준다', async () => {
+      getSavedTuning.mockResolvedValue({
+        models: { gemini: 'gemini-2.5-pro' },
+        efforts: { gemini: 'high' },
+        timeoutMs: 30000
+      });
+      const res = mockRes();
+
+      await getAiSetting({ user: { id: 1, role: 'admin' }, query: {} }, res);
+
+      const payload = res.json.mock.calls[0][0];
+      const gemini = payload.providers.find((p) => p.id === 'gemini');
+      expect(gemini.model).toBe('gemini-2.5-pro');
+      expect(gemini.effort).toBe('high');
+      expect(payload.timeoutMs).toBe(30000);
+    });
+
+    it('모델과 강도, 대기 시간을 함께 저장한다', async () => {
+      const res = mockRes();
+
+      await updateAiSetting(
+        adminReq({ provider: 'gemini', model: 'gemini-2.5-pro', effort: 'high', timeoutMs: 30000 }),
+        res
+      );
+
+      expect(saveTuning).toHaveBeenCalledWith(
+        { provider: 'gemini', model: 'gemini-2.5-pro', effort: 'high', timeoutMs: 30000 },
+        1
+      );
+    });
+
+    it('모델 이름 앞뒤 공백은 다듬어 저장한다', async () => {
+      const res = mockRes();
+
+      await updateAiSetting(adminReq({ provider: 'gemini', model: '  gemini-2.5-pro  ' }), res);
+
+      expect(saveTuning.mock.calls[0][0].model).toBe('gemini-2.5-pro');
+    });
+
+    it('이상한 모델 이름은 400 으로 거부한다', async () => {
+      const res = mockRes();
+
+      await updateAiSetting(adminReq({ provider: 'gemini', model: 'bad name; rm -rf' }), res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(saveTuning).not.toHaveBeenCalled();
+    });
+
+    it('그 제공자가 받지 않는 강도는 400 으로 거부한다', async () => {
+      const res = mockRes();
+
+      // minimal 은 OpenAI 전용이라 Gemini 에는 쓸 수 없다.
+      await updateAiSetting(adminReq({ provider: 'gemini', model: 'gemini-2.5-pro', effort: 'minimal' }), res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(saveTuning).not.toHaveBeenCalled();
+    });
+
+    it('빈 강도는 "모델 기본값에 맡김" 으로 허용한다', async () => {
+      const res = mockRes();
+
+      await updateAiSetting(adminReq({ provider: 'gemini', model: 'gemini-2.5-pro', effort: '' }), res);
+
+      expect(res.status).not.toHaveBeenCalledWith(400);
+      expect(saveTuning.mock.calls[0][0].effort).toBe('');
+    });
+
+    it('범위를 벗어난 대기 시간은 400 으로 거부한다', async () => {
+      const res = mockRes();
+
+      await updateAiSetting(adminReq({ provider: 'gemini', model: 'g', timeoutMs: 120000 }), res);
+      expect(res.status).toHaveBeenCalledWith(400);
+
+      await updateAiSetting(adminReq({ provider: 'gemini', model: 'g', timeoutMs: 1000 }), res);
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(saveTuning).not.toHaveBeenCalled();
     });
   });
 });

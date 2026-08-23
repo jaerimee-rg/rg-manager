@@ -10,11 +10,27 @@ const PROVIDER_STYLE = {
 
 const styleFor = (id) => PROVIDER_STYLE[id] || { icon: '⚙️', accent: 'var(--color-primary)' };
 
+const EFFORT_LABEL = {
+  minimal: '최소 (minimal)',
+  low: '낮음 (low)',
+  medium: '보통 (medium)',
+  high: '높음 (high)'
+};
+
+// 목록에 없는 모델도 쓸 수 있어야 한다 (새 모델이 나오면 배포 없이 바꿀 수 있도록).
+const CUSTOM = '__custom__';
+
 function AdminSettings() {
   const [providers, setProviders] = useState([]);
   const [provider, setProvider] = useState('');
   const [effectiveProvider, setEffectiveProvider] = useState('');
   const [selected, setSelected] = useState('');
+  const [model, setModel] = useState('');
+  const [customModel, setCustomModel] = useState(false);
+  const [effort, setEffort] = useState('');
+  const [timeoutSec, setTimeoutSec] = useState(20);
+  const [savedTimeoutSec, setSavedTimeoutSec] = useState(20);
+  const [range, setRange] = useState({ min: 5000, max: 60000 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const isMobile = useIsMobile();
@@ -25,10 +41,22 @@ function AdminSettings() {
   }, []);
 
   const applyData = (data) => {
-    setProviders(Array.isArray(data.providers) ? data.providers : []);
+    const list = Array.isArray(data.providers) ? data.providers : [];
+    setProviders(list);
     setProvider(data.provider || '');
     setEffectiveProvider(data.effectiveProvider || data.provider || '');
     setSelected(data.provider || '');
+    const sec = Math.round((data.timeoutMs || 20000) / 1000);
+    setTimeoutSec(sec);
+    setSavedTimeoutSec(sec);
+    if (data.timeoutRange) setRange(data.timeoutRange);
+
+    const current = list.find((p) => p.id === data.provider);
+    if (current) {
+      setModel(current.model || '');
+      setCustomModel(!current.modelOptions?.includes(current.model));
+      setEffort(current.effort || '');
+    }
   };
 
   const loadSettings = async () => {
@@ -36,11 +64,8 @@ function AdminSettings() {
       const response = await fetchWithAuth('/api/settings/ai');
       const data = await response.json();
 
-      if (response.ok) {
-        applyData(data);
-      } else {
-        alert(data.error || 'AI 설정을 불러오지 못했습니다.');
-      }
+      if (response.ok) applyData(data);
+      else alert(data.error || 'AI 설정을 불러오지 못했습니다.');
     } catch (error) {
       console.error('AI 설정 로드 실패:', error);
       alert('AI 설정을 불러오지 못했습니다.');
@@ -49,15 +74,46 @@ function AdminSettings() {
     }
   };
 
+  // 제공자를 바꾸면 그 제공자에 저장돼 있던 모델·강도를 불러온다.
+  const handleSelectProvider = (id) => {
+    setSelected(id);
+    const next = providers.find((p) => p.id === id);
+    if (next) {
+      setModel(next.model || '');
+      setCustomModel(!next.modelOptions?.includes(next.model));
+      setEffort(next.effort || '');
+    }
+  };
+
+  // 마지막으로 저장된 값으로 즉시 되돌린다 (서버를 다시 부르지 않는다).
+  const revert = () => {
+    setSelected(provider);
+    const saved = providers.find((p) => p.id === provider);
+    if (saved) {
+      setModel(saved.model || '');
+      setCustomModel(!saved.modelOptions?.includes(saved.model));
+      setEffort(saved.effort || '');
+    }
+    setTimeoutSec(savedTimeoutSec);
+  };
+
   const handleSave = async () => {
-    if (!selected || selected === provider) return;
+    if (!model.trim()) {
+      alert('모델 이름을 입력해 주세요.');
+      return;
+    }
 
     setSaving(true);
     try {
       const response = await fetchWithAuth('/api/settings/ai', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: selected })
+        body: JSON.stringify({
+          provider: selected,
+          model: model.trim(),
+          effort,
+          timeoutMs: timeoutSec * 1000
+        })
       });
 
       const data = await response.json();
@@ -66,22 +122,31 @@ function AdminSettings() {
         applyData(data);
         alert('AI 설정이 저장되었습니다.');
       } else {
-        // 저장에 실패하면 화면도 서버 값으로 되돌려 실제 상태와 어긋나지 않게 한다.
-        setSelected(provider);
+        // 저장에 실패하면 화면도 저장된 값으로 되돌려 실제 상태와 어긋나지 않게 한다.
+        revert();
         alert(data.error || 'AI 설정 저장에 실패했습니다.');
       }
     } catch (error) {
       console.error('AI 설정 저장 실패:', error);
-      setSelected(provider);
+      revert();
       alert('AI 설정 저장에 실패했습니다.');
     } finally {
       setSaving(false);
     }
   };
 
+  const current = providers.find((p) => p.id === selected);
+  const savedCurrent = providers.find((p) => p.id === provider);
   const labelOf = (id) => providers.find((p) => p.id === id)?.label || id;
 
-  const isDirty = Boolean(selected) && selected !== provider;
+  const isDirty =
+    Boolean(selected) &&
+    (selected !== provider ||
+      model.trim() !== (savedCurrent?.model || '') ||
+      effort !== (savedCurrent?.effort || '') ||
+      timeoutSec !== savedTimeoutSec);
+
+
 
   return (
     <div className="animate-fadeIn">
@@ -91,19 +156,13 @@ function AdminSettings() {
 
       <div className="card">
         <div className="card-header">
-          <h3 className="card-title">AI 제공자</h3>
+          <h3 className="card-title">FAQ 챗봇 AI</h3>
         </div>
 
-        <p style={{
-          color: 'var(--color-gray-600)',
-          fontSize: '0.9375rem',
-          lineHeight: 1.6,
-          marginTop: 'var(--spacing-lg)',
-          marginBottom: 'var(--spacing-lg)'
-        }}>
-          FAQ 챗봇이 학부모 질문에 답할 때 사용할 AI 를 고릅니다.
+        <p className="ai-setting-intro">
+          학부모 질문에 답할 때 사용할 AI 와 세부 설정입니다.
           <br />
-          어떤 AI 를 골라도 답변 문장은 등록된 FAQ 원문을 그대로 사용합니다.
+          어떤 설정이든 답변 문장은 등록된 FAQ 원문을 그대로 사용합니다.
         </p>
 
         {loading ? (
@@ -147,18 +206,11 @@ function AdminSettings() {
                       value={p.id}
                       checked={isSelected}
                       disabled={!p.configured || saving}
-                      onChange={() => setSelected(p.id)}
+                      onChange={() => handleSelectProvider(p.id)}
                       style={{ marginTop: 4 }}
                     />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: '6px',
-                        fontWeight: 600,
-                        color: 'var(--color-gray-900)'
-                      }}>
+                      <div className="ai-setting-provider-name">
                         <span aria-hidden="true">{icon}</span>
                         <span>{p.label}</span>
                         {provider === p.id && (
@@ -169,24 +221,10 @@ function AdminSettings() {
                         {effectiveProvider === p.id && provider !== p.id && (
                           <span className="badge badge-primary">대신 사용 중</span>
                         )}
-                        {!p.configured && (
-                          <span className="badge badge-gray">API 키 없음</span>
-                        )}
+                        {!p.configured && <span className="badge badge-gray">API 키 없음</span>}
                       </div>
-                      <div style={{
-                        color: 'var(--color-gray-600)',
-                        fontSize: '0.875rem',
-                        marginTop: '4px'
-                      }}>
-                        {p.description}
-                      </div>
-                      <div style={{
-                        color: 'var(--color-gray-500)',
-                        fontSize: '0.8125rem',
-                        marginTop: '6px'
-                      }}>
-                        {`모델: ${p.model}`}
-                      </div>
+                      <div className="ai-setting-provider-desc">{p.description}</div>
+                      <div className="ai-setting-provider-model">{`모델: ${p.model}`}</div>
                     </div>
                   </label>
                 );
@@ -194,18 +232,7 @@ function AdminSettings() {
             </div>
 
             {effectiveProvider && effectiveProvider !== provider && (
-              <div
-                role="alert"
-                style={{
-                  marginTop: 'var(--spacing-lg)',
-                  padding: 'var(--spacing-md) var(--spacing-lg)',
-                  border: '1px solid var(--color-warning, #d97706)',
-                  borderRadius: 'var(--radius-md)',
-                  color: 'var(--color-gray-800)',
-                  fontSize: '0.875rem',
-                  lineHeight: 1.6
-                }}
-              >
+              <div role="alert" className="ai-setting-warning">
                 <strong>{labelOf(provider)}</strong> 를 골라 두었지만 이 서버에 해당 API 키가 없어
                 실제로는 <strong>{labelOf(effectiveProvider)}</strong> 로 답변하고 있습니다.
                 <br />
@@ -213,38 +240,100 @@ function AdminSettings() {
               </div>
             )}
 
+            {current && (
+              <fieldset className="ai-setting-detail">
+                <legend>{current.label} 세부 설정</legend>
+
+                <div className="form-group">
+                  <label className="form-label" htmlFor="ai-model">모델</label>
+                  <select
+                    id="ai-model"
+                    value={customModel ? CUSTOM : model}
+                    disabled={saving}
+                    onChange={(e) => {
+                      if (e.target.value === CUSTOM) {
+                        setCustomModel(true);
+                      } else {
+                        setCustomModel(false);
+                        setModel(e.target.value);
+                      }
+                    }}
+                  >
+                    {current.modelOptions.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                        {m === current.defaultModel ? ' (기본값)' : ''}
+                      </option>
+                    ))}
+                    <option value={CUSTOM}>직접 입력…</option>
+                  </select>
+                  {customModel && (
+                    <input
+                      type="text"
+                      aria-label="모델 이름 직접 입력"
+                      placeholder="예) gpt-5-mini"
+                      value={model}
+                      disabled={saving}
+                      onChange={(e) => setModel(e.target.value)}
+                      style={{ marginTop: 8 }}
+                    />
+                  )}
+                  <div className="form-help">
+                    목록에 없는 모델도 직접 입력할 수 있습니다. 이름이 틀리면 답변이 실패하고
+                    학부모에게는 안내 문구가 나갑니다.
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" htmlFor="ai-effort">{current.effortLabel}</label>
+                  <select
+                    id="ai-effort"
+                    value={effort}
+                    disabled={saving}
+                    onChange={(e) => setEffort(e.target.value)}
+                  >
+                    <option value="">모델 기본값에 맡기기</option>
+                    {current.effortOptions.map((v) => (
+                      <option key={v} value={v}>
+                        {EFFORT_LABEL[v] || v}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="form-help">{current.effortHelp}</div>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" htmlFor="ai-timeout">응답 대기 시간 (초)</label>
+                  <input
+                    id="ai-timeout"
+                    type="number"
+                    min={range.min / 1000}
+                    max={range.max / 1000}
+                    value={timeoutSec}
+                    disabled={saving}
+                    onChange={(e) => setTimeoutSec(Number(e.target.value))}
+                  />
+                  <div className="form-help">
+                    이 시간을 넘기면 답변을 포기하고 안내 문구를 보냅니다.
+                    추론 강도를 높이면 더 오래 걸리니 함께 늘려주세요.
+                  </div>
+                </div>
+              </fieldset>
+            )}
+
             {providers.some((p) => !p.configured) && (
-              <p style={{
-                color: 'var(--color-gray-500)',
-                fontSize: '0.8125rem',
-                marginTop: 'var(--spacing-md)',
-                lineHeight: 1.6
-              }}>
+              <p className="ai-setting-note">
                 API 키가 없는 제공자는 선택할 수 없습니다.
-                서버 환경변수(로컬 <code>.env</code>, Vercel 환경변수)에 키를 넣은 뒤 다시 시도해주세요.
+                서버 환경변수에 키를 넣은 뒤 다시 시도해주세요.
               </p>
             )}
 
-            <div style={{
-              display: 'flex',
-              gap: 'var(--spacing-md)',
-              marginTop: 'var(--spacing-xl)',
-              paddingTop: 'var(--spacing-lg)',
-              borderTop: '1px solid var(--color-gray-200)'
-            }}>
-              <button
-                className="btn btn-primary"
-                onClick={handleSave}
-                disabled={!isDirty || saving}
-              >
+            <div className="ai-setting-actions">
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving || !isDirty}>
                 {saving ? '저장 중...' : '저장'}
               </button>
               {isDirty && (
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => setSelected(provider)}
-                  disabled={saving}
-                >
+                <button className="btn btn-secondary" onClick={revert} disabled={saving}>
                   취소
                 </button>
               )}

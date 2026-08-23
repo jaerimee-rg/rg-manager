@@ -85,7 +85,9 @@ const saveLog = async (req, action, target, responseData) => {
     } else if (action === 'DELETE_FAQ_FILE' && req.params) {
       details = `파일 ID: ${req.params.id}`;
     } else if (action === 'UPDATE_AI_PROVIDER' && req.body) {
-      details = `AI 제공자: ${req.body.provider}`;
+      details = `AI 제공자: ${req.body.provider}` +
+        (req.body.model ? ` / ${req.body.model}` : '') +
+        (req.body.effort ? ` / ${req.body.effort}` : '');
     } else if (action === 'ADD_COMPETITION_STUDENT' && req.body) {
       details = `학생 ID: ${req.body.studentId}`;
     } else if (action === 'REMOVE_COMPETITION_STUDENT' && req.params) {

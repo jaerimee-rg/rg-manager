@@ -143,7 +143,29 @@ Which AI answers parent questions is an **admin setting**, not a build-time cons
 - `server/utils/aiAnswer.js` — knows both APIs but no DB; `generateAnswer()` takes the
   provider as a parameter. `chatController` resolves it per request
 - A provider whose API key is missing on the server cannot be selected (400)
-- Models are overridable per provider: `OPENAI_FAQ_MODEL`, `FAQ_CHAT_MODEL`
+- **Model, effort, and timeout are also admin settings** (`ai_model_<provider>`,
+  `ai_effort_<provider>`, `ai_timeout_ms`). Precedence is **DB > env var > code default**, so the
+  old `OPENAI_FAQ_MODEL` / `FAQ_CHAT_MODEL` / `FAQ_CHAT_TIMEOUT_MS` vars still work as fallbacks
+- "Effort" maps to `reasoning_effort` (OpenAI) and `thinkingConfig.thinkingLevel` (Gemini).
+  Reasoning models reject `temperature`; non-reasoning models reject `reasoning_effort` — neither
+  is knowable in advance, so `aiAnswer.js` retries without the rejected field and remembers the
+  verdict **per model name** (changing the model re-tests it)
+- Model names are free text (a dropdown of common ones plus 직접 입력), so a newly released
+  model can be used without a deploy
+
+### LLM Call Log
+
+Every AI call is recorded in `llm_call_logs` and shown at Admin → 로그 → **AI 호출 로그**.
+
+- `generateAnswer()` returns the trace (`promptId`, `provider`, `model`, `systemPrompt`,
+  `userPrompt`, `rawResponse`, `errorMessage`); `chatController` writes it. **The write is
+  fire-and-forget** — a logging failure must never block a parent's answer
+- `PROMPT_ID` in `aiAnswer.js` (`faq_answer_select@vN`) identifies which prompt was used. Bump the
+  version when `SYSTEM_RULES` changes so old and new calls can be told apart in the log
+- The list endpoint deliberately omits the prompt columns (the system prompt embeds every FAQ and
+  is large); `GET /api/logs/llm/:id` returns them for the detail modal
+- A `no_faq` row means no AI call was made (the channel had no published FAQ), so model and token
+  columns are empty by design
 
 **Local and production share one Supabase database**, so `ai_provider` is a single global
 row — a change made from a local dev server takes effect in production immediately. The

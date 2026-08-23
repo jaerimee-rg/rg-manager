@@ -416,6 +416,35 @@ const initDatabase = async () => {
       'CREATE INDEX IF NOT EXISTS idx_faq_files_user ON faq_files ("userId", "createdAt" DESC)'
     );
 
+    // AI 호출 이력. 어떤 프롬프트로 무엇을 물었고 무엇이 돌아왔는지 남긴다.
+    // 프롬프트 원문은 FAQ 전체를 담아 길어지므로 목록 조회에서는 읽지 않는다.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS llm_call_logs (
+        id SERIAL PRIMARY KEY,
+        "userId" INTEGER,
+        "sessionId" INTEGER,
+        "visitorName" TEXT,
+        "promptId" TEXT,
+        provider TEXT,
+        model TEXT,
+        status TEXT,
+        answered BOOLEAN,
+        "inputTokens" INTEGER,
+        "outputTokens" INTEGER,
+        "latencyMs" INTEGER,
+        "systemPrompt" TEXT,
+        "userPrompt" TEXT,
+        response TEXT,
+        "errorMessage" TEXT,
+        "createdAt" TEXT NOT NULL,
+        FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    await client.query(
+      'CREATE INDEX IF NOT EXISTS idx_llm_logs_created ON llm_call_logs ("createdAt" DESC)'
+    );
+
     // 앱 전역 설정 (관리자 전용). 현재는 FAQ 자동 답변에 쓸 AI 제공자를 담는다.
     await client.query(`
       CREATE TABLE IF NOT EXISTS app_settings (

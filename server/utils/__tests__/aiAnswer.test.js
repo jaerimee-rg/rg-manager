@@ -62,7 +62,8 @@ describe('generateAnswer', () => {
       answer: '',
       usedFaqIds: [],
       suggestedFaqIds: [],
-      status: 'no_faq'
+      status: 'no_faq',
+      promptId: expect.any(String)
     });
   });
 

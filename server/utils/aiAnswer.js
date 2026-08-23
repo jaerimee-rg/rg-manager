@@ -1,17 +1,25 @@
 import { GoogleGenAI, Type } from '@google/genai';
-import { DEFAULT_PROVIDER, normalizeProvider, resolveApiKey, resolveModel } from './aiProvider.js';
+import {
+  DEFAULT_PROVIDER,
+  DEFAULT_TIMEOUT_MS,
+  normalizeProvider,
+  resolveApiKey,
+  envModel,
+  envEffort
+} from './aiProvider.js';
 
-const TIMEOUT_MS = Number(process.env.FAQ_CHAT_TIMEOUT_MS || 20000);
-const THINKING_LEVEL = process.env.FAQ_CHAT_THINKING_LEVEL || 'low';
+// 모델·강도·대기 시간은 관리자 설정(설정 > AI)에서 넘어온다.
+// 넘어오지 않으면 환경변수, 그것도 없으면 아래 기본값을 쓴다.
 const TEMPERATURE = 0.2;
 const MAX_OUTPUT_TOKENS = 1024;
 
-// thinkingConfig 지원 여부는 모델마다 다르다 (예: 3.x는 thinkingLevel, 2.5는 thinkingBudget).
-// 첫 요청이 INVALID_ARGUMENT로 실패하면 thinkingConfig 없이 재시도하고 이후에는 생략한다.
-let thinkingConfigSupported = true;
-
-// 추론 계열 OpenAI 모델은 temperature 를 받지 않는다. 위와 같은 방식으로 한 번만 확인한다.
-let openaiTemperatureSupported = true;
+// 지원 여부는 모델마다 다르다. 한 번 거절당하면 그 뒤로는 빼고 보낸다.
+// 모델을 바꾸면 다시 시험해야 하므로 모델 이름별로 기억한다.
+const unsupported = {
+  geminiThinking: new Set(),
+  openaiTemperature: new Set(),
+  openaiEffort: new Set()
+};
 
 let cachedGeminiClient = null;
 let cachedGeminiKey = null;
@@ -47,6 +55,10 @@ export const SYSTEM_RULES = `당신은 리듬체조 학원의 학부모 문의�
 [중요]
 학부모에게 전달되는 문장은 고른 FAQ의 답변 원문이 줄바꿈까지 그대로 사용됩니다.
 요약하거나 다듬거나 인사말을 덧붙이지 마세요. 당신이 쓴 문장은 사용되지 않습니다.`;
+
+// 어떤 프롬프트로 호출했는지 로그에서 구분하기 위한 이름.
+// SYSTEM_RULES 를 고칠 때 뒤의 번호를 올리면 이력에서 앞뒤를 갈라 볼 수 있다.
+export const PROMPT_ID = 'faq_answer_select@v2';
 
 // 서로 다른 것을 함께 물어본 경우에도 답변이 길게 늘어지지 않도록 제한한다.
 const MAX_FAQ_ANSWERS = 2;
@@ -123,7 +135,7 @@ export const composeAnswer = (usedFaqIds, faqs) => {
 // 두 제공자 모두 { parsed, inputTokens, outputTokens } 형태로 돌려준다.
 // parsed 가 null 이면 안전 필터 차단 등으로 근거를 얻지 못한 경우다.
 
-const callGemini = async ({ apiKey, model, systemInstruction, history, question }) => {
+const callGemini = async ({ apiKey, model, effort, timeoutMs, systemInstruction, history, question }) => {
   const ai = getGeminiClient(apiKey);
 
   const contents = [
@@ -140,20 +152,22 @@ const callGemini = async ({ apiKey, model, systemInstruction, history, question 
     responseSchema: GEMINI_ANSWER_SCHEMA,
     temperature: TEMPERATURE,
     maxOutputTokens: MAX_OUTPUT_TOKENS,
-    ...(withThinking ? { thinkingConfig: { thinkingLevel: THINKING_LEVEL } } : {}),
-    abortSignal: AbortSignal.timeout(TIMEOUT_MS)
+    ...(withThinking && effort ? { thinkingConfig: { thinkingLevel: effort } } : {}),
+    abortSignal: AbortSignal.timeout(timeoutMs)
   });
 
   const call = (withThinking) =>
     ai.models.generateContent({ model, contents, config: buildConfig(withThinking) });
 
+  const thinkingAllowed = Boolean(effort) && !unsupported.geminiThinking.has(model);
+
   let response;
   try {
-    response = await call(thinkingConfigSupported);
+    response = await call(thinkingAllowed);
   } catch (error) {
-    if (thinkingConfigSupported && /INVALID_ARGUMENT|invalid argument/i.test(error?.message || '')) {
+    if (thinkingAllowed && /INVALID_ARGUMENT|invalid argument/i.test(error?.message || '')) {
       console.warn(`${model} 모델이 thinkingConfig를 지원하지 않아 생략하고 재시도합니다.`);
-      thinkingConfigSupported = false;
+      unsupported.geminiThinking.add(model);
       response = await call(false);
     } else {
       throw error;
@@ -168,12 +182,12 @@ const callGemini = async ({ apiKey, model, systemInstruction, history, question 
 
   const text = response.text;
   // 안전 필터 차단 등으로 후보가 비어 있는 경우
-  if (!text) return { parsed: null, ...tokens };
+  if (!text) return { parsed: null, rawResponse: '', ...tokens };
 
-  return { parsed: JSON.parse(text), ...tokens };
+  return { parsed: JSON.parse(text), rawResponse: text, ...tokens };
 };
 
-const callOpenAI = async ({ apiKey, model, systemInstruction, history, question }) => {
+const callOpenAI = async ({ apiKey, model, effort, timeoutMs, systemInstruction, history, question }) => {
   const messages = [
     { role: 'system', content: systemInstruction },
     ...history.map((m) => ({
@@ -183,26 +197,27 @@ const callOpenAI = async ({ apiKey, model, systemInstruction, history, question 
     { role: 'user', content: question }
   ];
 
-  const buildBody = (withTemperature) => ({
+  const buildBody = (withTemperature, withEffort) => ({
     model,
     messages,
     max_completion_tokens: MAX_OUTPUT_TOKENS,
     ...(withTemperature ? { temperature: TEMPERATURE } : {}),
+    ...(withEffort ? { reasoning_effort: effort } : {}),
     response_format: {
       type: 'json_schema',
       json_schema: { name: 'faq_selection', strict: true, schema: OPENAI_ANSWER_SCHEMA }
     }
   });
 
-  const request = async (withTemperature) => {
+  const request = async (withTemperature, withEffort) => {
     const response = await fetch(OPENAI_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`
       },
-      body: JSON.stringify(buildBody(withTemperature)),
-      signal: AbortSignal.timeout(TIMEOUT_MS)
+      body: JSON.stringify(buildBody(withTemperature, withEffort)),
+      signal: AbortSignal.timeout(timeoutMs)
     });
 
     if (!response.ok) {
@@ -217,16 +232,31 @@ const callOpenAI = async ({ apiKey, model, systemInstruction, history, question 
     return response.json();
   };
 
+  // 추론 계열 모델은 temperature 를, 일반 모델은 reasoning_effort 를 받지 않는다.
+  // 어느 쪽인지 미리 알 수 없으므로 한 번 시도해 보고 거절당하면 빼고 다시 보낸다.
+  let withTemperature = !unsupported.openaiTemperature.has(model);
+  let withEffort = Boolean(effort) && !unsupported.openaiEffort.has(model);
+
+  const rejected = (error, field) =>
+    error.status === 400 && new RegExp(field, 'i').test(error.detail || '');
+
   let data;
-  try {
-    data = await request(openaiTemperatureSupported);
-  } catch (error) {
-    if (openaiTemperatureSupported && error.status === 400 && /temperature/i.test(error.detail || '')) {
-      console.warn(`${model} 모델이 temperature 를 지원하지 않아 생략하고 재시도합니다.`);
-      openaiTemperatureSupported = false;
-      data = await request(false);
-    } else {
-      throw error;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      data = await request(withTemperature, withEffort);
+      break;
+    } catch (error) {
+      if (attempt < 2 && withTemperature && rejected(error, 'temperature')) {
+        console.warn(`${model} 모델이 temperature 를 지원하지 않아 생략하고 재시도합니다.`);
+        unsupported.openaiTemperature.add(model);
+        withTemperature = false;
+      } else if (attempt < 2 && withEffort && rejected(error, 'reasoning_effort')) {
+        console.warn(`${model} 모델이 reasoning_effort 를 지원하지 않아 생략하고 재시도합니다.`);
+        unsupported.openaiEffort.add(model);
+        withEffort = false;
+      } else {
+        throw error;
+      }
     }
   }
 
@@ -238,9 +268,11 @@ const callOpenAI = async ({ apiKey, model, systemInstruction, history, question 
 
   const message = data.choices?.[0]?.message;
   // 안전 정책으로 거부했거나(refusal) 본문이 비면 근거가 없는 것이므로 버린다.
-  if (!message || message.refusal || !message.content) return { parsed: null, ...tokens };
+  if (!message || message.refusal || !message.content) {
+    return { parsed: null, rawResponse: message?.refusal || '', ...tokens };
+  }
 
-  return { parsed: JSON.parse(message.content), ...tokens };
+  return { parsed: JSON.parse(message.content), rawResponse: message.content, ...tokens };
 };
 
 const CALLERS = { gemini: callGemini, openai: callOpenAI };
@@ -252,13 +284,22 @@ const CALLERS = { gemini: callGemini, openai: callOpenAI };
  * provider 를 넘기지 않으면 환경변수 AI_PROVIDER, 그것도 없으면 기본 제공자를 쓴다.
  * (관리자 설정값은 호출하는 쪽에서 읽어 넘긴다 — 이 모듈은 DB를 모른다.)
  */
-export const generateAnswer = async ({ faqs = [], history = [], question, provider }) => {
+export const generateAnswer = async ({
+  faqs = [],
+  history = [],
+  question,
+  provider,
+  model: requestedModel,
+  effort: requestedEffort,
+  timeoutMs: requestedTimeout
+}) => {
   const empty = (status) => ({
     answered: false,
     answer: '',
     usedFaqIds: [],
     suggestedFaqIds: [],
-    status
+    status,
+    promptId: PROMPT_ID
   });
 
   if (!faqs.length) return empty('no_faq');
@@ -270,19 +311,44 @@ export const generateAnswer = async ({ faqs = [], history = [], question, provid
     return empty('ai_error');
   }
 
-  const model = resolveModel(selected);
+  // 관리자 설정이 넘어오면 그것을 쓰고, 없으면 환경변수·기본값으로 이어간다.
+  const model = requestedModel || envModel(selected);
+  const effort = requestedEffort !== undefined ? requestedEffort : envEffort(selected);
+  const timeoutMs = requestedTimeout || Number(process.env.FAQ_CHAT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS;
   const startedAt = Date.now();
 
+  // 호출 이력에 남길 값. 실패해도 무엇을 보냈는지는 남아야 한다.
+  const systemPrompt = buildSystemInstruction(faqs);
+  const trace = {
+    promptId: PROMPT_ID,
+    provider: selected,
+    model,
+    effort: effort || null,
+    systemPrompt,
+    userPrompt: question
+  };
+
   try {
-    const { parsed, inputTokens, outputTokens } = await CALLERS[selected]({
+    const { parsed, rawResponse, inputTokens, outputTokens } = await CALLERS[selected]({
       apiKey,
       model,
-      systemInstruction: buildSystemInstruction(faqs),
+      effort,
+      timeoutMs,
+      systemInstruction: systemPrompt,
       history,
       question
     });
 
-    if (!parsed) return { ...empty('ai_error'), latencyMs: Date.now() - startedAt };
+    if (!parsed) {
+      return {
+        ...empty('ai_error'),
+        ...trace,
+        rawResponse: rawResponse || '',
+        inputTokens,
+        outputTokens,
+        latencyMs: Date.now() - startedAt
+      };
+    }
 
     // 모델이 고른 id 로 등록된 답변 원문을 그대로 꺼내 쓴다.
     // 없는 id 를 골랐다면 근거가 없는 것이므로 버린다.
@@ -303,13 +369,20 @@ export const generateAnswer = async ({ faqs = [], history = [], question, provid
       usedFaqIds,
       suggestedFaqIds,
       status: 'ok',
-      provider: selected,
+      ...trace,
+      rawResponse,
       inputTokens,
       outputTokens,
       latencyMs: Date.now() - startedAt
     };
   } catch (error) {
-    console.error(`AI 답변 생성 실패 (${selected}):`, error?.message || error);
-    return { ...empty('ai_error'), latencyMs: Date.now() - startedAt };
+    const message = error?.message || String(error);
+    console.error(`AI 답변 생성 실패 (${selected}/${model}):`, message);
+    return {
+      ...empty('ai_error'),
+      ...trace,
+      errorMessage: message,
+      latencyMs: Date.now() - startedAt
+    };
   }
 };
