@@ -13,6 +13,7 @@ import logRoutes from './routes/logs.js';
 import competitionRoutes from './routes/competitions.js';
 import eventRoutes from './routes/events.js';
 import parentAdminRoutes from './routes/parents.js';
+import driveRoutes from './routes/drive.js';
 import inviteRoutes from './routes/invite.js';
 import parentRoutes from './routes/parent.js';
 import faqRoutes from './routes/faqs.js';
@@ -154,6 +155,9 @@ app.use('/api/logs', rejectParents, logRoutes);
 app.use('/api/competitions', rejectParents, competitionRoutes);
 app.use('/api/events', rejectParents, eventRoutes);
 app.use('/api/parents', rejectParents, parentAdminRoutes);
+// 선생님의 Google Drive 연결 (앨범 폴더를 만들고 업로드 세션을 발급한다).
+// /api/drive/callback 만 Google 이 브라우저를 되돌려 보내는 공개 경로다.
+app.use('/api/drive', rejectParents, driveRoutes);
 
 // 초대 링크 확인은 비로그인 학부모가 여는 공개 경로다.
 app.use('/api/invite', inviteRoutes);
