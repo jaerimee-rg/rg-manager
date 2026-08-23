@@ -11,7 +11,6 @@ import AttendanceCheck from './components/Attendance/AttendanceCheck';
 import Dashboard from './pages/Dashboard';
 import StudentAttendance from './pages/StudentAttendance';
 import Login from './pages/Login';
-import CompetitionList from './pages/Competitions/CompetitionList';
 import CompetitionForm from './pages/Competitions/CompetitionForm';
 import CompetitionStudentManagement from './pages/Competitions/CompetitionStudentManagement';
 import StudentCompetitions from './pages/StudentCompetitions';
@@ -20,6 +19,9 @@ import RegisterName from './pages/RegisterName';
 import Settings from './pages/Settings';
 import FaqList from './pages/Faq/FaqList';
 import PublicChat from './pages/PublicChat';
+import EventList from './pages/Events/EventList';
+import EventForm from './pages/Events/EventForm';
+import ParentList from './pages/Parents/ParentList';
 
 // Admin components
 import AdminRoute from './components/admin/AdminRoute';
@@ -33,6 +35,8 @@ import AdminLogs from './pages/admin/AdminLogs';
 import AdminNotifications from './pages/admin/AdminNotifications';
 import AdminFaq from './pages/admin/AdminFaq';
 import AdminSettings from './pages/admin/AdminSettings';
+import AdminEvents from './pages/admin/AdminEvents';
+import AdminParents from './pages/admin/AdminParents';
 
 function AuthLoading() {
   return (
@@ -141,10 +145,11 @@ function App() {
     { path: '/', label: '대시보드', icon: '📊' },
     { path: '/students', label: '학생 관리', icon: '👥' },
     { path: '/classes', label: '수업 관리', icon: '📚' },
-    { path: '/competitions', label: '대회 관리', icon: '🏆' },
+    { path: '/events', label: '이벤트 관리', icon: '📅' },
     { path: '/attendance', label: '출석 체크', icon: '✓' },
     { path: '/student-attendance', label: '학생별 출석', icon: '📋' },
     { path: '/student-competitions', label: '학생별 대회', icon: '🎖️' },
+    { path: '/parents', label: '학부모', icon: '👨‍👩‍👧' },
     { path: '/faq', label: 'FAQ', icon: '💬' },
   ];
 
@@ -166,6 +171,10 @@ function App() {
           <Route path="competitions/new" element={<CompetitionForm />} />
           <Route path="competitions/edit" element={<CompetitionForm />} />
           <Route path="competitions/manage" element={<CompetitionStudentManagement />} />
+          <Route path="events" element={<AdminEvents />} />
+          <Route path="events/new" element={<EventForm basePath="/admin/events" />} />
+          <Route path="events/edit" element={<EventForm basePath="/admin/events" />} />
+          <Route path="parents" element={<AdminParents />} />
           <Route path="attendance" element={<AdminAttendance />} />
           <Route path="users" element={<AdminUsers />} />
           <Route path="logs" element={<AdminLogs />} />
@@ -280,7 +289,12 @@ function App() {
           <Route path="/classes/new" element={<ProtectedRoute><ClassForm /></ProtectedRoute>} />
           <Route path="/classes/edit" element={<ProtectedRoute><ClassForm /></ProtectedRoute>} />
           <Route path="/classes/manage" element={<ProtectedRoute><ClassStudentManagement /></ProtectedRoute>} />
-          <Route path="/competitions" element={<ProtectedRoute><CompetitionList /></ProtectedRoute>} />
+          {/* 목록은 이벤트 관리로 옮겼다. 옛 주소·북마크는 그대로 살려 둔다. */}
+          <Route path="/competitions" element={<Navigate to="/events" replace />} />
+          <Route path="/events" element={<ProtectedRoute><EventList /></ProtectedRoute>} />
+          <Route path="/events/new" element={<ProtectedRoute><EventForm /></ProtectedRoute>} />
+          <Route path="/events/edit" element={<ProtectedRoute><EventForm /></ProtectedRoute>} />
+          <Route path="/parents" element={<ProtectedRoute><ParentList /></ProtectedRoute>} />
           <Route path="/competitions/new" element={<ProtectedRoute><CompetitionForm /></ProtectedRoute>} />
           <Route path="/competitions/edit" element={<ProtectedRoute><CompetitionForm /></ProtectedRoute>} />
           <Route path="/competitions/manage" element={<ProtectedRoute><CompetitionStudentManagement /></ProtectedRoute>} />

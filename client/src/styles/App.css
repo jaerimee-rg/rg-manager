@@ -800,11 +800,19 @@ tbody tr:last-child td {
 .badge {
   display: inline-flex;
   align-items: center;
+  gap: 4px;
+  /* 좁은 칸에 들어가도 글자가 세로로 쪼개지지 않게 한다 */
+  white-space: nowrap;
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--radius-full);
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: -0.2px;
+}
+
+.badge-purple {
+  background-color: #F0EBFF;
+  color: #7C5CFC;
 }
 
 .badge-primary {

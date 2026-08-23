@@ -6,6 +6,8 @@ const adminMenuItems = [
   { path: '/admin/students', label: '학생', icon: '👥' },
   { path: '/admin/classes', label: '수업', icon: '📚' },
   { path: '/admin/competitions', label: '대회', icon: '🏆' },
+  { path: '/admin/events', label: '이벤트', icon: '📅' },
+  { path: '/admin/parents', label: '학부모', icon: '👨‍👩‍👧' },
   { path: '/admin/attendance', label: '출석', icon: '✓' },
   { path: '/admin/users', label: '사용자', icon: '👤' },
   { path: '/admin/logs', label: '로그', icon: '📝' },

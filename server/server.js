@@ -12,6 +12,8 @@ import authRoutes from './routes/auth.js';
 import logRoutes from './routes/logs.js';
 import competitionRoutes from './routes/competitions.js';
 import eventRoutes from './routes/events.js';
+import parentAdminRoutes from './routes/parents.js';
+import inviteRoutes from './routes/invite.js';
 import faqRoutes from './routes/faqs.js';
 import chatRoutes from './routes/chat.js';
 import {
@@ -148,6 +150,10 @@ app.use('/api/attendance', rejectParents, attendanceRoutes);
 app.use('/api/logs', rejectParents, logRoutes);
 app.use('/api/competitions', rejectParents, competitionRoutes);
 app.use('/api/events', rejectParents, eventRoutes);
+app.use('/api/parents', rejectParents, parentAdminRoutes);
+
+// 초대 링크 확인은 비로그인 학부모가 여는 공개 경로다.
+app.use('/api/invite', inviteRoutes);
 app.use('/api/faqs', rejectParents, faqRoutes);
 app.use('/api/chat', (req, res, next) => {
   // 공개 채팅(/api/chat/public/*)은 비로그인 학부모용이라 그대로 통과시킨다.

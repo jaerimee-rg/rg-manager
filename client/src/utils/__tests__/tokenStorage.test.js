@@ -362,11 +362,13 @@ describe('tokenStorage', () => {
       expect(result).toEqual(user);
     });
 
-    it('should handle empty string token', () => {
+    it('should treat an empty string token as no token', () => {
+      // 빈 문자열은 토큰이 아니다. getToken 은 쿠키 복구를 거쳐 null 을 돌려주고,
+      // 호출부(fetchWithAuth)는 값이 없으면 Authorization 헤더를 붙이지 않는다.
       saveToken('');
       const result = getToken();
 
-      expect(result).toBe('');
+      expect(result).toBeNull();
     });
   });
 });
