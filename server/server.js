@@ -13,6 +13,12 @@ import logRoutes from './routes/logs.js';
 import competitionRoutes from './routes/competitions.js';
 import faqRoutes from './routes/faqs.js';
 import chatRoutes from './routes/chat.js';
+import {
+  RATE_LIMIT_WINDOW_MS,
+  PUBLIC_CHAT_READ_MAX,
+  PUBLIC_CHAT_WRITE_MAX,
+  visitorKeyGenerator
+} from './utils/rateLimits.js';
 import notificationRoutes from './routes/notifications.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -66,15 +72,30 @@ const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
   message: { error: '너무 많은 요청입니다. 잠시 후 다시 시도해주세요.' },
+  // 공개 채팅은 아래 전용 한도를 쓴다. 여기서 또 세면 더 낮은 쪽(200, IP 기준)이
+  // 실제 상한이 되어 학부모 여러 명이 한 칸을 나눠 쓰게 된다.
+  skip: (req) => req.originalUrl.startsWith('/api/chat/public'),
   standardHeaders: true,
   legacyHeaders: false
 });
 
-// 레이트 리미팅 - 공개 채팅(비로그인)은 더 엄격하게
-const publicChatLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 30,
+// 레이트 리미팅 - 공개 채팅(비로그인). 설정 근거는 utils/rateLimits.js 참고.
+// 폴링(12초 주기 → 15분에 약 75회)에 여유를 둔 값
+const publicChatReadLimiter = rateLimit({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: PUBLIC_CHAT_READ_MAX,
   message: { error: '요청이 많습니다. 잠시 후 다시 시도해주세요.' },
+  keyGenerator: visitorKeyGenerator,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// 질문 전송만 엄격하게 (Gemini 호출 비용이 드는 경로)
+const publicChatWriteLimiter = rateLimit({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: PUBLIC_CHAT_WRITE_MAX,
+  message: { error: '질문을 너무 자주 보내셨어요. 잠시 후 다시 시도해주세요.' },
+  keyGenerator: visitorKeyGenerator,
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -98,7 +119,9 @@ app.get('/api', (req, res) => {
   res.json({ message: '리듬체조 출석 관리 API' });
 });
 
-app.use('/api/chat/public', publicChatLimiter);
+// 쓰기 경로를 먼저 걸고, 나머지 공개 채팅 요청은 읽기 한도로 처리한다.
+app.post('/api/chat/public/:publicId/messages', publicChatWriteLimiter);
+app.use('/api/chat/public', publicChatReadLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/signup', authLimiter);
 app.use('/api/auth/kakao', authLimiter);

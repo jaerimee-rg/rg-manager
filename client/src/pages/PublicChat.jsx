@@ -3,6 +3,11 @@ import { useParams } from 'react-router-dom';
 
 const MESSAGE_MAX = 500;
 const NAME_MAX = 20;
+// 관리자 답변을 받아보기 위한 갱신 주기
+const POLL_INTERVAL_MS = 12000;
+// 한도를 넘었을 때 기본 대기 시간 (서버가 알려주면 그 값을 쓴다)
+const POLL_BACKOFF_MS = 60000;
+const POLL_BACKOFF_MAX_MS = 5 * 60 * 1000;
 const VISITOR_KEY_STORAGE = 'faqChatVisitorKey';
 
 // 로그인하지 않은 학부모 화면이므로 fetchWithAuth(401 시 /login 이동)를 사용하지 않는다.
@@ -33,7 +38,7 @@ const formatTime = (iso) => {
 
 function PublicChat() {
   const { publicId } = useParams();
-  const [status, setStatus] = useState('loading'); // loading | entry | chat | notfound
+  const [status, setStatus] = useState('loading'); // loading | entry | chat | notfound | busy
   const [channel, setChannel] = useState(null);
   const [visitorKey] = useState(getVisitorKey);
   const [visitorName, setVisitorName] = useState('');
@@ -46,6 +51,8 @@ function PublicChat() {
 
   const messagesRef = useRef(null);
   const sendingRef = useRef(false);
+  // 한도 초과 시 폴링을 잠시 멈춰 둘 시각
+  const pollBlockedUntilRef = useRef(0);
   const composerRef = useRef(null);
 
   useEffect(() => {
@@ -94,7 +101,7 @@ function PublicChat() {
     const timer = setInterval(() => {
       if (document.hidden || sendingRef.current) return;
       refreshMessages();
-    }, 8000);
+    }, POLL_INTERVAL_MS);
 
     const onVisible = () => {
       if (!document.hidden && !sendingRef.current) refreshMessages();
@@ -117,7 +124,8 @@ function PublicChat() {
     try {
       const response = await fetch(`/api/chat/public/${publicId}`);
       if (!response.ok) {
-        setStatus('notfound');
+        // 한도 초과를 "없는 채팅방"으로 안내하면 링크가 죽은 것처럼 보인다.
+        setStatus(response.status === 429 ? 'busy' : 'notfound');
         return;
       }
 
@@ -147,10 +155,24 @@ function PublicChat() {
   };
 
   const refreshMessages = async () => {
+    if (Date.now() < pollBlockedUntilRef.current) return;
+
     try {
       const response = await fetch(
         `/api/chat/public/${publicId}/messages?visitorKey=${encodeURIComponent(visitorKey)}`
       );
+
+      // 한도를 넘은 뒤에도 같은 속도로 계속 두드리면 창이 회복되지 않는다.
+      if (response.status === 429) {
+        const reset = Number(response.headers.get('ratelimit-reset'));
+        const waitMs =
+          Number.isFinite(reset) && reset > 0
+            ? Math.min(reset * 1000, POLL_BACKOFF_MAX_MS)
+            : POLL_BACKOFF_MS;
+        pollBlockedUntilRef.current = Date.now() + waitMs;
+        return;
+      }
+
       if (!response.ok) return;
 
       const data = await response.json();
@@ -276,6 +298,20 @@ function PublicChat() {
     return (
       <div className="pchat-state">
         <div className="pchat-state-title">불러오는 중...</div>
+      </div>
+    );
+  }
+
+  if (status === 'busy') {
+    return (
+      <div className="pchat-state">
+        <div className="pchat-state-emoji">⏳</div>
+        <div className="pchat-state-title">잠시 후 다시 시도해 주세요</div>
+        <div className="pchat-state-desc">
+          지금 문의가 많아 잠시 연결이 어렵습니다.
+          <br />
+          잠시 뒤에 새로고침해 주세요.
+        </div>
       </div>
     );
   }
