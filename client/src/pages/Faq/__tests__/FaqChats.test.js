@@ -243,6 +243,36 @@ describe('FaqChats — 메시지 수정 / 스크롤', () => {
     expect(screen.getAllByRole('button', { name: '메시지 삭제' })).toHaveLength(2);
   });
 
+  // 학부모에게는 문구 없이 추천 질문만 나가므로, 선생님 화면에서 빈 말풍선처럼
+  // 보이면 무슨 일이 있었는지 알 수 없다.
+  it('문구 없이 추천만 나간 경우 무엇을 추천했는지 보여준다', async () => {
+    const withSuggestOnly = {
+      ...THREAD,
+      messages: [
+        THREAD.messages[0],
+        {
+          id: 3,
+          role: 'bot',
+          content: '',
+          answered: false,
+          status: 'ok',
+          createdAt: '2026-08-22T10:02:00.000Z',
+          matchedFaqs: [],
+          suggestedFaqs: [{ id: 7, question: '수업 시간이 어떻게 되나요?' }]
+        }
+      ]
+    };
+    fetchWithAuth.mockImplementation((url) => {
+      if (url.includes('/messages')) return jsonResponse(withSuggestOnly);
+      return routeFetch(url);
+    });
+
+    await open();
+
+    expect(await screen.findByText('추천 질문만 보여드렸습니다')).toBeInTheDocument();
+    expect(screen.getByText(/수업 시간이 어떻게 되나요\?/)).toBeInTheDocument();
+  });
+
   it('AI 답변에도 수정 버튼이 있다', async () => {
     const withBot = {
       ...THREAD,

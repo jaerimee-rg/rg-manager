@@ -490,7 +490,22 @@ function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
                 </div>
               </div>
             ) : (
-              <div className="chat-bubble"><RichText text={m.content} /></div>
+              <div className="chat-bubble">
+                {m.content ? (
+                  <RichText text={m.content} />
+                ) : (
+                  // 학부모에게는 문구 없이 추천 질문만 나갔다.
+                  <span className="chat-bubble-note">추천 질문만 보여드렸습니다</span>
+                )}
+              </div>
+            )}
+            {m.suggestedFaqs && m.suggestedFaqs.length > 0 && (
+              <div className="chat-msg-src">
+                추천
+                {m.suggestedFaqs.map((f) => (
+                  <code key={f.id}>FAQ #{f.id} {f.question}</code>
+                ))}
+              </div>
             )}
             {m.matchedFaqs && m.matchedFaqs.length > 0 && (
               <div className="chat-msg-src">

@@ -2540,27 +2540,60 @@ tbody tr:last-child td {
 }
 
 .pchat-suggest-label {
-  font-size: 0.6875rem;
-  color: var(--color-gray-500);
+  font-size: 0.75rem;
+  color: var(--color-gray-600);
   font-weight: 600;
 }
 
+/*
+ * 추천 질문은 "읽는 말풍선" 이 아니라 "누르는 버튼" 이다.
+ * 말풍선과 확실히 구분되도록 강조색 테두리를 주고, 오른쪽 화살표로
+ * 누를 수 있다는 것을 한눈에 알리고, 눌렀을 때 색이 차오르게 한다.
+ */
 .pchat-sug {
-  background: var(--bg-secondary);
-  border: 1px solid var(--color-gray-200);
-  color: var(--color-gray-800);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  background: var(--bg-primary, #fff);
+  border: 1.5px solid var(--color-primary);
+  color: var(--color-primary);
   border-radius: var(--radius-full);
-  padding: 9px 14px;
+  padding: 10px 16px;
   font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
   text-align: left;
+  transition: background-color 0.15s, color 0.15s, transform 0.1s;
 }
 
-.pchat-sug:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+.pchat-sug::after {
+  content: '›';
+  font-size: 1.15rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.pchat-sug:hover:not(:disabled) {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.pchat-sug:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* 키보드로 이동해도 어디에 있는지 보이게 한다 */
+.pchat-sug:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.pchat-sug:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .pchat-typing {
@@ -3316,4 +3349,10 @@ body.pchat-lock {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* 문구 없이 추천 질문만 나간 봇 메시지 (선생님 화면 표시용) */
+.chat-bubble-note {
+  color: var(--color-gray-500);
+  font-style: italic;
 }

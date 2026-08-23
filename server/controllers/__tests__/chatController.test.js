@@ -493,6 +493,85 @@ describe('chatController (공개 채팅)', () => {
       ]);
     });
 
+    // "찾지 못했습니다" 와 추천을 함께 보여주면 학부모가 실패로 읽고 대화를 접는다.
+    it('추천할 질문이 있으면 안내 문구 없이 추천만 보낸다', async () => {
+      Faq.getPublishedByUserId.mockResolvedValue([
+        { id: 3, question: '수업 시간이 어떻게 되나요?', answer: '오전 10시' }
+      ]);
+      generateAnswer.mockResolvedValue({
+        answered: false,
+        answer: '',
+        usedFaqIds: [],
+        suggestedFaqIds: [3],
+        status: 'ok'
+      });
+      req.body = { visitorKey: 'v1', message: '수업' };
+
+      await postMessage(req, res);
+
+      const payload = res.json.mock.calls[0][0];
+      expect(payload.reply).toBe('');
+      expect(payload.reply).not.toContain('찾지 못했습니다');
+      expect(payload.suggestions).toHaveLength(1);
+    });
+
+    it('안내 문구를 보내지 않은 경우 저장되는 메시지도 비어 있다', async () => {
+      Faq.getPublishedByUserId.mockResolvedValue([
+        { id: 3, question: '수업 시간이 어떻게 되나요?', answer: '오전 10시' }
+      ]);
+      generateAnswer.mockResolvedValue({
+        answered: false,
+        answer: '',
+        usedFaqIds: [],
+        suggestedFaqIds: [3],
+        status: 'ok'
+      });
+      req.body = { visitorKey: 'v1', message: '수업' };
+
+      await postMessage(req, res);
+
+      expect(ChatMessage.create).toHaveBeenLastCalledWith(
+        11,
+        expect.objectContaining({ role: 'bot', content: '', suggestedFaqIds: [3] })
+      );
+    });
+
+    it('추천할 질문이 없으면 기존 안내 문구를 그대로 보낸다', async () => {
+      Faq.getPublishedByUserId.mockResolvedValue([
+        { id: 3, question: '수업 시간이 어떻게 되나요?', answer: '오전 10시' }
+      ]);
+      generateAnswer.mockResolvedValue({
+        answered: false,
+        answer: '',
+        usedFaqIds: [],
+        suggestedFaqIds: [],
+        status: 'ok'
+      });
+      req.body = { visitorKey: 'v1', message: '주차장 있나요?' };
+
+      await postMessage(req, res);
+
+      expect(res.json.mock.calls[0][0].reply).toBe(activeChannel.fallbackMessage);
+    });
+
+    it('추천만 보낸 경우에도 미답변으로 세어 선생님이 놓치지 않게 한다', async () => {
+      Faq.getPublishedByUserId.mockResolvedValue([
+        { id: 3, question: '수업 시간이 어떻게 되나요?', answer: '오전 10시' }
+      ]);
+      generateAnswer.mockResolvedValue({
+        answered: false,
+        answer: '',
+        usedFaqIds: [],
+        suggestedFaqIds: [3],
+        status: 'ok'
+      });
+      req.body = { visitorKey: 'v1', message: '수업' };
+
+      await postMessage(req, res);
+
+      expect(ChatSession.recordMessages).toHaveBeenLastCalledWith(11, { unanswered: true });
+    });
+
     it('추천을 메시지에 저장해 새로고침해도 남아 있게 한다', async () => {
       Faq.getPublishedByUserId.mockResolvedValue([{ id: 3, question: 'Q3', answer: 'A3' }]);
       generateAnswer.mockResolvedValue({

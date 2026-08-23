@@ -420,13 +420,16 @@ function PublicChat() {
                 <span className="pchat-avatar teacher">선</span> 선생님
               </div>
             )}
-            <div
-              className={`pchat-bubble ${
-                m.role === 'admin' ? 'pchat-bubble-admin' : ''
-              } ${m.role === 'bot' && m.answered === false ? 'pchat-bubble-warn' : ''}`}
-            >
-              <RichText text={m.content} embedHtml />
-            </div>
+            {/* 추천 질문만 보여주는 경우 문구가 비어 있다. 빈 말풍선은 그리지 않는다. */}
+            {m.content ? (
+              <div
+                className={`pchat-bubble ${
+                  m.role === 'admin' ? 'pchat-bubble-admin' : ''
+                } ${m.role === 'bot' && m.answered === false ? 'pchat-bubble-warn' : ''}`}
+              >
+                <RichText text={m.content} embedHtml />
+              </div>
+            ) : null}
 
             {/* 정확히 맞는 답이 없을 때, 가까운 주제의 질문을 눌러 바로 물어볼 수 있게 한다 */}
             {m.suggestions?.length > 0 && (

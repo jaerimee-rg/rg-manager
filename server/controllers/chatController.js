@@ -290,10 +290,16 @@ export const postMessage = async (req, res) => {
       errorMessage: result.errorMessage ?? null
     }).catch((error) => console.error('AI 호출 이력 저장 실패:', error?.message || error));
 
-    // 최종 문구는 서버가 결정한다. answered=false 면 AI 문장을 쓰지 않는다.
-    const reply = result.answered ? result.answer : fallback;
-
     const suggestions = result.answered ? [] : toSuggestions(result.suggestedFaqIds, faqs);
+
+    // 최종 문구는 서버가 결정한다. answered=false 면 AI 문장을 쓰지 않는다.
+    // 추천할 질문이 있으면 사과 문구를 건너뛰고 추천만 보여준다.
+    // ("찾지 못했습니다" 와 추천을 함께 보여주면 학부모가 실패로 읽고 대화를 접는다)
+    const reply = result.answered
+      ? result.answer
+      : suggestions.length > 0
+      ? ''
+      : fallback;
 
     const saved = await ChatMessage.create(session.id, {
       role: 'bot',
@@ -392,6 +398,10 @@ export const getSessionMessages = async (req, res) => {
         createdAt: m.createdAt,
         editedAt: m.editedAt,
         matchedFaqs: (m.matchedFaqIds || [])
+          .filter((id) => faqMap.has(id))
+          .map((id) => ({ id, question: faqMap.get(id) })),
+        // 답을 못 찾아 추천만 보여준 경우, 선생님도 무엇을 추천했는지 볼 수 있어야 한다.
+        suggestedFaqs: (m.suggestedFaqIds || [])
           .filter((id) => faqMap.has(id))
           .map((id) => ({ id, question: faqMap.get(id) }))
       }))

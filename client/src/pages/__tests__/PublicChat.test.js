@@ -16,9 +16,11 @@ const jsonResponse = (data, { status = 200 } = {}) =>
   });
 
 const renderPage = async () => {
+  let result;
   await act(async () => {
-    render(<PublicChat />);
+    result = render(<PublicChat />);
   });
+  return result;
 };
 
 describe('PublicChat — 한도 초과 응답 처리', () => {
@@ -102,6 +104,52 @@ describe('PublicChat — 추천 질문', () => {
     expect(await screen.findByText('혹시 이걸 찾으셨나요?')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '수업 시간이 어떻게 되나요?' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '수업료는 얼마인가요?' })).toBeInTheDocument();
+  });
+
+  // 사과 문구와 추천을 함께 보여주면 학부모가 실패로 읽고 대화를 접는다.
+  it('문구 없이 추천만 온 경우 빈 말풍선을 그리지 않는다', async () => {
+    withMessages([
+      { id: 1, role: 'parent', content: '수업', createdAt: '2026-08-23T01:00:00.000Z' },
+      {
+        id: 2,
+        role: 'bot',
+        content: '',
+        answered: false,
+        createdAt: '2026-08-23T01:00:01.000Z',
+        suggestions: [{ id: 3, question: '수업 시간이 어떻게 되나요?' }]
+      }
+    ]);
+
+    const { container } = await renderPage();
+
+    expect(await screen.findByText('혹시 이걸 찾으셨나요?')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '수업 시간이 어떻게 되나요?' })).toBeInTheDocument();
+
+    // 빈 말풍선이 하나도 없어야 한다 (문구 없는 봇 메시지는 말풍선을 만들지 않는다).
+    const bubbles = [...container.querySelectorAll('.pchat-bubble')];
+    expect(bubbles.length).toBeGreaterThan(0);
+    expect(bubbles.every((b) => b.textContent.trim().length > 0)).toBe(true);
+    expect(screen.queryByText(/찾지 못했습니다/)).not.toBeInTheDocument();
+  });
+
+  it('추천 질문은 눌러서 물어볼 수 있는 버튼으로 보여준다', async () => {
+    withMessages([
+      {
+        id: 2,
+        role: 'bot',
+        content: '',
+        answered: false,
+        createdAt: '2026-08-23T01:00:01.000Z',
+        suggestions: [{ id: 3, question: '수업 시간이 어떻게 되나요?' }]
+      }
+    ]);
+
+    await renderPage();
+
+    const chip = await screen.findByRole('button', { name: '수업 시간이 어떻게 되나요?' });
+    // 말풍선이 아니라 누르는 버튼이라는 것이 표시로 드러나야 한다.
+    expect(chip).toHaveClass('pchat-sug');
+    expect(chip.tagName).toBe('BUTTON');
   });
 
   it('추천을 누르면 그 질문을 그대로 보낸다', async () => {
