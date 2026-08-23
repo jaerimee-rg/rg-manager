@@ -59,6 +59,7 @@ jest.unstable_mockModule('../../utils/aiAnswer.js', () => ({
 // 제공자 설정은 DB를 읽으므로 테스트에서는 기본값을 돌려주도록 대체한다.
 jest.unstable_mockModule('../../utils/aiSettings.js', () => ({
   getSelectedProvider: jest.fn().mockResolvedValue('gemini'),
+  getEffectiveProvider: jest.fn().mockResolvedValue('gemini'),
   setSelectedProvider: jest.fn()
 }));
 

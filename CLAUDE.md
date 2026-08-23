@@ -142,9 +142,20 @@ Which AI answers parent questions is an **admin setting**, not a build-time cons
   `AI_PROVIDER` env, then `gemini`, and never throws so the chatbot keeps working)
 - `server/utils/aiAnswer.js` — knows both APIs but no DB; `generateAnswer()` takes the
   provider as a parameter. `chatController` resolves it per request
-- A provider whose API key is missing on the server cannot be selected (400), so the
-  chatbot can never be switched into a silently broken state
+- A provider whose API key is missing on the server cannot be selected (400)
 - Models are overridable per provider: `OPENAI_FAQ_MODEL`, `FAQ_CHAT_MODEL`
+
+**Local and production share one Supabase database**, so `ai_provider` is a single global
+row — a change made from a local dev server takes effect in production immediately. The
+write-time "key must exist" check only sees the environment doing the write, so it cannot
+prevent a local admin (who has a key) from selecting a provider production lacks. Two
+things cover that gap:
+
+- `resolveUsableProvider()` — at answer time, if the selected provider has no key in *this*
+  environment, it falls through to one that does and logs a warning. Use
+  `getEffectiveProvider()` (not `getSelectedProvider()`) anywhere an answer is generated
+- `GET /api/settings/ai` returns `effectiveProvider` alongside `provider`; when they differ
+  the admin screen shows a warning naming both
 
 Regardless of provider, the reply sent to a parent is always the registered FAQ answer
 verbatim — the model only picks *which* FAQ, it never writes the sentence.

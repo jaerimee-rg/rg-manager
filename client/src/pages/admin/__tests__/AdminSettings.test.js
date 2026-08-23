@@ -14,6 +14,7 @@ import AdminSettings from '../AdminSettings';
 
 const SETTINGS = {
   provider: 'gemini',
+  effectiveProvider: 'gemini',
   providers: [
     {
       id: 'openai',
@@ -35,7 +36,10 @@ const SETTINGS = {
 const jsonResponse = (data, ok = true) => Promise.resolve({ ok, json: () => Promise.resolve(data) });
 
 // 조회는 항상 성공, 저장 응답만 테스트마다 바꾼다.
-const mockApi = (saveResponse = jsonResponse({ ...SETTINGS, provider: 'openai' }), settings = SETTINGS) => {
+const mockApi = (
+  saveResponse = jsonResponse({ ...SETTINGS, provider: 'openai', effectiveProvider: 'openai' }),
+  settings = SETTINGS
+) => {
   fetchWithAuth.mockImplementation((url, options) => {
     if (options?.method === 'PUT') return saveResponse;
     return jsonResponse(settings);
@@ -133,6 +137,31 @@ describe('AdminSettings — AI 제공자 선택', () => {
 
     expect(radioFor('OpenAI')).toBeDisabled();
     expect(screen.getByText('API 키 없음')).toBeInTheDocument();
+  });
+
+  // 로컬과 프로덕션이 DB 를 공유하므로, 고른 제공자의 키가 이 서버에는 없을 수 있다.
+  it('고른 제공자와 실제 답변 제공자가 다르면 경고를 보여준다', async () => {
+    const mismatch = {
+      provider: 'openai',
+      effectiveProvider: 'gemini',
+      providers: SETTINGS.providers.map((p) => (p.id === 'openai' ? { ...p, configured: false } : p))
+    };
+    mockApi(undefined, mismatch);
+    await renderPage();
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('OpenAI');
+    expect(alert).toHaveTextContent('Google Gemini');
+    expect(screen.getByText('대신 사용 중')).toBeInTheDocument();
+    expect(screen.getByText('선택됨')).toBeInTheDocument();
+  });
+
+  it('고른 제공자로 실제 답변하고 있으면 경고를 띄우지 않는다', async () => {
+    mockApi(undefined, { ...SETTINGS, effectiveProvider: 'gemini' });
+    await renderPage();
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText('사용 중')).toBeInTheDocument();
   });
 
   it('취소를 누르면 원래 설정으로 되돌린다', async () => {

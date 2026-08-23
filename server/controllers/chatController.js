@@ -3,7 +3,7 @@ import ChatSession from '../models/ChatSession.js';
 import ChatMessage from '../models/ChatMessage.js';
 import Faq from '../models/Faq.js';
 import { generateAnswer } from '../utils/aiAnswer.js';
-import { getSelectedProvider } from '../utils/aiSettings.js';
+import { getEffectiveProvider } from '../utils/aiSettings.js';
 import { sendFaqInquiryKakaoMessage } from '../utils/kakaoMessage.js';
 import { isAdminViewing, isKakaoNotifyCooling } from '../utils/chatPresence.js';
 
@@ -266,7 +266,8 @@ export const postMessage = async (req, res) => {
 
     const faqs = await Faq.getPublishedByUserId(channel.userId);
     // 어떤 AI 를 쓸지는 관리자 설정(설정 > AI 제공자)이 정한다.
-    const provider = await getSelectedProvider();
+    // 그 제공자의 키가 이 환경에 없으면 키가 있는 쪽으로 넘어간다.
+    const provider = await getEffectiveProvider();
     const result = await generateAnswer({ faqs, history, question, provider });
 
     // 최종 문구는 서버가 결정한다. answered=false 면 AI 문장을 쓰지 않는다.

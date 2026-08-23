@@ -4,7 +4,7 @@ import {
   describeProviders,
   getProviderInfo
 } from '../utils/aiProvider.js';
-import { getSelectedProvider, setSelectedProvider } from '../utils/aiSettings.js';
+import { getSelectedProvider, getEffectiveProvider, setSelectedProvider } from '../utils/aiSettings.js';
 
 const requireAdmin = (req, res) => {
   if (req.user.role !== 'admin') {
@@ -15,8 +15,11 @@ const requireAdmin = (req, res) => {
 };
 
 // 화면이 항상 최신 상태를 그리도록 조회·저장 모두 같은 모양을 돌려준다.
+// effectiveProvider 가 provider 와 다르면 이 환경에 그 키가 없어 대신 쓰고 있다는 뜻이다
+// (로컬과 프로덕션이 DB 를 공유하므로 실제로 생길 수 있다).
 const buildResponse = async () => ({
   provider: await getSelectedProvider(),
+  effectiveProvider: await getEffectiveProvider(),
   providers: describeProviders()
 });
 

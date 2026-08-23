@@ -54,6 +54,31 @@ export const resolveModel = (id) => {
   return process.env[info.modelEnvKey] || info.defaultModel;
 };
 
+/**
+ * 이 환경에서 실제로 호출할 수 있는 제공자를 고른다.
+ *
+ * 설정은 DB 한 곳에 저장되는데 로컬과 프로덕션이 같은 DB 를 쓴다. 그래서 키가
+ * 로컬에만 있는 제공자를 로컬에서 저장하면 프로덕션에는 그 키가 없을 수 있다.
+ * 저장 시점 검사는 저장하는 환경만 보므로 이 경우를 못 막는다.
+ * 읽는 쪽에서 키가 있는 제공자로 넘어가야 챗봇이 조용히 멈추지 않는다.
+ *
+ * 쓸 수 있는 제공자가 하나도 없으면 원래 고른 제공자를 그대로 돌려준다
+ * (호출하는 쪽이 "키 없음" 으로 처리하며, 오류 메시지에 의도한 제공자가 남는다).
+ */
+export const resolveUsableProvider = (preferred) => {
+  const normalized = normalizeProvider(preferred);
+  if (isProviderConfigured(normalized)) return normalized;
+
+  const usable = AI_PROVIDERS.find((p) => isProviderConfigured(p.id));
+  if (!usable) return normalized;
+
+  console.warn(
+    `${normalized} API 키가 이 환경에 없어 ${usable.id} 로 대신 답변합니다. ` +
+      '관리자 설정과 실제 사용 제공자가 다릅니다.'
+  );
+  return usable.id;
+};
+
 // 설정 화면에 내려줄 목록 (API 키 값은 제외)
 export const describeProviders = () =>
   AI_PROVIDERS.map(({ id, label, description }) => ({

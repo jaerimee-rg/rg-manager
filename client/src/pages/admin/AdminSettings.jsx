@@ -13,6 +13,7 @@ const styleFor = (id) => PROVIDER_STYLE[id] || { icon: '⚙️', accent: 'var(--
 function AdminSettings() {
   const [providers, setProviders] = useState([]);
   const [provider, setProvider] = useState('');
+  const [effectiveProvider, setEffectiveProvider] = useState('');
   const [selected, setSelected] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -26,6 +27,7 @@ function AdminSettings() {
   const applyData = (data) => {
     setProviders(Array.isArray(data.providers) ? data.providers : []);
     setProvider(data.provider || '');
+    setEffectiveProvider(data.effectiveProvider || data.provider || '');
     setSelected(data.provider || '');
   };
 
@@ -76,6 +78,8 @@ function AdminSettings() {
       setSaving(false);
     }
   };
+
+  const labelOf = (id) => providers.find((p) => p.id === id)?.label || id;
 
   const isDirty = Boolean(selected) && selected !== provider;
 
@@ -158,7 +162,12 @@ function AdminSettings() {
                         <span aria-hidden="true">{icon}</span>
                         <span>{p.label}</span>
                         {provider === p.id && (
-                          <span className="badge badge-primary">사용 중</span>
+                          <span className="badge badge-primary">
+                            {effectiveProvider === p.id ? '사용 중' : '선택됨'}
+                          </span>
+                        )}
+                        {effectiveProvider === p.id && provider !== p.id && (
+                          <span className="badge badge-primary">대신 사용 중</span>
                         )}
                         {!p.configured && (
                           <span className="badge badge-gray">API 키 없음</span>
@@ -183,6 +192,26 @@ function AdminSettings() {
                 );
               })}
             </div>
+
+            {effectiveProvider && effectiveProvider !== provider && (
+              <div
+                role="alert"
+                style={{
+                  marginTop: 'var(--spacing-lg)',
+                  padding: 'var(--spacing-md) var(--spacing-lg)',
+                  border: '1px solid var(--color-warning, #d97706)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--color-gray-800)',
+                  fontSize: '0.875rem',
+                  lineHeight: 1.6
+                }}
+              >
+                <strong>{labelOf(provider)}</strong> 를 골라 두었지만 이 서버에 해당 API 키가 없어
+                실제로는 <strong>{labelOf(effectiveProvider)}</strong> 로 답변하고 있습니다.
+                <br />
+                서버 환경변수에 키를 넣어주세요.
+              </div>
+            )}
 
             {providers.some((p) => !p.configured) && (
               <p style={{

@@ -2,10 +2,13 @@ import { jest } from '@jest/globals';
 
 jest.unstable_mockModule('../../utils/aiSettings.js', () => ({
   getSelectedProvider: jest.fn(),
+  getEffectiveProvider: jest.fn(),
   setSelectedProvider: jest.fn()
 }));
 
-const { getSelectedProvider, setSelectedProvider } = await import('../../utils/aiSettings.js');
+const { getSelectedProvider, getEffectiveProvider, setSelectedProvider } = await import(
+  '../../utils/aiSettings.js'
+);
 const { getAiSetting, updateAiSetting } = await import('../settingsController.js');
 
 const mockRes = () => {
@@ -26,6 +29,7 @@ describe('settingsController — AI 제공자', () => {
       delete process.env[key];
     });
     getSelectedProvider.mockResolvedValue('gemini');
+    getEffectiveProvider.mockResolvedValue('gemini');
   });
 
   afterEach(() => {
