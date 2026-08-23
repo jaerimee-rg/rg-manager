@@ -60,6 +60,13 @@ function AdminFaq() {
 
       <div className="card">
         <div className="card-header">
+          <h3 className="card-title">대화 내역</h3>
+        </div>
+        <FaqChats filterUserId={filterUserId} />
+      </div>
+
+      <div className="card">
+        <div className="card-header">
           <h3 className="card-title">
             FAQ 목록
             <span className="badge badge-primary" style={{ marginLeft: 8 }}>{faqs.length}개</span>
@@ -101,12 +108,6 @@ function AdminFaq() {
         )}
       </div>
 
-      <div className="card">
-        <div className="card-header">
-          <h3 className="card-title">대화 내역</h3>
-        </div>
-        <FaqChats filterUserId={filterUserId} />
-      </div>
     </div>
   );
 }
