@@ -14,6 +14,7 @@ import competitionRoutes from './routes/competitions.js';
 import eventRoutes from './routes/events.js';
 import parentAdminRoutes from './routes/parents.js';
 import inviteRoutes from './routes/invite.js';
+import parentRoutes from './routes/parent.js';
 import faqRoutes from './routes/faqs.js';
 import chatRoutes from './routes/chat.js';
 import {
@@ -67,7 +68,9 @@ app.use(cors({
 // 레이트 리미팅 - 인증 엔드포인트
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15분
-  max: 20,
+  // 같은 Wi-Fi 에서 학부모 여러 명이 한꺼번에 가입해도 막히지 않도록 넉넉히 둔다.
+  // (한 번 가입에 인가 URL 요청 + 콜백 = 2회씩 쓴다)
+  max: 60,
   message: { error: '너무 많은 요청입니다. 잠시 후 다시 시도해주세요.' },
   standardHeaders: true,
   legacyHeaders: false
@@ -154,6 +157,9 @@ app.use('/api/parents', rejectParents, parentAdminRoutes);
 
 // 초대 링크 확인은 비로그인 학부모가 여는 공개 경로다.
 app.use('/api/invite', inviteRoutes);
+
+// 학부모 전용 API (라우터 안에서 role='parent' 만 통과시킨다)
+app.use('/api/parent', parentRoutes);
 app.use('/api/faqs', rejectParents, faqRoutes);
 app.use('/api/chat', (req, res, next) => {
   // 공개 채팅(/api/chat/public/*)은 비로그인 학부모용이라 그대로 통과시킨다.

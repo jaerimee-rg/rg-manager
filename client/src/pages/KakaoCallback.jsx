@@ -16,6 +16,7 @@ function KakaoCallback() {
       isProcessing.current = true;
 
       const code = searchParams.get('code');
+      const state = searchParams.get('state');
       const errorParam = searchParams.get('error');
 
       if (errorParam) {
@@ -31,8 +32,13 @@ function KakaoCallback() {
       }
 
       try {
-        const result = await kakaoLogin(code);
-        if (result.isNewUser) {
+        const result = await kakaoLogin(code, state);
+
+        if (result.role === 'parent') {
+          // 학부모는 이름을 따로 정하지 않는다 (카카오 닉네임을 쓴다).
+          // 아이를 아직 안 넣었으면 온보딩으로 보낸다.
+          navigate(result.needsOnboarding ? '/parent/onboarding' : '/parent/schedule');
+        } else if (result.isNewUser) {
           // 신규 사용자는 이름 등록 페이지로 이동
           navigate('/register-name');
         } else {

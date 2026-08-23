@@ -90,6 +90,10 @@ class Student {
   }
 
   static async delete(id, userId, role) {
+    // 학생이 사라지면 parent_children.studentId 는 FK 로 NULL 이 되지만,
+    // 상태까지 바꿔 두어야 학부모 화면에 "연결이 해제되었어요" 로 보인다.
+    await pool.query(`UPDATE parent_children SET status = 'unlinked' WHERE "studentId" = $1`, [id]);
+
     let query = 'DELETE FROM students WHERE id = $1';
     let params = [id];
 

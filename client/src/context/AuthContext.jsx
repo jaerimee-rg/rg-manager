@@ -120,11 +120,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   // 카카오 로그인 콜백 처리
-  const kakaoLogin = async (code) => {
+  const kakaoLogin = async (code, state) => {
     const response = await fetch('/api/auth/kakao/callback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code })
+      // state 에는 학부모 초대 토큰이 실려 온다 (선생님 로그인은 비어 있다)
+      body: JSON.stringify({ code, state })
     });
 
     if (!response.ok) {
@@ -141,7 +142,12 @@ export const AuthProvider = ({ children }) => {
     setToken(data.token);
     saveUser(data.user);
     saveToken(data.token);
-    return { user: data.user, isNewUser: data.isNewUser };
+    return {
+      user: data.user,
+      isNewUser: data.isNewUser,
+      role: data.role || data.user?.role,
+      needsOnboarding: data.needsOnboarding === true
+    };
   };
 
   // 사용자 이름 설정

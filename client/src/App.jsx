@@ -22,6 +22,7 @@ import PublicChat from './pages/PublicChat';
 import EventList from './pages/Events/EventList';
 import EventForm from './pages/Events/EventForm';
 import ParentList from './pages/Parents/ParentList';
+import InviteLanding from './pages/parent/InviteLanding';
 
 // Admin components
 import AdminRoute from './components/admin/AdminRoute';
@@ -136,6 +137,7 @@ function App() {
         <Route path="/signup" element={<Navigate to="/login" />} />
         <Route path="/oauth/kakao/callback" element={<KakaoCallback />} />
         <Route path="/register-name" element={<RegisterName />} />
+        <Route path="/invite/:token" element={<InviteLanding />} />
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
     );
@@ -307,6 +309,8 @@ function App() {
           <Route path="/faq/files" element={<ProtectedRoute><FaqList initialTab="files" /></ProtectedRoute>} />
           <Route path="/chat/:publicId" element={<PublicChat />} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          {/* 선생님이 자기 초대 링크를 눌러 확인하는 경우 */}
+          <Route path="/invite/:token" element={<InviteLanding />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </main>
