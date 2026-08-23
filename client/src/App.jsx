@@ -23,6 +23,7 @@ import EventList from './pages/Events/EventList';
 import EventForm from './pages/Events/EventForm';
 import ParentList from './pages/Parents/ParentList';
 import InviteLanding from './pages/parent/InviteLanding';
+import ParentApp from './components/parent/ParentApp';
 
 // Admin components
 import AdminRoute from './components/admin/AdminRoute';
@@ -141,6 +142,12 @@ function App() {
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
     );
+  }
+
+  // 학부모는 선생님 화면을 쓰지 않는다. 레이아웃·라우팅이 아예 다르므로
+  // 여기서 갈라 두면 아래 선생님 트리는 손대지 않아도 된다.
+  if (user.role === 'parent') {
+    return <ParentApp />;
   }
 
   const navLinks = [

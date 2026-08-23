@@ -326,6 +326,8 @@
 
 ### 10.3 사진 공유 — Google Drive 앨범 + 자녀 얼굴 인식 필터
 
+> **⚠️ 2026-08-23 대체됨** — 이 절의 분석은 [../photo-sharing/](../photo-sharing/README.md) 문서로 **대체**되었다. 달라진 점(앱이 Drive 폴더 생성, 선생님 OAuth `drive.file`, **확정 학부모가 직접 업로드**, 영상 포함, 업로드 즉시 얼굴 인덱싱)은 [photo-sharing/01-requirements.md §9](../photo-sharing/01-requirements.md#9-결정-사항--이전-분석parent-portal-103과-달라진-점) 참조. 아래는 이력 보존용이다.
+
 **메모 원문** (학부모 3) "대회 사진 Google Drive 업로드, 볼 수 있게 / 대회 사진 애들 사진 등록, 자기의 애들 사진만 볼 수 있게 필터" · (선생님 4) "대회 사진 보기, 대회 사진 Google Drive 업로드"
 **추가 지시** "학부모가 자기 애들 **얼굴 사진을 올리면, 해당 얼굴이 포함된 사진만 필터**"
 

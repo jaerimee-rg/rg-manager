@@ -46,7 +46,7 @@ function CompetitionStudentManagement() {
     window.scrollTo(0, 0);
 
     if (!competition) {
-      navigate('/competitions');
+      navigate('/events');
       return;
     }
 
@@ -360,7 +360,7 @@ function CompetitionStudentManagement() {
         <h2 className="page-title">{competition.name} - 참가 학생</h2>
         <button
           className="btn btn-secondary"
-          onClick={() => navigate('/competitions')}
+          onClick={() => navigate('/events')}
         >
           목록으로
         </button>
