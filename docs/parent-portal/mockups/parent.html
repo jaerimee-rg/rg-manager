@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>학부모 포털 목업 — 학부모 화면</title>
+<style>
+:root{
+  --color-primary:#3182F6; --color-primary-dark:#1B64DA; --color-primary-bg:#EBF4FF;
+  --color-success:#00C471; --color-success-bg:#E8FAF0;
+  --color-danger:#FF4848; --color-danger-bg:#FFEDED;
+  --color-warning:#FF9F00; --color-warning-bg:#FFF4E0;
+  --color-purple:#7C5CFC; --color-purple-bg:#F0EBFF;
+  --color-gray-100:#F2F4F6; --color-gray-200:#E5E8EB; --color-gray-300:#D1D6DB;
+  --color-gray-400:#B0B8C1; --color-gray-500:#8B95A1; --color-gray-600:#6B7684;
+  --color-gray-700:#4E5968; --color-gray-800:#333D4B; --color-gray-900:#191F28;
+  --bg-primary:#F2F4F6; --bg-secondary:#FFFFFF; --bg-tertiary:#F7F8FA;
+  --kakao:#FEE500; --kakao-text:#191919;
+  --radius-sm:8px; --radius-md:12px; --radius-lg:16px; --radius-full:9999px;
+  --shadow-md:0 2px 8px rgba(0,0,0,.08); --shadow-lg:0 8px 32px rgba(0,0,0,.18);
+  --font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-family);background:var(--color-gray-200);color:var(--color-gray-900);line-height:1.5;font-size:15px;letter-spacing:-.3px;-webkit-font-smoothing:antialiased;min-height:100vh}
+button{font-family:inherit}
+
+/* ── 목업 크롬 ── */
+.mock-bar{background:var(--color-gray-900);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:.8125rem}
+.mock-bar strong{font-weight:700}
+.mock-bar .spacer{flex:1}
+.mock-bar a{color:#9DC4FF;text-decoration:none;font-weight:600}
+.mock-bar a:hover{text-decoration:underline}
+.mock-note{background:#FFF9E6;border-bottom:1px solid #F5E3A8;color:#7A5D00;font-size:.8125rem;padding:8px 16px;text-align:center}
+.stage{display:flex;gap:28px;justify-content:center;align-items:flex-start;padding:28px 16px 60px;flex-wrap:wrap}
+
+.panel{background:#fff;border-radius:var(--radius-lg);padding:20px;width:300px;box-shadow:var(--shadow-md)}
+.panel h3{font-size:.9375rem;font-weight:700;margin-bottom:4px}
+.panel p{font-size:.8125rem;color:var(--color-gray-500);margin-bottom:14px;line-height:1.6}
+.state-btn{display:block;width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--color-gray-200);border-radius:var(--radius-md);padding:11px 13px;margin-bottom:8px;cursor:pointer;font:inherit}
+.state-btn:hover{border-color:var(--color-primary)}
+.state-btn.on{background:var(--color-primary-bg);border-color:var(--color-primary)}
+.state-btn .t{font-weight:700;font-size:.875rem;display:block}
+.state-btn .d{font-size:.75rem;color:var(--color-gray-500);display:block;margin-top:2px}
+.panel .divider{height:1px;background:var(--color-gray-100);margin:16px 0}
+.tip{font-size:.75rem;color:var(--color-gray-500);line-height:1.7}
+.tip code{background:var(--color-gray-100);padding:1px 5px;border-radius:4px;font-size:.7rem}
+
+/* ── 휴대폰 ── */
+.phone{width:390px;height:820px;background:#000;border-radius:44px;padding:11px;box-shadow:var(--shadow-lg);flex-shrink:0}
+.screen{width:100%;height:100%;background:var(--bg-primary);border-radius:34px;overflow:hidden;display:flex;flex-direction:column;position:relative}
+.statusbar{background:#fff;padding:10px 22px 4px;display:flex;justify-content:space-between;font-size:.75rem;font-weight:600;color:var(--color-gray-800)}
+.urlbar{background:#fff;padding:4px 14px 10px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--color-gray-100)}
+.urlbar .u{flex:1;background:var(--color-gray-100);border-radius:var(--radius-full);padding:6px 12px;font-size:.6875rem;color:var(--color-gray-600);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.view{flex:1;min-height:0;display:flex;flex-direction:column}
+.hidden{display:none !important}
+
+/* 공통 */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:var(--radius-full);font-size:.6875rem;font-weight:700;white-space:nowrap}
+.badge-primary{background:var(--color-primary-bg);color:var(--color-primary)}
+.badge-gray{background:var(--color-gray-100);color:var(--color-gray-600)}
+.badge-success{background:var(--color-success-bg);color:#059669}
+.badge-danger{background:var(--color-danger-bg);color:var(--color-danger)}
+.badge-warning{background:var(--color-warning-bg);color:#B26A00}
+.badge-purple{background:var(--color-purple-bg);color:var(--color-purple)}
+.badge-outline{background:#fff;border:1px solid var(--color-gray-200);color:var(--color-gray-600)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:13px 16px;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:.9375rem;font-weight:700;letter-spacing:-.2px;white-space:nowrap;min-height:44px}
+.btn-primary{background:var(--color-primary);color:#fff}
+.btn-primary:hover{background:var(--color-primary-dark)}
+.btn-outline{background:#fff;color:var(--color-gray-700);border:1px solid var(--color-gray-300)}
+.btn-danger{background:var(--color-danger-bg);color:var(--color-danger)}
+.btn-kakao{background:var(--kakao);color:var(--kakao-text)}
+.btn-block{width:100%}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-sm{padding:8px 12px;font-size:.8125rem;min-height:36px;border-radius:var(--radius-sm)}
+.input{width:100%;padding:13px 14px;border:1px solid var(--color-gray-300);border-radius:var(--radius-md);font:inherit;font-size:16px}
+.input:focus{outline:none;border-color:var(--color-primary)}
+.label{display:block;font-size:.8125rem;font-weight:700;color:var(--color-gray-700);margin-bottom:6px}
+.label .req{color:var(--color-danger)}
+
+/* 랜딩/온보딩 */
+.entry{flex:1;display:flex;flex-direction:column;justify-content:center;padding:24px 20px;overflow-y:auto}
+.entry-card{background:#fff;border-radius:var(--radius-lg);padding:26px 20px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.entry-emoji{font-size:2.2rem;margin-bottom:10px}
+.entry-title{font-size:1.25rem;font-weight:800;margin-bottom:6px;letter-spacing:-.5px}
+.entry-desc{font-size:.9rem;color:var(--color-gray-600);line-height:1.6;margin-bottom:20px}
+.entry-note{font-size:.6875rem;color:var(--color-gray-400);line-height:1.6;margin-top:14px;text-align:center}
+.kakao-ico{width:20px;height:20px;border-radius:50%;background:#3C1E1E;display:inline-flex;align-items:center;justify-content:center;color:var(--kakao);font-size:.7rem;font-weight:900}
+.child-form{background:var(--bg-tertiary);border:1px solid var(--color-gray-200);border-radius:var(--radius-md);padding:14px;margin-bottom:10px;position:relative}
+.child-form .num{font-size:.75rem;font-weight:700;color:var(--color-primary);margin-bottom:8px}
+.child-form .rm{position:absolute;top:10px;right:10px;border:none;background:none;color:var(--color-gray-400);cursor:pointer;font-size:1rem}
+.child-form .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.add-child{width:100%;border:1px dashed var(--color-gray-300);background:#fff;color:var(--color-primary);font-weight:700;padding:12px;border-radius:var(--radius-md);cursor:pointer;font-size:.875rem;margin-bottom:14px}
+.consent{display:flex;gap:8px;align-items:flex-start;font-size:.75rem;color:var(--color-gray-600);line-height:1.5;margin-bottom:14px}
+.consent input{margin-top:3px;width:16px;height:16px}
+
+/* 포털 헤더 / 하단 탭 */
+.p-header{background:#fff;padding:12px 16px;border-bottom:1px solid var(--color-gray-100);display:flex;align-items:center;gap:10px}
+.p-header .t{font-size:1.0625rem;font-weight:800;flex:1;letter-spacing:-.4px}
+.p-header .sub{font-size:.75rem;color:var(--color-gray-500);display:block;font-weight:500;margin-top:1px}
+.bell{width:40px;height:40px;border:none;background:var(--color-gray-100);border-radius:var(--radius-md);font-size:1.05rem;cursor:pointer;position:relative}
+.bell .dot{position:absolute;top:7px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--color-danger);border:2px solid #fff}
+.tabbar{background:#fff;border-top:1px solid var(--color-gray-100);display:flex;padding:6px 8px calc(10px + env(safe-area-inset-bottom));flex-shrink:0}
+.tabbar button{flex:1;border:none;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:.6875rem;font-weight:600;color:var(--color-gray-500);padding:6px 0;border-radius:var(--radius-sm);cursor:pointer}
+.tabbar button .i{font-size:1.25rem}
+.tabbar button.on{color:var(--color-primary)}
+.tabbar button.soon{opacity:.4}
+
+/* 일정 */
+.sched{flex:1;min-height:0;overflow-y:auto;padding:12px 14px 16px}
+.child-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border-radius:var(--radius-full);border:1px solid var(--color-gray-200);background:#fff;font-size:.8125rem;font-weight:600;color:var(--color-gray-700);cursor:pointer}
+.chip.on{background:var(--color-gray-900);color:#fff;border-color:var(--color-gray-900)}
+.chip .st{font-size:.625rem;font-weight:700;padding:1px 6px;border-radius:var(--radius-full);background:var(--color-warning-bg);color:#B26A00}
+.type-filter{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px}
+.type-filter .chip{padding:6px 11px;font-size:.75rem}
+.type-filter .chip.on{background:var(--color-primary);border-color:var(--color-primary)}
+.month-head{position:sticky;top:-12px;z-index:2;background:var(--bg-primary);padding:10px 2px 8px;font-size:.875rem;font-weight:800;color:var(--color-gray-800);display:flex;align-items:baseline;gap:6px}
+.month-head small{font-size:.6875rem;color:var(--color-gray-400);font-weight:600}
+.card{background:#fff;border-radius:var(--radius-lg);padding:14px;margin-bottom:10px;display:flex;gap:12px;cursor:pointer;border:1px solid transparent;box-shadow:0 1px 2px rgba(0,0,0,.04);transition:border-color .15s}
+.card:hover{border-color:var(--color-primary)}
+.card.past{opacity:.5}
+.date-col{width:46px;flex-shrink:0;text-align:center;border-radius:var(--radius-md);padding:8px 0;background:var(--bg-tertiary)}
+.date-col .d{font-size:1.25rem;font-weight:800;line-height:1.1;letter-spacing:-.5px}
+.date-col .w{font-size:.6875rem;color:var(--color-gray-500);font-weight:600}
+.date-col.sun .d,.date-col.sun .w{color:var(--color-danger)}
+.date-col.sat .d,.date-col.sat .w{color:var(--color-primary)}
+.card-body{flex:1;min-width:0}
+.card-top{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.dday{margin-left:auto;font-size:.6875rem;font-weight:800;color:var(--color-gray-500)}
+.dday.hot{color:var(--color-danger)}
+.card-title{font-size:.9375rem;font-weight:700;line-height:1.35;margin-bottom:5px;word-break:keep-all}
+.card-meta{font-size:.75rem;color:var(--color-gray-500);display:flex;flex-wrap:wrap;gap:4px 10px}
+.card-foot{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px 28px;gap:8px}
+.empty .e{font-size:2.5rem}
+.empty .t{font-size:1rem;font-weight:700}
+.empty .d{font-size:.8125rem;color:var(--color-gray-500);line-height:1.6}
+
+/* 바텀시트 */
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.45);display:none;z-index:20}
+.dim.on{display:block}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:22px 22px 0 0;z-index:21;transform:translateY(105%);transition:transform .25s ease;display:flex;flex-direction:column;max-height:92%}
+.sheet.on{transform:translateY(0)}
+.grab{width:40px;height:4px;border-radius:4px;background:var(--color-gray-300);margin:10px auto 2px}
+.sheet-body{overflow-y:auto;padding:10px 18px 18px}
+.sheet-title{font-size:1.125rem;font-weight:800;letter-spacing:-.4px;margin:6px 0 8px;line-height:1.35}
+.kv{display:flex;gap:10px;font-size:.875rem;margin-bottom:6px;color:var(--color-gray-800)}
+.kv .k{width:18px;flex-shrink:0;text-align:center}
+.sec{margin-top:16px}
+.sec h4{font-size:.8125rem;font-weight:800;color:var(--color-gray-700);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.sec h4 .opt-hint{font-weight:600;color:var(--color-gray-400);font-size:.6875rem}
+.desc{font-size:.875rem;color:var(--color-gray-700);line-height:1.65;white-space:pre-wrap;background:var(--bg-tertiary);border-radius:var(--radius-md);padding:12px}
+.opt-list{display:flex;flex-direction:column;gap:6px}
+.opt{display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--color-gray-200);border-radius:var(--radius-md);cursor:pointer;font-size:.9rem;font-weight:600;min-height:44px;background:#fff}
+.opt.on{border-color:var(--color-primary);background:var(--color-primary-bg)}
+.opt .box{width:20px;height:20px;border-radius:6px;border:2px solid var(--color-gray-300);display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;color:#fff;flex-shrink:0}
+.opt.on .box{background:var(--color-primary);border-color:var(--color-primary)}
+.opt.dis{opacity:.5;cursor:not-allowed}
+.notice{font-size:.8125rem;padding:11px 12px;border-radius:var(--radius-md);line-height:1.55;margin-top:14px}
+.notice.warn{background:var(--color-warning-bg);color:#7A5D00}
+.notice.ok{background:var(--color-success-bg);color:#047857}
+.notice.gray{background:var(--color-gray-100);color:var(--color-gray-600)}
+.sheet-foot{padding:12px 18px calc(16px + env(safe-area-inset-bottom));border-top:1px solid var(--color-gray-100);display:flex;gap:8px;flex-shrink:0;background:#fff}
+.sheet-foot .btn{flex:1}
+
+/* 내 정보 */
+.me{flex:1;overflow-y:auto;padding:14px}
+.me-card{background:#fff;border-radius:var(--radius-lg);padding:16px;margin-bottom:12px}
+.me-card h4{font-size:.8125rem;font-weight:800;color:var(--color-gray-500);margin-bottom:10px}
+.me-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--color-gray-100)}
+.me-row:first-of-type{border-top:none}
+.me-row .av{width:38px;height:38px;border-radius:50%;background:var(--color-primary-bg);color:var(--color-primary);font-weight:800;display:inline-flex;align-items:center;justify-content:center}
+.me-row .n{font-weight:700;font-size:.9375rem}
+.me-row .b{font-size:.75rem;color:var(--color-gray-500)}
+.me-row .sp{flex:1}
+
+/* 토스트 */
+.toast{position:absolute;left:50%;bottom:90px;transform:translateX(-50%) translateY(20px);background:rgba(25,31,40,.92);color:#fff;padding:10px 16px;border-radius:var(--radius-full);font-size:.8125rem;font-weight:600;opacity:0;transition:all .2s;z-index:30;white-space:nowrap;pointer-events:none}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (max-width: 900px){
+  .stage{flex-direction:column;align-items:stretch;gap:0;padding:0}
+  .panel{width:100%;border-radius:0;order:2;box-shadow:none;border-top:1px solid var(--color-gray-200);padding:16px}
+  .state-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .state-btn{margin-bottom:0}
+  .phone{order:1;width:100%;height:auto;min-height:80vh;min-height:80dvh;background:none;border-radius:0;padding:0;box-shadow:none}
+  .screen{border-radius:0;min-height:80vh;min-height:80dvh}
+  .statusbar{display:none}
+  .mock-bar{font-size:.75rem;padding:8px 12px;gap:8px}
+  .mock-note{font-size:.75rem;text-align:left;line-height:1.5}
+}
+</style>
+</head>
+<body>
+
+<div class="mock-bar">
+  <strong>학부모 포털 목업</strong>
+  <span>학부모 화면 (초대 → 카카오 가입 → 일정 · 신청)</span>
+  <div class="spacer"></div>
+  <a href="./teacher.html">선생님 화면 목업 →</a>
+</div>
+<div class="mock-note">실제 동작하지 않는 화면 목업입니다. 데이터는 예시이며, 오늘은 <b>2026-08-23(일)</b> 로 가정합니다. 달력 없이 <b>올해 남은 일정</b>만 카드로 보여줍니다.</div>
+
+<div class="stage">
+  <div class="panel">
+    <h3>화면</h3>
+    <p>초대 링크부터 신청까지 학부모가 보는 화면입니다.</p>
+    <div class="state-grid">
+      <button class="state-btn on" onclick="setState('invite',this)"><span class="t">① 초대 랜딩</span><span class="d">/invite/&lt;token&gt; — 카카오로 시작</span></button>
+      <button class="state-btn" onclick="setState('onboard',this)"><span class="t">② 아이 등록</span><span class="d">이름·생년월일 → 자동 연결</span></button>
+      <button class="state-btn" onclick="setState('schedule',this)"><span class="t">③ 일정</span><span class="d">올해 남은 일정 카드 + 신청</span></button>
+      <button class="state-btn" onclick="setState('empty',this)"><span class="t">④ 일정 없음</span><span class="d">빈 상태</span></button>
+      <button class="state-btn" onclick="setState('me',this)"><span class="t">⑤ 내 정보</span><span class="d">자녀·연결 상태·로그아웃</span></button>
+      <button class="state-btn" onclick="setState('notfound',this)"><span class="t">⑥ 잘못된 링크</span><span class="d">무효·재발급된 초대 토큰</span></button>
+    </div>
+    <div class="divider"></div>
+    <div class="tip">
+      <strong>직접 해보세요</strong><br>
+      · ③ 일정에서 <b>카드를 누르면</b> 상세 바텀시트가 열립니다<br>
+      · 대회 카드 → 자녀 선택 → <b>옵션 체크</b> → 신청 / 취소<br>
+      · <code>준호</code> 는 "확인 대기" 라 신청이 막힙니다<br>
+      · <code>전국 꿈나무 대회</code> 는 접수 마감 상태입니다<br>
+      · 휴관일은 정보만 보이고 신청 영역이 없습니다<br>
+      · 상단 칩으로 종류 필터, 자녀 칩으로 신청 상태 배지를 바꿔 보세요
+    </div>
+  </div>
+
+  <div class="phone">
+    <div class="screen" id="screen">
+      <div class="statusbar"><span>9:41</span><span>■■■ ⚡ 100%</span></div>
+      <div class="urlbar"><span>🔒</span><div class="u" id="url">rg-manager.vercel.app/invite/o1CGtibM0ULAsoDW89H98w</div></div>
+
+      <!-- ① 초대 랜딩 -->
+      <div id="vInvite" class="view">
+        <div class="entry">
+          <div class="entry-card">
+            <div class="entry-emoji">🎀</div>
+            <div class="entry-title">이재림 선생님의 초대</div>
+            <div class="entry-desc">이재림 리듬체조 학부모 포털입니다. 대회·이벤트·휴관일 일정을 확인하고 우리 아이 이름으로 바로 신청할 수 있어요.</div>
+            <button class="btn btn-kakao btn-block" onclick="setState('onboard')"><span class="kakao-ico">K</span> 카카오로 시작하기</button>
+            <div class="entry-note">카카오 닉네임·이메일과 다음 단계에서 입력하는 아이 이름·생년월일이<br>이재림 선생님에게 제공됩니다. 이미 가입했다면 카카오로 바로 로그인돼요.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ② 온보딩 -->
+      <div id="vOnboard" class="view hidden">
+        <div class="entry" style="justify-content:flex-start">
+          <div class="entry-card">
+            <div class="entry-title">아이 정보를 알려 주세요</div>
+            <div class="entry-desc">선생님이 등록한 학생 정보와 대조해 자동으로 연결해요. 아이가 여러 명이면 모두 추가해 주세요.</div>
+            <div id="childForms">
+              <div class="child-form">
+                <div class="num">아이 1</div>
+                <div class="grid">
+                  <div><label class="label">이름 <span class="req">*</span></label><input class="input" value="김민서" placeholder="예: 김민서"></div>
+                  <div><label class="label">생년월일 <span class="req">*</span></label><input class="input" type="date" value="2018-03-05"></div>
+                </div>
+              </div>
+              <div class="child-form">
+                <button class="rm" title="삭제" onclick="this.parentNode.remove()">✕</button>
+                <div class="num">아이 2</div>
+                <div class="grid">
+                  <div><label class="label">이름 <span class="req">*</span></label><input class="input" value="김준호"></div>
+                  <div><label class="label">생년월일 <span class="req">*</span></label><input class="input" type="date" value="2020-11-12"></div>
+                </div>
+              </div>
+            </div>
+            <button class="add-child" onclick="addChildForm()">+ 아이 추가</button>
+            <label class="consent"><input type="checkbox" checked> 입력한 아이 이름·생년월일은 이재림 선생님이 학생 정보와 대조하는 데에만 사용됩니다.</label>
+            <button class="btn btn-primary btn-block" onclick="finishOnboard()">시작하기</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ③ 일정 -->
+      <div id="vSchedule" class="view hidden">
+        <div class="p-header">
+          <div class="t">이재림 리듬체조<span class="sub">일정 · 2026년 남은 일정</span></div>
+          <button class="bell" title="알림">🔔<span class="dot"></span></button>
+        </div>
+        <div class="sched" id="sched">
+          <div class="child-chips" id="childChips"></div>
+          <div class="type-filter" id="typeFilter"></div>
+          <div id="cardList"></div>
+        </div>
+        <div class="tabbar">
+          <button class="on"><span class="i">📅</span>일정</button>
+          <button class="soon" title="향후 추가"><span class="i">📷</span>사진</button>
+          <button class="soon" title="향후 추가"><span class="i">💬</span>채팅</button>
+          <button onclick="setState('me')"><span class="i">👤</span>내 정보</button>
+        </div>
+      </div>
+
+      <!-- ④ 빈 상태 -->
+      <div id="vEmpty" class="view hidden">
+        <div class="p-header"><div class="t">이재림 리듬체조<span class="sub">일정 · 2026년 남은 일정</span></div><button class="bell">🔔</button></div>
+        <div class="empty"><div class="e">🗓️</div><div class="t">올해 남은 일정이 없어요</div><div class="d">선생님이 새 일정을 올리면 여기에 보여요.<br>알림을 켜두면 놓치지 않아요.</div></div>
+        <div class="tabbar"><button class="on"><span class="i">📅</span>일정</button><button class="soon"><span class="i">📷</span>사진</button><button class="soon"><span class="i">💬</span>채팅</button><button onclick="setState('me')"><span class="i">👤</span>내 정보</button></div>
+      </div>
+
+      <!-- ⑤ 내 정보 -->
+      <div id="vMe" class="view hidden">
+        <div class="p-header"><div class="t">내 정보<span class="sub">카카오 · 민서엄마</span></div></div>
+        <div class="me">
+          <div class="me-card">
+            <h4>내 아이</h4>
+            <div class="me-row"><div class="av">민</div><div><div class="n">김민서</div><div class="b">2018-03-05 · 토요 A반</div></div><div class="sp"></div><span class="badge badge-success">연결됨</span></div>
+            <div class="me-row"><div class="av" style="background:var(--color-warning-bg);color:#B26A00">준</div><div><div class="n">김준호</div><div class="b">2020-11-12</div></div><div class="sp"></div><span class="badge badge-warning">확인 대기</span></div>
+            <div class="notice gray" style="margin-top:10px">확인 대기 중인 아이는 선생님이 학생 명단과 연결하면 신청할 수 있어요. 이름·생년월일이 다르면 선생님께 말씀해 주세요.</div>
+            <button class="btn btn-outline btn-block" style="margin-top:12px" onclick="toast('아이 추가 화면 (② 와 동일)')">+ 아이 추가</button>
+          </div>
+          <div class="me-card">
+            <h4>선생님</h4>
+            <div class="me-row"><div class="av" style="background:var(--color-gray-100);color:var(--color-gray-700)">이</div><div><div class="n">이재림 선생님</div><div class="b">이재림 리듬체조 · 카카오0212 문의</div></div></div>
+          </div>
+          <button class="btn btn-outline btn-block" onclick="toast('로그아웃 (목업)')">로그아웃</button>
+          <div class="entry-note" style="margin-top:14px">아이 정보 수정·삭제는 선생님께 문의해 주세요. (MVP)</div>
+        </div>
+        <div class="tabbar"><button onclick="setState('schedule')"><span class="i">📅</span>일정</button><button class="soon"><span class="i">📷</span>사진</button><button class="soon"><span class="i">💬</span>채팅</button><button class="on"><span class="i">👤</span>내 정보</button></div>
+      </div>
+
+      <!-- ⑥ 404 -->
+      <div id="vNotfound" class="view hidden">
+        <div class="empty"><div class="e">🔗</div><div class="t">유효하지 않은 초대 링크예요</div><div class="d">링크가 바뀌었거나 만료됐을 수 있어요.<br>선생님께 새 초대 링크를 요청해 주세요.</div><button class="btn btn-outline" style="margin-top:10px" onclick="toast('로그인 페이지로 (이미 가입한 학부모)')">이미 가입했어요 · 카카오 로그인</button></div>
+      </div>
+
+      <!-- 바텀시트 -->
+      <div class="dim" id="dim" onclick="closeSheet()"></div>
+      <div class="sheet" id="sheet">
+        <div class="grab"></div>
+        <div class="sheet-body" id="sheetBody"></div>
+        <div class="sheet-foot" id="sheetFoot"></div>
+      </div>
+      <div class="toast" id="toast"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ───────── 예시 데이터 ───────── */
+const TODAY = new Date('2026-08-23T00:00:00');
+const children = [
+  { id: 1, name: '김민서', short: '민서', status: 'linked' },
+  { id: 2, name: '김준호', short: '준호', status: 'pending' }
+];
+let currentChild = 1;
+let typeFilter = 'all';
+
+const TYPE = {
+  competition: { label: '대회', emoji: '🏆', cls: 'badge-danger' },
+  special:     { label: '스페셜', emoji: '⭐', cls: 'badge-purple' },
+  closure:     { label: '휴관일', emoji: '🚫', cls: 'badge-gray' }
+};
+
+const events = [
+  { id: 1, type: 'closure', title: '여름 휴관', date: '2026-08-25', endDate: '2026-08-27',
+    description: '8/25(화)~8/27(목) 3일간 휴관합니다. 8/28(금)부터 정상 수업이에요.' },
+  { id: 2, type: 'special', title: '한강 러닝 클래스', date: '2026-08-29', time: '10:00', location: '여의도 한강공원 이벤트광장',
+    description: '가볍게 뛰며 체력을 다지는 시간이에요. 편한 운동화와 물을 챙겨 주세요. 보호자 동반 환영!',
+    options: ['5km', '10km', '보호자 동반'], registrationOpen: true, deadline: '2026-08-27T23:59' },
+  { id: 3, type: 'competition', title: '2026 서울시 리듬체조 대회', date: '2026-09-12', time: '09:00', location: '올림픽공원 체조경기장',
+    description: '종목을 체크해 주세요. 의상은 개인 준비이며 자세한 안내는 확정 후 드립니다.\n접수 마감: 9/1(화)',
+    options: ['맨손', '볼', '후프', '곤봉', '리본', '줄', '단체전', '의상 대여'], requireOption: true,
+    registrationOpen: true, deadline: '2026-09-01T23:59' },
+  { id: 4, type: 'closure', title: '추석 연휴 휴관', date: '2026-09-24', endDate: '2026-09-27',
+    description: '즐거운 한가위 보내세요 🌕' },
+  { id: 5, type: 'special', title: '가을 특강 — 리본 집중반', date: '2026-10-10', time: '14:00', location: '본관 2층',
+    description: '리본 기본 테크닉을 4시간 집중 연습해요. 수준에 맞는 반을 골라 주세요.',
+    options: ['초급 (14:00~16:00)', '중급 (16:00~18:00)'], requireOption: true, registrationOpen: true },
+  { id: 6, type: 'competition', title: '전국 꿈나무 리듬체조 대회', date: '2026-10-31', time: '08:30', location: '광주 염주체육관',
+    description: '접수가 마감되었습니다. 추가 참가는 선생님께 문의해 주세요.',
+    options: ['맨손', '볼', '후프', '리본'], registrationOpen: true, deadline: '2026-08-20T23:59' },
+  { id: 7, type: 'special', title: '연말 발표회 리허설', date: '2026-11-14', time: '13:00', location: '본관 대강당',
+    description: '발표회 참가 학생은 모두 참석해 주세요.', options: [], registrationOpen: true },
+  { id: 8, type: 'special', title: '2026 연말 발표회', date: '2026-12-19', time: '17:00', location: '구민회관 대공연장',
+    description: '한 해의 마무리 무대 🎄 가족 모두 초대합니다.', options: ['가족 관람 2명', '가족 관람 4명'], registrationOpen: true },
+  // 지난 일정 (올해지만 오늘 이전) — 목록에서 빠진다
+  { id: 9, type: 'competition', title: '여름 오픈 대회', date: '2026-08-10', location: '잠실', options: [], registrationOpen: false }
+];
+
+// 신청 상태: { [eventId]: { [childId]: { status:'registered'|'cancelled'|'confirmed', options:[] } } }
+const regs = {
+  3: { 1: { status: 'registered', options: ['볼', '후프'] } },
+  2: { 1: { status: 'cancelled', options: ['5km'] } }
+};
+
+/* ───────── 유틸 ───────── */
+const DOW = ['일','월','화','수','목','금','토'];
+const d = (s) => new Date(s + 'T00:00:00');
+const fmtDate = (s) => { const x = d(s); return `${x.getMonth()+1}/${x.getDate()}(${DOW[x.getDay()]})`; };
+const daysDiff = (s) => Math.round((d(s) - TODAY) / 86400000);
+function dday(ev){
+  const start = daysDiff(ev.date);
+  if (ev.endDate && start <= 0 && daysDiff(ev.endDate) >= 0) return { t: '진행 중', hot: false };
+  if (start === 0) return { t: '오늘', hot: true };
+  if (start < 0) return { t: '지남', hot: false };
+  return { t: `D-${start}`, hot: start <= 3 };
+}
+function canRegister(ev, child){
+  if (ev.type === 'closure') return { ok: false, reason: 'none' };
+  if (!ev.registrationOpen) return { ok: false, reason: 'closed' };
+  if (ev.deadline && new Date(ev.deadline) <= new Date('2026-08-23T09:41:00')) return { ok: false, reason: 'deadline' };
+  if (daysDiff(ev.date) < 0) return { ok: false, reason: 'started' };
+  if (!child || child.status !== 'linked') return { ok: false, reason: 'child_pending' };
+  return { ok: true };
+}
+function regOf(ev, childId){ return (regs[ev.id] || {})[childId]; }
+function esc(s){ const t = document.createElement('div'); t.textContent = s; return t.innerHTML; }
+
+/* ───────── 일정 렌더 ───────── */
+function renderChips(){
+  document.getElementById('childChips').innerHTML = children.map(c =>
+    `<button class="chip ${c.id===currentChild?'on':''}" onclick="currentChild=${c.id};renderAll()">${c.short}${c.status==='pending'?' <span class="st">확인 대기</span>':''}</button>`
+  ).join('') + `<span style="font-size:.6875rem;color:var(--color-gray-400);align-self:center;margin-left:2px">← 자녀별 신청 상태</span>`;
+  document.getElementById('typeFilter').innerHTML = [['all','전체'],['competition','🏆 대회'],['special','⭐ 스페셜'],['closure','🚫 휴관일']]
+    .map(([k,l]) => `<button class="chip ${typeFilter===k?'on':''}" onclick="typeFilter='${k}';renderAll()">${l}</button>`).join('');
+}
+function renderCards(){
+  const child = children.find(c => c.id === currentChild);
+  const list = events
+    .filter(ev => (ev.endDate ? daysDiff(ev.endDate) >= 0 : daysDiff(ev.date) >= 0))   // 오늘~연말
+    .filter(ev => typeFilter === 'all' || ev.type === typeFilter)
+    .sort((a,b) => a.date.localeCompare(b.date));
+  const el = document.getElementById('cardList');
+  if (!list.length){ el.innerHTML = `<div class="empty" style="padding:50px 20px"><div class="e">🗓️</div><div class="t">해당하는 일정이 없어요</div></div>`; return; }
+  let html = '', lastMonth = '';
+  for (const ev of list){
+    const m = d(ev.date).getMonth() + 1;
+    if (String(m) !== lastMonth){ lastMonth = String(m); html += `<div class="month-head">${m}월 <small>2026</small></div>`; }
+    const x = d(ev.date), dow = x.getDay();
+    const T = TYPE[ev.type], dd = dday(ev);
+    const r = regOf(ev, child.id), cr = canRegister(ev, child);
+    let foot = '';
+    if (ev.type !== 'closure'){
+      if (r && (r.status === 'registered' || r.status === 'confirmed')) foot += `<span class="badge badge-success">✓ 신청 완료 · ${child.short}${r.status==='confirmed'?' (확정)':''}</span>`;
+      else if (cr.ok) foot += `<span class="badge badge-primary">신청 가능</span>`;
+      else if (cr.reason === 'child_pending') foot += `<span class="badge badge-warning">선생님 확인 후 신청</span>`;
+      else foot += `<span class="badge badge-gray">접수 마감</span>`;
+      if (ev.options && ev.options.length) foot += `<span class="badge badge-outline">옵션 ${ev.options.length}</span>`;
+    }
+    const dateTxt = ev.endDate ? `${fmtDate(ev.date)} ~ ${fmtDate(ev.endDate)}` : fmtDate(ev.date);
+    html += `
+    <div class="card" onclick="openSheet(${ev.id})">
+      <div class="date-col ${dow===0?'sun':dow===6?'sat':''}"><div class="d">${x.getDate()}</div><div class="w">${DOW[dow]}</div></div>
+      <div class="card-body">
+        <div class="card-top"><span class="badge ${T.cls}">${T.emoji} ${T.label}</span><span class="dday ${dd.hot?'hot':''}">${dd.t}</span></div>
+        <div class="card-title">${esc(ev.title)}</div>
+        <div class="card-meta"><span>📅 ${dateTxt}${ev.time?' '+ev.time:' · 종일'}</span>${ev.location?`<span>📍 ${esc(ev.location)}</span>`:''}</div>
+        ${foot?`<div class="card-foot">${foot}</div>`:''}
+      </div>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+function renderAll(){ renderChips(); renderCards(); }
+
+/* ───────── 바텀시트 ───────── */
+let sheetEv = null, sheetChild = null, picked = new Set();
+function openSheet(id){
+  sheetEv = events.find(e => e.id === id);
+  sheetChild = currentChild;
+  const r = regOf(sheetEv, sheetChild);
+  picked = new Set(r && r.status !== 'cancelled' ? r.options : []);
+  renderSheet();
+  document.getElementById('dim').classList.add('on');
+  document.getElementById('sheet').classList.add('on');
+}
+function closeSheet(){ document.getElementById('dim').classList.remove('on'); document.getElementById('sheet').classList.remove('on'); }
+function pickChild(id){ sheetChild = id; const r = regOf(sheetEv, id); picked = new Set(r && r.status !== 'cancelled' ? r.options : []); renderSheet(); }
+function toggleOpt(o){ if (picked.has(o)) picked.delete(o); else picked.add(o); renderSheet(); }
+function renderSheet(){
+  const ev = sheetEv, T = TYPE[ev.type];
+  const child = children.find(c => c.id === sheetChild);
+  const r = regOf(ev, sheetChild);
+  const registered = r && (r.status === 'registered' || r.status === 'confirmed');
+  const cr = canRegister(ev, child);
+  const dateTxt = ev.endDate ? `${fmtDate(ev.date)} ~ ${fmtDate(ev.endDate)}` : fmtDate(ev.date);
+  let body = `
+    <span class="badge ${T.cls}">${T.emoji} ${T.label}</span>
+    <div class="sheet-title">${esc(ev.title)}</div>
+    <div class="kv"><span class="k">📅</span><span>${dateTxt}${ev.time?' '+ev.time:' · 종일'} <span style="color:var(--color-gray-400);font-size:.75rem;margin-left:4px">${dday(ev).t}</span></span></div>
+    ${ev.location?`<div class="kv"><span class="k">📍</span><span>${esc(ev.location)}</span></div>`:''}
+    ${ev.deadline && ev.type!=='closure'?`<div class="kv"><span class="k">⏰</span><span>접수 마감 ${fmtDate(ev.deadline.slice(0,10))} ${ev.deadline.slice(11)}</span></div>`:''}
+    ${ev.description?`<div class="sec"><h4>안내</h4><div class="desc">${esc(ev.description)}</div></div>`:''}`;
+  let foot = '';
+  if (ev.type === 'closure'){
+    body += `<div class="notice gray">휴관일 안내예요. 신청은 필요 없어요.</div>`;
+    foot = `<button class="btn btn-outline" onclick="closeSheet()">닫기</button>`;
+  } else {
+    body += `<div class="sec"><h4>누구를 신청할까요?</h4><div class="child-chips">${children.map(c =>
+      `<button class="chip ${c.id===sheetChild?'on':''}" onclick="pickChild(${c.id})">${c.name}${c.status==='pending'?' <span class="st">확인 대기</span>':''}</button>`).join('')}</div></div>`;
+    if (ev.options && ev.options.length){
+      const disabled = !cr.ok && !registered;
+      body += `<div class="sec"><h4>옵션 <span class="opt-hint">${ev.requireOption?'1개 이상 선택':'선택 사항 · 여러 개 가능'}</span></h4><div class="opt-list">${ev.options.map(o =>
+        `<div class="opt ${picked.has(o)?'on':''} ${disabled?'dis':''}" onclick="${disabled?'':`toggleOpt('${o.replace(/'/g,"\\'")}')`}"><span class="box">${picked.has(o)?'✓':''}</span>${esc(o)}</div>`).join('')}</div></div>`;
+    }
+    if (registered){
+      body += `<div class="notice ok">✓ ${child.name} 신청 완료${r.status==='confirmed'?' · 선생님이 확정했어요':''}${picked.size?` · ${[...picked].join(', ')}`:''}</div>`;
+      if (cr.ok){
+        const changed = r.options.length !== picked.size || r.options.some(o => !picked.has(o));
+        foot = `<button class="btn btn-danger" onclick="cancelReg()">신청 취소</button><button class="btn btn-primary" ${changed && (!ev.requireOption || picked.size)?'':'disabled'} onclick="submitReg()">옵션 변경</button>`;
+      } else {
+        body += `<div class="notice warn">접수가 마감되어 변경·취소는 선생님께 문의해 주세요.</div>`;
+        foot = `<button class="btn btn-outline" onclick="closeSheet()">닫기</button>`;
+      }
+    } else if (cr.ok){
+      const need = ev.requireOption && picked.size === 0;
+      foot = `<button class="btn btn-primary" ${need?'disabled':''} onclick="submitReg()">${ev.options&&ev.options.length?'선택한 옵션으로 신청하기':'참가 신청'}</button>`;
+      if (r && r.status === 'cancelled') body += `<div class="notice gray">이전에 취소한 신청이에요. 다시 신청할 수 있어요.</div>`;
+    } else {
+      const msg = { child_pending: `${child.name}는 선생님 확인 후 신청할 수 있어요. 이름·생년월일을 확인해 주세요.`, deadline: '접수가 마감되었어요. 추가 참가는 선생님께 문의해 주세요.', closed: '지금은 접수를 받지 않아요.', started: '이미 시작된 일정이에요.' }[cr.reason];
+      body += `<div class="notice warn">${msg}</div>`;
+      foot = `<button class="btn btn-outline" onclick="closeSheet()">닫기</button>`;
+    }
+  }
+  document.getElementById('sheetBody').innerHTML = body;
+  document.getElementById('sheetFoot').innerHTML = foot;
+}
+function submitReg(){
+  regs[sheetEv.id] = regs[sheetEv.id] || {};
+  const prev = regs[sheetEv.id][sheetChild];
+  regs[sheetEv.id][sheetChild] = { status: prev && prev.status === 'confirmed' ? 'confirmed' : 'registered', options: [...picked] };
+  toast(prev && prev.status !== 'cancelled' ? '옵션을 변경했어요' : '신청했어요 · 선생님에게 전달됩니다');
+  renderSheet(); renderCards();
+}
+function cancelReg(){
+  const r = regs[sheetEv.id][sheetChild];
+  const wasConfirmed = r.status === 'confirmed';
+  regs[sheetEv.id][sheetChild] = { status: 'cancelled', options: r.options };
+  picked = new Set();
+  toast(wasConfirmed ? '취소했어요 · 확정된 신청이라 선생님께 한 번 더 알려 주세요' : '신청을 취소했어요');
+  renderSheet(); renderCards();
+}
+
+/* ───────── 온보딩 ───────── */
+function addChildForm(){
+  const n = document.querySelectorAll('#childForms .child-form').length + 1;
+  const div = document.createElement('div'); div.className = 'child-form';
+  div.innerHTML = `<button class="rm" title="삭제" onclick="this.parentNode.remove()">✕</button><div class="num">아이 ${n}</div><div class="grid"><div><label class="label">이름 <span class="req">*</span></label><input class="input" placeholder="예: 김민서"></div><div><label class="label">생년월일 <span class="req">*</span></label><input class="input" type="date"></div></div>`;
+  document.getElementById('childForms').appendChild(div);
+}
+function finishOnboard(){
+  setState('schedule');
+  setTimeout(() => toast('민서는 연결됐어요 · 준호는 선생님 확인 대기'), 300);
+}
+
+/* ───────── 상태 전환 ───────── */
+const URLS = { invite: 'rg-manager.vercel.app/invite/o1CGtibM0ULAsoDW89H98w', onboard: 'rg-manager.vercel.app/parent/onboarding', schedule: 'rg-manager.vercel.app/parent/schedule', empty: 'rg-manager.vercel.app/parent/schedule', me: 'rg-manager.vercel.app/parent/settings', notfound: 'rg-manager.vercel.app/invite/expired-token' };
+function setState(s, btn){
+  ['Invite','Onboard','Schedule','Empty','Me','Notfound'].forEach(v => document.getElementById('v'+v).classList.add('hidden'));
+  document.getElementById('v' + s.charAt(0).toUpperCase() + s.slice(1)).classList.remove('hidden');
+  document.getElementById('url').textContent = URLS[s];
+  closeSheet();
+  document.querySelectorAll('.state-btn').forEach(b => b.classList.remove('on'));
+  if (btn) btn.classList.add('on');
+  else { const i = ['invite','onboard','schedule','empty','me','notfound'].indexOf(s); const bs = document.querySelectorAll('.state-btn'); if (bs[i]) bs[i].classList.add('on'); }
+  if (s === 'schedule') renderAll();
+}
+let toastTimer;
+function toast(msg){ const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 2200); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+renderAll();
+</script>
+</body>
+</html>

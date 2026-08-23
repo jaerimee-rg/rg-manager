@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>학부모 포털 목업 — 선생님 이벤트 관리</title>
+<style>
+:root{
+  --color-primary:#3182F6; --color-primary-dark:#1B64DA; --color-primary-bg:#EBF4FF;
+  --color-success:#00C471; --color-success-bg:#E8FAF0;
+  --color-danger:#FF4848; --color-danger-bg:#FFEDED;
+  --color-warning:#FF9F00; --color-warning-bg:#FFF4E0;
+  --color-purple:#7C5CFC; --color-purple-bg:#F0EBFF;
+  --color-gray-50:#F9FAFB; --color-gray-100:#F2F4F6; --color-gray-200:#E5E8EB; --color-gray-300:#D1D6DB;
+  --color-gray-400:#B0B8C1; --color-gray-500:#8B95A1; --color-gray-600:#6B7684;
+  --color-gray-700:#4E5968; --color-gray-800:#333D4B; --color-gray-900:#191F28;
+  --bg-primary:#F2F4F6; --bg-secondary:#FFFFFF; --bg-tertiary:#F7F8FA;
+  --radius-sm:8px; --radius-md:12px; --radius-lg:16px; --radius-full:9999px;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.05); --shadow-md:0 2px 8px rgba(0,0,0,.08); --shadow-lg:0 8px 32px rgba(0,0,0,.18);
+  --font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-family);background:var(--color-gray-200);color:var(--color-gray-900);line-height:1.5;font-size:15px;letter-spacing:-.3px;-webkit-font-smoothing:antialiased;min-height:100vh}
+button,input,select,textarea{font-family:inherit}
+
+/* 목업 크롬 */
+.mock-bar{background:var(--color-gray-900);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:.8125rem}
+.mock-bar strong{font-weight:700}
+.mock-bar .spacer{flex:1}
+.mock-bar a{color:#9DC4FF;text-decoration:none;font-weight:600}
+.seg{display:inline-flex;background:rgba(255,255,255,.12);border-radius:var(--radius-full);padding:3px}
+.seg button{background:none;border:none;color:rgba(255,255,255,.7);font:inherit;font-weight:600;padding:5px 12px;border-radius:var(--radius-full);cursor:pointer}
+.seg button.on{background:#fff;color:var(--color-gray-900)}
+.mock-note{background:#FFF9E6;border-bottom:1px solid #F5E3A8;color:#7A5D00;font-size:.8125rem;padding:8px 16px;text-align:center}
+
+/* 프레임 */
+.frame{margin:24px auto;background:var(--bg-primary);border-radius:20px;overflow:hidden;box-shadow:var(--shadow-lg);max-width:1100px;transition:max-width .25s ease;position:relative;min-height:760px}
+.frame.mobile{max-width:400px}
+.app-header{background:var(--bg-secondary);padding:16px 20px;border-bottom:1px solid var(--color-gray-100)}
+.app-header .row{display:flex;align-items:center;justify-content:space-between}
+.app-header h1{font-size:1.25rem;font-weight:700;letter-spacing:-.5px}
+.hamburger{display:none;border:none;background:none;font-size:1.4rem;cursor:pointer}
+.desktop-nav{display:flex;gap:4px;margin-top:12px;flex-wrap:wrap;align-items:center}
+.desktop-nav a{padding:8px 12px;border-radius:var(--radius-sm);color:var(--color-gray-600);text-decoration:none;font-size:.9375rem;font-weight:500}
+.desktop-nav a.active{background:var(--color-primary-bg);color:var(--color-primary);font-weight:700}
+.desktop-nav .push{flex:1}
+.frame.mobile .desktop-nav{display:none}
+.frame.mobile .hamburger{display:block}
+.app-main{padding:24px 20px 48px}
+.frame.mobile .app-main{padding:16px 12px 40px}
+
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px}
+.page-title{font-size:1.5rem;font-weight:800;letter-spacing:-.6px}
+.page-desc{font-size:.875rem;color:var(--color-gray-500);margin-top:4px}
+.page-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.frame.mobile .page-title{font-size:1.25rem}
+.frame.mobile .page-desc{display:none}
+
+.tabs{display:flex;gap:4px;background:var(--color-gray-100);padding:4px;border-radius:var(--radius-md);margin-bottom:16px}
+.tabs button{flex:1;border:none;background:none;font:inherit;font-weight:600;font-size:.9375rem;color:var(--color-gray-600);padding:9px;border-radius:var(--radius-sm);cursor:pointer}
+.tabs button.on{background:#fff;color:var(--color-gray-900);box-shadow:var(--shadow-sm)}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 16px;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:.9375rem;font-weight:600;letter-spacing:-.2px;white-space:nowrap;transition:all .15s ease}
+.btn-primary{background:var(--color-primary);color:#fff}
+.btn-primary:hover{background:var(--color-primary-dark)}
+.btn-outline{background:#fff;color:var(--color-gray-700);border:1px solid var(--color-gray-300)}
+.btn-ghost{background:transparent;color:var(--color-gray-600)}
+.btn-danger{background:var(--color-danger-bg);color:var(--color-danger)}
+.btn-success{background:var(--color-success-bg);color:#059669}
+.btn-sm{padding:7px 11px;font-size:.8125rem;border-radius:var(--radius-sm)}
+.btn-xs{padding:4px 8px;font-size:.75rem;border-radius:6px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.icon-btn{width:44px;height:44px;flex-shrink:0;border-radius:var(--radius-md);border:1px solid var(--color-gray-200);background:#fff;color:var(--color-gray-600);display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.icon-btn:hover{color:var(--color-primary);border-color:var(--color-primary);background:var(--color-primary-bg)}
+
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:var(--radius-full);font-size:.6875rem;font-weight:700;white-space:nowrap}
+.badge-primary{background:var(--color-primary-bg);color:var(--color-primary)}
+.badge-gray{background:var(--color-gray-100);color:var(--color-gray-600)}
+.badge-success{background:var(--color-success-bg);color:#059669}
+.badge-danger{background:var(--color-danger-bg);color:var(--color-danger)}
+.badge-warning{background:var(--color-warning-bg);color:#B26A00}
+.badge-purple{background:var(--color-purple-bg);color:var(--color-purple)}
+.badge-outline{background:#fff;border:1px solid var(--color-gray-200);color:var(--color-gray-600)}
+
+.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.chips{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+.chip{padding:7px 12px;border-radius:var(--radius-full);border:1px solid var(--color-gray-200);background:#fff;font-size:.8125rem;font-weight:600;color:var(--color-gray-700);cursor:pointer}
+.chip.on{background:var(--color-primary);border-color:var(--color-primary);color:#fff}
+.switch{display:inline-flex;align-items:center;gap:6px;font-size:.8125rem;color:var(--color-gray-700);cursor:pointer;white-space:nowrap}
+
+/* 표 */
+.table-wrap{background:#fff;border-radius:var(--radius-lg);overflow:hidden;overflow-x:auto}
+table{width:100%;min-width:900px;border-collapse:collapse}
+th{text-align:left;font-size:.75rem;font-weight:700;color:var(--color-gray-500);padding:12px 14px;background:var(--bg-tertiary);border-bottom:1px solid var(--color-gray-100);white-space:nowrap}
+td{padding:13px 14px;border-bottom:1px solid var(--color-gray-100);vertical-align:middle;font-size:.9rem}
+tr:last-child td{border-bottom:none}
+tr.past td{opacity:.55}
+.ev-title{font-weight:700;word-break:keep-all}
+td.loc{word-break:keep-all;color:var(--color-gray-800)}
+.ev-card .loc-line{color:var(--color-gray-800);font-size:.8125rem;font-weight:600}
+.ev-sub{font-size:.75rem;color:var(--color-gray-500);margin-top:2px}
+.link{color:var(--color-primary);font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:2px;white-space:nowrap}
+.actions{display:flex;gap:6px;justify-content:flex-end;white-space:nowrap}
+.frame.mobile .table-wrap{display:none}
+
+/* 모바일 카드 */
+.ev-cards{display:none;flex-direction:column;gap:10px}
+.frame.mobile .ev-cards{display:flex}
+.ev-card{background:#fff;border-radius:var(--radius-lg);padding:14px}
+.ev-card .top{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.ev-card .top .sp{flex:1}
+.ev-card .t{font-weight:700;font-size:.9375rem}
+.ev-card .m{font-size:.75rem;color:var(--color-gray-500);margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 10px}
+.ev-card .foot{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.ev-card.past{opacity:.55}
+.past-toggle{margin:14px 0 0;text-align:center}
+
+/* 모달 */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:200;padding:16px}
+.modal.on{display:flex}
+.modal-box{background:#fff;border-radius:var(--radius-lg);width:100%;max-width:640px;max-height:92vh;display:flex;flex-direction:column;box-shadow:var(--shadow-lg)}
+.modal-head{padding:18px 20px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--color-gray-100)}
+.modal-head h3{font-size:1.0625rem;font-weight:800}
+.modal-body{padding:16px 20px;overflow-y:auto}
+.modal-foot{padding:12px 20px 16px;border-top:1px solid var(--color-gray-100);display:flex;gap:8px;justify-content:flex-end}
+.x{border:none;background:none;font-size:1.25rem;cursor:pointer;color:var(--color-gray-500);width:36px;height:36px;border-radius:var(--radius-sm)}
+.x:hover{background:var(--color-gray-100)}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:.8125rem;font-weight:700;color:var(--color-gray-700);margin-bottom:6px}
+.field .req{color:var(--color-danger)}
+.field .hint{font-size:.75rem;color:var(--color-gray-500);margin-top:5px;line-height:1.5}
+.input,select.input,textarea.input{width:100%;padding:11px 13px;border:1px solid var(--color-gray-300);border-radius:var(--radius-md);font:inherit;font-size:.9375rem;background:#fff}
+.input:focus{outline:none;border-color:var(--color-primary)}
+textarea.input{resize:vertical;min-height:80px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.typesel{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.typesel button{border:1px solid var(--color-gray-200);background:#fff;border-radius:var(--radius-md);padding:12px 8px;cursor:pointer;font-size:.875rem;font-weight:700;color:var(--color-gray-700);display:flex;flex-direction:column;align-items:center;gap:4px}
+.typesel button .e{font-size:1.3rem}
+.typesel button .d{font-size:.6875rem;font-weight:500;color:var(--color-gray-500)}
+.typesel button.on{border-color:var(--color-primary);background:var(--color-primary-bg);color:var(--color-primary)}
+.typesel button:disabled{opacity:.5;cursor:not-allowed}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--color-gray-100);font-size:.9rem}
+.toggle-row .d{font-size:.75rem;color:var(--color-gray-500);font-weight:400;margin-top:2px}
+.sw{width:44px;height:26px;border-radius:13px;background:var(--color-gray-300);position:relative;cursor:pointer;border:none;flex-shrink:0;transition:background .15s}
+.sw::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:var(--shadow-sm)}
+.sw.on{background:var(--color-success)}
+.sw.on::after{left:21px}
+/* 옵션 편집기 */
+.opt-editor{border:1px solid var(--color-gray-200);border-radius:var(--radius-md);overflow:hidden}
+.opt-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--color-gray-100);background:#fff}
+.opt-row:last-child{border-bottom:none}
+.opt-row .h{color:var(--color-gray-400);cursor:grab;font-size:.9rem}
+.opt-row input{flex:1;border:1px solid transparent;border-radius:var(--radius-sm);padding:7px 9px;font-size:.9rem;background:var(--bg-tertiary)}
+.opt-row input:focus{outline:none;border-color:var(--color-primary);background:#fff}
+.opt-row .cnt{font-size:.6875rem;color:var(--color-gray-500);white-space:nowrap}
+.opt-row .rm{border:none;background:none;color:var(--color-gray-400);cursor:pointer;font-size:1rem;width:28px;height:28px;border-radius:6px}
+.opt-row .rm:hover{background:var(--color-danger-bg);color:var(--color-danger)}
+.opt-add{display:flex;gap:8px;padding:10px;background:var(--bg-tertiary)}
+.opt-add input{flex:1}
+.section-title{font-size:.8125rem;font-weight:800;color:var(--color-gray-500);margin:18px 0 8px;display:flex;align-items:center;gap:8px}
+.section-title::after{content:'';flex:1;height:1px;background:var(--color-gray-100)}
+
+/* 신청 현황 패널 */
+.reg-layout{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
+.frame.mobile .reg-layout{grid-template-columns:1fr}
+.reg-panel{background:#fff;border-radius:var(--radius-lg);padding:16px;position:sticky;top:12px}
+.frame.mobile .reg-panel{position:static}
+.reg-panel h3{font-size:1rem;font-weight:800;display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.reg-panel .sub{font-size:.75rem;color:var(--color-gray-500);margin-bottom:12px}
+.summ{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.summ .s{background:var(--bg-tertiary);border-radius:var(--radius-sm);padding:6px 10px;font-size:.75rem;font-weight:600;color:var(--color-gray-700)}
+.summ .s b{color:var(--color-primary);margin-left:4px}
+.reg-row{display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--color-gray-100);align-items:flex-start}
+.reg-row .av{width:34px;height:34px;border-radius:50%;background:var(--color-primary-bg);color:var(--color-primary);font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.875rem}
+.reg-row .n{font-weight:700;font-size:.9rem;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.reg-row .p{font-size:.75rem;color:var(--color-gray-500)}
+.reg-row .o{font-size:.75rem;color:var(--color-gray-700);margin-top:3px}
+.reg-row .o span{display:inline-block;background:var(--color-gray-100);border-radius:4px;padding:1px 6px;margin:2px 3px 0 0}
+.reg-row .sp{flex:1;min-width:0}
+.reg-row.cancelled{opacity:.5}
+.reg-row.cancelled .nm{text-decoration:line-through}
+.reg-foot{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.ph-empty{text-align:center;color:var(--color-gray-400);font-size:.875rem;padding:30px 10px;background:#fff;border-radius:var(--radius-lg)}
+
+/* 학부모 관리 */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.frame.mobile .stats{grid-template-columns:repeat(2,1fr)}
+.stat{background:#fff;border-radius:var(--radius-lg);padding:12px 14px}
+.stat .k{font-size:.75rem;color:var(--color-gray-500);font-weight:600}
+.stat .v{font-size:1.375rem;font-weight:800;letter-spacing:-.5px;margin-top:2px}
+.stat.warn .v{color:#B26A00}
+.viewseg{display:inline-flex;background:var(--color-gray-100);padding:3px;border-radius:var(--radius-md)}
+.viewseg button{border:none;background:none;font-weight:700;font-size:.875rem;color:var(--color-gray-600);padding:8px 14px;border-radius:var(--radius-sm);cursor:pointer}
+.viewseg button.on{background:#fff;color:var(--color-gray-900);box-shadow:var(--shadow-sm)}
+.search{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--color-gray-200);border-radius:var(--radius-md);padding:0 12px;height:42px;flex:1;min-width:180px}
+.search input{border:none;outline:none;font:inherit;font-size:.9rem;flex:1;min-width:0}
+.stu-card{background:#fff;border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.stu-card .av{width:38px;height:38px;border-radius:50%;background:var(--color-primary-bg);color:var(--color-primary);font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.stu-card .n{font-weight:700}
+.stu-card .m{font-size:.75rem;color:var(--color-gray-500)}
+.stu-card .links{display:flex;gap:6px;flex-wrap:wrap;flex:1;align-items:center;min-width:200px}
+.ptag{display:inline-flex;align-items:center;gap:6px;background:var(--color-success-bg);color:#047857;border-radius:var(--radius-full);padding:4px 6px 4px 10px;font-size:.8125rem;font-weight:700}
+.ptag button{border:none;background:rgba(0,0,0,.06);color:inherit;border-radius:50%;width:18px;height:18px;font-size:.7rem;cursor:pointer;line-height:1}
+.ptag.pending{background:var(--color-warning-bg);color:#B26A00}
+.stu-card select,.kid select{padding:7px 8px;font-size:.8125rem;border:1px solid var(--color-gray-300);border-radius:var(--radius-sm);background:#fff;max-width:220px}
+.nolink{font-size:.8125rem;color:var(--color-gray-400)}
+.hint-row{font-size:.75rem;color:var(--color-gray-500);margin:-4px 0 10px}
+
+/* 학부모 카드 */
+.invite-box{background:#fff;border-radius:var(--radius-lg);padding:16px;margin-bottom:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.invite-box .u{flex:1;min-width:220px;background:var(--bg-tertiary);border-radius:var(--radius-md);padding:11px 13px;font-size:.8125rem;color:var(--color-gray-700);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Menlo,monospace}
+.invite-box .l{font-size:.75rem;color:var(--color-gray-500);width:100%}
+.parent-card{background:#fff;border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:10px}
+.parent-card .head{display:flex;align-items:center;gap:10px}
+.parent-card .av{width:38px;height:38px;border-radius:50%;background:var(--color-gray-100);color:var(--color-gray-700);font-weight:800;display:inline-flex;align-items:center;justify-content:center}
+.parent-card .n{font-weight:700}
+.parent-card .m{font-size:.75rem;color:var(--color-gray-500)}
+.parent-card .sp{flex:1}
+.kid{display:flex;align-items:center;gap:8px;padding:9px 0 0 48px;flex-wrap:wrap;font-size:.875rem}
+.kid .b{font-size:.75rem;color:var(--color-gray-500)}
+.kid select{padding:6px 8px;font-size:.8125rem;border:1px solid var(--color-gray-300);border-radius:var(--radius-sm)}
+.frame.mobile .kid{padding-left:0}
+
+.toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(20px);background:rgba(25,31,40,.92);color:#fff;padding:10px 16px;border-radius:var(--radius-full);font-size:.8125rem;font-weight:600;opacity:0;transition:all .2s;z-index:400;white-space:nowrap;pointer-events:none}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.hidden{display:none !important}
+@media (max-width:720px){ .reg-layout{grid-template-columns:1fr} .reg-panel{position:static} .grid2{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<div class="mock-bar">
+  <strong>학부모 포털 목업</strong>
+  <span>선생님 화면 — 이벤트 관리</span>
+  <div class="seg"><button id="segEvents" class="on" onclick="showPage('events')">이벤트 관리</button><button id="segParents" onclick="showPage('parents')">학부모</button></div>
+  <div class="seg"><button id="btnDesktop" class="on" onclick="setView('desktop')">데스크톱</button><button id="btnMobile" onclick="setView('mobile')">모바일</button></div>
+  <div class="spacer"></div>
+  <a href="./parent.html">학부모 화면 목업 →</a>
+</div>
+<div class="mock-note">실제 동작하지 않는 화면 목업입니다. 기존 <b>대회 관리</b> 메뉴가 <b>이벤트 관리</b>로 바뀌고, 새 <b>학부모</b> 메뉴(상단 메뉴에서 전환)에서 초대 링크·학부모↔학생 연결을 관리합니다. 오늘은 <b>2026-08-23</b> 로 가정합니다.</div>
+
+<div class="frame" id="frame">
+  <header class="app-header">
+    <div class="row"><h1>리듬체조 출석</h1><button class="hamburger">☰</button></div>
+    <nav class="desktop-nav">
+      <a href="#">대시보드</a><a href="#">학생 관리</a><a href="#">수업 관리</a><a href="#" id="navEvents" class="active" onclick="showPage('events');return false">이벤트 관리</a><a href="#">출석 체크</a><a href="#">학생별 출석</a><a href="#">학생별 대회</a><a href="#" id="navParents" onclick="showPage('parents');return false">학부모</a><a href="#">FAQ</a>
+      <span class="push"></span><a href="#">설정</a><a href="#">로그아웃</a>
+    </nav>
+  </header>
+
+  <main class="app-main">
+    <!-- ═══ 이벤트 관리 페이지 ═══ -->
+    <section id="pageEvents">
+      <div class="page-head">
+        <div><div class="page-title">이벤트 관리</div><div class="page-desc">대회·스페셜 이벤트·휴관일을 등록하면 학부모 포털 일정에 바로 보이고, 신청 현황을 확인할 수 있습니다.</div></div>
+        <div class="page-actions"><button class="btn btn-primary" onclick="openForm()">+ 이벤트</button></div>
+      </div>
+      <div class="toolbar">
+        <div class="chips" id="typeChips"></div>
+        <label class="switch"><input type="checkbox" id="showPast" onchange="renderEvents()"> 지난 일정 보기</label>
+      </div>
+      <div class="reg-layout" id="regLayout" style="grid-template-columns:1fr">
+        <div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th style="width:78px">종류</th><th style="min-width:180px">이벤트</th><th style="width:150px">날짜</th><th style="min-width:150px">장소</th><th style="width:84px;text-align:center">참가 학생</th><th style="width:64px;text-align:center">신청</th><th style="width:86px">공개 · 접수</th><th style="width:1%">관리</th></tr></thead>
+              <tbody id="evRows"></tbody>
+            </table>
+          </div>
+          <div class="ev-cards" id="evCards"></div>
+          <div class="past-toggle"><span style="font-size:.75rem;color:var(--color-gray-400)">신청 수를 누르면 신청 현황이 열립니다 · 대회형은 [참가 학생]으로 기존 화면을 엽니다</span></div>
+        </div>
+        <div id="regPanelWrap" class="hidden"></div>
+      </div>
+    </section>
+
+    <!-- ═══ 학부모 관리 페이지 ═══ -->
+    <section id="pageParents" class="hidden">
+      <div class="page-head">
+        <div><div class="page-title">학부모</div><div class="page-desc">초대 링크로 가입한 학부모를 학생과 연결합니다. 연결된 아이만 일정에 신청할 수 있어요.</div></div>
+        <div class="page-actions">
+          <button class="icon-btn" title="학부모 초대 링크 복사" aria-label="학부모 초대 링크 복사" onclick="copyInvite()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></button>
+        </div>
+      </div>
+
+      <div class="invite-box">
+        <div class="l">학부모 초대 링크 — 카톡방에 한 번 올리면 됩니다. 이 링크로 들어온 학부모만 카카오로 가입할 수 있고, 가입 때 입력한 아이 이름·생년월일이 학생 명단과 맞으면 자동으로 연결돼요.</div>
+        <div class="u">https://rg-manager.vercel.app/invite/o1CGtibM0ULAsoDW89H98w</div>
+        <button class="btn btn-outline btn-sm" onclick="copyInvite()">복사</button>
+        <button class="btn btn-ghost btn-sm" onclick="toast('재발급: 기존 링크는 즉시 무효화됩니다 (목업)')">재발급</button>
+      </div>
+
+      <div class="stats" id="parentStats"></div>
+
+      <div class="toolbar">
+        <div class="viewseg"><button id="vsParents" class="on" onclick="setParentView('parents')">학부모별</button><button id="vsStudents" onclick="setParentView('students')">학생별</button></div>
+        <div class="search"><span>🔍</span><input type="text" id="parentSearch" placeholder="학부모·아이 이름 검색" oninput="renderParentPage()"></div>
+        <div class="chips" id="parentChips"></div>
+      </div>
+
+      <div id="parentList"></div>
+      <div id="studentList" class="hidden"></div>
+    </section>
+  </main>
+
+  <!-- 이벤트 폼 모달 -->
+  <div class="modal" id="modalForm">
+    <div class="modal-box">
+      <div class="modal-head"><h3 id="formTitle">이벤트 등록</h3><button class="x" onclick="closeForm()">✕</button></div>
+      <div class="modal-body">
+        <div class="field"><label>종류 <span class="req">*</span> <span style="font-weight:400;color:var(--color-gray-400);font-size:.75rem">등록 후에는 바꿀 수 없어요</span></label>
+          <div class="typesel" id="typeSel"></div>
+        </div>
+        <div class="field"><label>이벤트 이름 <span class="req">*</span></label><input class="input" id="fTitle" placeholder="예: 2026 서울시 리듬체조 대회" maxlength="100"></div>
+        <div class="grid2">
+          <div class="field"><label>날짜 <span class="req">*</span></label><input class="input" type="date" id="fDate"></div>
+          <div class="field" id="fEndWrap"><label>종료일 <span style="font-weight:400;color:var(--color-gray-400)">(기간일 때)</span></label><input class="input" type="date" id="fEnd"></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label>시간 <span style="font-weight:400;color:var(--color-gray-400)">(비우면 종일)</span></label><input class="input" type="time" id="fTime"></div>
+          <div class="field" id="fLocWrap"><label>장소 <span class="req">*</span></label><input class="input" id="fLoc" placeholder="예: 올림픽공원 체조경기장"></div>
+        </div>
+        <div class="field"><label>학부모 안내</label><textarea class="input" id="fDesc" placeholder="학부모 포털 상세에 그대로 보입니다 (1000자)"></textarea></div>
+
+        <div id="optSection">
+          <div class="section-title">옵션 <span style="font-weight:500;color:var(--color-gray-400)">학부모가 신청할 때 체크합니다 · 여러 개 선택 가능</span></div>
+          <div class="opt-editor" id="optEditor"></div>
+          <div class="field" style="margin-top:8px"><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline btn-sm" id="btnApparatus" onclick="addApparatus()">🎀 종목 6개 불러오기</button><span class="hint" style="align-self:center">맨손 · 볼 · 후프 · 곤봉 · 리본 · 줄 을 옵션으로 한 번에 추가 (2차)</span></div></div>
+          <div class="toggle-row"><div>옵션 1개 이상 필수<div class="d">켜면 학부모가 옵션을 고르지 않고는 신청할 수 없어요</div></div><button class="sw" id="swReq" onclick="this.classList.toggle('on')"></button></div>
+        </div>
+
+        <div class="section-title">공개 · 접수</div>
+        <div class="toggle-row" style="border-top:none"><div>학부모에게 공개<div class="d">끄면 일정에 보이지 않아요 (준비 중인 이벤트)</div></div><button class="sw on" id="swPub" onclick="this.classList.toggle('on')"></button></div>
+        <div id="regSection">
+          <div class="toggle-row"><div>접수 받기<div class="d">끄면 "접수 마감" 으로 보여요</div></div><button class="sw on" id="swOpen" onclick="this.classList.toggle('on')"></button></div>
+          <div class="field" style="margin-top:10px"><label>접수 마감 일시 <span style="font-weight:400;color:var(--color-gray-400)">(비우면 이벤트 시작 전까지)</span></label><input class="input" type="datetime-local" id="fDeadline"></div>
+        </div>
+        <div id="compNote" class="field hidden"><div class="hint" style="background:var(--color-primary-bg);color:var(--color-primary-dark);padding:10px 12px;border-radius:var(--radius-md)">🏆 대회형은 저장하면 <b>대회 관리 데이터(참가 학생·종목·참가비)</b>가 함께 만들어져 기존 [참가 학생 관리]·[학생별 대회] 화면에서 그대로 쓸 수 있어요. 학부모 신청은 <b>[확정]</b> 해야 참가 학생으로 올라갑니다.</div></div>
+      </div>
+      <div class="modal-foot"><button class="btn btn-outline" onclick="closeForm()">취소</button><button class="btn btn-primary" onclick="saveForm()">저장</button></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+/* ───────── 예시 데이터 ───────── */
+const TODAY = '2026-08-23';
+const TYPE = {
+  competition: { label: '대회', emoji: '🏆', cls: 'badge-danger', d: '신청 → 확정 → 참가 학생' },
+  special:     { label: '스페셜 이벤트', emoji: '⭐', cls: 'badge-purple', d: '러닝·특강·발표회' },
+  closure:     { label: '휴관일', emoji: '🚫', cls: 'badge-gray', d: '신청 없음 · 안내만' }
+};
+const APPARATUS = ['맨손','볼','후프','곤봉','리본','줄'];
+let events = [
+  { id: 1, type: 'closure', title: '여름 휴관', date: '2026-08-25', endDate: '2026-08-27', published: true },
+  { id: 2, type: 'special', title: '한강 러닝 클래스', date: '2026-08-29', time: '10:00', location: '여의도 한강공원 이벤트광장', options: ['5km','10km','보호자 동반'], published: true, open: true, deadline: '2026-08-27T23:59' },
+  { id: 3, type: 'competition', title: '2026 서울시 리듬체조 대회', date: '2026-09-12', time: '09:00', location: '올림픽공원 체조경기장', options: ['맨손','볼','후프','곤봉','리본','줄','단체전','의상 대여'], requireOption: true, published: true, open: true, deadline: '2026-09-01T23:59' },
+  { id: 4, type: 'closure', title: '추석 연휴 휴관', date: '2026-09-24', endDate: '2026-09-27', published: true },
+  { id: 5, type: 'special', title: '가을 특강 — 리본 집중반', date: '2026-10-10', time: '14:00', location: '본관 2층', options: ['초급 (14:00~16:00)','중급 (16:00~18:00)'], requireOption: true, published: true, open: true },
+  { id: 6, type: 'competition', title: '전국 꿈나무 리듬체조 대회', date: '2026-10-31', time: '08:30', location: '광주 염주체육관', options: ['맨손','볼','후프','리본'], published: true, open: true, deadline: '2026-08-20T23:59' },
+  { id: 7, type: 'special', title: '연말 발표회 리허설', date: '2026-11-14', time: '13:00', location: '본관 대강당', options: [], published: true, open: true },
+  { id: 8, type: 'special', title: '2026 연말 발표회', date: '2026-12-19', time: '17:00', location: '구민회관 대공연장', options: ['가족 관람 2명','가족 관람 4명'], published: false, open: true },
+  { id: 9, type: 'competition', title: '여름 오픈 대회', date: '2026-08-10', time: '09:00', location: '잠실학생체육관', options: [], published: true, open: false }
+];
+// 대회형 참가 학생 수 (기존 competition_students)
+const participants = { 3: 1, 6: 1, 9: 6 };
+// 신청: eventId → rows
+let regs = {
+  3: [
+    { id: 31, child: '김민서', parent: '민서엄마', options: ['볼','후프'], status: 'registered', at: '8/21 14:02' },
+    { id: 32, child: '박서연', parent: '서연맘', options: ['리본','줄'], status: 'confirmed', at: '8/20 09:15' },
+    { id: 33, child: '이하은', parent: '하은아빠', options: ['맨손','단체전','의상 대여'], status: 'registered', at: '8/22 21:40' },
+    { id: 34, child: '최지우', parent: '지우엄마', options: ['볼'], status: 'cancelled', at: '8/19 11:02', cancelledAfterConfirm: true },
+  ],
+  2: [
+    { id: 21, child: '박서연', parent: '서연맘', options: ['5km','보호자 동반'], status: 'registered', at: '8/22 08:10' },
+    { id: 22, child: '김민서', parent: '민서엄마', options: ['5km'], status: 'cancelled', at: '8/21 19:00' },
+    { id: 23, child: '정유나', parent: '유나엄마', options: ['10km'], status: 'registered', at: '8/23 07:55' },
+  ],
+  5: [ { id: 51, child: '이하은', parent: '하은아빠', options: ['중급 (16:00~18:00)'], status: 'registered', at: '8/23 09:00' } ],
+  6: [ { id: 61, child: '박서연', parent: '서연맘', options: ['후프'], status: 'confirmed', at: '8/15 10:00' } ]
+};
+// 선생님의 학생 명단 (students 테이블)
+const studentsAll = [
+  { id: 1, name: '김민서', birth: '2018-03-05', cls: '토요 A반' },
+  { id: 2, name: '이하은', birth: '2017-07-22', cls: '평일 B반' },
+  { id: 3, name: '박서연', birth: '2016-01-30', cls: '선수반' },
+  { id: 4, name: '정유나', birth: '2019-05-14', cls: '토요 A반' },
+  { id: 5, name: '김준호', birth: '2020-11-12', cls: '유아반' },
+  { id: 6, name: '한소율', birth: '2019-09-02', cls: '유아반' },
+  { id: 7, name: '최지우', birth: '2017-12-18', cls: '평일 B반' },
+];
+// 학부모 계정 + 자녀 입력(parent_children). studentId 가 있으면 연결됨
+let parents = [
+  { id: 101, name: '민서엄마', joined: '8/20', last: '오늘 09:12', kids: [ { id: 1, name: '김민서', birth: '2018-03-05', studentId: 1, by: 'auto' }, { id: 2, name: '김 준호', birth: '2020-11-12', studentId: null } ] },
+  { id: 102, name: '하은아빠', joined: '8/21', last: '어제', kids: [ { id: 3, name: '이하은', birth: '2017-07-22', studentId: 2, by: 'auto' } ] },
+  { id: 103, name: '서연맘', joined: '8/19', last: '오늘 08:10', kids: [ { id: 4, name: '박서연', birth: '2016-01-30', studentId: 3, by: 'auto' } ] },
+  { id: 104, name: '유나엄마', joined: '8/23', last: '오늘 07:55', kids: [ { id: 5, name: '정윤아', birth: '2019-05-14', studentId: null } ] },
+  { id: 105, name: '지우아빠', joined: '8/22', last: '오늘 06:30', kids: [ { id: 6, name: '최지우', birth: '2017-12-18', studentId: 7, by: 'teacher' } ] },
+];
+let parentView = 'parents', parentFilter = 'all';
+
+const DOW = ['일','월','화','수','목','금','토'];
+const fmt = (s) => { const x = new Date(s+'T00:00:00'); return `${x.getMonth()+1}/${x.getDate()}(${DOW[x.getDay()]})`; };
+const esc = (s) => { const t = document.createElement('div'); t.textContent = s; return t.innerHTML; };
+const activeCount = (id) => (regs[id]||[]).filter(r => r.status !== 'cancelled').length;
+let typeFilter = 'all', openReg = null;
+
+/* ───────── 이벤트 목록 ───────── */
+function renderChips(){
+  document.getElementById('typeChips').innerHTML = [['all','전체'],['competition','🏆 대회'],['special','⭐ 스페셜'],['closure','🚫 휴관일']]
+    .map(([k,l]) => `<button class="chip ${typeFilter===k?'on':''}" onclick="typeFilter='${k}';renderEvents()">${l}</button>`).join('');
+}
+function renderEvents(){
+  renderChips();
+  const showPast = document.getElementById('showPast').checked;
+  const list = events.filter(e => typeFilter==='all' || e.type===typeFilter).filter(e => showPast || (e.endDate||e.date) >= TODAY).sort((a,b)=>a.date.localeCompare(b.date));
+  const rows = [], cards = [];
+  for (const e of list){
+    const T = TYPE[e.type], past = (e.endDate||e.date) < TODAY, n = activeCount(e.id);
+    const when = `${fmt(e.date)}${e.endDate?' ~ '+fmt(e.endDate):''}${e.time?' '+e.time:''}`;
+    const pub = e.published ? `<span class="badge badge-success">공개</span>` : `<span class="badge badge-gray">비공개</span>`;
+    const rec = e.type==='closure' ? '' : (e.open && (!e.deadline || e.deadline > TODAY+'T09:41') && !past ? `<span class="badge badge-primary">접수 중</span>` : `<span class="badge badge-gray">마감</span>`);
+    const regCell = e.type==='closure' ? `<span style="color:var(--color-gray-400)">—</span>` : `<span class="link" onclick="toggleReg(${e.id})">${n}건</span>`;
+    const act = `<button class="btn btn-outline btn-sm" onclick="openForm(${e.id})">수정</button>${e.type==='competition'?`<button class="btn btn-outline btn-sm" onclick="toast('기존 참가 학생 관리 화면으로 이동 (/competitions/manage)')">참가 학생</button>`:''}<button class="btn btn-danger btn-sm" onclick="toast('삭제 확인 모달 (대회형은 참가 학생·신청도 함께 삭제됨을 안내)')">삭제</button>`;
+    const partCell = e.type==='competition' ? `<span class="link" onclick="toast('기존 참가 학생 관리 화면으로 이동 (/competitions/manage)')">${participants[e.id]||0}명</span>` : `<span style="color:var(--color-gray-400)">—</span>`;
+    rows.push(`<tr class="${past?'past':''}"><td><span class="badge ${T.cls}">${T.emoji} ${T.label.replace(' 이벤트','')}</span></td><td><div class="ev-title">${esc(e.title)}</div>${e.options&&e.options.length?`<div class="ev-sub">옵션 ${e.options.length}개</div>`:''}</td><td style="white-space:nowrap">${when}</td><td class="loc">${e.location?esc(e.location):'<span style="color:var(--color-gray-400)">—</span>'}</td><td style="text-align:center">${partCell}</td><td style="text-align:center">${regCell}</td><td><div style="display:flex;gap:4px;flex-wrap:wrap">${pub}${rec}</div></td><td><div class="actions">${act}</div></td></tr>`);
+    cards.push(`<div class="ev-card ${past?'past':''}"><div class="top"><span class="badge ${T.cls}">${T.emoji} ${T.label.replace(' 이벤트','')}</span>${pub}${rec}<span class="sp"></span>${e.type!=='closure'?`<span class="link" onclick="toggleReg(${e.id})">신청 ${n}</span>`:''}</div><div class="t">${esc(e.title)}</div><div class="m"><span>📅 ${when}</span></div>${e.location?`<div class="m loc-line">📍 ${esc(e.location)}</div>`:''}${e.type==='competition'?`<div class="m"><span>👥 참가 학생 ${participants[e.id]||0}명</span></div>`:''}<div class="foot">${act}</div></div>`);
+  }
+  document.getElementById('evRows').innerHTML = rows.join('') || `<tr><td colspan="8" style="text-align:center;color:var(--color-gray-400);padding:30px">이벤트가 없습니다</td></tr>`;
+  document.getElementById('evCards').innerHTML = cards.join('');
+  renderRegPanel();
+}
+
+/* ───────── 신청 현황 ───────── */
+function toggleReg(id){ openReg = openReg === id ? null : id; renderRegPanel(); if (openReg && document.getElementById('frame').classList.contains('mobile')) document.getElementById('regPanelWrap').scrollIntoView({behavior:'smooth'}); }
+function renderRegPanel(){
+  const wrap = document.getElementById('regPanelWrap'), layout = document.getElementById('regLayout');
+  if (!openReg){ wrap.classList.add('hidden'); layout.style.gridTemplateColumns = '1fr'; return; }
+  wrap.classList.remove('hidden'); layout.style.gridTemplateColumns = '';
+  const e = events.find(x => x.id === openReg), T = TYPE[e.type], rows = regs[e.id] || [];
+  const hideCancelled = wrap.dataset.hide === '1';
+  const active = rows.filter(r => r.status !== 'cancelled');
+  const counts = {}; active.forEach(r => r.options.forEach(o => counts[o] = (counts[o]||0)+1));
+  const summ = Object.entries(counts).map(([o,c]) => `<span class="s">${esc(o)}<b>${c}</b></span>`).join('') || `<span class="s">옵션 없는 이벤트</span>`;
+  const list = rows.filter(r => !hideCancelled || r.status !== 'cancelled').map(r => {
+    const st = r.status === 'confirmed' ? `<span class="badge badge-success">확정</span>` : r.status === 'cancelled' ? `<span class="badge badge-gray">취소</span>${r.cancelledAfterConfirm?`<span class="badge badge-danger">⚠ 확정 후 취소</span>`:''}` : `<span class="badge badge-primary">신청</span>`;
+    const btn = e.type === 'competition' && r.status === 'registered' ? `<button class="btn btn-success btn-xs" onclick="confirmReg(${e.id},${r.id})">확정</button>` : e.type === 'competition' && r.status === 'confirmed' ? `<span style="font-size:.6875rem;color:var(--color-gray-400)">참가 학생 ✓</span>` : '';
+    return `<div class="reg-row ${r.status}"><div class="av">${r.child[0]}</div><div class="sp"><div class="n"><span class="nm">${esc(r.child)}</span> ${st}</div><div class="p">${esc(r.parent)} · ${r.at}</div>${r.options.length?`<div class="o">${r.options.map(o=>`<span>${esc(o)}</span>`).join('')}</div>`:''}</div><div>${btn}</div></div>`;
+  }).join('') || `<div class="ph-empty">아직 신청이 없어요</div>`;
+  const foot = e.type === 'competition'
+    ? `<button class="btn btn-success btn-sm" onclick="confirmAll(${e.id})" ${active.some(r=>r.status==='registered')?'':'disabled'}>✓ 일괄 확정 (${active.filter(r=>r.status==='registered').length})</button><button class="btn btn-outline btn-sm" onclick="toast('기존 참가 학생 관리 화면으로 이동')">참가 학생 관리</button>`
+    : `<button class="btn btn-outline btn-sm" onclick="toast('명단을 복사했습니다 (목업)')">📋 명단 복사</button>`;
+  wrap.innerHTML = `<div class="reg-panel">
+    <h3><span class="badge ${T.cls}">${T.emoji} ${T.label.replace(' 이벤트','')}</span>${esc(e.title)}<button class="x" style="margin-left:auto" onclick="toggleReg(${e.id})">✕</button></h3>
+    <div class="sub">신청 ${active.length}건 · ${fmt(e.date)}${e.time?' '+e.time:''}${e.type==='competition'?' · 확정하면 참가 학생에 추가됩니다':''}</div>
+    <div class="summ">${summ}</div>
+    <label class="switch" style="margin-bottom:6px"><input type="checkbox" ${hideCancelled?'checked':''} onchange="document.getElementById('regPanelWrap').dataset.hide=this.checked?'1':'0';renderRegPanel()"> 취소 숨기기</label>
+    ${list}
+    <div class="reg-foot">${foot}</div>
+  </div>`;
+}
+function confirmReg(eid, rid){ const r = regs[eid].find(x => x.id === rid); r.status = 'confirmed'; toast(`${r.child} 확정 · 참가 학생에 추가됐어요`); renderRegPanel(); }
+function confirmAll(eid){ regs[eid].filter(r => r.status === 'registered').forEach(r => r.status = 'confirmed'); toast('모두 확정했어요'); renderRegPanel(); }
+
+/* ───────── 폼 ───────── */
+let formType = 'competition', editId = null, formOpts = [];
+function renderTypeSel(){
+  document.getElementById('typeSel').innerHTML = Object.entries(TYPE).map(([k,v]) => `<button class="${formType===k?'on':''}" ${editId?'disabled':''} onclick="formType='${k}';applyType();renderTypeSel()"><span class="e">${v.emoji}</span>${v.label}<span class="d">${v.d}</span></button>`).join('');
+}
+function applyType(){
+  const closure = formType === 'closure';
+  document.getElementById('fLocWrap').classList.toggle('hidden', closure);
+  document.getElementById('optSection').classList.toggle('hidden', closure);
+  document.getElementById('regSection').classList.toggle('hidden', closure);
+  document.getElementById('fEndWrap').classList.toggle('hidden', false);
+  document.getElementById('compNote').classList.toggle('hidden', formType !== 'competition');
+  document.getElementById('btnApparatus').classList.toggle('hidden', formType !== 'competition');
+}
+function renderOpts(){
+  const ed = document.getElementById('optEditor');
+  const usage = (o) => editId ? (regs[editId]||[]).filter(r => r.status!=='cancelled' && r.options.includes(o)).length : 0;
+  ed.innerHTML = formOpts.map((o,i) => `<div class="opt-row"><span class="h">⋮⋮</span><input value="${esc(o)}" oninput="formOpts[${i}]=this.value"><span class="cnt">${usage(o)?`신청 ${usage(o)}건`:''}</span><button class="rm" title="삭제" onclick="removeOpt(${i})">✕</button></div>`).join('')
+    + `<div class="opt-add"><input class="input" id="optNew" placeholder="옵션 추가 (예: 단체전, 의상 대여, 5km)" onkeydown="if(event.key==='Enter'){addOpt();event.preventDefault()}"><button class="btn btn-outline btn-sm" onclick="addOpt()">추가</button></div>`;
+}
+function addOpt(){ const i = document.getElementById('optNew'); const v = i.value.trim(); if (!v) return; if (formOpts.length >= 20) return toast('옵션은 최대 20개'); formOpts.push(v); renderOpts(); document.getElementById('optNew').focus(); }
+function removeOpt(i){ const o = formOpts[i]; const n = editId ? (regs[editId]||[]).filter(r => r.status!=='cancelled' && r.options.includes(o)).length : 0; if (n && !confirm(`"${o}" 을(를) ${n}건의 신청이 선택했습니다. 삭제하면 해당 신청에 "(삭제된 옵션)" 으로 표시됩니다. 삭제할까요?`)) return; formOpts.splice(i,1); renderOpts(); }
+function addApparatus(){ APPARATUS.forEach(a => { if (!formOpts.includes(a)) formOpts.push(a); }); renderOpts(); toast('종목 6개를 옵션으로 추가했어요'); }
+function openForm(id){
+  editId = id || null;
+  const e = id ? events.find(x => x.id === id) : null;
+  formType = e ? e.type : 'competition';
+  formOpts = e && e.options ? [...e.options] : [];
+  document.getElementById('formTitle').textContent = e ? '이벤트 수정' : '이벤트 등록';
+  document.getElementById('fTitle').value = e ? e.title : '';
+  document.getElementById('fDate').value = e ? e.date : '';
+  document.getElementById('fEnd').value = e && e.endDate ? e.endDate : '';
+  document.getElementById('fTime').value = e && e.time ? e.time : '';
+  document.getElementById('fLoc').value = e && e.location ? e.location : '';
+  document.getElementById('fDesc').value = e ? (e.desc || '') : '';
+  document.getElementById('fDeadline').value = e && e.deadline ? e.deadline : '';
+  document.getElementById('swReq').classList.toggle('on', !!(e && e.requireOption));
+  document.getElementById('swPub').classList.toggle('on', e ? e.published !== false : true);
+  document.getElementById('swOpen').classList.toggle('on', e ? e.open !== false : true);
+  renderTypeSel(); applyType(); renderOpts();
+  document.getElementById('modalForm').classList.add('on');
+}
+function closeForm(){ document.getElementById('modalForm').classList.remove('on'); }
+function saveForm(){
+  const title = document.getElementById('fTitle').value.trim(), date = document.getElementById('fDate').value;
+  if (!title || !date) return toast('이름과 날짜는 필수예요');
+  if (formType !== 'closure' && !document.getElementById('fLoc').value.trim()) return toast('장소를 입력해 주세요');
+  const data = { type: formType, title, date, endDate: document.getElementById('fEnd').value || null, time: document.getElementById('fTime').value || null, location: formType==='closure' ? null : document.getElementById('fLoc').value.trim(), desc: document.getElementById('fDesc').value, options: formType==='closure' ? [] : formOpts.filter(Boolean), requireOption: document.getElementById('swReq').classList.contains('on'), published: document.getElementById('swPub').classList.contains('on'), open: document.getElementById('swOpen').classList.contains('on'), deadline: document.getElementById('fDeadline').value || null };
+  if (editId){ Object.assign(events.find(x => x.id === editId), data); toast('수정했어요'); }
+  else { events.push({ id: Date.now(), ...data }); toast(formType==='competition' ? '등록했어요 · 대회 관리 데이터도 함께 만들어졌어요' : '등록했어요 · 학부모 일정에 바로 보여요'); }
+  closeForm(); renderEvents();
+}
+
+/* ───────── 학부모 관리 ───────── */
+const stu = (id) => studentsAll.find(x => x.id === id);
+const kidStatus = (k) => k.studentId ? 'linked' : 'pending';
+// 이름(공백 제거)·생년월일이 같은 학생 — 드롭다운 맨 위에 추천
+const suggestFor = (k) => studentsAll.filter(x => x.name.replace(/\s+/g,'') === k.name.replace(/\s+/g,'') || x.birth === k.birth);
+function setParentView(v){ parentView = v; document.getElementById('vsParents').classList.toggle('on', v==='parents'); document.getElementById('vsStudents').classList.toggle('on', v==='students'); renderParentPage(); }
+function renderParentPage(){
+  const kids = parents.flatMap(p => p.kids);
+  const pending = kids.filter(k => !k.studentId).length;
+  const linkedStudents = new Set(kids.filter(k => k.studentId).map(k => k.studentId));
+  document.getElementById('parentStats').innerHTML = `
+    <div class="stat"><div class="k">가입 학부모</div><div class="v">${parents.length}</div></div>
+    <div class="stat ${pending?'warn':''}"><div class="k">확인 대기 아이</div><div class="v">${pending}</div></div>
+    <div class="stat"><div class="k">연결된 학생</div><div class="v">${linkedStudents.size} <span style="font-size:.8125rem;color:var(--color-gray-400);font-weight:600">/ ${studentsAll.length}</span></div></div>
+    <div class="stat"><div class="k">학부모 없는 학생</div><div class="v">${studentsAll.length - linkedStudents.size}</div></div>`;
+  const chips = parentView === 'parents'
+    ? [['all',`전체 ${parents.length}`],['pending',`확인 대기 ${parents.filter(p=>p.kids.some(k=>!k.studentId)).length}`],['linked',`모두 연결됨 ${parents.filter(p=>p.kids.every(k=>k.studentId)).length}`]]
+    : [['all',`전체 ${studentsAll.length}`],['linked',`학부모 있음 ${linkedStudents.size}`],['none',`학부모 없음 ${studentsAll.length - linkedStudents.size}`]];
+  document.getElementById('parentChips').innerHTML = chips.map(([k,l]) => `<button class="chip ${parentFilter===k?'on':''}" onclick="parentFilter='${k}';renderParentPage()">${l}</button>`).join('');
+  document.getElementById('parentList').classList.toggle('hidden', parentView !== 'parents');
+  document.getElementById('studentList').classList.toggle('hidden', parentView !== 'students');
+  if (parentView === 'parents') renderParentsView(); else renderStudentsView();
+}
+function renderParentsView(){
+  const q = (document.getElementById('parentSearch').value || '').trim();
+  let list = [...parents].sort((a,b) => (b.kids.some(k=>!k.studentId)?1:0) - (a.kids.some(k=>!k.studentId)?1:0));
+  if (parentFilter === 'pending') list = list.filter(p => p.kids.some(k => !k.studentId));
+  if (parentFilter === 'linked') list = list.filter(p => p.kids.every(k => k.studentId));
+  if (q) list = list.filter(p => p.name.includes(q) || p.kids.some(k => k.name.replace(/\s+/g,'').includes(q.replace(/\s+/g,''))));
+  document.getElementById('parentList').innerHTML = list.map(p => `<div class="parent-card">
+    <div class="head"><div class="av">${p.name[0]}</div><div><div class="n">${esc(p.name)} <span class="badge badge-outline">카카오</span></div><div class="m">가입 ${p.joined} · 마지막 로그인 ${p.last}</div></div><div class="sp"></div><button class="btn btn-ghost btn-sm" onclick="toast('학부모 삭제 확인 (자녀 연결·신청도 함께 삭제)')">삭제</button></div>
+    ${p.kids.map(k => {
+      if (k.studentId){ const st = stu(k.studentId); return `<div class="kid"><span>👧 <b>${esc(k.name)}</b></span><span class="b">${k.birth}</span><span class="badge badge-success">연결됨 · ${esc(st.name)} (${esc(st.cls)})${k.by==='teacher'?' · 선생님 연결':''}</span><button class="btn btn-ghost btn-xs" onclick="unlinkKid(${p.id},${k.id})">연결 해제</button></div>`; }
+      const sug = suggestFor(k), sugIds = new Set(sug.map(x=>x.id));
+      return `<div class="kid"><span>👧 <b>${esc(k.name)}</b></span><span class="b">${k.birth}</span><span class="badge badge-warning">확인 대기</span>
+        <select onchange="linkKid(${p.id},${k.id},this.value)"><option value="">학생 연결…</option>${sug.length?`<optgroup label="비슷한 학생">${sug.map(x=>`<option value="${x.id}">${x.name} · ${x.birth} · ${x.cls}</option>`).join('')}</optgroup>`:''}<optgroup label="전체 학생">${studentsAll.filter(x=>!sugIds.has(x.id)).map(x=>`<option value="${x.id}">${x.name} · ${x.birth} · ${x.cls}</option>`).join('')}</optgroup></select>
+        ${sug.length?`<span class="b">💡 ${sug.map(x=>x.name).join(', ')} 와(과) 이름 또는 생일이 같아요</span>`:''}</div>`;
+    }).join('')}
+    <div class="kid"><select onchange="addKidLink(${p.id},this.value)"><option value="">+ 이 학부모에 학생 연결 추가…</option>${studentsAll.filter(x => !p.kids.some(k => k.studentId === x.id)).map(x=>`<option value="${x.id}">${x.name} · ${x.birth} · ${x.cls}</option>`).join('')}</select><span class="b">학부모가 아이를 안 넣었거나 형제를 추가할 때</span></div>
+  </div>`).join('') || `<div class="ph-empty">해당하는 학부모가 없어요</div>`;
+}
+function renderStudentsView(){
+  const q = (document.getElementById('parentSearch').value || '').trim();
+  let list = [...studentsAll];
+  const linkedOf = (sid) => parents.flatMap(p => p.kids.filter(k => k.studentId === sid).map(k => ({ p, k })));
+  if (parentFilter === 'linked') list = list.filter(s => linkedOf(s.id).length);
+  if (parentFilter === 'none') list = list.filter(s => !linkedOf(s.id).length);
+  if (q) list = list.filter(s => s.name.includes(q) || linkedOf(s.id).some(({p}) => p.name.includes(q)));
+  document.getElementById('studentList').innerHTML = `<div class="hint-row">학생 기준으로 봅니다. 한 학생에 학부모 여러 명(엄마·아빠)을 연결할 수 있어요.</div>` + list.map(s => {
+    const links = linkedOf(s.id);
+    const candidates = parents.filter(p => !p.kids.some(k => k.studentId === s.id));
+    // 확인 대기 아이 중 이 학생과 비슷한 것을 맨 위에 추천
+    const pendingMatch = parents.flatMap(p => p.kids.filter(k => !k.studentId && (k.name.replace(/\s+/g,'') === s.name.replace(/\s+/g,'') || k.birth === s.birth)).map(k => ({ p, k })));
+    return `<div class="stu-card"><div class="av">${s.name[0]}</div><div><div class="n">${esc(s.name)}</div><div class="m">${s.birth} · ${esc(s.cls)}</div></div>
+      <div class="links">${links.length ? links.map(({p,k}) => `<span class="ptag">👤 ${esc(p.name)}<button title="연결 해제" onclick="unlinkKid(${p.id},${k.id})">✕</button></span>`).join('') : `<span class="nolink">연결된 학부모 없음</span>`}
+        ${pendingMatch.map(({p,k}) => `<span class="ptag pending">💡 ${esc(p.name)}의 "${esc(k.name)}" 확인 대기 <button title="이 학생으로 연결" style="background:#B26A00;color:#fff;width:auto;padding:0 6px;border-radius:9px" onclick="linkKid(${p.id},${k.id},${s.id})">연결</button></span>`).join('')}
+      </div>
+      <select onchange="linkStudentToParent(${s.id},this.value)"><option value="">+ 학부모 연결…</option>${candidates.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select>
+    </div>`;
+  }).join('');
+}
+function linkKid(pid, kid, sid){ sid = Number(sid); if (!sid) return; const p = parents.find(x => x.id === pid); const k = p.kids.find(x => x.id === kid); k.studentId = sid; k.by = 'teacher'; toast(`${k.name} ↔ ${stu(sid).name} 연결 · ${p.name}이(가) 바로 신청할 수 있어요`); renderParentPage(); }
+function unlinkKid(pid, kid){ const p = parents.find(x => x.id === pid); const k = p.kids.find(x => x.id === kid); k.studentId = null; toast(`${k.name} 연결을 해제했어요 (확인 대기로)`); renderParentPage(); }
+function addKidLink(pid, sid){ sid = Number(sid); if (!sid) return; const p = parents.find(x => x.id === pid); const st = stu(sid); p.kids.push({ id: Date.now(), name: st.name, birth: st.birth, studentId: sid, by: 'teacher' }); toast(`${p.name}에 ${st.name} 연결을 추가했어요`); renderParentPage(); }
+function linkStudentToParent(sid, pid){ pid = Number(pid); if (!pid) return; addKidLink(pid, sid); }
+
+/* ───────── 공통 ───────── */
+function showPage(p){ document.getElementById('pageEvents').classList.toggle('hidden', p!=='events'); document.getElementById('pageParents').classList.toggle('hidden', p!=='parents'); document.getElementById('navEvents').classList.toggle('active', p==='events'); document.getElementById('navParents').classList.toggle('active', p==='parents'); document.getElementById('segEvents').classList.toggle('on', p==='events'); document.getElementById('segParents').classList.toggle('on', p==='parents'); if (p==='parents') renderParentPage(); window.scrollTo({top:0}); }
+function setView(v){ document.getElementById('frame').classList.toggle('mobile', v==='mobile'); document.getElementById('btnDesktop').classList.toggle('on', v==='desktop'); document.getElementById('btnMobile').classList.toggle('on', v==='mobile'); }
+function copyInvite(){ const t = 'https://rg-manager.vercel.app/invite/o1CGtibM0ULAsoDW89H98w'; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(()=>toast('초대 링크를 복사했어요 · 카톡방에 붙여 넣으세요')).catch(()=>toast('초대 링크: ' + t)); }
+let toastTimer; function toast(m){ const t = document.getElementById('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(()=>t.classList.remove('on'), 2400); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeForm(); });
+renderEvents(); renderParentPage();
+</script>
+</body>
+</html>
