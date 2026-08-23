@@ -5,11 +5,36 @@ import Event from '../models/Event.js';
 import EventRegistration from '../models/EventRegistration.js';
 import { matchChild } from '../services/parentOnboarding.js';
 import { canRegister, todayKst } from '../services/eventService.js';
+import { sendEventRegistrationKakaoMessage } from '../utils/kakaoMessage.js';
 
 export const CHILD_NAME_MAX = 20;
 export const MAX_CHILDREN = 10;
 
 const notFound = (res) => res.status(404).json({ error: '찾을 수 없습니다.' });
+
+/**
+ * 선생님에게 신청 소식을 알린다.
+ * 신청은 이미 저장된 뒤라 알림이 실패해도 학부모 응답을 막지 않는다.
+ */
+const notifyTeacher = async ({ teacherId, event, child, optionIds, action }) => {
+  try {
+    const labels = (event.options || [])
+      .filter((o) => (optionIds || []).includes(o.id))
+      .map((o) => o.label);
+
+    await sendEventRegistrationKakaoMessage({
+      userId: teacherId,
+      eventId: event.id,
+      eventTitle: event.title,
+      eventDate: event.date,
+      childName: child.childName,
+      optionLabels: labels,
+      action
+    });
+  } catch (error) {
+    console.error('이벤트 신청 알림 처리 오류:', error?.message || error);
+  }
+};
 
 /** 요청한 학부모의 소속 선생님 */
 const teacherOf = async (userId) => {
@@ -255,12 +280,23 @@ export const registerChild = async (req, res) => {
       return res.status(400).json({ error: '옵션을 1개 이상 선택해 주세요.' });
     }
 
+    const existing = await EventRegistration.getByEventAndStudent(event.id, child.studentId);
+    const changing = existing && existing.status !== 'cancelled';
+
     const saved = await EventRegistration.upsertRegistered({
       eventId: event.id,
       studentId: child.studentId,
       parentUserId: req.user.id,
       optionIds,
       createdBy: 'parent'
+    });
+
+    await notifyTeacher({
+      teacherId: loaded.account.teacherId,
+      event,
+      child,
+      optionIds: saved.optionIds,
+      action: changing ? 'updated' : 'registered'
     });
 
     res.json({ status: saved.status, optionIds: saved.optionIds });
@@ -287,6 +323,14 @@ export const cancelChild = async (req, res) => {
 
     const cancelled = await EventRegistration.cancel(event.id, child.studentId);
     if (!cancelled) return res.status(404).json({ error: '신청 내역이 없습니다.' });
+
+    await notifyTeacher({
+      teacherId: loaded.account.teacherId,
+      event,
+      child,
+      optionIds: cancelled.optionIds,
+      action: cancelled.cancelledAfterConfirm ? 'cancelled_after_confirm' : 'cancelled'
+    });
 
     res.json({
       status: cancelled.status,

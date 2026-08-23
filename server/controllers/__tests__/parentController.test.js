@@ -17,7 +17,17 @@ jest.unstable_mockModule('../../models/Event.js', () => ({
 }));
 
 jest.unstable_mockModule('../../models/EventRegistration.js', () => ({
-  default: { listForStudents: jest.fn(), upsertRegistered: jest.fn(), cancel: jest.fn() }
+  default: {
+    listForStudents: jest.fn(),
+    upsertRegistered: jest.fn(),
+    cancel: jest.fn(),
+    getByEventAndStudent: jest.fn()
+  }
+}));
+
+// 알림은 신청이 저장된 뒤에 나가고 실패해도 응답을 막지 않는다.
+jest.unstable_mockModule('../../utils/kakaoMessage.js', () => ({
+  sendEventRegistrationKakaoMessage: jest.fn().mockResolvedValue({ success: true })
 }));
 
 const ParentAccount = (await import('../../models/ParentAccount.js')).default;
@@ -25,6 +35,7 @@ const ParentChild = (await import('../../models/ParentChild.js')).default;
 const Student = (await import('../../models/Student.js')).default;
 const Event = (await import('../../models/Event.js')).default;
 const EventRegistration = (await import('../../models/EventRegistration.js')).default;
+const { sendEventRegistrationKakaoMessage } = await import('../../utils/kakaoMessage.js');
 const { getMe, addChildren, getEvents, getEvent, registerChild, cancelChild } =
   await import('../parentController.js');
 
@@ -56,6 +67,7 @@ describe('parentController', () => {
     ParentChild.listByParent.mockResolvedValue([linkedChild, pendingChild]);
     ParentChild.hasStudent.mockResolvedValue(false);
     EventRegistration.listForStudents.mockResolvedValue([]);
+    EventRegistration.getByEventAndStudent.mockResolvedValue(null);
   });
 
   describe('getMe', () => {
@@ -294,6 +306,37 @@ describe('parentController', () => {
       expect(res.status).toHaveBeenCalledWith(404);
       expect(EventRegistration.upsertRegistered).not.toHaveBeenCalled();
     });
+
+    it('신청하면 선생님에게 알림을 보낸다', async () => {
+      req.body = { optionIds: ['opt_a'] };
+
+      await registerChild(req, res);
+
+      expect(sendEventRegistrationKakaoMessage).toHaveBeenCalledWith(expect.objectContaining({
+        userId: 7, childName: '김민서', optionLabels: ['볼'], action: 'registered'
+      }));
+    });
+
+    it('이미 신청한 건이면 변경 알림으로 보낸다', async () => {
+      EventRegistration.getByEventAndStudent.mockResolvedValue({ status: 'registered', optionIds: ['opt_b'] });
+      req.body = { optionIds: ['opt_a'] };
+
+      await registerChild(req, res);
+
+      expect(sendEventRegistrationKakaoMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'updated' })
+      );
+    });
+
+    it('알림이 실패해도 신청은 정상 응답한다', async () => {
+      sendEventRegistrationKakaoMessage.mockRejectedValueOnce(new Error('kakao down'));
+      req.body = { optionIds: ['opt_a'] };
+
+      await registerChild(req, res);
+
+      expect(res.status).not.toHaveBeenCalledWith(500);
+      expect(res.json.mock.calls[0][0].status).toBe('registered');
+    });
   });
 
   describe('cancelChild (취소)', () => {
@@ -317,6 +360,20 @@ describe('parentController', () => {
       await cancelChild(req, res);
 
       expect(res.json.mock.calls[0][0].cancelledAfterConfirm).toBe(true);
+      // 확정 후 취소는 선생님이 바로 알아야 한다
+      expect(sendEventRegistrationKakaoMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'cancelled_after_confirm' })
+      );
+    });
+
+    it('보통 취소는 취소 알림으로 보낸다', async () => {
+      EventRegistration.cancel.mockResolvedValue({ status: 'cancelled', cancelledAfterConfirm: false, optionIds: [] });
+
+      await cancelChild(req, res);
+
+      expect(sendEventRegistrationKakaoMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'cancelled' })
+      );
     });
 
     it('접수가 끝난 뒤에는 취소할 수 없다', async () => {

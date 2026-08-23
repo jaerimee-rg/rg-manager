@@ -222,6 +222,51 @@ render time only, preserving the "answer is used verbatim" rule.
 `sandbox="allow-scripts allow-popups ..."` without `allow-same-origin` — a second barrier
 independent of the CSP header. Teacher-facing list screens render file-name links only (no iframes).
 
+### Parent Portal
+
+Parents get their own accounts and a separate app under `/parent/*`. Design docs live in
+`docs/parent-portal/` (requirements, data model, implementation plan, mockups).
+
+- **Roles**: `users.role` is now `admin` | `user`(teacher) | **`parent`**. Parents sign in with
+  Kakao only and belong to exactly one teacher (`parent_accounts.teacherId`).
+- **`middleware/roles.js`** — `rejectParents` reads the role off the JWT *without* deciding
+  authentication (`verifyToken` still owns 401), so it is mounted at the router registration in
+  `server.js` and every route file stays untouched. `requireRole('parent')` guards `/api/parent/*`.
+  Open to parents: `/api/auth/login|signup|kakao*|verify`, `/api/invite/*`, `/api/parent/*`,
+  `/api/chat/public/*`, `GET /api/faq-files/:id/view`. **Add new teacher routers to the guarded
+  list in `server.js`.**
+- **Invite link**: one per teacher (`parent_invites`), shown at 학부모 (`/parents`). The token
+  rides through Kakao as the OAuth `state`; only a callback carrying a valid one creates a parent.
+  A teacher's Kakao id hitting an invite link is refused with 409, never converted.
+- **Child matching** (`services/parentOnboarding.js`): name (spaces removed) + birthdate
+  (format-normalised) must hit exactly one of that teacher's students to auto-link. Zero or
+  several leaves the child `pending` — signup still completes, and the teacher links it by hand
+  from either the by-parent or by-student view.
+- **Events** (`events`) are the single source for the schedule: `competition` / `special` /
+  `closure`. A competition event owns a `competitions` row 1:1 (`events.competitionId`), so the
+  existing 참가 학생 · 종목 · 참가비 screens keep working. Writes go through
+  `services/competitionMirror.js` from both sides; mirror failures are swallowed and the
+  idempotent boot-time backfill catches up. **`type` cannot change after creation.**
+- **Registrations** (`event_registrations`): one row per child per event, unique. Cancel is soft
+  (`status='cancelled'`) so re-registering reuses the row. Confirming a competition registration
+  calls the existing `Competition.addStudent`; removing that participant reverts it to
+  `registered`.
+- **Options**: JSON on the event, each with an id that survives label edits so live registrations
+  never break. Deleting an option that registrations use warns first and shows "(삭제된 옵션)".
+- **Notifications**: `EVENT_REGISTRATION` in `NOTIFICATION_EVENTS`, sent to the *teacher* via the
+  existing Kakao "send to me". Parents receive no Kakao messages (decided 2026-08); anything for
+  them is in-app only.
+- **Client**: `App.jsx` returns `<ParentApp />` right after the logged-out branch when
+  `user.role === 'parent'`, so the teacher tree is untouched. `/competitions` redirects to
+  `/events`; its sub-routes (`/new`, `/edit`, `/manage`) stay.
+
+**Local development uses a local Postgres**, not the shared Supabase database — creating parent
+accounts against production data would let pre-guard code treat them as teachers:
+```
+createdb rg_manager
+DATABASE_URL=postgresql://<user>@localhost:5432/rg_manager npm start
+```
+
 ### Student-Class Relationship
 
 **Many-to-Many** relationship stored as JSON array in `students.classIds`:
