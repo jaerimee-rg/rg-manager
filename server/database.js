@@ -569,12 +569,152 @@ const initDatabase = async () => {
 
     await client.query('CREATE INDEX IF NOT EXISTS idx_event_registrations_event ON event_registrations ("eventId", status)');
 
+    // ───────── 대회 사진·영상 앨범 (docs/photo-sharing) ─────────
+
+    // 선생님 ↔ Google 계정. 토큰을 users 에 컬럼으로 붙이지 않는 이유는
+    // 연결 해제가 행 삭제로 끝나고, 학부모 users 행에 빈 컬럼이 생기지 않게 하기 위함이다.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS google_drive_accounts (
+        id SERIAL PRIMARY KEY,
+        "userId" INTEGER NOT NULL UNIQUE,
+        "googleSub" TEXT NOT NULL,
+        "googleEmail" TEXT NOT NULL,
+        "accessToken" TEXT NOT NULL,
+        "refreshToken" TEXT NOT NULL,
+        "tokenExpiresAt" TEXT NOT NULL,
+        "rootFolderId" TEXT,
+        "rootFolderName" TEXT NOT NULL DEFAULT 'RG Manager',
+        status TEXT NOT NULL DEFAULT 'connected',
+        "lastError" TEXT,
+        "connectedAt" TEXT NOT NULL,
+        "updatedAt" TEXT NOT NULL,
+        FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    // 이벤트에 앨범 폴더를 붙인다 (대회·스페셜만 쓰고 휴관일은 쓰지 않는다).
+    await client.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS "driveFolderId" TEXT');
+    await client.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS "driveFolderName" TEXT');
+    // 어느 Google 연결로 만든 폴더인지 기억해 둔다. 선생님이 계정을 바꾸면 이전 앨범은 조회만 된다.
+    await client.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS "driveAccountId" INTEGER');
+    await client.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumUploadOpen" BOOLEAN NOT NULL DEFAULT TRUE');
+    // none | ready | missing(폴더가 Drive 에서 사라짐) | unshared(링크 공유가 꺼짐)
+    await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumStatus" TEXT NOT NULL DEFAULT 'none'`);
+    await client.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumCreatedAt" TEXT');
+    await client.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumCheckedAt" TEXT');
+
+    // 사진·영상 1개. 바이트는 Drive 에 있고 여기에는 파일 id 와 메타만 둔다.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS event_media (
+        id SERIAL PRIMARY KEY,
+        "eventId" INTEGER NOT NULL,
+        "driveFileId" TEXT UNIQUE,
+        kind TEXT NOT NULL,
+        "originalName" TEXT NOT NULL,
+        "driveName" TEXT NOT NULL,
+        "mimeType" TEXT NOT NULL,
+        size BIGINT NOT NULL DEFAULT 0,
+        width INTEGER,
+        height INTEGER,
+        "durationMs" INTEGER,
+        "takenAt" TEXT NOT NULL,
+        "uploaderUserId" INTEGER,
+        "uploaderRole" TEXT NOT NULL,
+        "uploaderStudentId" INTEGER,
+        status TEXT NOT NULL DEFAULT 'uploading',
+        "isHidden" BOOLEAN NOT NULL DEFAULT FALSE,
+        "faceStatus" TEXT NOT NULL DEFAULT 'pending',
+        "faceCount" INTEGER NOT NULL DEFAULT 0,
+        "faceAnalyzedAt" TEXT,
+        "faceError" TEXT,
+        "uploadSessionUri" TEXT,
+        "createdAt" TEXT NOT NULL,
+        "updatedAt" TEXT NOT NULL,
+        FOREIGN KEY ("eventId") REFERENCES events(id) ON DELETE CASCADE,
+        FOREIGN KEY ("uploaderUserId") REFERENCES users(id) ON DELETE SET NULL,
+        FOREIGN KEY ("uploaderStudentId") REFERENCES students(id) ON DELETE SET NULL
+      )
+    `);
+
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_event_media_gallery
+      ON event_media ("eventId", status, "isHidden", "takenAt" DESC, id DESC)`);
+    await client.query('CREATE INDEX IF NOT EXISTS idx_event_media_uploader ON event_media ("uploaderUserId")');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_event_media_face ON event_media ("eventId", "faceStatus")');
+
+    // 사진에서 찾은 얼굴. 이미지는 저장하지 않고 특징값(128차원)과 위치만 남긴다.
+    // descriptor 는 base64(Float32Array) — pgvector 는 운영 DB 계정 권한으로 설치할 수 없어
+    // 거리 계산은 순수 JS 로 한다 (docs/photo-sharing/03-implementation-plan.md C-1).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS media_faces (
+        id SERIAL PRIMARY KEY,
+        "mediaId" INTEGER NOT NULL,
+        box TEXT NOT NULL,
+        score REAL NOT NULL DEFAULT 0,
+        descriptor TEXT NOT NULL,
+        "createdAt" TEXT NOT NULL,
+        FOREIGN KEY ("mediaId") REFERENCES event_media(id) ON DELETE CASCADE
+      )
+    `);
+
+    await client.query('CREATE INDEX IF NOT EXISTS idx_media_faces_media ON media_faces ("mediaId")');
+
+    // 학부모가 등록한 자녀 기준 얼굴. 학생 단위로 모으고, 올린 학부모를 기억한다.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS child_face_profiles (
+        id SERIAL PRIMARY KEY,
+        "studentId" INTEGER NOT NULL,
+        "teacherUserId" INTEGER NOT NULL,
+        "parentUserId" INTEGER,
+        "createdBy" TEXT NOT NULL DEFAULT 'parent',
+        "storagePath" TEXT,
+        descriptor TEXT NOT NULL,
+        "consentAt" TEXT,
+        "createdAt" TEXT NOT NULL,
+        FOREIGN KEY ("studentId") REFERENCES students(id) ON DELETE CASCADE,
+        FOREIGN KEY ("teacherUserId") REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY ("parentUserId") REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    await client.query('CREATE INDEX IF NOT EXISTS idx_child_face_student ON child_face_profiles ("studentId")');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_child_face_teacher ON child_face_profiles ("teacherUserId")');
+
+    // 미디어 ↔ 학생. 자동(face)·후보(candidate)·수동(manual)·학부모 확인(parent_confirmed)·제외(excluded)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS media_tags (
+        id SERIAL PRIMARY KEY,
+        "mediaId" INTEGER NOT NULL,
+        "studentId" INTEGER NOT NULL,
+        source TEXT NOT NULL,
+        distance REAL,
+        "faceId" INTEGER,
+        "createdByUserId" INTEGER,
+        "createdAt" TEXT NOT NULL,
+        "updatedAt" TEXT NOT NULL,
+        UNIQUE ("mediaId", "studentId"),
+        FOREIGN KEY ("mediaId") REFERENCES event_media(id) ON DELETE CASCADE,
+        FOREIGN KEY ("studentId") REFERENCES students(id) ON DELETE CASCADE,
+        FOREIGN KEY ("faceId") REFERENCES media_faces(id) ON DELETE SET NULL,
+        FOREIGN KEY ("createdByUserId") REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    await client.query('CREATE INDEX IF NOT EXISTS idx_media_tags_student ON media_tags ("studentId", source)');
+
     // 설정한 적이 없을 때 기존 동작(Gemini)이 그대로 유지되도록 기본값을 채워둔다.
     await client.query(
       `INSERT INTO app_settings (key, value, "updatedAt")
        VALUES ('ai_provider', $1, $2)
        ON CONFLICT (key) DO NOTHING`,
       [process.env.AI_PROVIDER || 'gemini', new Date().toISOString()]
+    );
+
+    // 얼굴 매칭 임계값. 관리자가 나중에 조정할 수 있도록 설정으로 둔다.
+    await client.query(
+      `INSERT INTO app_settings (key, value, "updatedAt")
+       VALUES ('face_match_threshold', '0.50', $1), ('face_candidate_threshold', '0.60', $1)
+       ON CONFLICT (key) DO NOTHING`,
+      [new Date().toISOString()]
     );
 
     // 기존 대회를 학부모 일정(events)으로 옮긴다.

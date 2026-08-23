@@ -140,6 +140,54 @@ class Event {
     );
     return result.rows.length > 0 ? hydrate(result.rows[0]) : null;
   }
+
+  // ───────── 앨범 (docs/photo-sharing) ─────────
+
+  /** 앨범 폴더를 붙이거나 이름·상태를 고친다. 앨범 컬럼만 건드린다. */
+  static async updateAlbum(id, fields) {
+    const allowed = ['driveFolderId', 'driveFolderName', 'driveAccountId', 'albumUploadOpen', 'albumStatus', 'albumCheckedAt', 'albumCreatedAt'];
+    const sets = [];
+    const params = [id];
+
+    for (const key of allowed) {
+      if (fields[key] === undefined) continue;
+      params.push(fields[key]);
+      sets.push(`"${key}" = $${params.length}`);
+    }
+    if (!sets.length) return null;
+
+    params.push(new Date().toISOString());
+    sets.push(`"updatedAt" = $${params.length}`);
+
+    const result = await pool.query(
+      `UPDATE events SET ${sets.join(', ')} WHERE id = $1 RETURNING *`,
+      params
+    );
+    return result.rows.length > 0 ? hydrate(result.rows[0]) : null;
+  }
+
+  /**
+   * 학부모 사진 탭: 앨범 폴더가 있는 공개 이벤트를 최근 순으로.
+   * 확정 여부는 컨트롤러가 걸러낸다 (신청·참가 학생을 함께 봐야 하기 때문).
+   */
+  static async listWithAlbumsForParent(teacherId) {
+    const result = await pool.query(
+      `SELECT * FROM events
+        WHERE "userId" = $1
+          AND "isPublished" IS NOT FALSE
+          AND "driveFolderId" IS NOT NULL
+          AND type <> 'closure'
+        ORDER BY date DESC, id DESC`,
+      [teacherId]
+    );
+    return result.rows.map(hydrate);
+  }
+
+  /** 선생님이 Google 계정을 바꾸면 이전 연결로 만든 앨범을 표시해 둘 수 있게 */
+  static async listByDriveAccount(driveAccountId) {
+    const result = await pool.query('SELECT * FROM events WHERE "driveAccountId" = $1', [driveAccountId]);
+    return result.rows.map(hydrate);
+  }
 }
 
 export default Event;
