@@ -80,6 +80,10 @@ const saveLog = async (req, action, target, responseData) => {
       details = `세션 ID: ${req.params.id}`;
     } else if (action === 'DELETE_CHAT_SESSION' && req.params) {
       details = `세션 ID: ${req.params.id}`;
+    } else if (action === 'UPLOAD_FAQ_FILE' && responseData) {
+      details = `파일: ${responseData.filename}`;
+    } else if (action === 'DELETE_FAQ_FILE' && req.params) {
+      details = `파일 ID: ${req.params.id}`;
     } else if (action === 'UPDATE_AI_PROVIDER' && req.body) {
       details = `AI 제공자: ${req.body.provider}`;
     } else if (action === 'ADD_COMPETITION_STUDENT' && req.body) {

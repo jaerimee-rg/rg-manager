@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { fetchWithAuth } from '../../utils/api';
 import FaqChats from '../Faq/FaqChats';
+import FaqFiles from '../Faq/FaqFiles';
+import RichText from '../../components/common/RichText';
 
 function AdminFaq() {
   const [users, setUsers] = useState([]);
@@ -67,6 +69,13 @@ function AdminFaq() {
 
       <div className="card">
         <div className="card-header">
+          <h3 className="card-title">파일</h3>
+        </div>
+        <FaqFiles filterUserId={filterUserId} userName={userName} />
+      </div>
+
+      <div className="card">
+        <div className="card-header">
           <h3 className="card-title">
             FAQ 목록
             <span className="badge badge-primary" style={{ marginLeft: 8 }}>{faqs.length}개</span>
@@ -93,7 +102,7 @@ function AdminFaq() {
                     <td>{userName(faq.userId)}</td>
                     <td>
                       <div style={{ fontWeight: 600, marginBottom: 4 }}>{faq.question}</div>
-                      <div className="faq-answer-preview">{faq.answer}</div>
+                      <div className="faq-answer-preview"><RichText text={faq.answer} /></div>
                     </td>
                     <td>
                       <span className={`badge ${faq.isPublished ? 'badge-success' : 'badge-gray'}`}>

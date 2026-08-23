@@ -160,6 +160,44 @@ things cover that gap:
 Regardless of provider, the reply sent to a parent is always the registered FAQ answer
 verbatim — the model only picks *which* FAQ, it never writes the sentence.
 
+### FAQ Answer Files
+
+Teachers upload files (PDF/HTML/images/docs) under FAQ → 파일 tab (`/faq/files`), then paste
+the generated link into an FAQ answer. Parents click it in chat.
+
+- Bytes live in **Supabase Storage** (public bucket `faq-files`); `faq_files` holds metadata
+- `server/utils/storage.js` — Supabase Storage REST calls via plain `fetch`, no SDK dependency.
+  `SUPABASE_URL` is derived from `DATABASE_URL`'s project ref when not set explicitly
+- Upload sends **raw file bytes** (`express.raw`), not base64 — base64 inflates by 33% and
+  Vercel caps request bodies at 4.5MB. Limit is 4MB, enforced in the controller and the bucket
+- **The file extension decides the MIME type**, never the browser-supplied `Content-Type`
+  (`server/utils/faqFileTypes.js`). `.svg` is rejected — it looks like an image but can carry script
+- Storage path is `{userId}/{uuid}/{filename}` so re-uploads never overwrite and paths aren't guessable
+
+**Storage keys are ASCII-only.** Supabase rejects Korean (and `%`) in object keys with
+`InvalidKey`, so `toStorageSafeName()` strips the key down to ASCII (a Korean-only name becomes
+`file.<ext>`). The original name is kept in `faq_files.filename` **and** appended to the URL as
+`?name=<encoded>`, which `displayNameForUrl()` reads — so a pasted bare URL still shows the
+Korean name.
+
+**HTML must be proxied.** Supabase serves *any* HTML from a public bucket as `text/plain`
+(their anti-XSS policy), so it would display as source code. `GET /api/faq-files/:id/view`
+(public, unauthenticated — parents aren't logged in) re-serves it with the real Content-Type plus
+`Content-Security-Policy: sandbox allow-scripts ...`. Omitting `allow-same-origin` gives the
+document an opaque origin, so it cannot reach the app's `localStorage` JWT even though it is
+served from the app's own domain. `buildLinkUrl()` returns this proxy path **for HTML only**;
+PDFs and images keep the direct Supabase URL (no function cost). The proxy path is **relative**,
+so a link copied locally still works in production.
+
+**Link format.** The copy button produces `[파일이름.pdf](linkUrl)`. `client/src/utils/richText.js`
+parses that (and bare URLs, including the relative `/api/faq-files/...` form) so the answer renders
+the **file name**, not the raw URL. The stored answer text is never rewritten — parsing happens at
+render time only, preserving the "answer is used verbatim" rule.
+
+**HTML renders inline in the parent chat** via `RichText embedHtml`. The iframe also carries
+`sandbox="allow-scripts allow-popups ..."` without `allow-same-origin` — a second barrier
+independent of the CSP header. Teacher-facing list screens render file-name links only (no iframes).
+
 ### Student-Class Relationship
 
 **Many-to-Many** relationship stored as JSON array in `students.classIds`:
@@ -183,6 +221,12 @@ on every push to `main` via the GitHub integration. Render is no longer used.
 - `GEMINI_API_KEY` — FAQ chatbot answers (Gemini provider)
 - `OPENAI_API_KEY` — FAQ chatbot answers (OpenAI provider). `OEPNAI_API_KEY` (typo)
   is also read, since that is the name currently registered locally and on Vercel.
+- `SUPABASE_SECRET_KEY` — required to upload FAQ answer files (dashboard → API Keys →
+  Secret key, `sb_secret_...`). The older `SUPABASE_SERVICE_ROLE_KEY` name is still read.
+  Without either, the 파일 tab shows a notice and uploads are refused with 503
+  (the rest of the app is unaffected).
+- `SUPABASE_URL` — optional; derived from `DATABASE_URL`'s project ref when unset
+- `SUPABASE_STORAGE_BUCKET` — optional, defaults to `faq-files`
 
 `APP_URL` and `KAKAO_REDIRECT_URI` must both match the live domain. They are resolved in
 `server/utils/appUrl.js`, which derives `KAKAO_REDIRECT_URI` from `APP_URL` when it is not

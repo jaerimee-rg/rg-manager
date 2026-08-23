@@ -396,6 +396,26 @@ const initDatabase = async () => {
       [new Date().toISOString()]
     );
 
+    // FAQ 답변에 붙이는 파일. 바이트는 Supabase Storage 에 있고 여기엔 위치만 담는다.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS faq_files (
+        id SERIAL PRIMARY KEY,
+        "userId" INTEGER NOT NULL,
+        filename TEXT NOT NULL,
+        "storagePath" TEXT NOT NULL UNIQUE,
+        "mimeType" TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        url TEXT NOT NULL,
+        "createdAt" TEXT NOT NULL,
+        FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    await client.query(
+      'CREATE INDEX IF NOT EXISTS idx_faq_files_user ON faq_files ("userId", "createdAt" DESC)'
+    );
+
     // 앱 전역 설정 (관리자 전용). 현재는 FAQ 자동 답변에 쓸 AI 제공자를 담는다.
     await client.query(`
       CREATE TABLE IF NOT EXISTS app_settings (

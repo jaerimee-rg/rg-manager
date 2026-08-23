@@ -2929,3 +2929,160 @@ body.pchat-lock {
 .pchat-entry-card input[type='text'] {
   font-size: 16px;
 }
+
+/* ─────────── FAQ 파일 탭 ─────────── */
+
+.faq-file-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 20px;
+  border: 2px dashed var(--color-gray-300);
+  border-radius: var(--radius-md);
+  text-align: center;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.faq-file-drop.over {
+  border-color: var(--color-primary);
+  background-color: var(--color-gray-50);
+}
+
+.faq-file-drop-icon { font-size: 1.75rem; }
+
+.faq-file-drop-title {
+  font-weight: 600;
+  color: var(--color-gray-800);
+}
+
+.faq-file-drop-desc {
+  font-size: 0.8125rem;
+  color: var(--color-gray-500);
+  margin-bottom: 4px;
+}
+
+.faq-file-help {
+  font-size: 0.8125rem;
+  color: var(--color-gray-600);
+  line-height: 1.6;
+  margin: 16px 0;
+}
+
+.faq-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.faq-file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+}
+
+.faq-file-icon { font-size: 1.25rem; }
+
+.faq-file-meta { flex: 1; min-width: 0; }
+
+.faq-file-name {
+  display: block;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.faq-file-name:hover { text-decoration: underline; }
+
+.faq-file-sub {
+  font-size: 0.8125rem;
+  color: var(--color-gray-500);
+  margin-top: 2px;
+}
+
+.faq-file-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .faq-file-item {
+    flex-wrap: wrap;
+  }
+  .faq-file-actions {
+    width: 100%;
+  }
+  .faq-file-actions .btn {
+    flex: 1;
+  }
+}
+
+/* ─────────── 답변 안의 링크·파일 ─────────── */
+
+.rt-link,
+.rt-file {
+  color: var(--color-primary);
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.rt-file {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.rt-file:hover { text-decoration: underline; }
+
+/* 채팅 안에서 펼쳐 보여주는 HTML 파일 */
+.rt-embed {
+  display: block;
+  margin: 8px 0;
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #fff;
+}
+
+.rt-embed-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--color-gray-100);
+  border-bottom: 1px solid var(--color-gray-200);
+  font-size: 0.8125rem;
+}
+
+.rt-embed-name {
+  font-weight: 600;
+  color: var(--color-gray-800);
+  word-break: break-all;
+}
+
+.rt-embed-open {
+  flex-shrink: 0;
+  color: var(--color-primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.rt-embed-open:hover { text-decoration: underline; }
+
+.rt-embed-frame {
+  display: block;
+  width: 100%;
+  height: 320px;
+  border: 0;
+  background: #fff;
+}
+
+@media (max-width: 768px) {
+  .rt-embed-frame { height: 240px; }
+}

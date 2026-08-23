@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
+import RichText from '../components/common/RichText';
 // 로그인하지 않은 학부모 화면이므로 fetchWithAuth(401 시 /login 이동)를 사용하지 않는다.
 import { getVisitorKey } from '../utils/visitorStorage';
 
@@ -424,7 +425,7 @@ function PublicChat() {
                 m.role === 'admin' ? 'pchat-bubble-admin' : ''
               } ${m.role === 'bot' && m.answered === false ? 'pchat-bubble-warn' : ''}`}
             >
-              {m.content}
+              <RichText text={m.content} embedHtml />
             </div>
 
             {/* 정확히 맞는 답이 없을 때, 가까운 주제의 질문을 눌러 바로 물어볼 수 있게 한다 */}

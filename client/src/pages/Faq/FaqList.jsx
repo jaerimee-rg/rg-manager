@@ -7,6 +7,8 @@ import { copyToClipboard } from '../../utils/copyToClipboard';
 import FaqFormModal from '../../components/Faq/FaqFormModal';
 import ChannelSettingsModal from '../../components/Faq/ChannelSettingsModal';
 import FaqChats from './FaqChats';
+import FaqFiles from './FaqFiles';
+import RichText from '../../components/common/RichText';
 
 const SWIPE_REVEAL_WIDTH = 124;
 const MIN_SWIPE_DISTANCE = 50;
@@ -216,11 +218,13 @@ function FaqList({ initialTab = 'chats', basePath = '/faq' }) {
     }
   };
 
+  const TAB_PATHS = { chats: basePath, faq: `${basePath}/manage`, files: `${basePath}/files` };
+
   const changeTab = (next) => {
     setTab(next);
     // 대화 내역이 기본 화면이라 짧은 주소를 갖는다.
     // /faq/chats 도 계속 대화 내역으로 열린다 (카카오 알림 링크가 이 주소를 쓴다).
-    navigate(next === 'chats' ? basePath : `${basePath}/manage`);
+    navigate(TAB_PATHS[next] || basePath);
   };
 
   const filteredFaqs = search.trim()
@@ -295,9 +299,14 @@ function FaqList({ initialTab = 'chats', basePath = '/faq' }) {
         <button className={tab === 'faq' ? 'on' : ''} onClick={() => changeTab('faq')}>
           FAQ 관리
         </button>
+        <button className={tab === 'files' ? 'on' : ''} onClick={() => changeTab('files')}>
+          파일
+        </button>
       </div>
 
-      {tab === 'chats' ? (
+      {tab === 'files' ? (
+        <FaqFiles onToast={showToast} />
+      ) : tab === 'chats' ? (
         <FaqChats
           onCountChange={setUnansweredCount}
           channel={channel}
@@ -352,7 +361,7 @@ function FaqList({ initialTab = 'chats', basePath = '/faq' }) {
                       <tr key={faq.id}>
                         <td>
                           <div style={{ fontWeight: 600, marginBottom: 4 }}>{faq.question}</div>
-                          <div className="faq-answer-preview">{faq.answer}</div>
+                          <div className="faq-answer-preview"><RichText text={faq.answer} /></div>
                         </td>
                         <td>
                           <span className={`badge ${faq.isPublished ? 'badge-success' : 'badge-gray'}`}>
@@ -415,7 +424,7 @@ function FaqList({ initialTab = 'chats', basePath = '/faq' }) {
                       {faq.isPublished ? '공개' : '비공개'}
                     </span>
                     <div className="faq-card-question">{faq.question}</div>
-                    <div className="faq-answer-preview">{faq.answer}</div>
+                    <div className="faq-answer-preview"><RichText text={faq.answer} /></div>
                   </div>
                 </div>
               ))}

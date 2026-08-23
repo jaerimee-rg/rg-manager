@@ -21,6 +21,7 @@ import {
 } from './utils/rateLimits.js';
 import notificationRoutes from './routes/notifications.js';
 import settingsRoutes from './routes/settings.js';
+import faqFileRoutes from './routes/faqFiles.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -138,6 +139,7 @@ app.use('/api/faqs', faqRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/faq-files', faqFileRoutes);
 
 // Handle React routing - serve index.html for all non-API routes
 app.get('*', (req, res) => {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
+import RichText from '../../components/common/RichText';
 import { fetchWithAuth } from '../../utils/api';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import DateRangePicker from '../../components/common/DateRangePicker';
@@ -489,7 +490,7 @@ function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
                 </div>
               </div>
             ) : (
-              <div className="chat-bubble">{m.content}</div>
+              <div className="chat-bubble"><RichText text={m.content} /></div>
             )}
             {m.matchedFaqs && m.matchedFaqs.length > 0 && (
               <div className="chat-msg-src">
