@@ -209,16 +209,20 @@ export async function sendAttendanceKakaoMessage({
 }
 
 /**
- * 학부모 FAQ 문의가 들어왔을 때 채널 주인에게 카카오톡 알림 전송 (나에게 보내기)
+ * 학부모 메시지가 들어왔을 때 채널 주인에게 카카오톡 알림 전송 (나에게 보내기)
  *
  * 학부모가 기다리는 요청 안에서 호출되므로 카카오 API 가 늦어져도 채팅이 막히지 않도록
  * 타임아웃을 두고, 실패는 로그만 남기고 조용히 넘어간다.
+ *
+ * `isFollowUp` 은 이미 진행 중인 대화에 이어진 메시지라는 뜻 — 문구만 달라지고
+ * 이력의 messageType 은 그대로 FAQ_INQUIRY 로 남긴다.
  */
 export async function sendFaqInquiryKakaoMessage({
   userId,
   channelName,
   visitorName,
   question,
+  isFollowUp = false,
 }) {
   try {
     if (!(await isEventEnabled('FAQ_INQUIRY'))) return disabledResult('FAQ_INQUIRY');
@@ -239,12 +243,12 @@ export async function sendFaqInquiryKakaoMessage({
 
     const templateObject = {
       object_type: 'text',
-      text: `💬 새 문의가 도착했습니다\n\n📮 ${channelName}\n🙋 ${visitorName}\n\n"${preview}"`,
+      text: `${isFollowUp ? '💬 새 메시지가 도착했습니다' : '💬 새 문의가 도착했습니다'}\n\n📮 ${channelName}\n🙋 ${visitorName}\n\n"${preview}"`,
       link: {
         web_url: chatUrl,
         mobile_web_url: chatUrl,
       },
-      button_title: '문의 확인하기',
+      button_title: isFollowUp ? '답장하러 가기' : '문의 확인하기',
     };
 
     const response = await fetch('https://kapi.kakao.com/v2/api/talk/memo/default/send', {

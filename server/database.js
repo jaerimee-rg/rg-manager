@@ -347,7 +347,7 @@ const initDatabase = async () => {
       ADD COLUMN IF NOT EXISTS "adminViewingAt" TEXT
     `);
 
-    // 새 문의 카카오 알림을 보낸 시각 (연속 질문에 중복 발송하지 않기 위해)
+    // 이 대화에 마지막으로 카카오 알림을 보낸 시각 (발송 여부 추적용)
     await client.query(`
       ALTER TABLE chat_sessions
       ADD COLUMN IF NOT EXISTS "kakaoNotifiedAt" TEXT

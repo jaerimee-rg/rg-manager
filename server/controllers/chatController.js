@@ -6,7 +6,7 @@ import { generateAnswer } from '../utils/aiAnswer.js';
 import { getAiConfig } from '../utils/aiSettings.js';
 import LlmCallLog from '../models/LlmCallLog.js';
 import { sendFaqInquiryKakaoMessage } from '../utils/kakaoMessage.js';
-import { isAdminViewing, isKakaoNotifyCooling } from '../utils/chatPresence.js';
+import { isAdminViewing } from '../utils/chatPresence.js';
 
 export const MESSAGE_MAX = 500;
 export const VISITOR_NAME_MAX = 20;
@@ -17,24 +17,25 @@ const DAILY_LIMIT = Number(process.env.FAQ_CHAT_DAILY_LIMIT || 200);
 const notFound = (res) => res.status(404).json({ error: '채팅방을 찾을 수 없습니다.' });
 
 /**
- * 새 문의를 채널 주인에게 카카오톡으로 알린다.
+ * 학부모가 보낸 메시지를 채널 주인에게 카카오톡으로 알린다.
  *
+ * 첫 질문뿐 아니라 이어지는 메시지도 매번 알린다 — 선생님이 대화 중간의
+ * 추가 질문을 놓치면 학부모는 답을 받지 못한 채 기다리게 된다.
  * 학부모 답변을 막으면 안 되므로 어떤 실패도 밖으로 던지지 않는다.
- * 연속 질문에 알림이 쏟아지지 않도록 대화 단위 쿨다운을 둔다.
  */
-const notifyNewInquiry = async ({ channel, session, question }) => {
+const notifyNewInquiry = async ({ channel, session, question, isFollowUp }) => {
   try {
     if (channel.kakaoNotify === false) return;
-    if (isKakaoNotifyCooling(session.kakaoNotifiedAt)) return;
 
     const result = await sendFaqInquiryKakaoMessage({
       userId: channel.userId,
       channelName: channel.name,
       visitorName: session.visitorName,
-      question
+      question,
+      isFollowUp
     });
 
-    // 토큰이 없어 건너뛴 경우는 쿨다운을 걸지 않는다 (나중에 연동하면 바로 받도록).
+    // 마지막으로 알림이 나간 시각을 남긴다 (알림이 왜 안 왔는지 추적용).
     if (result?.success) {
       await ChatSession.recordKakaoNotified(session.id);
     }
@@ -232,10 +233,12 @@ export const postMessage = async (req, res) => {
     const history = await ChatMessage.recentHistory(session.id, HISTORY_TURNS);
     await ChatMessage.create(session.id, { role: 'parent', content: question });
 
-    // 관리자가 보고 있으면 알림은 불필요하므로 그때만 건너뛴다.
-    if (!adminViewing) {
-      await notifyNewInquiry({ channel, session, question });
-    }
+    // 학부모 메시지는 올 때마다 알린다. 카카오 왕복만큼 답변이 늦어지지 않도록
+    // 여기서는 시작만 하고 응답 직전에 기다린다 (실패해도 던지지 않는 함수라 안전하다).
+    // 관리자가 보고 있으면 이미 확인 중이므로 그때만 건너뛴다.
+    const notifying = adminViewing
+      ? null
+      : notifyNewInquiry({ channel, session, question, isFollowUp: history.length > 0 });
 
     // AI 자동 답변이 꺼져 있거나 관리자가 대화창을 보고 있으면
     // AI 를 호출하지 않고 접수 안내만 남긴다 (관리자가 직접 답변).
@@ -254,6 +257,7 @@ export const postMessage = async (req, res) => {
       });
 
       await ChatSession.recordMessages(session.id, { unanswered: true });
+      await notifying;
 
       return res.json({
         answered: false,
@@ -314,6 +318,7 @@ export const postMessage = async (req, res) => {
     });
 
     await ChatSession.recordMessages(session.id, { unanswered: !result.answered });
+    await notifying;
 
     res.json({
       answered: result.answered,

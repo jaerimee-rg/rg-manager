@@ -70,7 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_chat_channels_user ON chat_channels ("userId");
 | `isActive` | false면 링크 접속 시 "문의를 받고 있지 않습니다" |
 | `aiEnabled` | false면 AI를 호출하지 않고 접수 안내만 남긴다(관리자가 직접 답변) |
 | `pendingMessage` | AI가 답하지 않을 때(`aiEnabled=false` 또는 관리자 접속 중) 학부모에게 보여줄 접수 안내 문구 |
-| `kakaoNotify` | true면 새 문의가 들어올 때 채널 주인에게 카카오톡 알림을 보낸다 |
+| `kakaoNotify` | true면 학부모 메시지가 들어올 때마다 채널 주인에게 카카오톡 알림을 보낸다(관리자가 대화창을 보고 있으면 생략) |
 
 > MVP에서는 사용자당 채널 1개(최초 진입 시 자동 생성). 스키마는 1:N을 허용하므로 이후 확장 가능.
 
@@ -108,7 +108,7 @@ CREATE INDEX IF NOT EXISTS idx_chat_sessions_channel
 | `visitorName` | 학부모가 입장 시 입력한 대화명(**필수**, 1~20자) |
 | `unansweredCount` | 안내 문구로 응답된 횟수. 미답변 필터에 사용 |
 | `adminViewingAt` | 관리자가 이 대화창을 열어둔 마지막 시각. 45초 안이면 AI 자동 답변을 멈춘다 |
-| `kakaoNotifiedAt` | 마지막 카카오 알림 발송 시각. 5분 쿨다운으로 연속 문의에 중복 발송을 막는다 |
+| `kakaoNotifiedAt` | 마지막 카카오 알림 발송 시각(기록용). 알림은 학부모 메시지마다 나가므로 이 값이 발송을 막지는 않는다 |
 | `aiEnabled` | 이 대화에서만 AI 자동 답변을 끈다. 채널 설정(`chat_channels.aiEnabled`)과 AND 로 판정 |
 
 ### 1.4 `chat_messages` — 메시지
