@@ -130,6 +130,25 @@ When modifying forms/lists, ensure mobile view uses:
 - `/api/attendance` - Attendance records (supports bulk operations)
 - `/api/auth` - Login, signup, user management
 
+### FAQ Chatbot AI Provider
+
+Which AI answers parent questions is an **admin setting**, not a build-time constant.
+
+- Admin → 설정 (`/admin/settings`) picks between OpenAI and Google Gemini
+- Stored in the `app_settings` table under the key `ai_provider`
+- `server/utils/aiProvider.js` — provider catalog: env key names, default model, and
+  whether a provider is configured. It never exposes key values, only "configured: true/false"
+- `server/utils/aiSettings.js` — reads/writes the stored choice (falls back to
+  `AI_PROVIDER` env, then `gemini`, and never throws so the chatbot keeps working)
+- `server/utils/aiAnswer.js` — knows both APIs but no DB; `generateAnswer()` takes the
+  provider as a parameter. `chatController` resolves it per request
+- A provider whose API key is missing on the server cannot be selected (400), so the
+  chatbot can never be switched into a silently broken state
+- Models are overridable per provider: `OPENAI_FAQ_MODEL`, `FAQ_CHAT_MODEL`
+
+Regardless of provider, the reply sent to a parent is always the registered FAQ answer
+verbatim — the model only picks *which* FAQ, it never writes the sentence.
+
 ### Student-Class Relationship
 
 **Many-to-Many** relationship stored as JSON array in `students.classIds`:
@@ -150,7 +169,9 @@ on every push to `main` via the GitHub integration. Render is no longer used.
 - `DATABASE_URL`, `JWT_SECRET`, `NODE_ENV`
 - `KAKAO_CLIENT_ID`, `KAKAO_CLIENT_SECRET`, `KAKAO_REDIRECT_URI`
 - `APP_URL` — outward URL used for KakaoTalk message links
-- `GEMINI_API_KEY` — FAQ chatbot answers
+- `GEMINI_API_KEY` — FAQ chatbot answers (Gemini provider)
+- `OPENAI_API_KEY` — FAQ chatbot answers (OpenAI provider). `OEPNAI_API_KEY` (typo)
+  is also read, since that is the name currently registered locally and on Vercel.
 
 `APP_URL` and `KAKAO_REDIRECT_URI` must both match the live domain. They are resolved in
 `server/utils/appUrl.js`, which derives `KAKAO_REDIRECT_URI` from `APP_URL` when it is not

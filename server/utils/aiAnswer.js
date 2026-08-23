@@ -1,22 +1,28 @@
 import { GoogleGenAI, Type } from '@google/genai';
+import { DEFAULT_PROVIDER, normalizeProvider, resolveApiKey, resolveModel } from './aiProvider.js';
 
-const MODEL = process.env.FAQ_CHAT_MODEL || 'gemini-3.6-flash';
 const TIMEOUT_MS = Number(process.env.FAQ_CHAT_TIMEOUT_MS || 20000);
 const THINKING_LEVEL = process.env.FAQ_CHAT_THINKING_LEVEL || 'low';
+const TEMPERATURE = 0.2;
+const MAX_OUTPUT_TOKENS = 1024;
 
 // thinkingConfig 지원 여부는 모델마다 다르다 (예: 3.x는 thinkingLevel, 2.5는 thinkingBudget).
 // 첫 요청이 INVALID_ARGUMENT로 실패하면 thinkingConfig 없이 재시도하고 이후에는 생략한다.
 let thinkingConfigSupported = true;
 
-let cachedClient = null;
+// 추론 계열 OpenAI 모델은 temperature 를 받지 않는다. 위와 같은 방식으로 한 번만 확인한다.
+let openaiTemperatureSupported = true;
 
-// 키가 없으면 null을 반환한다 (AI 없이도 앱은 안내 문구로 정상 동작).
-const getClient = () => {
-  if (!process.env.GEMINI_API_KEY) return null;
-  if (!cachedClient) {
-    cachedClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+let cachedGeminiClient = null;
+let cachedGeminiKey = null;
+
+// 키가 바뀌면(테스트·재배포) 클라이언트를 새로 만든다.
+const getGeminiClient = (apiKey) => {
+  if (!cachedGeminiClient || cachedGeminiKey !== apiKey) {
+    cachedGeminiClient = new GoogleGenAI({ apiKey });
+    cachedGeminiKey = apiKey;
   }
-  return cachedClient;
+  return cachedGeminiClient;
 };
 
 // 학부모에게 나가는 문장은 등록된 FAQ 답변 원문을 그대로 쓴다.
@@ -49,28 +55,35 @@ const MAX_SUGGESTIONS = 3;
 // FAQ 답변 원문을 건드리지 않기 위해 사이에만 빈 줄을 넣는다.
 const ANSWER_SEPARATOR = '\n\n';
 
+const ANSWERED_DESC = '질문에 답이 되는 FAQ를 찾은 경우 true, 찾지 못한 경우 false';
+const USED_DESC = '질문에 답이 되는 FAQ의 id 목록. 가장 관련 있는 것 하나, 최대 2개.';
+const SUGGESTED_DESC = '답은 못 찾았지만 주제가 가까운 FAQ의 id 목록 (관련도 순, 최대 3개)';
+
 // answer 필드는 두지 않는다. 모델이 문장을 쓸 여지를 남기면 원문 그대로가 깨진다.
-const ANSWER_SCHEMA = {
+const GEMINI_ANSWER_SCHEMA = {
   type: Type.OBJECT,
   properties: {
-    answered: {
-      type: Type.BOOLEAN,
-      description: '질문에 답이 되는 FAQ를 찾은 경우 true, 찾지 못한 경우 false'
-    },
-    usedFaqIds: {
-      type: Type.ARRAY,
-      items: { type: Type.INTEGER },
-      description: '질문에 답이 되는 FAQ의 id 목록. 가장 관련 있는 것 하나, 최대 2개.'
-    },
-    suggestedFaqIds: {
-      type: Type.ARRAY,
-      items: { type: Type.INTEGER },
-      description: '답은 못 찾았지만 주제가 가까운 FAQ의 id 목록 (관련도 순, 최대 3개)'
-    }
+    answered: { type: Type.BOOLEAN, description: ANSWERED_DESC },
+    usedFaqIds: { type: Type.ARRAY, items: { type: Type.INTEGER }, description: USED_DESC },
+    suggestedFaqIds: { type: Type.ARRAY, items: { type: Type.INTEGER }, description: SUGGESTED_DESC }
   },
   required: ['answered', 'usedFaqIds', 'suggestedFaqIds'],
   propertyOrdering: ['answered', 'usedFaqIds', 'suggestedFaqIds']
 };
+
+// OpenAI structured outputs(strict)는 additionalProperties:false 와 전체 required 를 요구한다.
+const OPENAI_ANSWER_SCHEMA = {
+  type: 'object',
+  properties: {
+    answered: { type: 'boolean', description: ANSWERED_DESC },
+    usedFaqIds: { type: 'array', items: { type: 'integer' }, description: USED_DESC },
+    suggestedFaqIds: { type: 'array', items: { type: 'integer' }, description: SUGGESTED_DESC }
+  },
+  required: ['answered', 'usedFaqIds', 'suggestedFaqIds'],
+  additionalProperties: false
+};
+
+const OPENAI_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
 
 // FAQ 직렬화 순서를 고정해야 프롬프트가 안정적이다 (캐시 적중/재현성).
 export const buildFaqBlock = (faqs) =>
@@ -105,28 +118,13 @@ export const composeAnswer = (usedFaqIds, faqs) => {
     .join(ANSWER_SEPARATOR);
 };
 
-/**
- * 등록된 FAQ만 근거로 답변을 생성한다.
- * 실패·근거 없음·키 없음 모두 answered=false 로 반환하고, 구분은 status 로 남긴다.
- */
-export const generateAnswer = async ({ faqs = [], history = [], question }) => {
-  const empty = (status) => ({
-    answered: false,
-    answer: '',
-    usedFaqIds: [],
-    suggestedFaqIds: [],
-    status
-  });
+/* ─────────── 제공자별 호출 ─────────── */
 
-  if (!faqs.length) return empty('no_faq');
+// 두 제공자 모두 { parsed, inputTokens, outputTokens } 형태로 돌려준다.
+// parsed 가 null 이면 안전 필터 차단 등으로 근거를 얻지 못한 경우다.
 
-  const ai = getClient();
-  if (!ai) {
-    console.error('GEMINI_API_KEY가 설정되지 않아 AI 답변을 생성할 수 없습니다.');
-    return empty('ai_error');
-  }
-
-  const startedAt = Date.now();
+const callGemini = async ({ apiKey, model, systemInstruction, history, question }) => {
+  const ai = getGeminiClient(apiKey);
 
   const contents = [
     ...history.map((m) => ({
@@ -137,40 +135,154 @@ export const generateAnswer = async ({ faqs = [], history = [], question }) => {
   ];
 
   const buildConfig = (withThinking) => ({
-    systemInstruction: buildSystemInstruction(faqs),
+    systemInstruction,
     responseMimeType: 'application/json',
-    responseSchema: ANSWER_SCHEMA,
-    temperature: 0.2,
-    maxOutputTokens: 1024,
+    responseSchema: GEMINI_ANSWER_SCHEMA,
+    temperature: TEMPERATURE,
+    maxOutputTokens: MAX_OUTPUT_TOKENS,
     ...(withThinking ? { thinkingConfig: { thinkingLevel: THINKING_LEVEL } } : {}),
     abortSignal: AbortSignal.timeout(TIMEOUT_MS)
   });
 
   const call = (withThinking) =>
-    ai.models.generateContent({ model: MODEL, contents, config: buildConfig(withThinking) });
+    ai.models.generateContent({ model, contents, config: buildConfig(withThinking) });
+
+  let response;
+  try {
+    response = await call(thinkingConfigSupported);
+  } catch (error) {
+    if (thinkingConfigSupported && /INVALID_ARGUMENT|invalid argument/i.test(error?.message || '')) {
+      console.warn(`${model} 모델이 thinkingConfig를 지원하지 않아 생략하고 재시도합니다.`);
+      thinkingConfigSupported = false;
+      response = await call(false);
+    } else {
+      throw error;
+    }
+  }
+
+  const usage = response.usageMetadata || {};
+  const tokens = {
+    inputTokens: usage.promptTokenCount ?? null,
+    outputTokens: usage.candidatesTokenCount ?? null
+  };
+
+  const text = response.text;
+  // 안전 필터 차단 등으로 후보가 비어 있는 경우
+  if (!text) return { parsed: null, ...tokens };
+
+  return { parsed: JSON.parse(text), ...tokens };
+};
+
+const callOpenAI = async ({ apiKey, model, systemInstruction, history, question }) => {
+  const messages = [
+    { role: 'system', content: systemInstruction },
+    ...history.map((m) => ({
+      role: m.role === 'parent' ? 'user' : 'assistant',
+      content: m.content
+    })),
+    { role: 'user', content: question }
+  ];
+
+  const buildBody = (withTemperature) => ({
+    model,
+    messages,
+    max_completion_tokens: MAX_OUTPUT_TOKENS,
+    ...(withTemperature ? { temperature: TEMPERATURE } : {}),
+    response_format: {
+      type: 'json_schema',
+      json_schema: { name: 'faq_selection', strict: true, schema: OPENAI_ANSWER_SCHEMA }
+    }
+  });
+
+  const request = async (withTemperature) => {
+    const response = await fetch(OPENAI_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(buildBody(withTemperature)),
+      signal: AbortSignal.timeout(TIMEOUT_MS)
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      // 본문에 프롬프트가 그대로 실려 오는 경우가 있어 로그가 커지지 않게 잘라 담는다.
+      const error = new Error(`OpenAI 요청 실패 (${response.status}): ${detail.slice(0, 300)}`);
+      error.status = response.status;
+      error.detail = detail;
+      throw error;
+    }
+
+    return response.json();
+  };
+
+  let data;
+  try {
+    data = await request(openaiTemperatureSupported);
+  } catch (error) {
+    if (openaiTemperatureSupported && error.status === 400 && /temperature/i.test(error.detail || '')) {
+      console.warn(`${model} 모델이 temperature 를 지원하지 않아 생략하고 재시도합니다.`);
+      openaiTemperatureSupported = false;
+      data = await request(false);
+    } else {
+      throw error;
+    }
+  }
+
+  const usage = data.usage || {};
+  const tokens = {
+    inputTokens: usage.prompt_tokens ?? null,
+    outputTokens: usage.completion_tokens ?? null
+  };
+
+  const message = data.choices?.[0]?.message;
+  // 안전 정책으로 거부했거나(refusal) 본문이 비면 근거가 없는 것이므로 버린다.
+  if (!message || message.refusal || !message.content) return { parsed: null, ...tokens };
+
+  return { parsed: JSON.parse(message.content), ...tokens };
+};
+
+const CALLERS = { gemini: callGemini, openai: callOpenAI };
+
+/**
+ * 등록된 FAQ만 근거로 답변을 생성한다.
+ * 실패·근거 없음·키 없음 모두 answered=false 로 반환하고, 구분은 status 로 남긴다.
+ *
+ * provider 를 넘기지 않으면 환경변수 AI_PROVIDER, 그것도 없으면 기본 제공자를 쓴다.
+ * (관리자 설정값은 호출하는 쪽에서 읽어 넘긴다 — 이 모듈은 DB를 모른다.)
+ */
+export const generateAnswer = async ({ faqs = [], history = [], question, provider }) => {
+  const empty = (status) => ({
+    answered: false,
+    answer: '',
+    usedFaqIds: [],
+    suggestedFaqIds: [],
+    status
+  });
+
+  if (!faqs.length) return empty('no_faq');
+
+  const selected = normalizeProvider(provider || process.env.AI_PROVIDER || DEFAULT_PROVIDER);
+  const apiKey = resolveApiKey(selected);
+  if (!apiKey) {
+    console.error(`${selected} API 키가 설정되지 않아 AI 답변을 생성할 수 없습니다.`);
+    return empty('ai_error');
+  }
+
+  const model = resolveModel(selected);
+  const startedAt = Date.now();
 
   try {
-    let response;
-    try {
-      response = await call(thinkingConfigSupported);
-    } catch (error) {
-      if (thinkingConfigSupported && /INVALID_ARGUMENT|invalid argument/i.test(error?.message || '')) {
-        console.warn(`${MODEL} 모델이 thinkingConfig를 지원하지 않아 생략하고 재시도합니다.`);
-        thinkingConfigSupported = false;
-        response = await call(false);
-      } else {
-        throw error;
-      }
-    }
+    const { parsed, inputTokens, outputTokens } = await CALLERS[selected]({
+      apiKey,
+      model,
+      systemInstruction: buildSystemInstruction(faqs),
+      history,
+      question
+    });
 
-    const text = response.text;
-    if (!text) {
-      // 안전 필터 차단 등으로 후보가 비어 있는 경우
-      return { ...empty('ai_error'), latencyMs: Date.now() - startedAt };
-    }
-
-    const parsed = JSON.parse(text);
-    const usage = response.usageMetadata || {};
+    if (!parsed) return { ...empty('ai_error'), latencyMs: Date.now() - startedAt };
 
     // 모델이 고른 id 로 등록된 답변 원문을 그대로 꺼내 쓴다.
     // 없는 id 를 골랐다면 근거가 없는 것이므로 버린다.
@@ -191,12 +303,13 @@ export const generateAnswer = async ({ faqs = [], history = [], question }) => {
       usedFaqIds,
       suggestedFaqIds,
       status: 'ok',
-      inputTokens: usage.promptTokenCount ?? null,
-      outputTokens: usage.candidatesTokenCount ?? null,
+      provider: selected,
+      inputTokens,
+      outputTokens,
       latencyMs: Date.now() - startedAt
     };
   } catch (error) {
-    console.error('AI 답변 생성 실패:', error?.message || error);
+    console.error(`AI 답변 생성 실패 (${selected}):`, error?.message || error);
     return { ...empty('ai_error'), latencyMs: Date.now() - startedAt };
   }
 };

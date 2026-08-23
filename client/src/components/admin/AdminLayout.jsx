@@ -11,6 +11,7 @@ const adminMenuItems = [
   { path: '/admin/logs', label: '로그', icon: '📝' },
   { path: '/admin/notifications', label: '알림', icon: '🔔' },
   { path: '/admin/faq', label: 'FAQ', icon: '💬' },
+  { path: '/admin/settings', label: '설정', icon: '⚙️' },
 ];
 
 function AdminLayout() {

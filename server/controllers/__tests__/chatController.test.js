@@ -56,6 +56,12 @@ jest.unstable_mockModule('../../utils/aiAnswer.js', () => ({
   generateAnswer: jest.fn()
 }));
 
+// 제공자 설정은 DB를 읽으므로 테스트에서는 기본값을 돌려주도록 대체한다.
+jest.unstable_mockModule('../../utils/aiSettings.js', () => ({
+  getSelectedProvider: jest.fn().mockResolvedValue('gemini'),
+  setSelectedProvider: jest.fn()
+}));
+
 const ChatChannel = (await import('../../models/ChatChannel.js')).default;
 const ChatSession = (await import('../../models/ChatSession.js')).default;
 const ChatMessage = (await import('../../models/ChatMessage.js')).default;

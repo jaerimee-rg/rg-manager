@@ -396,6 +396,25 @@ const initDatabase = async () => {
       [new Date().toISOString()]
     );
 
+    // 앱 전역 설정 (관리자 전용). 현재는 FAQ 자동 답변에 쓸 AI 제공자를 담는다.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        "updatedAt" TEXT NOT NULL,
+        "updatedBy" INTEGER,
+        FOREIGN KEY ("updatedBy") REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    // 설정한 적이 없을 때 기존 동작(Gemini)이 그대로 유지되도록 기본값을 채워둔다.
+    await client.query(
+      `INSERT INTO app_settings (key, value, "updatedAt")
+       VALUES ('ai_provider', $1, $2)
+       ON CONFLICT (key) DO NOTHING`,
+      [process.env.AI_PROVIDER || 'gemini', new Date().toISOString()]
+    );
+
     // 기본 관리자 계정 생성 (최초 1회만, 기존 계정이 없을 때)
     const adminCheck = await client.query('SELECT * FROM users WHERE username = $1', ['admin']);
     if (adminCheck.rows.length === 0) {
