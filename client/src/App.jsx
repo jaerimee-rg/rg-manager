@@ -115,11 +115,16 @@ function App() {
   // 학부모 공개 채팅은 앱 헤더 없이 단독 화면으로 보여준다
   const isPublicChatPage = location.pathname.startsWith('/chat/');
 
+  // 초대 링크도 마찬가지다. 학부모가 처음 여는 화면이라 앱 메뉴가 끼어들면 안 되고,
+  // 선생님이 자기 링크를 눌러 확인할 때도 같은 화면을 보여야 한다.
+  const isInvitePage = location.pathname.startsWith('/invite/');
+
   // 로그인과 무관한 화면이므로 인증 확인을 기다리지 않는다.
-  if (isPublicChatPage) {
+  if (isPublicChatPage || isInvitePage) {
     return (
       <Routes>
         <Route path="/chat/:publicId" element={<PublicChat />} />
+        <Route path="/invite/:token" element={<InviteLanding />} />
       </Routes>
     );
   }
@@ -138,7 +143,6 @@ function App() {
         <Route path="/signup" element={<Navigate to="/login" />} />
         <Route path="/oauth/kakao/callback" element={<KakaoCallback />} />
         <Route path="/register-name" element={<RegisterName />} />
-        <Route path="/invite/:token" element={<InviteLanding />} />
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
     );
@@ -316,8 +320,7 @@ function App() {
           <Route path="/faq/files" element={<ProtectedRoute><FaqList initialTab="files" /></ProtectedRoute>} />
           <Route path="/chat/:publicId" element={<PublicChat />} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-          {/* 선생님이 자기 초대 링크를 눌러 확인하는 경우 */}
-          <Route path="/invite/:token" element={<InviteLanding />} />
+
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </main>
