@@ -12,6 +12,13 @@ class AppSetting {
     return result.rows[0].value;
   }
 
+  // 여러 키를 한 번에 읽는다. 없는 키는 결과에서 빠지므로 호출한 쪽이 기본값을 채운다.
+  static async getMany(keys) {
+    if (!keys?.length) return {};
+    const result = await pool.query('SELECT key, value FROM app_settings WHERE key = ANY($1::text[])', [keys]);
+    return Object.fromEntries(result.rows.map((row) => [row.key, row.value]));
+  }
+
   static async setValue(key, value, updatedBy = null) {
     const now = new Date().toISOString();
     const result = await pool.query(

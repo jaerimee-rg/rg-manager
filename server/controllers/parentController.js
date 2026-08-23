@@ -3,6 +3,7 @@ import ParentChild from '../models/ParentChild.js';
 import Student from '../models/Student.js';
 import Event from '../models/Event.js';
 import EventRegistration from '../models/EventRegistration.js';
+import ChildFaceProfile from '../models/ChildFaceProfile.js';
 import { matchChild } from '../services/parentOnboarding.js';
 import { canRegister, todayKst } from '../services/eventService.js';
 import { sendEventRegistrationKakaoMessage } from '../utils/kakaoMessage.js';
@@ -59,10 +60,23 @@ export const getMe = async (req, res) => {
 
     const children = await ParentChild.listByParent(req.user.id);
 
+    // 자녀별 얼굴 사진 등록 여부 — "우리 아이만" 안내를 띄울지 화면이 정한다.
+    // 여기가 실패해도 내 정보 화면 자체는 떠야 하므로 0 으로 두고 넘어간다.
+    const linkedIds = children.filter((child) => child.studentId).map((child) => child.studentId);
+    let faceCounts = {};
+    try {
+      faceCounts = await ChildFaceProfile.countsByStudents(linkedIds);
+    } catch (error) {
+      console.error('자녀 얼굴 등록 수 조회 실패(0 으로 표시):', error?.message || error);
+    }
+
     res.json({
       user: { id: req.user.id, username: req.user.username },
       teacher: { name: account.teacherName },
-      children: children.map(presentChild)
+      children: children.map((child) => ({
+        ...presentChild(child),
+        faceProfileCount: child.studentId ? (faceCounts[child.studentId] || 0) : 0
+      }))
     });
   } catch (error) {
     console.error('학부모 처리 오류:', error);

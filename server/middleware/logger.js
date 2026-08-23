@@ -68,6 +68,22 @@ const saveLog = async (req, action, target, responseData) => {
       details = `대회명: ${req.body.name}`;
     } else if (action === 'DELETE_COMPETITION' && target) {
       details = `ID: ${target}`;
+    } else if (action === 'CREATE_ALBUM' && responseData) {
+      details = `앨범 폴더: ${responseData.driveFolderName}`;
+    } else if (action === 'UPDATE_ALBUM' && req.body) {
+      details = req.body.folderName
+        ? `앨범 이름: ${req.body.folderName}`
+        : `업로드 받기: ${req.body.albumUploadOpen ? '켬' : '끔'}`;
+    } else if (action === 'UPLOAD_ALBUM_MEDIA' && responseData?.media) {
+      details = `사진: ${responseData.media.fileName}`;
+    } else if (action === 'UPDATE_ALBUM_MEDIA' && req.body) {
+      details = `${req.body.action} · ${(req.body.mediaIds || []).length}건`;
+    } else if (action === 'DELETE_ALBUM_MEDIA' && req.params) {
+      details = `사진 ID: ${req.params.mediaId}`;
+    } else if ((action === 'TAG_ALBUM_MEDIA' || action === 'UNTAG_ALBUM_MEDIA') && req.params) {
+      details = `사진 ID: ${req.params.mediaId}`;
+    } else if (action === 'DISCONNECT_DRIVE') {
+      details = 'Google Drive 연결 해제';
     } else if (action === 'CREATE_FAQ' && responseData) {
       details = `질문: ${responseData.question}`;
     } else if (action === 'UPDATE_FAQ' && req.body) {

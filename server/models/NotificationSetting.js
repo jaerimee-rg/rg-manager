@@ -13,6 +13,11 @@ export const NOTIFICATION_EVENTS = [
     description: '학부모가 채팅으로 질문을 남기면 채널 주인에게 알립니다.'
   },
   {
+    eventType: 'ALBUM_UPLOAD',
+    label: '앨범 업로드 알림',
+    description: '학부모가 앨범에 사진·영상을 올리면 하루 한 번 묶어서 알립니다.'
+  },
+  {
     eventType: 'EVENT_REGISTRATION',
     label: '이벤트 신청 알림',
     description: '학부모가 일정에 신청하거나 취소하면 선생님에게 알립니다.'

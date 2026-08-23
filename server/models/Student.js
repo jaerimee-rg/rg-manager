@@ -43,6 +43,23 @@ class Student {
     };
   }
 
+  // 여러 학생을 한 번에. 이름을 붙이거나 태그 대상을 검증할 때 쓴다.
+  // 소유 규칙은 getById 와 같다 — 남의 학생은 결과에서 빠진다.
+  static async getByIds(ids, userId, role) {
+    if (!ids?.length) return [];
+
+    let query = 'SELECT * FROM students WHERE id = ANY($1::int[])';
+    const params = [ids];
+
+    if (role !== 'admin') {
+      query += ' AND "userId" = $2';
+      params.push(userId);
+    }
+
+    const result = await pool.query(query, params);
+    return result.rows.map((student) => ({ ...student, classIds: safeJsonParse(student.classIds, []) }));
+  }
+
   static async create(data, userId) {
     const { name, birthdate, phone, parentPhone, classIds } = data;
     const createdAt = new Date().toISOString();

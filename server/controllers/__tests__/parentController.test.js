@@ -16,6 +16,12 @@ jest.unstable_mockModule('../../models/Event.js', () => ({
   default: { listUpcomingForParent: jest.fn(), getPublishedForParent: jest.fn() }
 }));
 
+jest.unstable_mockModule('../../models/ChildFaceProfile.js', () => ({
+  default: { countsByStudents: jest.fn().mockResolvedValue({}) },
+  MAX_PER_PARENT: 3,
+  MAX_PER_STUDENT: 5
+}));
+
 jest.unstable_mockModule('../../models/EventRegistration.js', () => ({
   default: {
     listForStudents: jest.fn(),
