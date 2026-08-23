@@ -4,6 +4,10 @@ import Student from '../models/Student.js';
 import Event from '../models/Event.js';
 import EventRegistration from '../models/EventRegistration.js';
 import ChildFaceProfile from '../models/ChildFaceProfile.js';
+import Competition from '../models/Competition.js';
+import EventMedia from '../models/EventMedia.js';
+import { isConfirmedParent } from '../utils/albumAccess.js';
+import { thumbnailUrl } from '../utils/mediaSerializer.js';
 import { matchChild } from '../services/parentOnboarding.js';
 import { canRegister, todayKst } from '../services/eventService.js';
 import { sendEventRegistrationKakaoMessage } from '../utils/kakaoMessage.js';
@@ -220,7 +224,34 @@ export const getEvent = async (req, res) => {
     const byStudent = new Map(registrations.map((r) => [r.studentId, r]));
     const now = Date.now();
 
+    // 앨범이 있고 자녀가 확정됐으면 상세에서 바로 사진으로 들어갈 수 있게 알려준다.
+    // 여기가 실패해도 상세 화면은 떠야 하므로 앨범 정보만 비운다.
+    let album = null;
+    try {
+      if (event.driveFolderId) {
+        const confirmedStudentIds = registrations.filter((r) => r.status === 'confirmed').map((r) => r.studentId);
+        const competitionStudentIds = event.competitionId ? await Competition.getStudentIds(event.competitionId) : [];
+        const confirmed = isConfirmedParent({ childStudentIds: studentIds, confirmedStudentIds, competitionStudentIds });
+
+        if (confirmed) {
+          const summaries = await EventMedia.summaries([event.id], { studentIds });
+          const counts = summaries[event.id] || { images: 0, videos: 0, mine: 0, previews: [] };
+          album = {
+            available: true,
+            counts: { images: counts.images, videos: counts.videos, mine: counts.mine },
+            previews: (counts.previews || []).map((id) => thumbnailUrl(id, 400)),
+            uploadOpen: event.albumUploadOpen !== false
+          };
+        } else {
+          album = { available: false, reason: 'not_confirmed' };
+        }
+      }
+    } catch (error) {
+      console.error('이벤트 상세의 앨범 정보 조회 실패(생략하고 계속):', error?.message || error);
+    }
+
     res.json({
+      album,
       id: event.id,
       type: event.type,
       title: event.title,

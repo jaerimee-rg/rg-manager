@@ -3,6 +3,8 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import ParentSchedule from '../../pages/parent/ParentSchedule';
 import ParentSettings from '../../pages/parent/ParentSettings';
+import ParentAlbumList from '../../pages/parent/ParentAlbumList';
+import ParentAlbum from '../../pages/parent/ParentAlbum';
 import ParentOnboarding from '../../pages/parent/ParentOnboarding';
 import InviteLanding from '../../pages/parent/InviteLanding';
 
@@ -60,6 +62,8 @@ function ParentApp() {
       ) : (
         <>
           <Route path="/parent/schedule" element={<ParentSchedule />} />
+          <Route path="/parent/photos" element={<ParentAlbumList />} />
+          <Route path="/parent/photos/:eventId" element={<ParentAlbum />} />
           <Route path="/parent/settings" element={<ParentSettings />} />
           <Route path="*" element={<Navigate to="/parent/schedule" replace />} />
         </>

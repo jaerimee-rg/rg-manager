@@ -109,7 +109,9 @@ test.describe('학부모 — 가입부터 신청까지', () => {
   });
 
   test('학부모 토큰으로는 선생님 API 에 닿지 않는다', async ({ request }) => {
-    for (const path of ['/api/students', '/api/events', '/api/parents', '/api/competitions']) {
+    for (const path of ['/api/students', '/api/events', '/api/parents', '/api/competitions',
+      '/api/drive/account', `/api/events/${sessions.album.eventId}/album`,
+      `/api/events/${sessions.album.eventId}/media`]) {
       const res = await api(request, sessions.parent, 'GET', path);
       expect(res.status, `${path} 는 막혀야 한다`).toBe(403);
     }
@@ -117,5 +119,76 @@ test.describe('학부모 — 가입부터 신청까지', () => {
     // 학부모가 써야 하는 경로는 열려 있다
     const me = await api(request, sessions.parent, 'GET', '/api/parent/me');
     expect(me.status).toBe(200);
+  });
+});
+
+test.describe('학부모 — 사진', () => {
+  test.beforeEach(async ({ page }) => {
+    await loginAs(page, sessions.parent);
+  });
+
+  test('사진 탭에 확정된 이벤트의 앨범만 보인다', async ({ page }) => {
+    await page.goto('/parent/photos');
+
+    await expect(page.getByText(/e2e확정대회/)).toBeVisible();
+    await expect(page.getByText(/e2e미확정대회/)).toHaveCount(0);
+  });
+
+  test('앨범을 열면 갤러리가 보이고 우리 아이만 토글이 걸러 준다', async ({ page }) => {
+    await page.goto(`/parent/photos/${sessions.album.eventId}`);
+
+    const tiles = page.getByRole('button', { name: /사진 열기|영상 열기/ });
+    await expect(tiles).toHaveCount(sessions.album.totalCount);
+
+    await page.getByRole('button', { name: /우리 아이 사진만 보기/ }).click();
+    await expect(tiles).toHaveCount(sessions.album.taggedCount);
+
+    // 다시 끄면 전체로 돌아온다
+    await page.getByRole('button', { name: /우리 아이 사진만 보기/ }).click();
+    await expect(tiles).toHaveCount(sessions.album.totalCount);
+  });
+
+  test('사진을 누르면 뷰어가 열리고 원본을 저장할 수 있다', async ({ page }) => {
+    await page.goto(`/parent/photos/${sessions.album.eventId}`);
+    await page.getByRole('button', { name: '사진 열기' }).first().click();
+
+    const viewer = page.getByRole('dialog', { name: '사진 보기' });
+    await expect(viewer).toBeVisible();
+
+    const save = viewer.getByRole('link', { name: /저장/ });
+    await expect(save).toHaveAttribute('href', /drive\.google\.com\/uc\?export=download/);
+
+    // 좌우로 넘길 수 있다
+    await viewer.getByRole('button', { name: '다음 사진' }).click();
+    await expect(viewer).toBeVisible();
+
+    await viewer.getByRole('button', { name: '닫기' }).click();
+    await expect(viewer).toHaveCount(0);
+  });
+
+  test('내가 올린 사진에만 삭제가 보인다', async ({ page }) => {
+    await page.goto(`/parent/photos/${sessions.album.eventId}`);
+    await page.getByRole('button', { name: /내가 올린 것/ }).click();
+
+    await page.getByRole('button', { name: '사진 열기' }).first().click();
+    const viewer = page.getByRole('dialog', { name: '사진 보기' });
+    await expect(viewer.getByRole('button', { name: '삭제' })).toBeVisible();
+  });
+
+  test('확정되지 않은 이벤트의 앨범은 열리지 않는다', async ({ page }) => {
+    await page.goto(`/parent/photos/${sessions.album.lockedEventId}`);
+
+    await expect(page.getByText('아직 사진을 볼 수 없어요')).toBeVisible();
+  });
+
+  test('내 정보에서 자녀 얼굴을 등록할 수 있다', async ({ page }) => {
+    await page.goto('/parent/settings');
+
+    await expect(page.getByRole('heading', { name: '우리 아이 사진 찾기' })).toBeVisible();
+    await page.getByRole('button', { name: /얼굴 사진 등록/ }).first().click();
+    // 동의를 끄면 사진을 고를 수 없다
+    await expect(page.getByRole('button', { name: '사진 고르기' })).toBeEnabled();
+    await page.getByRole('checkbox').first().uncheck();
+    await expect(page.getByRole('button', { name: '사진 고르기' })).toBeDisabled();
   });
 });

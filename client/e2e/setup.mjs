@@ -60,7 +60,73 @@ await pool.query(
   [parent.id, teacher.id, inv.rows[0].id, now]
 );
 
+// ───────── 앨범 (사진 공유) ─────────
+// Google Drive 없이도 화면을 검증할 수 있게, 폴더가 있는 이벤트와 사진 몇 장을 직접 넣는다.
+// 썸네일은 Drive 를 가리키므로 브라우저에서 뜨지 않는다 — DOM 과 개수만 확인한다.
+
+// 확정된 대회 (앨범 있음) + 미확정 대회 (앨범 있음, 하지만 못 봐야 한다)
+const comp = await pool.query(
+  `INSERT INTO competitions (name, date, location, "userId", "createdAt")
+   VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+  [`e2e앨범대회_${stamp}`, '2026-09-12', '올림픽공원', teacher.id, now]
+);
+
+const mkEvent = async (title, competitionId, withAlbum) => {
+  const row = await pool.query(
+    `INSERT INTO events ("userId", type, title, date, location, options, "isPublished",
+                         "registrationOpen", "competitionId", "driveFolderId", "driveFolderName",
+                         "albumStatus", "albumUploadOpen", "albumCreatedAt", "createdAt", "updatedAt")
+     VALUES ($1,'competition',$2,'2026-09-12','올림픽공원','[]',TRUE,TRUE,$3,$4,$5,$6,TRUE,$7,$7,$7)
+     RETURNING id`,
+    [teacher.id, title, competitionId,
+      withAlbum ? `e2e-folder-${stamp}` : null,
+      withAlbum ? `2026-09-12 ${title}` : null,
+      withAlbum ? 'ready' : 'none', now]
+  );
+  return row.rows[0].id;
+};
+
+const albumEventId = await mkEvent(`e2e확정대회_${stamp}`, comp.rows[0].id, true);
+const lockedEventId = await mkEvent(`e2e미확정대회_${stamp}`, null, true);
+
+// 첫째 아이를 이 대회의 참가 학생으로 넣어 "확정" 상태를 만든다.
+await pool.query(
+  `INSERT INTO competition_students ("competitionId","studentId","createdAt") VALUES ($1,$2,$3)`,
+  [comp.rows[0].id, students[0].id, now]
+);
+
+// 사진 4장(선생님 3, 학부모 1) + 영상 1개
+const mkMedia = async ({ i, kind, uploaderRole, uploaderUserId, hidden = false }) => {
+  const row = await pool.query(
+    `INSERT INTO event_media ("eventId","driveFileId",kind,"originalName","driveName","mimeType",size,
+                              "takenAt","uploaderUserId","uploaderRole",status,"isHidden","faceStatus",
+                              "faceCount","createdAt","updatedAt")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'ready',$11,'done',1,$12,$12)
+     RETURNING id`,
+    [albumEventId, `e2e-file-${stamp}-${i}`, kind,
+      kind === 'video' ? `VID_${i}.mp4` : `IMG_${i}.jpg`,
+      `20260912_e2e_${i}`, kind === 'video' ? 'video/mp4' : 'image/jpeg',
+      100000 + i, `2026-09-12T1${i}:00:00.000Z`, uploaderUserId, uploaderRole, hidden, now]
+  );
+  return row.rows[0].id;
+};
+
+const mediaIds = [];
+mediaIds.push(await mkMedia({ i: 1, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id }));
+mediaIds.push(await mkMedia({ i: 2, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id }));
+mediaIds.push(await mkMedia({ i: 3, kind: 'image', uploaderRole: 'parent', uploaderUserId: parent.id }));
+mediaIds.push(await mkMedia({ i: 4, kind: 'video', uploaderRole: 'teacher', uploaderUserId: teacher.id }));
+
+// 첫째 아이 태그를 두 장에 붙인다 → "우리 아이만" 토글로 걸러지는지 확인한다.
+for (const mediaId of mediaIds.slice(0, 2)) {
+  await pool.query(
+    `INSERT INTO media_tags ("mediaId","studentId",source,"createdAt","updatedAt") VALUES ($1,$2,'face',$3,$3)`,
+    [mediaId, students[0].id, now]
+  );
+}
+
 const sessions = {
+  album: { eventId: albumEventId, lockedEventId, mediaIds, taggedCount: 2, totalCount: 4 },
   teacher: { token: sign(teacher), user: { id: teacher.id, username: teacher.username, role: 'user' } },
   parent: { token: sign(parent), user: { id: parent.id, username: parent.username, role: 'parent' } },
   invite: inv.rows[0].token,

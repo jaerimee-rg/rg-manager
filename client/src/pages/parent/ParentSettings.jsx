@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { fetchWithAuth } from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import ParentLayout from '../../components/parent/ParentLayout';
+import ChildFaceCard from './ChildFaceCard';
 
 const STATUS = {
   linked: { label: '연결됨', className: 'badge-success' },
@@ -124,6 +125,8 @@ function ParentSettings() {
           </button>
         )}
       </div>
+
+      <ChildFaceCard children={me?.children || []} onChanged={load} />
 
       {me?.teacher && (
         <div className="card" style={{ padding: '16px', marginBottom: '12px' }}>

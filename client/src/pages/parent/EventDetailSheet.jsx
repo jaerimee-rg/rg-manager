@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import { formatCardDate, dDay, reasonText } from '../../utils/parentSchedule';
 import { typeOf } from '../../utils/eventFormat';
@@ -8,6 +9,7 @@ import { typeOf } from '../../utils/eventFormat';
  * 신청 가능 여부는 서버가 내려준 판정을 그대로 쓰고, 저장할 때 서버가 한 번 더 확인한다.
  */
 function EventDetailSheet({ eventId, today, onClose, onChanged }) {
+  const navigate = useNavigate();
   const [event, setEvent] = useState(null);
   const [childId, setChildId] = useState(null);
   const [picked, setPicked] = useState([]);
@@ -157,6 +159,48 @@ function EventDetailSheet({ eventId, today, onClose, onChanged }) {
               }}>
                 {event.description}
               </div>
+            </div>
+          )}
+
+          {event.album?.available && (
+            <div style={{ marginTop: '16px' }}>
+              <h3 style={{ fontSize: '0.8125rem', fontWeight: 800, color: 'var(--color-gray-700)', marginBottom: '8px' }}>
+                📷 사진 · 영상
+              </h3>
+              <button
+                type="button"
+                onClick={() => navigate(`/parent/photos/${event.id}`)}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left', padding: 0,
+                  border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)',
+                  overflow: 'hidden', background: '#fff', cursor: 'pointer', fontFamily: 'inherit'
+                }}
+              >
+                {event.album.previews?.length > 0 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '2px', height: '80px', background: 'var(--color-gray-100)' }}>
+                    {event.album.previews.slice(0, 4).map((url, i) => (
+                      <img
+                        key={i}
+                        src={url}
+                        alt=""
+                        loading="lazy"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', background: 'var(--color-gray-200)' }}
+                        onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
+                      />
+                    ))}
+                  </div>
+                )}
+                <div style={{ padding: '11px 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>앨범 열기</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', marginTop: '1px' }}>
+                      사진 {event.album.counts.images} · 영상 {event.album.counts.videos}
+                      {event.album.counts.mine ? ` · 우리 아이 ${event.album.counts.mine}장` : ''}
+                    </div>
+                  </div>
+                  <div style={{ marginLeft: 'auto', color: 'var(--color-primary)', fontWeight: 800, fontSize: '0.8125rem' }}>보기 ›</div>
+                </div>
+              </button>
             </div>
           )}
 

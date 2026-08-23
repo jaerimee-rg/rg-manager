@@ -4,6 +4,7 @@
   "description": "리듬체조 수업 출석 체크 앱 - 클라이언트",
   "private": true,
   "dependencies": {
+    "@vladmandic/face-api": "^1.7.15",
     "axios": "^1.6.0",
     "date-fns": "^4.1.0",
     "jspdf": "^3.0.4",

@@ -1,14 +1,14 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
-// 향후 사진·게시판·채팅을 여기에 한 줄씩 추가한다.
+// 향후 게시판·채팅을 여기에 한 줄씩 추가한다.
 // 내 정보는 관례대로 맨 오른쪽에 두므로 그 앞의 자리들을 SOON 이 채운다.
 export const parentNavLinks = [
-  { path: '/parent/schedule', label: '일정', icon: '📅' }
+  { path: '/parent/schedule', label: '일정', icon: '📅' },
+  { path: '/parent/photos', label: '사진', icon: '📷' }
 ];
 
 const SOON = [
-  { label: '사진', icon: '📷' },
   { label: '채팅', icon: '💬' }
 ];
 
