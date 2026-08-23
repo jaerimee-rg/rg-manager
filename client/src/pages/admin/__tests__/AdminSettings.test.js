@@ -22,9 +22,9 @@ const SETTINGS = {
       id: 'openai',
       label: 'OpenAI',
       description: 'OpenAI GPT 모델로 FAQ 를 고릅니다.',
-      model: 'gpt-4.1-mini',
-      defaultModel: 'gpt-4.1-mini',
-      modelOptions: ['gpt-4.1-mini', 'gpt-4.1', 'gpt-5'],
+      model: 'gpt-5.6-luna',
+      defaultModel: 'gpt-5.6-luna',
+      modelOptions: ['gpt-5.6-luna', 'gpt-5.4-nano'],
       effort: '',
       effortOptions: ['minimal', 'low', 'medium', 'high'],
       effortLabel: '추론 강도 (reasoning_effort)',
@@ -91,7 +91,7 @@ describe('AdminSettings — AI 제공자 선택', () => {
     expect(screen.getAllByRole('radio')).toHaveLength(2);
     expect(screen.getByText('OpenAI')).toBeInTheDocument();
     expect(screen.getByText('Google Gemini')).toBeInTheDocument();
-    expect(screen.getByText('모델: gpt-4.1-mini')).toBeInTheDocument();
+    expect(screen.getByText('모델: gpt-5.6-luna')).toBeInTheDocument();
     expect(screen.getByText('모델: gemini-3.6-flash')).toBeInTheDocument();
   });
 
@@ -113,7 +113,7 @@ describe('AdminSettings — AI 제공자 선택', () => {
     expect(call[0]).toBe('/api/settings/ai');
     expect(JSON.parse(call[1].body)).toMatchObject({
       provider: 'openai',
-      model: 'gpt-4.1-mini',
+      model: 'gpt-5.6-luna',
       timeoutMs: 20000
     });
   });
@@ -197,7 +197,7 @@ describe('AdminSettings — AI 제공자 선택', () => {
       await renderPage();
 
       const options = [...screen.getByLabelText('모델').options].map((o) => o.value);
-      expect(options).toEqual(['gemini-3.6-flash', 'gemini-2.5-pro', '__custom__']);
+      expect(options).toEqual(['gemini-3.6-flash', 'gemini-2.5-pro']);
     });
 
     it('제공자마다 강도 항목 이름과 선택지가 다르다', async () => {
@@ -222,23 +222,48 @@ describe('AdminSettings — AI 제공자 선택', () => {
       expect(screen.getByLabelText('모델')).toHaveValue('gemini-3.6-flash');
 
       fireEvent.click(radioFor('OpenAI'));
-      expect(screen.getByLabelText('모델')).toHaveValue('gpt-4.1-mini');
+      expect(screen.getByLabelText('모델')).toHaveValue('gpt-5.6-luna');
     });
 
-    it('목록에 없는 모델을 직접 입력할 수 있다', async () => {
+    it('OpenAI 는 정해진 두 모델 중에서만 고른다', async () => {
       await renderPage();
 
-      fireEvent.change(screen.getByLabelText('모델'), { target: { value: '__custom__' } });
-      fireEvent.change(screen.getByLabelText('모델 이름 직접 입력'), {
-        target: { value: 'gemini-9-ultra' }
-      });
+      fireEvent.click(radioFor('OpenAI'));
+
+      const options = [...screen.getByLabelText('모델').options].map((o) => o.value);
+      expect(options).toEqual(['gpt-5.6-luna', 'gpt-5.4-nano']);
+      expect(screen.queryByLabelText('모델 이름 직접 입력')).not.toBeInTheDocument();
+    });
+
+    it('고른 모델을 저장한다', async () => {
+      await renderPage();
+
+      fireEvent.click(radioFor('OpenAI'));
+      fireEvent.change(screen.getByLabelText('모델'), { target: { value: 'gpt-5.4-nano' } });
 
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: '저장' }));
       });
 
       const call = fetchWithAuth.mock.calls.find(([, o]) => o?.method === 'PUT');
-      expect(JSON.parse(call[1].body).model).toBe('gemini-9-ultra');
+      expect(JSON.parse(call[1].body).model).toBe('gpt-5.4-nano');
+    });
+
+    it('선택지가 바뀌어도 지금 쓰는 모델은 목록에 남는다 (실제 상태를 숨기지 않는다)', async () => {
+      // 서버가 현재값을 목록 앞에 넣어 내려준다.
+      mockApi(undefined, {
+        ...SETTINGS,
+        provider: 'openai',
+        effectiveProvider: 'openai',
+        providers: SETTINGS.providers.map((p) =>
+          p.id === 'openai'
+            ? { ...p, model: 'gpt-4.1-mini', modelOptions: ['gpt-4.1-mini', 'gpt-5.6-luna', 'gpt-5.4-nano'] }
+            : p
+        )
+      });
+      await renderPage();
+
+      expect(screen.getByLabelText('모델')).toHaveValue('gpt-4.1-mini');
     });
 
     it('모델·강도·대기 시간을 함께 저장한다', async () => {

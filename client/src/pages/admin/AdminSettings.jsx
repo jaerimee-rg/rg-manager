@@ -17,16 +17,12 @@ const EFFORT_LABEL = {
   high: '높음 (high)'
 };
 
-// 목록에 없는 모델도 쓸 수 있어야 한다 (새 모델이 나오면 배포 없이 바꿀 수 있도록).
-const CUSTOM = '__custom__';
-
 function AdminSettings() {
   const [providers, setProviders] = useState([]);
   const [provider, setProvider] = useState('');
   const [effectiveProvider, setEffectiveProvider] = useState('');
   const [selected, setSelected] = useState('');
   const [model, setModel] = useState('');
-  const [customModel, setCustomModel] = useState(false);
   const [effort, setEffort] = useState('');
   const [timeoutSec, setTimeoutSec] = useState(20);
   const [savedTimeoutSec, setSavedTimeoutSec] = useState(20);
@@ -54,7 +50,6 @@ function AdminSettings() {
     const current = list.find((p) => p.id === data.provider);
     if (current) {
       setModel(current.model || '');
-      setCustomModel(!current.modelOptions?.includes(current.model));
       setEffort(current.effort || '');
     }
   };
@@ -80,7 +75,6 @@ function AdminSettings() {
     const next = providers.find((p) => p.id === id);
     if (next) {
       setModel(next.model || '');
-      setCustomModel(!next.modelOptions?.includes(next.model));
       setEffort(next.effort || '');
     }
   };
@@ -91,7 +85,6 @@ function AdminSettings() {
     const saved = providers.find((p) => p.id === provider);
     if (saved) {
       setModel(saved.model || '');
-      setCustomModel(!saved.modelOptions?.includes(saved.model));
       setEffort(saved.effort || '');
     }
     setTimeoutSec(savedTimeoutSec);
@@ -248,16 +241,9 @@ function AdminSettings() {
                   <label className="form-label" htmlFor="ai-model">모델</label>
                   <select
                     id="ai-model"
-                    value={customModel ? CUSTOM : model}
+                    value={model}
                     disabled={saving}
-                    onChange={(e) => {
-                      if (e.target.value === CUSTOM) {
-                        setCustomModel(true);
-                      } else {
-                        setCustomModel(false);
-                        setModel(e.target.value);
-                      }
-                    }}
+                    onChange={(e) => setModel(e.target.value)}
                   >
                     {current.modelOptions.map((m) => (
                       <option key={m} value={m}>
@@ -265,22 +251,10 @@ function AdminSettings() {
                         {m === current.defaultModel ? ' (기본값)' : ''}
                       </option>
                     ))}
-                    <option value={CUSTOM}>직접 입력…</option>
                   </select>
-                  {customModel && (
-                    <input
-                      type="text"
-                      aria-label="모델 이름 직접 입력"
-                      placeholder="예) gpt-5-mini"
-                      value={model}
-                      disabled={saving}
-                      onChange={(e) => setModel(e.target.value)}
-                      style={{ marginTop: 8 }}
-                    />
-                  )}
                   <div className="form-help">
-                    목록에 없는 모델도 직접 입력할 수 있습니다. 이름이 틀리면 답변이 실패하고
-                    학부모에게는 안내 문구가 나갑니다.
+                    모델을 바꾸면 다음 질문부터 적용됩니다. 이 계정에서 쓸 수 없는 모델이면
+                    답변이 실패하고 학부모에게는 안내 문구가 나갑니다.
                   </div>
                 </div>
 

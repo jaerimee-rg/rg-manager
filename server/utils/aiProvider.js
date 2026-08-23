@@ -22,9 +22,8 @@ export const AI_PROVIDERS = [
     // 로컬 .env 와 Vercel 에 OEPNAI_API_KEY(오타) 로 등록돼 있어 두 이름을 모두 읽는다.
     envKeys: ['OPENAI_API_KEY', 'OEPNAI_API_KEY'],
     modelEnvKey: 'OPENAI_FAQ_MODEL',
-    defaultModel: 'gpt-4.1-mini',
-    // 고르기 쉽게 흔히 쓰는 것만 담아 둔다. 목록에 없는 모델도 직접 입력할 수 있다.
-    modelOptions: ['gpt-4.1-mini', 'gpt-4.1', 'gpt-4o-mini', 'gpt-4o', 'gpt-5-mini', 'gpt-5'],
+    defaultModel: 'gpt-5.6-luna',
+    modelOptions: ['gpt-5.6-luna', 'gpt-5.4-nano'],
     // reasoning_effort. 추론 계열 모델만 받는다 (안 받으면 빼고 다시 보낸다).
     effortOptions: ['minimal', 'low', 'medium', 'high'],
     effortEnvKey: 'OPENAI_FAQ_EFFORT',
@@ -133,16 +132,26 @@ export const isValidTimeout = (value) =>
 
 // 설정 화면에 내려줄 목록 (API 키 값은 제외)
 export const describeProviders = (saved = {}) =>
-  AI_PROVIDERS.map((info) => ({
-    id: info.id,
-    label: info.label,
-    description: info.description,
-    configured: isProviderConfigured(info.id),
-    model: saved.models?.[info.id] || envModel(info.id),
-    defaultModel: info.defaultModel,
-    modelOptions: info.modelOptions,
-    effort: saved.efforts?.[info.id] ?? envEffort(info.id) ?? '',
-    effortOptions: info.effortOptions,
-    effortLabel: info.effortLabel,
-    effortHelp: info.effortHelp
-  }));
+  AI_PROVIDERS.map((info) => {
+    const model = saved.models?.[info.id] || envModel(info.id);
+
+    // 지금 쓰는 모델이 선택지에 없으면(선택지를 바꾼 뒤 등) 목록에 넣어 준다.
+    // 그래야 화면이 실제로 무엇을 쓰고 있는지 숨기지 않는다.
+    const modelOptions = info.modelOptions.includes(model)
+      ? info.modelOptions
+      : [model, ...info.modelOptions];
+
+    return {
+      id: info.id,
+      label: info.label,
+      description: info.description,
+      configured: isProviderConfigured(info.id),
+      model,
+      defaultModel: info.defaultModel,
+      modelOptions,
+      effort: saved.efforts?.[info.id] ?? envEffort(info.id) ?? '',
+      effortOptions: info.effortOptions,
+      effortLabel: info.effortLabel,
+      effortHelp: info.effortHelp
+    };
+  });

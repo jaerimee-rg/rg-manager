@@ -150,8 +150,10 @@ Which AI answers parent questions is an **admin setting**, not a build-time cons
   Reasoning models reject `temperature`; non-reasoning models reject `reasoning_effort` — neither
   is knowable in advance, so `aiAnswer.js` retries without the rejected field and remembers the
   verdict **per model name** (changing the model re-tests it)
-- Model names are free text (a dropdown of common ones plus 직접 입력), so a newly released
-  model can be used without a deploy
+- The UI offers a fixed per-provider dropdown (OpenAI: `gpt-5.6-luna`, `gpt-5.4-nano`). The API
+  still accepts any well-formed model name, and `describeProviders()` prepends the currently
+  configured model to the options when it is not in the list — so changing the list never hides
+  what is actually in use. To offer a new model, edit `modelOptions` in `server/utils/aiProvider.js`
 
 ### LLM Call Log
 

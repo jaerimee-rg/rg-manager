@@ -132,9 +132,9 @@ describe('settingsController — AI 제공자', () => {
       await getAiSetting({ user: { id: 1, role: 'admin' }, query: {} }, res);
 
       const openai = res.json.mock.calls[0][0].providers.find((p) => p.id === 'openai');
-      expect(openai.modelOptions).toContain('gpt-4.1-mini');
+      expect(openai.modelOptions).toEqual(['gpt-5.6-luna', 'gpt-5.4-nano']);
       expect(openai.effortOptions).toEqual(['minimal', 'low', 'medium', 'high']);
-      expect(openai.defaultModel).toBe('gpt-4.1-mini');
+      expect(openai.defaultModel).toBe('gpt-5.6-luna');
     });
 
     it('저장된 모델이 있으면 환경변수 기본값 대신 그것을 보여준다', async () => {
@@ -213,6 +213,27 @@ describe('settingsController — AI 제공자', () => {
       await updateAiSetting(adminReq({ provider: 'gemini', model: 'g', timeoutMs: 1000 }), res);
       expect(res.status).toHaveBeenCalledWith(400);
       expect(saveTuning).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('선택지 밖의 모델이 저장돼 있을 때', () => {
+    beforeEach(() => {
+      process.env.OPENAI_API_KEY = 'sk-key';
+    });
+
+    it('지금 쓰는 모델을 목록 앞에 넣어 준다 (화면이 실제 상태를 숨기지 않도록)', async () => {
+      getSavedTuning.mockResolvedValue({
+        models: { openai: 'gpt-4.1-mini' },
+        efforts: {},
+        timeoutMs: null
+      });
+      const res = mockRes();
+
+      await getAiSetting({ user: { id: 1, role: 'admin' }, query: {} }, res);
+
+      const openai = res.json.mock.calls[0][0].providers.find((p) => p.id === 'openai');
+      expect(openai.model).toBe('gpt-4.1-mini');
+      expect(openai.modelOptions).toEqual(['gpt-4.1-mini', 'gpt-5.6-luna', 'gpt-5.4-nano']);
     });
   });
 });

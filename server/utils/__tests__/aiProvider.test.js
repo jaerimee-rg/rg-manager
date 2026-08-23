@@ -72,10 +72,10 @@ describe('aiProvider', () => {
   });
 
   it('모델은 환경변수로 덮어쓸 수 있고, 없으면 기본 모델을 쓴다', () => {
-    expect(resolveModel('openai')).toBe('gpt-4.1-mini');
+    expect(resolveModel('openai')).toBe('gpt-5.6-luna');
 
-    process.env.OPENAI_FAQ_MODEL = 'gpt-4.1';
-    expect(resolveModel('openai')).toBe('gpt-4.1');
+    process.env.OPENAI_FAQ_MODEL = 'gpt-5.4-nano';
+    expect(resolveModel('openai')).toBe('gpt-5.4-nano');
   });
 
   // 로컬과 프로덕션이 같은 DB 를 쓰기 때문에, 저장된 제공자의 키가
