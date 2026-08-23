@@ -21,6 +21,8 @@
 | 문서 | 내용 |
 |---|---|
 | [01-requirements.md](./01-requirements.md) | 배경, 용어, 범위, 사용자 스토리, 기능 요구사항(FR-200~295), 비기능 요구사항, 화면, 수용 기준, **이전 분석과 달라진 점**, 열린 질문 |
+| [03-implementation-plan.md](./03-implementation-plan.md) | **구현 계획** — 02 에서 바뀐 설계 3가지(벡터 저장·얼굴 검출 위치), 기존 코드 영향, 단계별 구현 순서 S1~S9, 테스트·배포·스모크 계획, Google 연동 준비물 |
+| [mockups/parent.html](./mockups/parent.html) · [mockups/teacher.html](./mockups/teacher.html) | 화면 목업 (브라우저에서 바로 열림) |
 | [02-data-model-api.md](./02-data-model-api.md) | DB 스키마(pgvector 포함), Google Drive 연동 방식, 업로드 시퀀스, REST API, 순수 함수(테스트 대상), 프론트 라우트, 마이그레이션, 환경변수, 리스크 |
 
 ## 전제 (먼저 있어야 하는 것)
