@@ -11,7 +11,7 @@ import FaqChats from './FaqChats';
 const SWIPE_REVEAL_WIDTH = 124;
 const MIN_SWIPE_DISTANCE = 50;
 
-function FaqList({ initialTab = 'faq', basePath = '/faq' }) {
+function FaqList({ initialTab = 'chats', basePath = '/faq' }) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
@@ -218,7 +218,9 @@ function FaqList({ initialTab = 'faq', basePath = '/faq' }) {
 
   const changeTab = (next) => {
     setTab(next);
-    navigate(next === 'faq' ? basePath : `${basePath}/chats`);
+    // 대화 내역이 기본 화면이라 짧은 주소를 갖는다.
+    // /faq/chats 도 계속 대화 내역으로 열린다 (카카오 알림 링크가 이 주소를 쓴다).
+    navigate(next === 'chats' ? basePath : `${basePath}/manage`);
   };
 
   const filteredFaqs = search.trim()
@@ -284,14 +286,14 @@ function FaqList({ initialTab = 'faq', basePath = '/faq' }) {
 
       {/* 탭 */}
       <div className="faq-tabs">
-        <button className={tab === 'faq' ? 'on' : ''} onClick={() => changeTab('faq')}>
-          FAQ 관리
-        </button>
         <button className={tab === 'chats' ? 'on' : ''} onClick={() => changeTab('chats')}>
           대화 내역
           {unansweredCount > 0 && (
             <span className="badge badge-danger" style={{ marginLeft: 6 }}>{unansweredCount}</span>
           )}
+        </button>
+        <button className={tab === 'faq' ? 'on' : ''} onClick={() => changeTab('faq')}>
+          FAQ 관리
         </button>
       </div>
 

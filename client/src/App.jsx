@@ -287,6 +287,7 @@ function App() {
           <Route path="/student-competitions" element={<ProtectedRoute><StudentCompetitions /></ProtectedRoute>} />
           <Route path="/faq" element={<ProtectedRoute><FaqList /></ProtectedRoute>} />
           <Route path="/faq/chats" element={<ProtectedRoute><FaqList initialTab="chats" /></ProtectedRoute>} />
+          <Route path="/faq/manage" element={<ProtectedRoute><FaqList initialTab="faq" /></ProtectedRoute>} />
           <Route path="/chat/:publicId" element={<PublicChat />} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" />} />
