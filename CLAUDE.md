@@ -267,6 +267,59 @@ createdb rg_manager
 DATABASE_URL=postgresql://<user>@localhost:5432/rg_manager npm start
 ```
 
+### Event Photo Albums (Google Drive)
+
+Competition photos and videos live in the **teacher's own Google Drive**; the app stores only
+file ids, metadata, and face vectors. Design docs: `docs/photo-sharing/` (requirements, data
+model, implementation plan, mockups).
+
+- **Drive connection** is per teacher (`google_drive_accounts`), OAuth scope **`drive.file` only** —
+  the app sees only files it created, so Google requires no verification. `utils/googleDrive.js`
+  speaks REST via `fetch` (no `googleapis` SDK); `services/driveAccess.js` is the only place that
+  joins stored tokens with refresh. A revoked grant flips the row to `status='error'`, which every
+  screen reads to show a banner — **reads keep working, writes stop**.
+  `/api/drive/callback` cannot use `verifyToken` (browser redirect, no header), so it trusts a
+  **signed 10-minute `state`** carrying the user id.
+- **Album folder**: the teacher types a name in the event detail; the app creates the folder under
+  `RG Manager` and turns on **link sharing (anyone with the link, reader)** — the gallery uses
+  Drive thumbnail URLs directly, so without sharing nothing renders. `events.albumStatus` is
+  `none|ready|missing|unshared`. Deleting an event never deletes the Drive folder.
+- **Uploads never pass through the server.** `POST .../media/uploads` returns a Drive *resumable
+  session URI* (created with an `Origin` header so the browser may PUT to it); the browser uploads
+  in 8MB chunks with progress and resume (`utils/driveUpload.js`). `POST .../media/:id/complete`
+  re-reads the file from Drive and **verifies it landed in this album's folder** before marking it
+  `ready` — a leaked session URI cannot inject files elsewhere.
+- **Who can see an album**: the teacher, plus parents whose child is **confirmed** for that event —
+  either `event_registrations.status='confirmed'` or already in `competition_students`
+  (`utils/albumAccess.js:isConfirmedParent`). Everything parent-facing goes through
+  `utils/mediaSerializer.js:toParentMedia`, a **whitelist** — other children's tags, face boxes,
+  descriptors, uploader names and Drive filenames never leave the server. A test pins the exact
+  field list so a new column cannot leak by accident.
+- **Face indexing runs in the browser**, not on Vercel: `utils/faceClient.js` lazy-loads
+  `@vladmandic/face-api` plus three models from `client/public/models` (~6.4MB, its own bundle
+  chunk) and posts only `{box, score, descriptor}`. The server validates and stores the vector.
+  If the browser cannot decode the file (HEIC on Android) or the models fail to load, the upload
+  still succeeds with `faceStatus='skipped'` and the teacher can tag by hand.
+- **Vectors are `TEXT` (base64 of a 128-float array), not pgvector** — the production Supabase role
+  is not a superuser and cannot `CREATE EXTENSION`. Distances are computed in JS
+  (`utils/faceVector.js`); at this scale that is tens of milliseconds. Promote to pgvector later by
+  changing the column type only.
+- **Tag precedence** `manual > parent_confirmed > face > candidate`, and `excluded` is never
+  resurrected by re-matching (`utils/faceMatch.js:nextTagSource`, the whole table is unit-tested).
+  Distance ≤ `face_match_threshold` (0.50) auto-tags, ≤ `face_candidate_threshold` (0.60) becomes a
+  "혹시 우리 아이?" candidate; both are `app_settings` keys.
+- **Parents**: 사진 tab (`/parent/photos`), gallery (`/parent/photos/:eventId`) with the
+  **우리 아이 사진만 보기** toggle, a full-screen viewer whose 저장 button opens the Drive download
+  URL, and child face registration in 내 정보. Parents may delete only what they uploaded.
+- **Deletes go to the Drive trash** (`files.update {trashed:true}`), never permanent — 30 days to
+  recover. The DB row is removed, cascading faces and tags.
+
+**Google setup required before this works** (see `docs/photo-sharing/03-implementation-plan.md` §12):
+`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, an authorized redirect URI of
+`<APP_URL>/api/drive/callback`, Drive API enabled, and the consent screen published. Without them
+`/api/drive/account` returns `configured:false` and every album screen shows connect guidance —
+the rest of the app is unaffected.
+
 ### Student-Class Relationship
 
 **Many-to-Many** relationship stored as JSON array in `students.classIds`:
@@ -296,6 +349,9 @@ on every push to `main` via the GitHub integration. Render is no longer used.
   (the rest of the app is unaffected).
 - `SUPABASE_URL` — optional; derived from `DATABASE_URL`'s project ref when unset
 - `SUPABASE_STORAGE_BUCKET` — optional, defaults to `faq-files`
+- `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` — event photo albums (Google Drive).
+  Without them the album screens show "관리자에게 문의" guidance and nothing else breaks.
+- `GOOGLE_OAUTH_REDIRECT_URI` — optional; defaults to `${APP_URL}/api/drive/callback`
 
 `APP_URL` and `KAKAO_REDIRECT_URI` must both match the live domain. They are resolved in
 `server/utils/appUrl.js`, which derives `KAKAO_REDIRECT_URI` from `APP_URL` when it is not
