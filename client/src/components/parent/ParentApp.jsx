@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import ParentSchedule from '../../pages/parent/ParentSchedule';
@@ -14,13 +14,23 @@ function ParentApp() {
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchWithAuth('/api/parent/me')
-      .then((r) => (r.ok ? r.json() : null))
-      .then(setMe)
-      .catch(() => {})
-      .finally(() => setLoading(false));
+  const loadMe = useCallback(async () => {
+    try {
+      const response = await fetchWithAuth('/api/parent/me');
+      if (response.ok) {
+        const data = await response.json();
+        setMe(data);
+        return data;
+      }
+    } catch {
+      // 네트워크 오류면 다음 진입에서 다시 시도한다
+    }
+    return null;
   }, []);
+
+  useEffect(() => {
+    loadMe().finally(() => setLoading(false));
+  }, [loadMe]);
 
   if (loading) {
     return (
@@ -39,7 +49,12 @@ function ParentApp() {
   return (
     <Routes>
       <Route path="/invite/:token" element={<InviteLanding />} />
-      <Route path="/parent/onboarding" element={<ParentOnboarding teacherName={teacherName} />} />
+      {/* 아이를 저장한 뒤 내 정보를 다시 읽어야 아래 가드가 일정 화면을 열어 준다.
+          (읽지 않으면 저장에 성공하고도 온보딩으로 되돌아온다) */}
+      <Route
+        path="/parent/onboarding"
+        element={<ParentOnboarding teacherName={teacherName} onDone={loadMe} />}
+      />
       {needsOnboarding ? (
         <Route path="*" element={<Navigate to="/parent/onboarding" replace />} />
       ) : (

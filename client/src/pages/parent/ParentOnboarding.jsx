@@ -8,7 +8,7 @@ const emptyChild = () => ({ name: '', birthdate: '' });
  * 가입 직후 아이 등록.
  * 이름·생년월일이 선생님 학생과 맞으면 자동 연결되고, 아니면 확인 대기로 남는다.
  */
-function ParentOnboarding({ teacherName = '' }) {
+function ParentOnboarding({ teacherName = '', onDone }) {
   const navigate = useNavigate();
   const [children, setChildren] = useState([emptyChild()]);
   const [agreed, setAgreed] = useState(true);
@@ -44,6 +44,8 @@ function ParentOnboarding({ teacherName = '' }) {
         return;
       }
 
+      // 상위(ParentApp)의 "아이 있음" 판정을 먼저 새로 고친 뒤에 이동한다
+      await onDone?.();
       navigate('/parent/schedule', { state: { justOnboarded: true } });
     } catch {
       setError('저장 중 오류가 발생했습니다.');
