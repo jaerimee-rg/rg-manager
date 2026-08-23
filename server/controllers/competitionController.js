@@ -1,4 +1,6 @@
 import Competition from '../models/Competition.js';
+import { mirrorFromCompetition, syncCompetitionMirror } from '../services/competitionMirror.js';
+import EventRegistration from '../models/EventRegistration.js';
 
 export const getCompetitions = async (req, res) => {
   try {
@@ -45,6 +47,11 @@ export const createCompetition = async (req, res) => {
   try {
     const userId = req.user.id;
     const newCompetition = await Competition.create(req.body, userId);
+
+    // 학부모 일정에도 보이도록 이벤트를 함께 만든다.
+    // 실패해도 대회 등록은 성공이며, 빠진 이벤트는 다음 부팅의 백필이 메운다.
+    await mirrorFromCompetition(newCompetition);
+
     res.status(201).json(newCompetition);
   } catch (error) {
     console.error('대회 처리 오류:', error);
@@ -62,6 +69,9 @@ export const updateCompetition = async (req, res) => {
     if (!updatedCompetition) {
       return res.status(404).json({ error: '대회를 찾을 수 없습니다.' });
     }
+
+    // 이벤트의 이름·날짜·장소를 맞춰 둔다 (실패해도 대회 수정은 그대로).
+    await syncCompetitionMirror(updatedCompetition);
 
     res.json(updatedCompetition);
   } catch (error) {
@@ -169,6 +179,12 @@ export const removeStudentFromCompetition = async (req, res) => {
     }
 
     await Competition.removeStudent(id, studentId);
+
+    // 참가 학생에서 빼면 그 학부모 신청은 확정 이전(신청) 상태로 되돌린다.
+    // 실패해도 참가 학생 제거는 그대로 둔다.
+    await EventRegistration.revertConfirmation(id, studentId).catch((error) =>
+      console.error('확정 해제 반영 실패:', error?.message || error)
+    );
     res.json({ message: '학생이 대회에서 제외되었습니다.' });
   } catch (error) {
     res.status(500).json({ error: '대회 학생 제외 중 오류가 발생했습니다.' });

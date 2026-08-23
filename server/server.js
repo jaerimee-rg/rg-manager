@@ -11,6 +11,7 @@ import attendanceRoutes from './routes/attendance.js';
 import authRoutes from './routes/auth.js';
 import logRoutes from './routes/logs.js';
 import competitionRoutes from './routes/competitions.js';
+import eventRoutes from './routes/events.js';
 import faqRoutes from './routes/faqs.js';
 import chatRoutes from './routes/chat.js';
 import {
@@ -146,6 +147,7 @@ app.use('/api/classes', rejectParents, classRoutes);
 app.use('/api/attendance', rejectParents, attendanceRoutes);
 app.use('/api/logs', rejectParents, logRoutes);
 app.use('/api/competitions', rejectParents, competitionRoutes);
+app.use('/api/events', rejectParents, eventRoutes);
 app.use('/api/faqs', rejectParents, faqRoutes);
 app.use('/api/chat', (req, res, next) => {
   // 공개 채팅(/api/chat/public/*)은 비로그인 학부모용이라 그대로 통과시킨다.

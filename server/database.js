@@ -577,6 +577,17 @@ const initDatabase = async () => {
       [process.env.AI_PROVIDER || 'gemini', new Date().toISOString()]
     );
 
+    // 기존 대회를 학부모 일정(events)으로 옮긴다.
+    // 매 부팅마다 실행되므로 이미 옮긴 대회는 건너뛴다(멱등).
+    // 여기서 실패해도 나머지 초기화와 기존 기능은 계속돼야 한다.
+    try {
+      const { backfillCompetitionEvents } = await import('./services/competitionMirror.js');
+      const moved = await backfillCompetitionEvents(client);
+      if (moved > 0) console.log(`기존 대회 ${moved}건을 이벤트로 옮겼습니다.`);
+    } catch (error) {
+      console.error('대회→이벤트 백필 실패(무시하고 계속):', error?.message || error);
+    }
+
     // 기본 관리자 계정 생성 (최초 1회만, 기존 계정이 없을 때)
     const adminCheck = await client.query('SELECT * FROM users WHERE username = $1', ['admin']);
     if (adminCheck.rows.length === 0) {
