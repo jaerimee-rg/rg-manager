@@ -1,0 +1,836 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사진 공유 목업 — 학부모 화면</title>
+<style>
+:root{
+  --color-primary:#3182F6; --color-primary-dark:#1B64DA; --color-primary-bg:#EBF4FF;
+  --color-success:#00C471; --color-success-bg:#E8FAF0;
+  --color-danger:#FF4848; --color-danger-bg:#FFEDED;
+  --color-warning:#FF9F00; --color-warning-bg:#FFF4E0;
+  --color-purple:#7C5CFC; --color-purple-bg:#F0EBFF;
+  --color-gray-100:#F2F4F6; --color-gray-200:#E5E8EB; --color-gray-300:#D1D6DB;
+  --color-gray-400:#B0B8C1; --color-gray-500:#8B95A1; --color-gray-600:#6B7684;
+  --color-gray-700:#4E5968; --color-gray-800:#333D4B; --color-gray-900:#191F28;
+  --bg-primary:#F2F4F6; --bg-secondary:#FFFFFF; --bg-tertiary:#F7F8FA;
+  --radius-sm:8px; --radius-md:12px; --radius-lg:16px; --radius-full:9999px;
+  --shadow-md:0 2px 8px rgba(0,0,0,.08); --shadow-lg:0 8px 32px rgba(0,0,0,.18);
+  --font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-family);background:var(--color-gray-200);color:var(--color-gray-900);line-height:1.5;font-size:15px;letter-spacing:-.3px;-webkit-font-smoothing:antialiased;min-height:100vh}
+button,input{font-family:inherit}
+
+/* ── 목업 크롬 ── */
+.mock-bar{background:var(--color-gray-900);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:.8125rem}
+.mock-bar strong{font-weight:700}
+.mock-bar .spacer{flex:1}
+.mock-bar a{color:#9DC4FF;text-decoration:none;font-weight:600}
+.mock-bar a:hover{text-decoration:underline}
+.mock-note{background:#FFF9E6;border-bottom:1px solid #F5E3A8;color:#7A5D00;font-size:.8125rem;padding:8px 16px;text-align:center}
+.stage{display:flex;gap:28px;justify-content:center;align-items:flex-start;padding:28px 16px 60px;flex-wrap:wrap}
+
+.panel{background:#fff;border-radius:var(--radius-lg);padding:20px;width:300px;box-shadow:var(--shadow-md)}
+.panel h3{font-size:.9375rem;font-weight:700;margin-bottom:4px}
+.panel p{font-size:.8125rem;color:var(--color-gray-500);margin-bottom:14px;line-height:1.6}
+.state-btn{display:block;width:100%;text-align:left;background:var(--bg-tertiary);border:1px solid var(--color-gray-200);border-radius:var(--radius-md);padding:11px 13px;margin-bottom:8px;cursor:pointer;font:inherit}
+.state-btn:hover{border-color:var(--color-primary)}
+.state-btn.on{background:var(--color-primary-bg);border-color:var(--color-primary)}
+.state-btn .t{font-weight:700;font-size:.875rem;display:block}
+.state-btn .d{font-size:.75rem;color:var(--color-gray-500);display:block;margin-top:2px}
+.panel .divider{height:1px;background:var(--color-gray-100);margin:16px 0}
+.tip{font-size:.75rem;color:var(--color-gray-500);line-height:1.7}
+.tip code{background:var(--color-gray-100);padding:1px 5px;border-radius:4px;font-size:.7rem}
+.tip b{color:var(--color-gray-700)}
+
+/* ── 휴대폰 ── */
+.phone{width:390px;height:820px;background:#000;border-radius:44px;padding:11px;box-shadow:var(--shadow-lg);flex-shrink:0}
+.screen{width:100%;height:100%;background:var(--bg-primary);border-radius:34px;overflow:hidden;display:flex;flex-direction:column;position:relative}
+.statusbar{background:#fff;padding:10px 22px 4px;display:flex;justify-content:space-between;font-size:.75rem;font-weight:600;color:var(--color-gray-800)}
+.urlbar{background:#fff;padding:4px 14px 10px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--color-gray-100)}
+.urlbar .u{flex:1;background:var(--color-gray-100);border-radius:var(--radius-full);padding:6px 12px;font-size:.6875rem;color:var(--color-gray-600);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.view{flex:1;min-height:0;display:flex;flex-direction:column}
+.hidden{display:none !important}
+
+/* 공통 */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:var(--radius-full);font-size:.6875rem;font-weight:700;white-space:nowrap}
+.badge-primary{background:var(--color-primary-bg);color:var(--color-primary)}
+.badge-gray{background:var(--color-gray-100);color:var(--color-gray-600)}
+.badge-success{background:var(--color-success-bg);color:#059669}
+.badge-danger{background:var(--color-danger-bg);color:var(--color-danger)}
+.badge-warning{background:var(--color-warning-bg);color:#B26A00}
+.badge-outline{background:#fff;border:1px solid var(--color-gray-200);color:var(--color-gray-600)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:13px 16px;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:.9375rem;font-weight:700;letter-spacing:-.2px;white-space:nowrap;min-height:44px}
+.btn-primary{background:var(--color-primary);color:#fff}
+.btn-primary:hover{background:var(--color-primary-dark)}
+.btn-outline{background:#fff;color:var(--color-gray-700);border:1px solid var(--color-gray-300)}
+.btn-danger{background:var(--color-danger-bg);color:var(--color-danger)}
+.btn-block{width:100%}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-sm{padding:8px 12px;font-size:.8125rem;min-height:36px;border-radius:var(--radius-sm)}
+.label{display:block;font-size:.8125rem;font-weight:700;color:var(--color-gray-700);margin-bottom:6px}
+.notice{font-size:.8125rem;padding:11px 12px;border-radius:var(--radius-md);line-height:1.55}
+.notice.warn{background:var(--color-warning-bg);color:#7A5D00}
+.notice.ok{background:var(--color-success-bg);color:#047857}
+.notice.gray{background:var(--color-gray-100);color:var(--color-gray-600)}
+.notice.info{background:var(--color-primary-bg);color:var(--color-primary-dark)}
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px 28px;gap:8px}
+.empty .e{font-size:2.5rem}
+.empty .t{font-size:1rem;font-weight:700}
+.empty .d{font-size:.8125rem;color:var(--color-gray-500);line-height:1.6}
+
+/* 헤더 / 탭바 */
+.p-header{background:#fff;padding:12px 16px;border-bottom:1px solid var(--color-gray-100);display:flex;align-items:center;gap:10px}
+.p-header .t{font-size:1.0625rem;font-weight:800;flex:1;letter-spacing:-.4px;min-width:0}
+.p-header .sub{font-size:.75rem;color:var(--color-gray-500);display:block;font-weight:500;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.p-header .back{width:32px;height:32px;border:none;background:none;font-size:1.1rem;cursor:pointer;color:var(--color-gray-700);flex-shrink:0}
+.bell{width:40px;height:40px;border:none;background:var(--color-gray-100);border-radius:var(--radius-md);font-size:1.05rem;cursor:pointer;position:relative;flex-shrink:0}
+.bell .dot{position:absolute;top:7px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--color-danger);border:2px solid #fff}
+.tabbar{background:#fff;border-top:1px solid var(--color-gray-100);display:flex;padding:6px 8px calc(10px + env(safe-area-inset-bottom));flex-shrink:0}
+.tabbar button{flex:1;border:none;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:.6875rem;font-weight:600;color:var(--color-gray-500);padding:6px 0;border-radius:var(--radius-sm);cursor:pointer}
+.tabbar button .i{font-size:1.25rem}
+.tabbar button.on{color:var(--color-primary)}
+.tabbar button.soon{opacity:.4}
+
+/* 앨범 목록 */
+.scroll{flex:1;min-height:0;overflow-y:auto;padding:12px 14px 16px}
+.album-card{background:#fff;border-radius:var(--radius-lg);overflow:hidden;margin-bottom:12px;cursor:pointer;border:1px solid transparent;box-shadow:0 1px 2px rgba(0,0,0,.04);transition:border-color .15s}
+.album-card:hover{border-color:var(--color-primary)}
+.album-prev{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;height:88px}
+.album-body{padding:12px 14px}
+.album-top{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.album-title{font-size:.9375rem;font-weight:700;line-height:1.35;word-break:keep-all}
+.album-meta{font-size:.75rem;color:var(--color-gray-500);margin-top:5px;display:flex;flex-wrap:wrap;gap:4px 10px}
+.album-mine{color:var(--color-primary);font-weight:700}
+
+/* 사진 타일 */
+.tile{position:relative;overflow:hidden;background:var(--color-gray-200)}
+.tile .fig{position:absolute;font-size:2.2rem;filter:saturate(1.1);user-select:none}
+.tile.sq{aspect-ratio:1/1;border-radius:6px;cursor:pointer}
+.tile .vid-badge{position:absolute;left:5px;bottom:5px;background:rgba(0,0,0,.6);color:#fff;font-size:.625rem;font-weight:700;padding:2px 6px;border-radius:var(--radius-full);display:flex;gap:3px;align-items:center}
+.tile .mine-badge{position:absolute;right:4px;top:4px;background:rgba(49,130,246,.95);color:#fff;font-size:.625rem;font-weight:800;padding:2px 6px;border-radius:var(--radius-full)}
+.tile .new-badge{position:absolute;left:4px;top:4px;background:rgba(0,196,113,.95);color:#fff;font-size:.625rem;font-weight:800;padding:2px 6px;border-radius:var(--radius-full)}
+.tile .me-badge{position:absolute;right:4px;bottom:4px;background:rgba(255,255,255,.9);color:var(--color-gray-700);font-size:.625rem;font-weight:700;padding:1px 5px;border-radius:var(--radius-full)}
+.tile.dark::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.35))}
+.tile .play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.5rem;text-shadow:0 1px 6px rgba(0,0,0,.5);z-index:2}
+
+/* 갤러리 */
+.chips{display:flex;gap:6px;overflow-x:auto;padding:0 0 2px;margin-bottom:10px}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border-radius:var(--radius-full);border:1px solid var(--color-gray-200);background:#fff;font-size:.8125rem;font-weight:600;color:var(--color-gray-700);cursor:pointer;white-space:nowrap}
+.chip.on{background:var(--color-gray-900);color:#fff;border-color:var(--color-gray-900)}
+.chip .n{font-size:.6875rem;opacity:.75;font-weight:700}
+.kid-chips .chip.on{background:var(--color-primary);border-color:var(--color-primary)}
+.day-head{font-size:.8125rem;font-weight:800;color:var(--color-gray-700);margin:14px 2px 8px;display:flex;align-items:baseline;gap:6px}
+.day-head:first-child{margin-top:2px}
+.day-head small{font-size:.6875rem;color:var(--color-gray-400);font-weight:600}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.cand{background:#fff;border:1px solid var(--color-primary);border-radius:var(--radius-md);padding:12px;margin-bottom:12px}
+.cand .h{display:flex;align-items:center;gap:6px;font-size:.8125rem;font-weight:800;margin-bottom:4px}
+.cand .d{font-size:.75rem;color:var(--color-gray-500);line-height:1.5;margin-bottom:10px}
+.cand-row{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--color-gray-100)}
+.cand-row .tile{width:58px;height:58px;flex-shrink:0;border-radius:var(--radius-sm)}
+.cand-row .info{flex:1;min-width:0;font-size:.75rem;color:var(--color-gray-500)}
+.cand-row .info b{display:block;font-size:.8125rem;color:var(--color-gray-800)}
+.cand-row .acts{display:flex;gap:6px}
+.fab{position:absolute;right:16px;bottom:78px;height:50px;padding:0 18px;border-radius:var(--radius-full);background:var(--color-primary);color:#fff;border:none;font-weight:800;font-size:.9375rem;box-shadow:0 6px 18px rgba(49,130,246,.4);cursor:pointer;display:inline-flex;align-items:center;gap:7px;z-index:15}
+.fab:disabled{background:var(--color-gray-400);box-shadow:none;cursor:not-allowed}
+.gal-bar{background:#fff;padding:10px 14px 2px;border-bottom:1px solid var(--color-gray-100)}
+.gal-stat{font-size:.75rem;color:var(--color-gray-500);padding:0 2px 8px}
+
+/* 시트 */
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.45);display:none;z-index:20}
+.dim.on{display:block}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:22px 22px 0 0;z-index:21;transform:translateY(105%);transition:transform .25s ease;display:flex;flex-direction:column;max-height:92%}
+.sheet.on{transform:translateY(0)}
+.grab{width:40px;height:4px;border-radius:4px;background:var(--color-gray-300);margin:10px auto 2px}
+.sheet-body{overflow-y:auto;padding:10px 18px 18px}
+.sheet-title{font-size:1.0625rem;font-weight:800;letter-spacing:-.4px;margin:6px 0 10px;line-height:1.35}
+.sheet-foot{padding:12px 18px calc(16px + env(safe-area-inset-bottom));border-top:1px solid var(--color-gray-100);display:flex;gap:8px;flex-shrink:0;background:#fff}
+.sheet-foot .btn{flex:1}
+
+/* 업로드 시트 */
+.pick{border:1px dashed var(--color-gray-300);border-radius:var(--radius-md);padding:16px;text-align:center;margin-bottom:12px}
+.pick .e{font-size:1.6rem}
+.pick .t{font-weight:700;font-size:.875rem;margin-top:6px}
+.pick .d{font-size:.75rem;color:var(--color-gray-500);margin-top:3px;line-height:1.5}
+.pick .btns{display:flex;gap:8px;margin-top:12px}
+.pick .btns .btn{flex:1}
+.file{display:flex;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--color-gray-100)}
+.file .ic{width:34px;height:34px;border-radius:var(--radius-sm);display:inline-flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0}
+.file .nm{flex:1;min-width:0}
+.file .nm b{display:block;font-size:.8125rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file .nm span{font-size:.6875rem;color:var(--color-gray-500)}
+.file .st{font-size:.6875rem;font-weight:700;color:var(--color-gray-500);white-space:nowrap}
+.file.err .nm b{color:var(--color-gray-400);text-decoration:line-through}
+.file.err .st{color:var(--color-danger)}
+.file.done .st{color:var(--color-success)}
+.bar{height:4px;border-radius:4px;background:var(--color-gray-200);overflow:hidden;margin-top:5px}
+.bar i{display:block;height:100%;background:var(--color-primary);width:0;transition:width .25s}
+
+/* 뷰어 */
+.viewer{position:absolute;inset:0;background:#000;z-index:40;display:none;flex-direction:column}
+.viewer.on{display:flex}
+.v-top{padding:12px 14px;display:flex;align-items:center;gap:10px;color:#fff}
+.v-top .x{background:rgba(255,255,255,.15);border:none;color:#fff;width:34px;height:34px;border-radius:50%;font-size:1rem;cursor:pointer}
+.v-top .c{flex:1;font-size:.8125rem;font-weight:600;text-align:center;opacity:.85}
+.v-stage{flex:1;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.v-stage .tile{width:100%;height:100%;border-radius:0}
+.v-stage .tile .fig{font-size:6rem}
+.v-nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.35);border:none;color:#fff;width:38px;height:38px;border-radius:50%;font-size:1.1rem;cursor:pointer}
+.v-nav.l{left:8px} .v-nav.r{right:8px}
+.v-info{padding:12px 16px calc(14px + env(safe-area-inset-bottom));color:#fff;background:rgba(0,0,0,.6)}
+.v-info .row{display:flex;gap:8px;align-items:center;font-size:.8125rem;margin-bottom:8px;flex-wrap:wrap}
+.v-info .row .k{opacity:.6;font-size:.75rem}
+.v-info .acts{display:flex;gap:8px}
+.v-info .acts .btn{flex:1;background:rgba(255,255,255,.16);color:#fff;min-height:40px;font-size:.875rem}
+.v-info .acts .btn.danger{background:rgba(255,72,72,.25);color:#FFB4B4}
+.v-tag{background:rgba(49,130,246,.9);color:#fff;font-size:.6875rem;font-weight:800;padding:3px 9px;border-radius:var(--radius-full)}
+.v-video{width:100%;height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:#fff}
+.v-video .frame{width:88%;aspect-ratio:16/9;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:2.5rem;position:relative;overflow:hidden}
+.v-video .cap{font-size:.75rem;opacity:.7}
+
+/* 내 정보 · 얼굴 */
+.me-card{background:#fff;border-radius:var(--radius-lg);padding:16px;margin-bottom:12px}
+.me-card h4{font-size:.8125rem;font-weight:800;color:var(--color-gray-500);margin-bottom:10px}
+.kid-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.kid-row .av{width:38px;height:38px;border-radius:50%;background:var(--color-primary-bg);color:var(--color-primary);font-weight:800;display:inline-flex;align-items:center;justify-content:center}
+.kid-row .n{font-weight:700;font-size:.9375rem}
+.kid-row .b{font-size:.75rem;color:var(--color-gray-500)}
+.kid-row .sp{flex:1}
+.face-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.face-thumb{width:64px;height:64px;border-radius:var(--radius-md);position:relative;overflow:hidden}
+.face-thumb .rm{position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;border:none;font-size:.625rem;cursor:pointer;line-height:1}
+.face-add{width:64px;height:64px;border-radius:var(--radius-md);border:1px dashed var(--color-gray-300);background:var(--bg-tertiary);color:var(--color-primary);font-size:1.25rem;cursor:pointer}
+.consent{display:flex;gap:8px;align-items:flex-start;font-size:.75rem;color:var(--color-gray-600);line-height:1.55;margin:12px 0}
+.consent input{margin-top:3px;width:16px;height:16px;flex-shrink:0}
+
+/* 토스트 */
+.toast{position:absolute;left:50%;bottom:100px;transform:translateX(-50%) translateY(20px);background:rgba(25,31,40,.94);color:#fff;padding:10px 16px;border-radius:var(--radius-md);font-size:.8125rem;font-weight:600;opacity:0;transition:all .2s;z-index:60;max-width:88%;text-align:center;line-height:1.45;pointer-events:none}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (max-width: 900px){
+  .stage{flex-direction:column;align-items:stretch;gap:0;padding:0}
+  .panel{width:100%;border-radius:0;order:2;box-shadow:none;border-top:1px solid var(--color-gray-200);padding:16px}
+  .state-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .state-btn{margin-bottom:0}
+  .phone{order:1;width:100%;height:auto;min-height:86vh;min-height:86dvh;background:none;border-radius:0;padding:0;box-shadow:none}
+  .screen{border-radius:0;min-height:86vh;min-height:86dvh}
+  .statusbar{display:none}
+  .mock-bar{font-size:.75rem;padding:8px 12px;gap:8px}
+  .mock-note{font-size:.75rem;text-align:left;line-height:1.5}
+}
+</style>
+</head>
+<body>
+
+<div class="mock-bar">
+  <strong>사진 공유 목업</strong>
+  <span>학부모 화면 (앨범 · 업로드 · 우리 아이만)</span>
+  <div class="spacer"></div>
+  <a href="./teacher.html">선생님 화면 목업 →</a>
+</div>
+<div class="mock-note">실제 동작하지 않는 화면 목업입니다. 대회가 끝난 뒤 상황이라 오늘을 <b>2026-09-13(일)</b> 로 가정합니다. 썸네일은 <b>자리표시용 그래픽</b>이며 실제로는 Google Drive 썸네일이 그대로 보입니다.</div>
+
+<div class="stage">
+  <div class="panel">
+    <h3>화면</h3>
+    <p>확정된 대회의 앨범을 보고, 사진을 올리고, 우리 아이 사진만 거르는 화면입니다.</p>
+    <div class="state-grid">
+      <button class="state-btn on" onclick="setState('albums',this)"><span class="t">① 사진 (앨범 목록)</span><span class="d">확정된 이벤트의 앨범 카드</span></button>
+      <button class="state-btn" onclick="setState('gallery',this)"><span class="t">② 앨범 갤러리</span><span class="d">전체 / 우리 아이만 / 영상</span></button>
+      <button class="state-btn" onclick="setState('faces',this)"><span class="t">③ 자녀 얼굴 등록</span><span class="d">내 정보 &gt; 자녀 &gt; 얼굴 사진</span></button>
+      <button class="state-btn" onclick="setState('denied',this)"><span class="t">④ 미확정 (403)</span><span class="d">자녀가 확정되지 않은 이벤트</span></button>
+      <button class="state-btn" onclick="setState('noalbum',this)"><span class="t">⑤ 앨범 없음</span><span class="d">빈 상태</span></button>
+    </div>
+    <div class="divider"></div>
+    <div class="tip">
+      <strong>직접 해보세요</strong><br>
+      · ① 앨범 카드를 누르면 갤러리가 열립니다<br>
+      · ② 우하단 <b>[+ 올리기]</b> → 파일 목록 → 업로드 진행률 → 얼굴 분석 결과<br>
+      &nbsp;&nbsp;<code>문서.pdf</code>·<code>620MB 영상</code> 은 형식·크기로 걸러집니다<br>
+      · ② 칩 <b>[우리 아이만]</b> → <code>하은</code>은 자동 태그 + "혹시 우리 아이?" 확인<br>
+      &nbsp;&nbsp;<code>서준</code>은 얼굴 미등록이라 안내가 뜹니다<br>
+      · 썸네일을 누르면 <b>뷰어</b> (좌우 이동 · 원본 보기 · 내 사진만 삭제)<br>
+      · ③ 에서 얼굴 사진을 등록하면 기존 앨범에서 <b>즉시 매칭</b>됩니다<br>
+      · ② 상단 <b>[업로드 마감]</b> 앨범(여름 오픈 대회)은 올리기 버튼이 잠깁니다
+    </div>
+  </div>
+
+  <div class="phone">
+    <div class="screen" id="screen">
+      <div class="statusbar"><span>9:41</span><span>■■■ ⚡ 100%</span></div>
+      <div class="urlbar"><span>🔒</span><div class="u" id="url">rg-manager.vercel.app/parent/photos</div></div>
+
+      <!-- ① 앨범 목록 -->
+      <div id="vAlbums" class="view">
+        <div class="p-header">
+          <div class="t">사진<span class="sub">이재림 리듬체조 · 확정된 이벤트의 앨범</span></div>
+          <button class="bell" title="알림">🔔<span class="dot"></span></button>
+        </div>
+        <div class="scroll" id="albumList"></div>
+        <div class="tabbar">
+          <button onclick="toast('일정 화면 — 학부모 포털 목업 참고')"><span class="i">📅</span>일정</button>
+          <button class="on"><span class="i">📷</span>사진</button>
+          <button class="soon"><span class="i">💬</span>채팅</button>
+          <button onclick="setState('faces')"><span class="i">👤</span>내 정보</button>
+        </div>
+      </div>
+
+      <!-- ② 갤러리 -->
+      <div id="vGallery" class="view hidden">
+        <div class="p-header">
+          <button class="back" onclick="setState('albums')">←</button>
+          <div class="t" id="galTitle">2026 서울시 리듬체조 대회<span class="sub" id="galSub">9/12(토) · 사진 42 · 영상 3</span></div>
+        </div>
+        <div class="gal-bar">
+          <div class="chips" id="galChips"></div>
+          <div class="chips kid-chips hidden" id="kidChips"></div>
+        </div>
+        <div class="scroll" id="galBody"></div>
+        <button class="fab" id="fab" onclick="openUpload()">＋ 올리기</button>
+        <div class="tabbar">
+          <button onclick="toast('일정 화면 — 학부모 포털 목업 참고')"><span class="i">📅</span>일정</button>
+          <button class="on"><span class="i">📷</span>사진</button>
+          <button class="soon"><span class="i">💬</span>채팅</button>
+          <button onclick="setState('faces')"><span class="i">👤</span>내 정보</button>
+        </div>
+      </div>
+
+      <!-- ③ 내 정보 · 얼굴 -->
+      <div id="vFaces" class="view hidden">
+        <div class="p-header"><button class="back" onclick="setState('albums')">←</button><div class="t">내 정보<span class="sub">카카오 · 하은엄마</span></div></div>
+        <div class="scroll" id="faceBody"></div>
+        <div class="tabbar">
+          <button onclick="toast('일정 화면 — 학부모 포털 목업 참고')"><span class="i">📅</span>일정</button>
+          <button onclick="setState('albums')"><span class="i">📷</span>사진</button>
+          <button class="soon"><span class="i">💬</span>채팅</button>
+          <button class="on"><span class="i">👤</span>내 정보</button>
+        </div>
+      </div>
+
+      <!-- ④ 미확정 -->
+      <div id="vDenied" class="view hidden">
+        <div class="p-header"><button class="back" onclick="setState('albums')">←</button><div class="t">전국 꿈나무 리듬체조 대회<span class="sub">10/31(토) · 광주 염주체육관</span></div></div>
+        <div class="empty">
+          <div class="e">🔒</div>
+          <div class="t">아직 사진을 볼 수 없어요</div>
+          <div class="d">자녀가 <b>확정된</b> 이벤트의 사진만 볼 수 있어요.<br>신청 후 선생님이 확정하면 바로 열립니다.</div>
+          <button class="btn btn-outline btn-sm" style="margin-top:6px" onclick="toast('일정에서 신청하기 (학부모 포털)')">일정에서 신청하기</button>
+        </div>
+        <div class="tabbar"><button><span class="i">📅</span>일정</button><button class="on"><span class="i">📷</span>사진</button><button class="soon"><span class="i">💬</span>채팅</button><button onclick="setState('faces')"><span class="i">👤</span>내 정보</button></div>
+      </div>
+
+      <!-- ⑤ 앨범 없음 -->
+      <div id="vNoalbum" class="view hidden">
+        <div class="p-header"><div class="t">사진<span class="sub">이재림 리듬체조</span></div><button class="bell">🔔</button></div>
+        <div class="empty">
+          <div class="e">📷</div>
+          <div class="t">아직 앨범이 없어요</div>
+          <div class="d">확정된 대회의 사진이 여기에 모여요.<br>선생님이 앨범을 열면 바로 보여요.</div>
+        </div>
+        <div class="tabbar"><button><span class="i">📅</span>일정</button><button class="on"><span class="i">📷</span>사진</button><button class="soon"><span class="i">💬</span>채팅</button><button onclick="setState('faces')"><span class="i">👤</span>내 정보</button></div>
+      </div>
+
+      <!-- 시트 / 뷰어 / 토스트 -->
+      <div class="dim" id="dim" onclick="closeSheet()"></div>
+      <div class="sheet" id="sheet">
+        <div class="grab"></div>
+        <div class="sheet-body" id="sheetBody"></div>
+        <div class="sheet-foot" id="sheetFoot"></div>
+      </div>
+
+      <div class="viewer" id="viewer">
+        <div class="v-top"><button class="x" onclick="closeViewer()">✕</button><div class="c" id="vCount"></div><span style="width:34px"></span></div>
+        <div class="v-stage" id="vStage"></div>
+        <div class="v-info" id="vInfo"></div>
+      </div>
+
+      <div class="toast" id="toast"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ───────── 예시 데이터 ───────── */
+const TODAY = '2026-09-13';
+const children = [
+  { id: 1, name: '김하은', short: '하은', faces: ['h1','h2'] },
+  { id: 2, name: '김서준', short: '서준', faces: [] }
+];
+
+const albums = [
+  { id: 1, title: '2026 서울시 리듬체조 대회', date: '2026-09-12', place: '올림픽공원 체조경기장', uploadOpen: true },
+  { id: 2, title: '한강 러닝 클래스',           date: '2026-08-29', place: '여의도 한강공원',       uploadOpen: true },
+  { id: 3, title: '여름 오픈 대회',             date: '2026-08-10', place: '잠실 학생체육관',       uploadOpen: false }
+];
+
+/* 결정적 의사난수 (매번 같은 화면이 나오도록) */
+function rnd(seed){ let s = seed; return () => (s = (s * 1103515245 + 12345) % 2147483648) / 2147483648; }
+
+let mediaSeq = 100;
+function makeMedia(albumId, count, seed, opt){
+  const r = rnd(seed), out = [];
+  const times = ['09:12','09:40','10:05','10:24','10:51','11:08','11:33','12:02','13:15','13:44','14:20','14:58'];
+  for (let i = 0; i < count; i++){
+    const x = r();
+    const kind = x > 0.88 ? 'video' : 'image';
+    const uy = r();
+    const uploader = uy < 0.45 ? 'teacher' : uy < 0.62 ? 'me' : 'parent';
+    const t = r();
+    const tags = [], cand = [];
+    if (kind === 'image' && opt.tagRate){
+      if (t < opt.tagRate) tags.push(1);
+      else if (t < opt.tagRate + 0.10) cand.push(1);
+      if (r() < 0.10) tags.push(2);       // 서준 (선생님 수동 태그)
+    }
+    out.push({
+      id: ++mediaSeq, albumId, kind, uploader,
+      day: opt.days[Math.floor(r() * opt.days.length)],
+      time: times[Math.floor(r() * times.length)],
+      dur: kind === 'video' ? `0:${String(12 + Math.floor(r() * 45)).padStart(2,'0')}` : null,
+      tags, cand,
+      faceStatus: kind === 'video' ? 'skipped' : (r() < 0.08 ? 'none' : 'done'),
+      fresh: false
+    });
+  }
+  return out;
+}
+
+let media = [
+  ...makeMedia(1, 33, 7,  { days: ['2026-09-12'], tagRate: 0.26 }),
+  ...makeMedia(2, 14, 31, { days: ['2026-08-29'], tagRate: 0.00 }),
+  ...makeMedia(3, 24, 53, { days: ['2026-08-10'], tagRate: 0.20 })
+];
+
+/* ───────── 유틸 ───────── */
+const DOW = ['일','월','화','수','목','금','토'];
+const d = s => new Date(s + 'T00:00:00');
+const fmt = s => { const x = d(s); return `${x.getMonth()+1}/${x.getDate()}(${DOW[x.getDay()]})`; };
+const esc = s => { const t = document.createElement('div'); t.textContent = s; return t.innerHTML; };
+
+const PALETTES = [
+  ['#FFE3EE','#FFAFD0'], ['#E4ECFF','#AFC9FF'], ['#E7F7EA','#B4E4BD'],
+  ['#FFF2DE','#FFD79F'], ['#F1EAFF','#CFBCFF'], ['#DEF5F8','#A6E1E9'],
+  ['#FFE9E1','#FFC0AD'], ['#EFF1F4','#C7CED7']
+];
+const FIGS = ['🤸‍♀️','🎀','🩰','💃','🏅','🎽','🤾‍♀️','⭐'];
+
+function tileInner(m, big){
+  const p = PALETTES[m.id % PALETTES.length];
+  const ang = 110 + (m.id * 37) % 130;
+  const fig = FIGS[(m.id * 3) % FIGS.length];
+  const left = 14 + (m.id * 17) % 52, top = 10 + (m.id * 29) % 46;
+  const bg = m.kind === 'video'
+    ? `linear-gradient(${ang}deg, #4E5968, #191F28)`
+    : `linear-gradient(${ang}deg, ${p[0]}, ${p[1]})`;
+  return { bg, html: `<span class="fig" style="left:${left}%;top:${top}%${big?';font-size:6rem':''}">${fig}</span>` };
+}
+function tile(m, cls){
+  const t = tileInner(m);
+  const mine = m.tags.includes(1) || m.tags.includes(2);
+  const names = m.tags.map(id => children.find(c => c.id === id).short).join('·');
+  return `<div class="tile sq ${cls||''} ${m.kind==='video'?'dark':''}" style="${t.bg?`background:${t.bg}`:''}" onclick="openViewer(${m.id})">
+    ${t.html}
+    ${m.kind === 'video' ? `<span class="play">▶</span><span class="vid-badge">▶ ${m.dur}</span>` : ''}
+    ${mine ? `<span class="mine-badge">${names}</span>` : ''}
+    ${m.fresh ? `<span class="new-badge">방금</span>` : ''}
+    ${m.uploader === 'me' && !m.fresh ? `<span class="me-badge">내 사진</span>` : ''}
+  </div>`;
+}
+
+/* ───────── 앨범 목록 ───────── */
+function albumStats(a){
+  const list = media.filter(m => m.albumId === a.id);
+  return {
+    images: list.filter(m => m.kind === 'image').length,
+    videos: list.filter(m => m.kind === 'video').length,
+    mine: list.filter(m => m.tags.length).length
+  };
+}
+function renderAlbums(){
+  document.getElementById('albumList').innerHTML = albums.map(a => {
+    const s = albumStats(a);
+    const prev = media.filter(m => m.albumId === a.id).slice(0, 4).map(m => {
+      const t = tileInner(m);
+      return `<div class="tile ${m.kind==='video'?'dark':''}" style="background:${t.bg}">${t.html}${m.kind==='video'?'<span class="play">▶</span>':''}</div>`;
+    }).join('');
+    return `<div class="album-card" onclick="openAlbum(${a.id})">
+      <div class="album-prev">${prev}</div>
+      <div class="album-body">
+        <div class="album-top">
+          <span class="badge badge-danger">🏆 대회</span>
+          ${a.uploadOpen ? '<span class="badge badge-primary">사진 올릴 수 있어요</span>' : '<span class="badge badge-gray">업로드 마감</span>'}
+        </div>
+        <div class="album-title">${esc(a.title)}</div>
+        <div class="album-meta">
+          <span>📅 ${fmt(a.date)}</span><span>📍 ${esc(a.place)}</span>
+        </div>
+        <div class="album-meta">
+          <span>사진 ${s.images} · 영상 ${s.videos}</span>
+          ${s.mine ? `<span class="album-mine">우리 아이 ${s.mine}장</span>` : '<span style="color:var(--color-gray-400)">우리 아이 사진 없음</span>'}
+        </div>
+      </div>
+    </div>`;
+  }).join('') + `<div class="notice gray" style="margin-top:2px">확정된 이벤트의 앨범만 보여요. 선생님이 앨범을 열면 여기에 추가됩니다.</div>`;
+}
+
+/* ───────── 갤러리 ───────── */
+let curAlbum = 1, galFilter = 'all', curKid = 1;
+function openAlbum(id){ curAlbum = id; galFilter = 'all'; setState('gallery'); }
+
+function visible(){
+  let list = media.filter(m => m.albumId === curAlbum);
+  if (galFilter === 'mine')   list = list.filter(m => m.tags.includes(curKid));
+  if (galFilter === 'video')  list = list.filter(m => m.kind === 'video');
+  if (galFilter === 'uploaded') list = list.filter(m => m.uploader === 'me');
+  return list;
+}
+function renderGallery(){
+  const a = albums.find(x => x.id === curAlbum), s = albumStats(a);
+  document.getElementById('galTitle').innerHTML = `${esc(a.title)}<span class="sub">${fmt(a.date)} · 사진 ${s.images} · 영상 ${s.videos}</span>`;
+
+  const all = media.filter(m => m.albumId === curAlbum);
+  const counts = {
+    all: all.length,
+    mine: all.filter(m => m.tags.includes(curKid)).length,
+    video: all.filter(m => m.kind === 'video').length,
+    uploaded: all.filter(m => m.uploader === 'me').length
+  };
+  document.getElementById('galChips').innerHTML = [
+    ['all','전체'], ['mine','우리 아이만'], ['video','영상'], ['uploaded','내가 올린 것']
+  ].map(([k,l]) => `<button class="chip ${galFilter===k?'on':''}" onclick="galFilter='${k}';renderGallery()">${l} <span class="n">${counts[k]}</span></button>`).join('');
+
+  const kc = document.getElementById('kidChips');
+  if (galFilter === 'mine'){
+    kc.classList.remove('hidden');
+    kc.innerHTML = children.map(c => `<button class="chip ${c.id===curKid?'on':''}" onclick="curKid=${c.id};renderGallery()">${c.short}${c.faces.length?'':' <span class="n">얼굴 미등록</span>'}</button>`).join('');
+  } else kc.classList.add('hidden');
+
+  const fab = document.getElementById('fab');
+  fab.disabled = !a.uploadOpen;
+  fab.textContent = a.uploadOpen ? '＋ 올리기' : '업로드 마감';
+
+  const body = document.getElementById('galBody');
+  const list = visible();
+  let html = '';
+
+  if (galFilter === 'mine'){
+    const kid = children.find(c => c.id === curKid);
+    if (!kid.faces.length){
+      html += `<div class="notice info" style="margin-bottom:12px">
+        <b>${kid.name}</b>의 얼굴 사진을 등록하면 우리 아이 사진만 모아 볼 수 있어요.
+        <button class="btn btn-primary btn-sm btn-block" style="margin-top:9px" onclick="setState('faces')">얼굴 사진 등록하러 가기</button>
+      </div>`;
+    } else {
+      const cands = media.filter(m => m.albumId === curAlbum && m.cand.includes(curKid));
+      if (cands.length){
+        html += `<div class="cand">
+          <div class="h">🤔 혹시 우리 아이? <span class="badge badge-warning">${cands.length}장</span></div>
+          <div class="d">비슷하지만 확실하지 않은 사진이에요. 확인해 주시면 다음부터 더 정확해져요.</div>
+          ${cands.map(m => {
+            const t = tileInner(m);
+            return `<div class="cand-row">
+              <div class="tile" style="background:${t.bg}" onclick="openViewer(${m.id})">${t.html}</div>
+              <div class="info"><b>${m.time}</b>${m.uploader==='teacher'?'선생님':m.uploader==='me'?'내가 올림':'학부모'} 올림</div>
+              <div class="acts">
+                <button class="btn btn-outline btn-sm" onclick="confirmCand(${m.id},false)">아니에요</button>
+                <button class="btn btn-primary btn-sm" onclick="confirmCand(${m.id},true)">맞아요</button>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`;
+      }
+    }
+  }
+
+  if (!list.length){
+    html += `<div class="empty" style="padding:44px 20px">
+      <div class="e">${galFilter==='mine'?'🔍':galFilter==='video'?'🎬':'📷'}</div>
+      <div class="t">${galFilter==='mine'?'아직 찾은 사진이 없어요':galFilter==='video'?'영상이 없어요':galFilter==='uploaded'?'아직 올린 사진이 없어요':'사진이 없어요'}</div>
+      <div class="d">${galFilter==='mine'?'얼굴이 작게 나오거나 옆모습이면 못 찾을 수 있어요.<br>선생님이 직접 이름을 붙여 주기도 해요.':'우하단 [+ 올리기] 로 사진·영상을 올려 보세요.'}</div>
+    </div>`;
+  } else {
+    const days = [...new Set(list.map(m => m.day))].sort().reverse();
+    for (const day of days){
+      const items = list.filter(m => m.day === day);
+      html += `<div class="day-head">${fmt(day)} <small>${items.length}개</small></div><div class="grid3">${items.map(m => tile(m)).join('')}</div>`;
+    }
+    html += `<div class="gal-stat" style="padding:14px 2px 0;text-align:center">원본은 Google Drive 에서 열려요 · 화질 그대로 저장돼요</div>`;
+  }
+  body.innerHTML = html;
+}
+function confirmCand(id, yes){
+  const m = media.find(x => x.id === id);
+  m.cand = m.cand.filter(c => c !== curKid);
+  if (yes) m.tags.push(curKid);
+  toast(yes ? `${children.find(c=>c.id===curKid).short} 사진으로 저장했어요` : '다음부터 이 사진은 보여드리지 않을게요');
+  renderGallery();
+}
+
+/* ───────── 뷰어 ───────── */
+let viewList = [], viewIdx = 0;
+function openViewer(id){
+  viewList = visible();
+  if (!viewList.some(m => m.id === id)) viewList = media.filter(m => m.albumId === curAlbum);
+  viewIdx = viewList.findIndex(m => m.id === id);
+  document.getElementById('viewer').classList.add('on');
+  renderViewer();
+}
+function closeViewer(){ document.getElementById('viewer').classList.remove('on'); }
+function moveViewer(step){ viewIdx = (viewIdx + step + viewList.length) % viewList.length; renderViewer(); }
+function renderViewer(){
+  const m = viewList[viewIdx];
+  if (!m){ closeViewer(); return; }
+  const t = tileInner(m, true);
+  document.getElementById('vCount').textContent = `${viewIdx+1} / ${viewList.length}`;
+  document.getElementById('vStage').innerHTML = m.kind === 'video'
+    ? `<div class="v-video"><div class="frame" style="background:${t.bg}">${t.html}<span class="play">▶</span></div><div class="cap">Google Drive 플레이어로 재생 · ${m.dur}</div></div>
+       <button class="v-nav l" onclick="moveViewer(-1)">‹</button><button class="v-nav r" onclick="moveViewer(1)">›</button>`
+    : `<div class="tile" style="background:${t.bg}">${t.html}</div>
+       <button class="v-nav l" onclick="moveViewer(-1)">‹</button><button class="v-nav r" onclick="moveViewer(1)">›</button>`;
+  const who = m.uploader === 'teacher' ? '선생님' : m.uploader === 'me' ? '내가 올림' : '학부모';
+  const tags = m.tags.map(id => `<span class="v-tag">${children.find(c=>c.id===id).short}</span>`).join(' ');
+  document.getElementById('vInfo').innerHTML = `
+    <div class="row"><span class="k">📅</span> ${fmt(m.day)} ${m.time} <span class="k" style="margin-left:6px">👤</span> ${who} ${tags}</div>
+    <div class="acts">
+      <button class="btn" onclick="toast('Google Drive 에서 원본이 새 창으로 열려요')">원본 보기</button>
+      ${m.uploader === 'me' ? `<button class="btn danger" onclick="delMedia(${m.id})">삭제</button>` : ''}
+    </div>`;
+}
+function delMedia(id){
+  media = media.filter(m => m.id !== id);
+  viewList = viewList.filter(m => m.id !== id);
+  if (viewIdx >= viewList.length) viewIdx = 0;
+  toast('Drive 휴지통으로 옮겼어요 · 30일 안에 복구할 수 있어요');
+  renderGallery();
+  if (viewList.length) renderViewer(); else closeViewer();
+}
+
+/* ───────── 업로드 ───────── */
+const FILES = [
+  { name: 'IMG_4821.HEIC', size: '3.2MB', kind: 'image' },
+  { name: 'IMG_4822.JPG',  size: '2.8MB', kind: 'image' },
+  { name: 'IMG_4823.JPG',  size: '4.1MB', kind: 'image' },
+  { name: 'IMG_4826.JPG',  size: '3.6MB', kind: 'image' },
+  { name: 'VID_0091.MOV',  size: '182MB', kind: 'video' },
+  { name: '문서.pdf',       size: '1.1MB', kind: 'file',  error: '사진·영상만 올릴 수 있어요' },
+  { name: 'VID_0092.MOV',  size: '620MB', kind: 'video', error: '영상은 500MB 까지예요' }
+];
+let upState = 'pick';
+function openUpload(){
+  const a = albums.find(x => x.id === curAlbum);
+  if (!a.uploadOpen) return;
+  upState = 'pick';
+  renderUpload();
+  document.getElementById('dim').classList.add('on');
+  document.getElementById('sheet').classList.add('on');
+}
+function closeSheet(){ document.getElementById('dim').classList.remove('on'); document.getElementById('sheet').classList.remove('on'); }
+function fileIcon(f){
+  const bg = f.kind === 'video' ? '#EFF1F4' : f.kind === 'file' ? '#FFEDED' : '#EBF4FF';
+  const ic = f.kind === 'video' ? '🎬' : f.kind === 'file' ? '📄' : '🖼️';
+  return `<span class="ic" style="background:${bg}">${ic}</span>`;
+}
+function renderUpload(){
+  const body = document.getElementById('sheetBody'), foot = document.getElementById('sheetFoot');
+  const ok = FILES.filter(f => !f.error);
+  if (upState === 'pick'){
+    body.innerHTML = `<div class="sheet-title">사진 · 영상 올리기</div>
+      <div class="pick">
+        <div class="e">📷</div>
+        <div class="t">2026 서울시 리듬체조 대회 앨범에 올려요</div>
+        <div class="d">사진 25MB · 영상 500MB 까지, 한 번에 30개<br>선생님과 확정된 학부모가 함께 봐요</div>
+        <div class="btns"><button class="btn btn-outline" onclick="toast('카메라 열기 (목업)')">📸 촬영</button><button class="btn btn-outline" onclick="toast('아래 목록이 선택된 파일이에요')">🖼️ 갤러리</button></div>
+      </div>
+      <div style="font-size:.8125rem;font-weight:700;margin:4px 0 2px">선택한 파일 ${FILES.length}개</div>
+      ${FILES.map(f => `<div class="file ${f.error?'err':''}">
+        ${fileIcon(f)}
+        <div class="nm"><b>${esc(f.name)}</b><span>${f.size}</span></div>
+        <div class="st">${f.error ? esc(f.error) : '대기'}</div>
+      </div>`).join('')}
+      <div class="notice gray" style="margin-top:12px">올린 사진은 선생님의 Google Drive 앨범 폴더에 원본 그대로 저장돼요.</div>`;
+    foot.innerHTML = `<button class="btn btn-outline" onclick="closeSheet()">닫기</button><button class="btn btn-primary" onclick="startUpload()">${ok.length}개 올리기</button>`;
+  }
+  if (upState === 'busy'){
+    body.innerHTML = `<div class="sheet-title">올리는 중…</div>
+      <div class="notice info" style="margin-bottom:10px">앱을 닫지 말아 주세요. 끊겨도 이어서 올라가요.</div>
+      ${ok.map((f,i) => `<div class="file" id="upf${i}">
+        ${fileIcon(f)}
+        <div class="nm"><b>${esc(f.name)}</b><span>${f.size}</span><div class="bar"><i id="upb${i}"></i></div></div>
+        <div class="st" id="ups${i}">0%</div>
+      </div>`).join('')}`;
+    foot.innerHTML = `<button class="btn btn-outline" onclick="toast('업로드를 취소했어요')">취소</button>`;
+  }
+  if (upState === 'done'){
+    body.innerHTML = `<div class="sheet-title">다 올렸어요 🎉</div>
+      <div class="notice ok" style="margin-bottom:10px">사진 4장 · 영상 1개를 앨범에 올렸어요.</div>
+      <div class="file" style="border-top:none">🔍<div class="nm"><b>얼굴 분석 3장 완료</b><span>우리 아이 사진에 자동으로 모아드려요</span></div><div class="st done">완료</div></div>
+      <div class="file">⚠️<div class="nm"><b>1장은 분석하지 못했어요</b><span>IMG_4821.HEIC · 선생님이 다시 분석할 수 있어요</span></div><div class="st">보류</div></div>
+      <div class="file">🎬<div class="nm"><b>영상은 얼굴을 찾지 않아요</b><span>필요하면 선생님이 직접 이름을 붙여요</span></div><div class="st">-</div></div>
+      <div class="notice gray" style="margin-top:12px">올린 사진은 <b>내가 올린 것</b> 칩에서 모아 볼 수 있고, 내가 올린 사진만 삭제할 수 있어요.</div>`;
+    foot.innerHTML = `<button class="btn btn-primary btn-block" onclick="closeSheet();renderGallery()">앨범에서 보기</button>`;
+  }
+}
+function startUpload(){
+  upState = 'busy'; renderUpload();
+  const ok = FILES.filter(f => !f.error);
+  ok.forEach((f, i) => {
+    let p = 0;
+    const speed = f.kind === 'video' ? 7 : 19;
+    const timer = setInterval(() => {
+      p = Math.min(100, p + speed * (0.6 + Math.random()));
+      const bar = document.getElementById('upb' + i), st = document.getElementById('ups' + i);
+      if (!bar) { clearInterval(timer); return; }
+      bar.style.width = p + '%';
+      st.textContent = p >= 100 ? '완료' : Math.floor(p) + '%';
+      if (p >= 100){
+        clearInterval(timer);
+        document.getElementById('upf' + i).classList.add('done');
+        if (i === ok.length - 1) setTimeout(finishUpload, 500);
+      }
+    }, 220);
+  });
+}
+function finishUpload(){
+  const fresh = [
+    { kind: 'image', tags: [1], faceStatus: 'done' },
+    { kind: 'image', tags: [],  faceStatus: 'done' },
+    { kind: 'image', tags: [],  faceStatus: 'done' },
+    { kind: 'image', tags: [],  faceStatus: 'skipped' },
+    { kind: 'video', tags: [],  faceStatus: 'skipped', dur: '1:04' }
+  ].map(f => ({ id: ++mediaSeq, albumId: curAlbum, uploader: 'me', day: '2026-09-12', time: '15:20', cand: [], fresh: true, ...f }));
+  media = [...fresh, ...media];
+  upState = 'done'; renderUpload();
+}
+
+/* ───────── 자녀 얼굴 ───────── */
+function renderFaces(){
+  document.getElementById('faceBody').innerHTML = `
+    <div class="me-card">
+      <h4>우리 아이 사진 찾기</h4>
+      <div style="font-size:.8125rem;color:var(--color-gray-600);line-height:1.6;margin-bottom:12px">
+        아이 얼굴 사진을 등록하면 앨범에서 <b>우리 아이가 나온 사진만</b> 모아서 볼 수 있어요.
+        등록한 사진은 다른 학부모에게 보이지 않아요.
+      </div>
+      ${children.map(c => `
+        <div style="border-top:1px solid var(--color-gray-100);padding-top:12px;margin-top:12px">
+          <div class="kid-row">
+            <div class="av">${c.short.charAt(0)}</div>
+            <div><div class="n">${c.name}</div><div class="b">${c.faces.length ? `얼굴 사진 ${c.faces.length}장 등록됨` : '아직 등록하지 않았어요'}</div></div>
+            <div class="sp"></div>
+            ${c.faces.length ? '<span class="badge badge-success">찾는 중</span>' : '<span class="badge badge-gray">미등록</span>'}
+          </div>
+          <div class="face-row">
+            ${c.faces.map((f, i) => {
+              const p = PALETTES[(c.id * 3 + i) % PALETTES.length];
+              return `<div class="face-thumb" style="background:linear-gradient(140deg,${p[0]},${p[1]})">
+                <span class="fig" style="left:18%;top:12%;font-size:2rem">🙂</span>
+                <button class="rm" onclick="removeFace(${c.id},${i})">✕</button>
+              </div>`;
+            }).join('')}
+            ${c.faces.length < 3 ? `<button class="face-add" onclick="openConsent(${c.id})">＋</button>` : ''}
+          </div>
+        </div>`).join('')}
+      <div class="notice gray" style="margin-top:14px">사진은 정면이 잘 보이는 것으로, 아이 <b>한 명만</b> 나온 사진을 올려 주세요. 최대 3장까지 등록할 수 있어요.</div>
+    </div>
+    <div class="me-card">
+      <h4>내 아이</h4>
+      <div class="kid-row"><div class="av">하</div><div><div class="n">김하은</div><div class="b">2018-03-05 · 토요 A반</div></div><div class="sp"></div><span class="badge badge-success">연결됨</span></div>
+      <div class="kid-row"><div class="av">서</div><div><div class="n">김서준</div><div class="b">2020-11-12 · 수요 B반</div></div><div class="sp"></div><span class="badge badge-success">연결됨</span></div>
+    </div>`;
+}
+let consentKid = 1;
+function openConsent(kidId){
+  consentKid = kidId;
+  const c = children.find(x => x.id === kidId);
+  document.getElementById('sheetBody').innerHTML = `
+    <div class="sheet-title">${c.name} 얼굴 사진 등록</div>
+    <div class="pick">
+      <div class="e">🙂</div>
+      <div class="t">정면이 잘 보이는 사진 1장</div>
+      <div class="d">아이 한 명만 나온 사진을 골라 주세요.<br>얼굴이 없거나 두 명 이상이면 등록되지 않아요.</div>
+    </div>
+    <label class="consent"><input type="checkbox" id="cChk" checked onchange="renderConsentFoot()">
+      자녀 사진은 <b>우리 아이 사진 찾기</b>에만 사용되며, 얼굴 특징값과 함께 저장됩니다. 언제든 삭제할 수 있습니다.</label>
+    <div style="font-size:.75rem;color:var(--color-gray-400);line-height:1.6">목업에서는 아래 버튼으로 결과를 골라 볼 수 있어요.</div>
+    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+      <button class="btn btn-outline btn-sm" onclick="tryFace('none')">얼굴 없는 사진</button>
+      <button class="btn btn-outline btn-sm" onclick="tryFace('two')">둘이 나온 사진</button>
+    </div>`;
+  renderConsentFoot();
+  document.getElementById('dim').classList.add('on');
+  document.getElementById('sheet').classList.add('on');
+}
+function renderConsentFoot(){
+  const on = document.getElementById('cChk') && document.getElementById('cChk').checked;
+  document.getElementById('sheetFoot').innerHTML =
+    `<button class="btn btn-outline" onclick="closeSheet()">취소</button>
+     <button class="btn btn-primary" ${on?'':'disabled'} onclick="tryFace('ok')">사진 고르고 등록</button>`;
+}
+function tryFace(kind){
+  if (kind === 'none'){ toast('얼굴이 보이지 않아요 · 정면 사진으로 다시 시도해 주세요'); return; }
+  if (kind === 'two'){ toast('아이 한 명만 나온 사진을 올려 주세요'); return; }
+  const c = children.find(x => x.id === consentKid);
+  c.faces.push('f' + Date.now());
+  const found = matchNow(consentKid);
+  closeSheet(); renderFaces();
+  setTimeout(() => toast(found.photos
+    ? `앨범 ${found.albums}개에서 ${c.short} 사진 ${found.photos}장을 찾았어요`
+    : '등록했어요 · 새 사진이 올라오면 자동으로 찾아드려요'), 260);
+}
+function matchNow(kidId){
+  if (children.find(c => c.id === kidId).faces.length > 1) return { albums: 0, photos: 0 };
+  const r = rnd(kidId * 977);
+  const hit = new Set();
+  let photos = 0;
+  media.forEach(m => {
+    if (m.kind !== 'image' || m.tags.includes(kidId)) return;
+    const x = r();
+    if (x < 0.22){ m.tags.push(kidId); photos++; hit.add(m.albumId); }
+    else if (x < 0.30 && !m.cand.includes(kidId)) m.cand.push(kidId);
+  });
+  return { albums: hit.size, photos };
+}
+function removeFace(kidId, i){
+  const c = children.find(x => x.id === kidId);
+  c.faces.splice(i, 1);
+  if (!c.faces.length) media.forEach(m => { m.tags = m.tags.filter(t => t !== kidId); m.cand = m.cand.filter(t => t !== kidId); });
+  toast(c.faces.length ? '사진을 지웠어요' : '얼굴 사진과 자동으로 찾은 태그를 모두 지웠어요');
+  renderFaces();
+}
+
+/* ───────── 상태 전환 ───────── */
+const URLS = {
+  albums: 'rg-manager.vercel.app/parent/photos',
+  gallery: 'rg-manager.vercel.app/parent/photos/1',
+  faces: 'rg-manager.vercel.app/parent/me',
+  denied: 'rg-manager.vercel.app/parent/photos/6',
+  noalbum: 'rg-manager.vercel.app/parent/photos'
+};
+function setState(s, btn){
+  ['Albums','Gallery','Faces','Denied','Noalbum'].forEach(v => document.getElementById('v'+v).classList.add('hidden'));
+  document.getElementById('v' + s.charAt(0).toUpperCase() + s.slice(1)).classList.remove('hidden');
+  document.getElementById('url').textContent = URLS[s];
+  closeSheet(); closeViewer();
+  document.querySelectorAll('.state-btn').forEach(b => b.classList.remove('on'));
+  if (btn) btn.classList.add('on');
+  else { const i = ['albums','gallery','faces','denied','noalbum'].indexOf(s); const bs = document.querySelectorAll('.state-btn'); if (bs[i]) bs[i].classList.add('on'); }
+  if (s === 'albums') renderAlbums();
+  if (s === 'gallery') renderGallery();
+  if (s === 'faces') renderFaces();
+}
+let toastTimer;
+function toast(msg){ const t = document.getElementById('toast'); t.innerHTML = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 2600); }
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape'){ closeSheet(); closeViewer(); }
+  if (document.getElementById('viewer').classList.contains('on')){
+    if (e.key === 'ArrowLeft') moveViewer(-1);
+    if (e.key === 'ArrowRight') moveViewer(1);
+  }
+});
+renderAlbums();
+</script>
+</body>
+</html>

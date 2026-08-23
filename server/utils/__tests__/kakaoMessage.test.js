@@ -16,6 +16,7 @@ jest.unstable_mockModule('../../models/NotificationSetting.js', () => ({
   NOTIFICATION_EVENTS: [
     { eventType: 'ATTENDANCE', label: '출석 체크 알림' },
     { eventType: 'FAQ_INQUIRY', label: '새 문의 알림' },
+    { eventType: 'EVENT_REGISTRATION', label: '이벤트 신청 알림' },
     { eventType: 'CUSTOM', label: '관리자 직접 발송' }
   ]
 }));
@@ -23,8 +24,12 @@ jest.unstable_mockModule('../../models/NotificationSetting.js', () => ({
 const User = (await import('../../models/User.js')).default;
 const KakaoMessageLog = (await import('../../models/KakaoMessageLog.js')).default;
 const NotificationSetting = (await import('../../models/NotificationSetting.js')).default;
-const { sendAttendanceKakaoMessage, sendFaqInquiryKakaoMessage, sendCustomKakaoMessage } =
-  await import('../kakaoMessage.js');
+const {
+  sendAttendanceKakaoMessage,
+  sendFaqInquiryKakaoMessage,
+  sendEventRegistrationKakaoMessage,
+  sendCustomKakaoMessage
+} = await import('../kakaoMessage.js');
 
 // 토큰이 살아있는 사용자 (알림 설정만 분기하도록 나머지는 통과시킨다)
 const validTokens = {
@@ -163,5 +168,46 @@ describe('kakaoMessage — 이벤트별 알림 on/off', () => {
 
     expect(NotificationSetting.isEnabled).toHaveBeenCalledWith('FAQ_INQUIRY');
     expect(NotificationSetting.isEnabled).not.toHaveBeenCalledWith('ATTENDANCE');
+  });
+
+  it('이벤트 신청 알림이 꺼져 있으면 발송하지 않는다', async () => {
+    NotificationSetting.isEnabled.mockResolvedValue(false);
+
+    const result = await sendEventRegistrationKakaoMessage({
+      userId: 1, eventTitle: '대회', childName: '김민서'
+    });
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(result.disabled).toBe(true);
+    expect(result.error).toContain('이벤트 신청 알림');
+  });
+
+  it('신청·변경·취소마다 다른 문구로 보낸다', async () => {
+    NotificationSetting.isEnabled.mockResolvedValue(true);
+    global.fetch.mockResolvedValue(kakaoOk());
+
+    const sentText = () => {
+      const body = global.fetch.mock.calls.at(-1)[1].body;
+      return JSON.parse(body.get('template_object')).text;
+    };
+
+    const base = { userId: 1, eventTitle: '서울시 대회', eventDate: '2026-09-12', childName: '김민서' };
+
+    await sendEventRegistrationKakaoMessage({ ...base, optionLabels: ['볼', '후프'], action: 'registered' });
+    expect(sentText()).toContain('새 신청이 들어왔습니다');
+    expect(sentText()).toContain('볼, 후프');
+
+    await sendEventRegistrationKakaoMessage({ ...base, action: 'updated' });
+    expect(sentText()).toContain('옵션이 변경');
+
+    await sendEventRegistrationKakaoMessage({ ...base, action: 'cancelled' });
+    expect(sentText()).toContain('취소');
+
+    await sendEventRegistrationKakaoMessage({ ...base, action: 'cancelled_after_confirm' });
+    expect(sentText()).toContain('확정된 신청이 취소');
+
+    expect(KakaoMessageLog.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ messageType: 'EVENT_REGISTRATION', success: true })
+    );
   });
 });

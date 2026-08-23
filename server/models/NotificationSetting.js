@@ -13,6 +13,11 @@ export const NOTIFICATION_EVENTS = [
     description: '학부모가 채팅으로 질문을 남기면 채널 주인에게 알립니다.'
   },
   {
+    eventType: 'EVENT_REGISTRATION',
+    label: '이벤트 신청 알림',
+    description: '학부모가 일정에 신청하거나 취소하면 선생님에게 알립니다.'
+  },
+  {
     eventType: 'CUSTOM',
     label: '관리자 직접 발송',
     description: '이 화면에서 관리자가 직접 보내는 메시지입니다.'

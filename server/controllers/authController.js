@@ -1,4 +1,7 @@
 import User from '../models/User.js';
+import ParentInvite from '../models/ParentInvite.js';
+import ParentAccount from '../models/ParentAccount.js';
+import ParentChild from '../models/ParentChild.js';
 import jwt from 'jsonwebtoken';
 import { KAKAO_REDIRECT_URI } from '../utils/appUrl.js';
 
@@ -144,7 +147,12 @@ export const deleteUser = async (req, res) => {
       return res.status(403).json({ error: '권한이 없습니다.' });
     }
     const { id } = req.params;
+
+    // 선생님을 지우면 그 선생님에게 속한 학부모 계정도 함께 지운다.
+    // (parent_accounts 만 CASCADE 로 사라지면 소속 없는 학부모 계정이 남는다)
+    await ParentAccount.deleteByTeacher(id);
     await User.delete(id);
+
     res.json({ message: '사용자가 삭제되었습니다.' });
   } catch (error) {
     res.status(500).json({ error: '사용자 삭제 중 오류가 발생했습니다.' });
@@ -197,17 +205,60 @@ export const getKakaoAuthUrl = (req, res) => {
   }
   // talk_message scope 추가 (카카오톡 메시지 전송 권한)
   const scope = 'talk_message';
-  const kakaoAuthUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_CLIENT_ID}&redirect_uri=${encodeURIComponent(KAKAO_REDIRECT_URI)}&response_type=code&scope=${scope}`;
+  let kakaoAuthUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_CLIENT_ID}&redirect_uri=${encodeURIComponent(KAKAO_REDIRECT_URI)}&response_type=code&scope=${scope}`;
+
+  // 학부모 초대 링크에서 온 경우, 어느 선생님의 초대인지 state 로 실어 보낸다.
+  // (카카오가 콜백에 그대로 돌려주므로 별도 세션 저장이 필요 없다)
+  const invite = String(req.query.invite || '').trim();
+  if (invite) {
+    kakaoAuthUrl += `&state=${encodeURIComponent(invite)}`;
+  }
+
   res.json({ url: kakaoAuthUrl });
+};
+
+/**
+ * 학부모 이름은 카카오 닉네임을 쓴다. username 은 UNIQUE 라 겹치면 뒤에 숫자를 붙인다.
+ */
+const uniqueParentUsername = async (nickname) => {
+  const base = String(nickname || '학부모').trim().slice(0, USERNAME_MAX) || '학부모';
+
+  if (!(await User.getByUsername(base))) return base;
+
+  for (let i = 2; i < 100; i += 1) {
+    const candidate = `${base}_${i}`;
+    if (!(await User.getByUsername(candidate))) return candidate;
+  }
+
+  return `${base}_${Date.now()}`;
+};
+
+/** 학부모가 온보딩(아이 등록)을 아직 안 했는지 */
+const needsOnboarding = async (user) => {
+  if (user.role !== 'parent') return false;
+  const children = await ParentChild.listByParent(user.id);
+  return children.length === 0;
 };
 
 // 카카오 콜백 처리
 export const kakaoCallback = async (req, res) => {
   try {
-    const { code } = req.body;
+    const { code, state } = req.body;
 
     if (!code) {
       return res.status(400).json({ error: '인증 코드가 없습니다.' });
+    }
+
+    // state 에 초대 토큰이 실려 있으면 학부모 가입 흐름이다.
+    // 토큰이 유효하지 않으면 여기서 끊는다 (아무나 학부모로 가입하지 못하도록).
+    const inviteToken = String(state || '').trim();
+    let invite = null;
+
+    if (inviteToken) {
+      invite = await ParentInvite.getByToken(inviteToken);
+      if (!ParentInvite.isUsable(invite)) {
+        return res.status(400).json({ error: '유효하지 않은 초대 링크입니다. 선생님께 새 링크를 요청해 주세요.' });
+      }
     }
 
     // 1. 인증 코드로 액세스 토큰 발급
@@ -266,7 +317,34 @@ export const kakaoCallback = async (req, res) => {
     let user = await User.getByKakaoId(kakaoId);
     let isNewUser = false;
 
-    if (!user) {
+    if (invite) {
+      // ── 학부모 초대 흐름 ──
+      if (user && user.role !== 'parent') {
+        return res.status(409).json({
+          error: '이미 선생님 계정으로 사용 중인 카카오 계정입니다. 다른 카카오 계정으로 가입해 주세요.'
+        });
+      }
+
+      if (!user) {
+        user = await User.createWithKakao({
+          kakaoId,
+          username: await uniqueParentUsername(nickname),
+          email,
+          role: 'parent',
+          // 학부모에게는 알림을 보내지 않으므로 메시지 토큰을 저장하지 않는다.
+          accessToken: null,
+          refreshToken: null,
+          tokenExpiresAt: null,
+        });
+        isNewUser = true;
+      }
+
+      await ParentAccount.create({
+        userId: user.id,
+        teacherId: invite.userId,
+        inviteId: invite.id,
+      });
+    } else if (!user) {
       // 새 사용자 생성 (토큰 포함) - 임시 이름으로 생성
       const tempUsername = `카카오_${Date.now()}`;
       user = await User.createWithKakao({
@@ -278,6 +356,10 @@ export const kakaoCallback = async (req, res) => {
         tokenExpiresAt,
       });
       isNewUser = true;
+    } else if (user.role === 'parent') {
+      // 이미 가입한 학부모가 로그인 페이지의 카카오 버튼으로 들어온 경우.
+      // 학부모에게는 메시지 토큰이 필요 없으므로 마지막 로그인만 갱신한다.
+      await ParentAccount.touchLogin(user.id);
     } else {
       // 기존 사용자 토큰 및 이메일 업데이트
       const updatedUser = await User.updateKakaoTokens(user.id, {
@@ -306,6 +388,9 @@ export const kakaoCallback = async (req, res) => {
       user: userWithoutPassword,
       token,
       isNewUser,  // 신규 사용자 여부 반환
+      role: user.role,
+      // 학부모가 아직 아이를 등록하지 않았으면 온보딩 화면으로 보낸다
+      needsOnboarding: await needsOnboarding(user),
     });
   } catch (error) {
     console.error('카카오 로그인 오류:', error);

@@ -281,8 +281,14 @@ describe('dateHelpers', () => {
 
     describe('엣지 케이스', () => {
       it('should handle ISO date string with time', () => {
-        const result = formatDate('2024-06-15T15:30:00.000Z', 'short');
-        expect(result).toMatch(/6월 15일 \([일-토]\)/);
+        // 화면에는 보는 사람의 지역 날짜를 보여준다. UTC 날짜를 못박으면
+        // 한국(UTC+9)처럼 날짜가 넘어가는 시간대에서 테스트가 깨진다.
+        const iso = '2024-06-15T15:30:00.000Z';
+        const local = new Date(iso);
+        const result = formatDate(iso, 'short');
+        expect(result).toMatch(
+          new RegExp(`${local.getMonth() + 1}월 ${local.getDate()}일 \\([일-토]\\)`)
+        );
       });
 
       it('should handle leap year date', () => {

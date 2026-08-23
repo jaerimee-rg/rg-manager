@@ -199,6 +199,29 @@ class User {
         [toUserId, fromUserId]
       );
 
+      // 이벤트·학부모도 함께 옮긴다.
+      // 남겨두면 학부모가 보던 일정이 사라지고 소속 없는 계정이 된다.
+      const eventsResult = await client.query(
+        `UPDATE events SET "userId" = $1 WHERE "userId" = $2`,
+        [toUserId, fromUserId]
+      );
+
+      const parentsResult = await client.query(
+        `UPDATE parent_accounts SET "teacherId" = $1 WHERE "teacherId" = $2`,
+        [toUserId, fromUserId]
+      );
+
+      // 초대 링크는 선생님당 1개(UNIQUE)라 받는 쪽에 이미 있으면 옮기지 않고 지운다.
+      await client.query(
+        `DELETE FROM parent_invites
+          WHERE "userId" = $1 AND EXISTS (SELECT 1 FROM parent_invites WHERE "userId" = $2)`,
+        [fromUserId, toUserId]
+      );
+      await client.query(
+        `UPDATE parent_invites SET "userId" = $1 WHERE "userId" = $2`,
+        [toUserId, fromUserId]
+      );
+
       await client.query('COMMIT');
 
       return {
@@ -207,7 +230,9 @@ class User {
           students: studentsResult.rowCount,
           classes: classesResult.rowCount,
           attendance: attendanceResult.rowCount,
-          competitions: competitionsResult.rowCount
+          competitions: competitionsResult.rowCount,
+          events: eventsResult.rowCount,
+          parents: parentsResult.rowCount
         }
       };
     } catch (error) {

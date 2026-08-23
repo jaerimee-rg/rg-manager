@@ -11,6 +11,10 @@ import attendanceRoutes from './routes/attendance.js';
 import authRoutes from './routes/auth.js';
 import logRoutes from './routes/logs.js';
 import competitionRoutes from './routes/competitions.js';
+import eventRoutes from './routes/events.js';
+import parentAdminRoutes from './routes/parents.js';
+import inviteRoutes from './routes/invite.js';
+import parentRoutes from './routes/parent.js';
 import faqRoutes from './routes/faqs.js';
 import chatRoutes from './routes/chat.js';
 import {
@@ -22,6 +26,7 @@ import {
 import notificationRoutes from './routes/notifications.js';
 import settingsRoutes from './routes/settings.js';
 import faqFileRoutes from './routes/faqFiles.js';
+import { rejectParents } from './middleware/roles.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -63,7 +68,9 @@ app.use(cors({
 // 레이트 리미팅 - 인증 엔드포인트
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15분
-  max: 20,
+  // 같은 Wi-Fi 에서 학부모 여러 명이 한꺼번에 가입해도 막히지 않도록 넉넉히 둔다.
+  // (한 번 가입에 인가 URL 요청 + 콜백 = 2회씩 쓴다)
+  max: 60,
   message: { error: '너무 많은 요청입니다. 잠시 후 다시 시도해주세요.' },
   standardHeaders: true,
   legacyHeaders: false
@@ -129,17 +136,43 @@ app.use('/api/auth/signup', authLimiter);
 app.use('/api/auth/kakao', authLimiter);
 app.use('/api', apiLimiter);
 
+// 학부모 토큰(role='parent')은 선생님·관리자 기능에 접근할 수 없다.
+// verifyToken 은 역할을 보지 않으므로 라우터 등록 지점에서 한 번에 막는다.
+// 학부모도 써야 하는 경로(로그인·초대·학부모 API·공개 채팅·FAQ 파일 보기)는 가드를 걸지 않는다.
+app.use('/api/auth/users', rejectParents);
+app.use('/api/auth/username', rejectParents);
+app.use('/api/auth/kakao/consent', rejectParents);
+app.use('/api/auth/kakao/messages', rejectParents);
+app.use('/api/auth/kakao/users', rejectParents);
+app.use('/api/auth/kakao/test', rejectParents);
+
 app.use('/api/auth', authRoutes);
-app.use('/api/students', studentRoutes);
-app.use('/api/classes', classRoutes);
-app.use('/api/attendance', attendanceRoutes);
-app.use('/api/logs', logRoutes);
-app.use('/api/competitions', competitionRoutes);
-app.use('/api/faqs', faqRoutes);
-app.use('/api/chat', chatRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/settings', settingsRoutes);
-app.use('/api/faq-files', faqFileRoutes);
+app.use('/api/students', rejectParents, studentRoutes);
+app.use('/api/classes', rejectParents, classRoutes);
+app.use('/api/attendance', rejectParents, attendanceRoutes);
+app.use('/api/logs', rejectParents, logRoutes);
+app.use('/api/competitions', rejectParents, competitionRoutes);
+app.use('/api/events', rejectParents, eventRoutes);
+app.use('/api/parents', rejectParents, parentAdminRoutes);
+
+// 초대 링크 확인은 비로그인 학부모가 여는 공개 경로다.
+app.use('/api/invite', inviteRoutes);
+
+// 학부모 전용 API (라우터 안에서 role='parent' 만 통과시킨다)
+app.use('/api/parent', parentRoutes);
+app.use('/api/faqs', rejectParents, faqRoutes);
+app.use('/api/chat', (req, res, next) => {
+  // 공개 채팅(/api/chat/public/*)은 비로그인 학부모용이라 그대로 통과시킨다.
+  if (req.path.startsWith('/public')) return next();
+  return rejectParents(req, res, next);
+}, chatRoutes);
+app.use('/api/notifications', rejectParents, notificationRoutes);
+app.use('/api/settings', rejectParents, settingsRoutes);
+app.use('/api/faq-files', (req, res, next) => {
+  // 학부모 채팅에서 파일을 열 수 있어야 하므로 보기 경로만 통과시킨다.
+  if (/^\/\d+\/view$/.test(req.path)) return next();
+  return rejectParents(req, res, next);
+}, faqFileRoutes);
 
 // Handle React routing - serve index.html for all non-API routes
 app.get('*', (req, res) => {

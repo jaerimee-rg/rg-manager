@@ -295,6 +295,97 @@ export async function sendFaqInquiryKakaoMessage({
 }
 
 /**
+ * 학부모가 이벤트에 신청·변경·취소했을 때 선생님에게 알림 (나에게 보내기)
+ *
+ * FAQ 문의 알림과 같은 규칙: 학부모 요청 안에서 호출되므로 타임아웃을 두고,
+ * 실패는 로그만 남긴다 (신청 자체는 이미 저장돼 있다).
+ */
+export async function sendEventRegistrationKakaoMessage({
+  userId,
+  eventTitle,
+  eventDate,
+  childName,
+  optionLabels = [],
+  action = 'registered',
+  eventId,
+}) {
+  try {
+    if (!(await isEventEnabled('EVENT_REGISTRATION'))) return disabledResult('EVENT_REGISTRATION');
+
+    const accessToken = await getValidAccessToken(userId);
+
+    if (!accessToken) {
+      return {
+        success: false,
+        error: '유효한 카카오 토큰이 없거나 메시지 알림에 동의하지 않았습니다.',
+        skipped: true,
+      };
+    }
+
+    const heading = {
+      registered: '🙋 새 신청이 들어왔습니다',
+      updated: '✏️ 신청 옵션이 변경되었습니다',
+      cancelled: '🚫 신청이 취소되었습니다',
+      cancelled_after_confirm: '⚠️ 확정된 신청이 취소되었습니다',
+    }[action] || '🙋 신청 소식이 있습니다';
+
+    const options = optionLabels.length > 0 ? `\n🏷️ ${optionLabels.join(', ')}` : '';
+    const link = `${APP_URL}/events`;
+
+    const templateObject = {
+      object_type: 'text',
+      text: `${heading}\n\n📅 ${eventTitle}${eventDate ? ` (${eventDate})` : ''}\n👧 ${childName}${options}`,
+      link: {
+        web_url: link,
+        mobile_web_url: link,
+      },
+      button_title: '신청 현황 보기',
+    };
+
+    const response = await fetch('https://kapi.kakao.com/v2/api/talk/memo/default/send', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
+      },
+      body: new URLSearchParams({
+        template_object: JSON.stringify(templateObject),
+      }),
+      signal: AbortSignal.timeout(KAKAO_SEND_TIMEOUT_MS),
+    });
+
+    const result = await response.json();
+    const messageContent = templateObject.text;
+
+    if (result.result_code === 0) {
+      await KakaoMessageLog.create({
+        senderId: userId,
+        recipientId: userId,
+        messageType: 'EVENT_REGISTRATION',
+        messageContent,
+        success: true,
+        errorMessage: null,
+      });
+      return { success: true };
+    }
+
+    console.error('이벤트 신청 카카오 알림 전송 실패:', result);
+    await KakaoMessageLog.create({
+      senderId: userId,
+      recipientId: userId,
+      messageType: 'EVENT_REGISTRATION',
+      messageContent,
+      success: false,
+      errorMessage: result.msg || '메시지 전송 실패',
+    });
+    return { success: false, error: result.msg || '메시지 전송 실패' };
+  } catch (error) {
+    console.error('이벤트 신청 카카오 알림 전송 오류:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * 관리자가 특정 사용자에게 커스텀 메시지 전송
  */
 export async function sendCustomKakaoMessage({
@@ -372,5 +463,6 @@ export async function sendCustomKakaoMessage({
 export default {
   sendAttendanceKakaoMessage,
   sendFaqInquiryKakaoMessage,
+  sendEventRegistrationKakaoMessage,
   sendCustomKakaoMessage,
 };

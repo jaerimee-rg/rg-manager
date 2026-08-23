@@ -76,11 +76,6 @@ const initDatabase = async () => {
       ADD COLUMN IF NOT EXISTS "userId" INTEGER
     `);
 
-    await client.query(`
-      ALTER TABLE attendance
-      ADD COLUMN IF NOT EXISTS "userId" INTEGER
-    `);
-
     // Attendance 테이블
     await client.query(`
       CREATE TABLE IF NOT EXISTS attendance (
@@ -92,6 +87,13 @@ const initDatabase = async () => {
         FOREIGN KEY ("studentId") REFERENCES students(id) ON DELETE CASCADE,
         FOREIGN KEY ("classId") REFERENCES classes(id) ON DELETE CASCADE
       )
+    `);
+
+    // userId 컬럼 추가 (멀티테넌시).
+    // 반드시 CREATE TABLE 뒤에 와야 한다 — 빈 DB 에서는 앞서 실행하면 초기화가 멈춘다.
+    await client.query(`
+      ALTER TABLE attendance
+      ADD COLUMN IF NOT EXISTS "userId" INTEGER
     `);
 
     // attendance 테이블에 UNIQUE 제약 추가
@@ -456,6 +458,117 @@ const initDatabase = async () => {
       )
     `);
 
+    /* ───────── 학부모 포털 ─────────
+       모두 신규 테이블이다. 기존 테이블의 컬럼은 바꾸지 않는다.
+       FK 방향도 신규 → 기존 이므로 기존 쓰기 경로에 제약이 붙지 않는다. */
+
+    // 선생님별 학부모 초대 링크 (선생님당 1개, 재발급 가능)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS parent_invites (
+        id SERIAL PRIMARY KEY,
+        "userId" INTEGER NOT NULL UNIQUE,
+        token TEXT NOT NULL UNIQUE,
+        "expiresAt" TEXT,
+        "createdAt" TEXT NOT NULL,
+        "updatedAt" TEXT NOT NULL,
+        FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    // 학부모 계정 ↔ 초대한 선생님
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS parent_accounts (
+        "userId" INTEGER PRIMARY KEY,
+        "teacherId" INTEGER NOT NULL,
+        "inviteId" INTEGER,
+        "lastLoginAt" TEXT,
+        "createdAt" TEXT NOT NULL,
+        FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY ("teacherId") REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY ("inviteId") REFERENCES parent_invites(id) ON DELETE SET NULL
+      )
+    `);
+
+    await client.query('CREATE INDEX IF NOT EXISTS idx_parent_accounts_teacher ON parent_accounts ("teacherId")');
+
+    // 학부모가 입력한 아이. studentId 가 있으면 선생님 학생과 연결된 상태
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS parent_children (
+        id SERIAL PRIMARY KEY,
+        "parentUserId" INTEGER NOT NULL,
+        "studentId" INTEGER,
+        "childName" TEXT NOT NULL,
+        "childBirthdate" TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        "linkedAt" TEXT,
+        "linkedBy" TEXT,
+        "createdAt" TEXT NOT NULL,
+        FOREIGN KEY ("parentUserId") REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY ("studentId") REFERENCES students(id) ON DELETE SET NULL
+      )
+    `);
+
+    await client.query('CREATE INDEX IF NOT EXISTS idx_parent_children_parent ON parent_children ("parentUserId")');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_parent_children_student ON parent_children ("studentId")');
+
+    // 같은 학부모가 같은 학생을 두 번 연결하지 못하게 (studentId NULL 은 중복 허용)
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_parent_children_unique
+      ON parent_children ("parentUserId", "studentId")
+      WHERE "studentId" IS NOT NULL
+    `);
+
+    // 일정의 단일 출처. 대회형(type='competition')은 competitions 행과 1:1
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS events (
+        id SERIAL PRIMARY KEY,
+        "userId" INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        date TEXT NOT NULL,
+        "endDate" TEXT,
+        "startTime" TEXT,
+        location TEXT,
+        description TEXT,
+        options TEXT NOT NULL DEFAULT '[]',
+        "requireOption" BOOLEAN DEFAULT FALSE,
+        "isPublished" BOOLEAN DEFAULT TRUE,
+        "registrationOpen" BOOLEAN DEFAULT TRUE,
+        "registrationDeadline" TEXT,
+        "competitionId" INTEGER UNIQUE,
+        "createdAt" TEXT NOT NULL,
+        "updatedAt" TEXT NOT NULL,
+        FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY ("competitionId") REFERENCES competitions(id) ON DELETE CASCADE
+      )
+    `);
+
+    await client.query('CREATE INDEX IF NOT EXISTS idx_events_user_date ON events ("userId", date)');
+
+    // 학부모 신청 (자녀 1명 = 이벤트당 1행, 취소는 status 로 남긴다)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS event_registrations (
+        id SERIAL PRIMARY KEY,
+        "eventId" INTEGER NOT NULL,
+        "studentId" INTEGER NOT NULL,
+        "parentUserId" INTEGER,
+        "optionIds" TEXT NOT NULL DEFAULT '[]',
+        status TEXT NOT NULL DEFAULT 'registered',
+        "confirmedAt" TEXT,
+        "cancelledAt" TEXT,
+        "cancelledAfterConfirm" BOOLEAN DEFAULT FALSE,
+        "createdBy" TEXT NOT NULL DEFAULT 'parent',
+        "createdAt" TEXT NOT NULL,
+        "updatedAt" TEXT NOT NULL,
+        UNIQUE ("eventId", "studentId"),
+        FOREIGN KEY ("eventId") REFERENCES events(id) ON DELETE CASCADE,
+        FOREIGN KEY ("studentId") REFERENCES students(id) ON DELETE CASCADE,
+        FOREIGN KEY ("parentUserId") REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    await client.query('CREATE INDEX IF NOT EXISTS idx_event_registrations_event ON event_registrations ("eventId", status)');
+
     // 설정한 적이 없을 때 기존 동작(Gemini)이 그대로 유지되도록 기본값을 채워둔다.
     await client.query(
       `INSERT INTO app_settings (key, value, "updatedAt")
@@ -463,6 +576,17 @@ const initDatabase = async () => {
        ON CONFLICT (key) DO NOTHING`,
       [process.env.AI_PROVIDER || 'gemini', new Date().toISOString()]
     );
+
+    // 기존 대회를 학부모 일정(events)으로 옮긴다.
+    // 매 부팅마다 실행되므로 이미 옮긴 대회는 건너뛴다(멱등).
+    // 여기서 실패해도 나머지 초기화와 기존 기능은 계속돼야 한다.
+    try {
+      const { backfillCompetitionEvents } = await import('./services/competitionMirror.js');
+      const moved = await backfillCompetitionEvents(client);
+      if (moved > 0) console.log(`기존 대회 ${moved}건을 이벤트로 옮겼습니다.`);
+    } catch (error) {
+      console.error('대회→이벤트 백필 실패(무시하고 계속):', error?.message || error);
+    }
 
     // 기본 관리자 계정 생성 (최초 1회만, 기존 계정이 없을 때)
     const adminCheck = await client.query('SELECT * FROM users WHERE username = $1', ['admin']);

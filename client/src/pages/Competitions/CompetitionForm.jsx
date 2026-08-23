@@ -45,7 +45,7 @@ function CompetitionForm() {
         });
         if (response.ok) {
           alert('대회 정보가 수정되었습니다.');
-          navigate('/competitions');
+          navigate('/events');
         }
       } else {
         const response = await fetchWithAuth('/api/competitions', {
@@ -55,7 +55,7 @@ function CompetitionForm() {
         });
         if (response.ok) {
           alert('대회가 등록되었습니다.');
-          navigate('/competitions');
+          navigate('/events');
         }
       }
     } catch (error) {
@@ -71,7 +71,7 @@ function CompetitionForm() {
         <h2 className="page-title">{isEditing ? '대회 수정' : '새 대회 등록'}</h2>
         <button
           className="btn btn-secondary"
-          onClick={() => navigate('/competitions')}
+          onClick={() => navigate('/events')}
         >
           목록으로
         </button>
@@ -131,7 +131,7 @@ function CompetitionForm() {
             <button
               type="button"
               className="btn btn-secondary btn-lg"
-              onClick={() => navigate('/competitions')}
+              onClick={() => navigate('/events')}
             >
               취소
             </button>
