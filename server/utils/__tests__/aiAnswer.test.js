@@ -57,7 +57,13 @@ describe('generateAnswer', () => {
 
     const result = await generateAnswer({ faqs: [], history: [], question: '토요일 수업?' });
 
-    expect(result).toEqual({ answered: false, answer: '', usedFaqIds: [], status: 'no_faq' });
+    expect(result).toEqual({
+      answered: false,
+      answer: '',
+      usedFaqIds: [],
+      suggestedFaqIds: [],
+      status: 'no_faq'
+    });
   });
 
   it('API 키가 없으면 ai_error 로 반환하고 답변하지 않는다', async () => {
@@ -158,5 +164,32 @@ describe('SYSTEM_RULES (원문 유지 지시)', () => {
     expect(SYSTEM_RULES).not.toContain('정리해 전달');
     expect(SYSTEM_RULES).not.toContain('300자');
     expect(SYSTEM_RULES).not.toContain('3문장');
+  });
+});
+
+describe('추천 FAQ 선별 (pickFaqIds 개수 제한)', () => {
+  const faqs = [1, 2, 3, 4, 5].map((id) => ({ id, question: `Q${id}`, answer: `A${id}` }));
+
+  it('추천은 최대 3개까지 남긴다', () => {
+    expect(pickFaqIds([1, 2, 3, 4, 5], faqs, 3)).toEqual([1, 2, 3]);
+  });
+
+  it('답변용은 기본 2개 제한을 유지한다', () => {
+    expect(pickFaqIds([1, 2, 3], faqs)).toEqual([1, 2]);
+  });
+
+  it('추천에서도 없는 id 는 버린다', () => {
+    expect(pickFaqIds([99, 2, 100], faqs, 3)).toEqual([2]);
+  });
+});
+
+describe('SYSTEM_RULES (추천 질문 지시)', () => {
+  it('답을 못 찾아도 가까운 FAQ 를 추천하도록 지시한다', () => {
+    expect(SYSTEM_RULES).toContain('suggestedFaqIds');
+    expect(SYSTEM_RULES).toContain('가까운 주제');
+  });
+
+  it('억지로 채우지 않도록 못 박는다', () => {
+    expect(SYSTEM_RULES).toContain('억지로 채우지 않습니다');
   });
 });

@@ -41,6 +41,15 @@ const notifyNewInquiry = async ({ channel, session, question }) => {
   }
 };
 
+// 답을 못 찾았을 때 보여줄 추천 질문. 학부모 화면에서 눌러 바로 물어볼 수 있다.
+const toSuggestions = (ids, faqs) => {
+  const byId = new Map(faqs.map((f) => [f.id, f]));
+  return (ids || [])
+    .map((id) => byId.get(id))
+    .filter(Boolean)
+    .map((f) => ({ id: f.id, question: f.question }));
+};
+
 /* ─────────── 관리자: 채널 ─────────── */
 
 export const getChannel = async (req, res) => {
@@ -165,6 +174,9 @@ export const getPublicMessages = async (req, res) => {
 
     const messages = await ChatMessage.listBySession(session.id, 50);
 
+    // 추천 질문은 지금 공개된 FAQ 기준으로 다시 확인한다 (그 사이 지워졌을 수 있다).
+    const faqs = await Faq.getPublishedByUserId(channel.userId);
+
     res.json({
       visitorName: session.visitorName,
       messages: messages.map((m) => ({
@@ -172,6 +184,7 @@ export const getPublicMessages = async (req, res) => {
         role: m.role,
         content: m.content,
         answered: m.answered,
+        suggestions: toSuggestions(m.suggestedFaqIds, faqs),
         createdAt: m.createdAt
       }))
     });
@@ -256,11 +269,14 @@ export const postMessage = async (req, res) => {
     // 최종 문구는 서버가 결정한다. answered=false 면 AI 문장을 쓰지 않는다.
     const reply = result.answered ? result.answer : fallback;
 
+    const suggestions = result.answered ? [] : toSuggestions(result.suggestedFaqIds, faqs);
+
     const saved = await ChatMessage.create(session.id, {
       role: 'bot',
       content: reply,
       answered: result.answered,
       matchedFaqIds: result.usedFaqIds,
+      suggestedFaqIds: result.suggestedFaqIds,
       status: result.status,
       inputTokens: result.inputTokens ?? null,
       outputTokens: result.outputTokens ?? null,
@@ -273,6 +289,7 @@ export const postMessage = async (req, res) => {
       answered: result.answered,
       reply,
       matchedFaqIds: result.usedFaqIds,
+      suggestions,
       messageId: saved.id,
       createdAt: saved.createdAt
     });

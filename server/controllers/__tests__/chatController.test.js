@@ -449,6 +449,68 @@ describe('chatController (공개 채팅)', () => {
       expect(generateAnswer).toHaveBeenCalled();
     });
 
+    it('답을 못 찾으면 가까운 FAQ 를 추천으로 함께 내려준다', async () => {
+      Faq.getPublishedByUserId.mockResolvedValue([
+        { id: 3, question: '수업 시간이 어떻게 되나요?', answer: '오전 10시' },
+        { id: 4, question: '수업료는 얼마인가요?', answer: '월 15만원' }
+      ]);
+      generateAnswer.mockResolvedValue({
+        answered: false,
+        answer: '',
+        usedFaqIds: [],
+        suggestedFaqIds: [3, 4],
+        status: 'ok'
+      });
+      req.body = { visitorKey: 'v1', message: '수업' };
+
+      await postMessage(req, res);
+
+      const payload = res.json.mock.calls[0][0];
+      expect(payload.answered).toBe(false);
+      expect(payload.suggestions).toEqual([
+        { id: 3, question: '수업 시간이 어떻게 되나요?' },
+        { id: 4, question: '수업료는 얼마인가요?' }
+      ]);
+    });
+
+    it('추천을 메시지에 저장해 새로고침해도 남아 있게 한다', async () => {
+      Faq.getPublishedByUserId.mockResolvedValue([{ id: 3, question: 'Q3', answer: 'A3' }]);
+      generateAnswer.mockResolvedValue({
+        answered: false, answer: '', usedFaqIds: [], suggestedFaqIds: [3], status: 'ok'
+      });
+      req.body = { visitorKey: 'v1', message: '수업' };
+
+      await postMessage(req, res);
+
+      expect(ChatMessage.create).toHaveBeenLastCalledWith(
+        11,
+        expect.objectContaining({ role: 'bot', suggestedFaqIds: [3] })
+      );
+    });
+
+    it('답을 찾았으면 추천을 내려주지 않는다', async () => {
+      generateAnswer.mockResolvedValue({
+        answered: true, answer: '오전 10시', usedFaqIds: [3], suggestedFaqIds: [], status: 'ok'
+      });
+      req.body = { visitorKey: 'v1', message: '수업 시간?' };
+
+      await postMessage(req, res);
+
+      expect(res.json.mock.calls[0][0].suggestions).toEqual([]);
+    });
+
+    it('지워진 FAQ 는 추천에서 빠진다', async () => {
+      Faq.getPublishedByUserId.mockResolvedValue([{ id: 3, question: 'Q3', answer: 'A3' }]);
+      generateAnswer.mockResolvedValue({
+        answered: false, answer: '', usedFaqIds: [], suggestedFaqIds: [3, 99], status: 'ok'
+      });
+      req.body = { visitorKey: 'v1', message: '수업' };
+
+      await postMessage(req, res);
+
+      expect(res.json.mock.calls[0][0].suggestions).toEqual([{ id: 3, question: 'Q3' }]);
+    });
+
     it('질문 저장 전에 이전 대화 맥락을 읽는다', async () => {
       generateAnswer.mockResolvedValue({ answered: true, answer: 'ok', usedFaqIds: [3], status: 'ok' });
       req.body = { visitorKey: 'v1', message: '질문' };

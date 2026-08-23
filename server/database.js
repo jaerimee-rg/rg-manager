@@ -353,6 +353,12 @@ const initDatabase = async () => {
       ADD COLUMN IF NOT EXISTS "kakaoNotifiedAt" TEXT
     `);
 
+    // 답을 찾지 못했을 때 학부모에게 보여줄 추천 FAQ
+    await client.query(`
+      ALTER TABLE chat_messages
+      ADD COLUMN IF NOT EXISTS "suggestedFaqIds" TEXT
+    `);
+
     // 관리자가 보낸 답변을 수정한 시각 (수정됨 표시용)
     await client.query(`
       ALTER TABLE chat_messages

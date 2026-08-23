@@ -426,6 +426,24 @@ function PublicChat() {
             >
               {m.content}
             </div>
+
+            {/* 정확히 맞는 답이 없을 때, 가까운 주제의 질문을 눌러 바로 물어볼 수 있게 한다 */}
+            {m.suggestions?.length > 0 && (
+              <div className="pchat-suggest pchat-suggest-inline">
+                <span className="pchat-suggest-label">혹시 이걸 찾으셨나요?</span>
+                {m.suggestions.map((sug) => (
+                  <button
+                    key={sug.id}
+                    className="pchat-sug"
+                    onClick={() => send(sug.question)}
+                    disabled={sending}
+                  >
+                    {sug.question}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="pchat-time">{formatTime(m.createdAt)}</div>
           </div>
         ))}

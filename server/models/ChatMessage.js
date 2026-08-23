@@ -8,6 +8,7 @@ class ChatMessage {
       content,
       answered = null,
       matchedFaqIds = null,
+      suggestedFaqIds = null,
       status = 'ok',
       inputTokens = null,
       outputTokens = null,
@@ -16,8 +17,8 @@ class ChatMessage {
 
     const result = await pool.query(
       `INSERT INTO chat_messages
-         ("sessionId", role, content, answered, "matchedFaqIds", status, "inputTokens", "outputTokens", "latencyMs", "createdAt")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ("sessionId", role, content, answered, "matchedFaqIds", "suggestedFaqIds", status, "inputTokens", "outputTokens", "latencyMs", "createdAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [
         sessionId,
@@ -25,6 +26,7 @@ class ChatMessage {
         content,
         answered,
         matchedFaqIds ? JSON.stringify(matchedFaqIds) : null,
+        suggestedFaqIds ? JSON.stringify(suggestedFaqIds) : null,
         status,
         inputTokens,
         outputTokens,
@@ -42,7 +44,11 @@ class ChatMessage {
        ) t ORDER BY t.id ASC`,
       [sessionId, limit]
     );
-    return result.rows.map((m) => ({ ...m, matchedFaqIds: safeJsonParse(m.matchedFaqIds, []) }));
+    return result.rows.map((m) => ({
+      ...m,
+      matchedFaqIds: safeJsonParse(m.matchedFaqIds, []),
+      suggestedFaqIds: safeJsonParse(m.suggestedFaqIds, [])
+    }));
   }
 
   // 메시지 + 대화 소유자를 함께 조회해 삭제 권한 확인에 쓴다

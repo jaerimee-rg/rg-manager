@@ -2533,6 +2533,12 @@ tbody tr:last-child td {
   max-width: 88%;
 }
 
+/* 답변 말풍선 바로 아래 붙는 추천 질문 */
+.pchat-suggest-inline {
+  margin-top: 7px;
+  max-width: 100%;
+}
+
 .pchat-suggest-label {
   font-size: 0.6875rem;
   color: var(--color-gray-500);
