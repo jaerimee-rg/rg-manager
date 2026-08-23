@@ -1,9 +1,4 @@
-import {
-  isAdminViewing,
-  isKakaoNotifyCooling,
-  ADMIN_PRESENCE_WINDOW_MS,
-  KAKAO_NOTIFY_COOLDOWN_MS
-} from '../chatPresence.js';
+import { isAdminViewing, ADMIN_PRESENCE_WINDOW_MS } from '../chatPresence.js';
 
 const NOW = new Date('2026-08-22T10:00:00.000Z').getTime();
 const ago = (ms) => new Date(NOW - ms).toISOString();
@@ -34,21 +29,5 @@ describe('isAdminViewing', () => {
   it('시계가 어긋나 미래 시각이 들어와도 보고 있는 중으로 본다', () => {
     const future = new Date(NOW + 5000).toISOString();
     expect(isAdminViewing(future, NOW)).toBe(true);
-  });
-});
-
-describe('isKakaoNotifyCooling', () => {
-  it('보낸 적이 없으면 쿨다운이 아니다', () => {
-    expect(isKakaoNotifyCooling(null, NOW)).toBe(false);
-  });
-
-  it('쿨다운 안에 보낸 알림이 있으면 건너뛴다', () => {
-    expect(isKakaoNotifyCooling(ago(60 * 1000), NOW)).toBe(true);
-    expect(isKakaoNotifyCooling(ago(KAKAO_NOTIFY_COOLDOWN_MS - 1), NOW)).toBe(true);
-  });
-
-  it('쿨다운이 지나면 다시 보낼 수 있다', () => {
-    expect(isKakaoNotifyCooling(ago(KAKAO_NOTIFY_COOLDOWN_MS), NOW)).toBe(false);
-    expect(isKakaoNotifyCooling(ago(30 * 60 * 1000), NOW)).toBe(false);
   });
 });

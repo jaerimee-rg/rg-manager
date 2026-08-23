@@ -116,6 +116,40 @@ describe('kakaoMessage — 이벤트별 알림 on/off', () => {
     expect(result.success).toBe(true);
   });
 
+  it('첫 문의와 이어지는 메시지의 문구를 구분한다', async () => {
+    NotificationSetting.isEnabled.mockResolvedValue(true);
+    global.fetch.mockResolvedValue(kakaoOk());
+
+    const sentText = async () => {
+      const body = global.fetch.mock.calls.at(-1)[1].body;
+      return JSON.parse(body.get('template_object')).text;
+    };
+
+    await sendFaqInquiryKakaoMessage({
+      userId: 1,
+      channelName: '문의',
+      visitorName: '학부모',
+      question: '주차 되나요?'
+    });
+    expect(await sentText()).toContain('새 문의가 도착했습니다');
+
+    await sendFaqInquiryKakaoMessage({
+      userId: 1,
+      channelName: '문의',
+      visitorName: '학부모',
+      question: '몇 시까지 하나요?',
+      isFollowUp: true
+    });
+    const followUp = await sentText();
+    expect(followUp).toContain('새 메시지가 도착했습니다');
+    expect(followUp).toContain('몇 시까지 하나요?');
+
+    // 이어지는 메시지도 이력에는 같은 종류로 남는다
+    expect(KakaoMessageLog.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ messageType: 'FAQ_INQUIRY', success: true })
+    );
+  });
+
   it('이벤트마다 자기 설정만 확인한다', async () => {
     NotificationSetting.isEnabled.mockResolvedValue(true);
     global.fetch.mockResolvedValue(kakaoOk());

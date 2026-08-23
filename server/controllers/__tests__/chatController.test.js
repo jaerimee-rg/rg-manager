@@ -350,7 +350,8 @@ describe('chatController (공개 채팅)', () => {
         userId: activeChannel.userId,
         channelName: activeChannel.name,
         visitorName: '민수 어머니',
-        question: '주차 가능한가요?'
+        question: '주차 가능한가요?',
+        isFollowUp: false
       });
       expect(ChatSession.recordKakaoNotified).toHaveBeenCalledWith(11);
     });
@@ -365,18 +366,62 @@ describe('chatController (공개 채팅)', () => {
       expect(sendFaqInquiryKakaoMessage).not.toHaveBeenCalled();
     });
 
-    it('쿨다운 안이면 연속 질문에 카카오 알림을 다시 보내지 않는다', async () => {
+    it('직전에 알림을 보냈어도 학부모 메시지마다 다시 보낸다', async () => {
       ChatSession.getByVisitorKey.mockResolvedValue({
         id: 11,
         visitorName: '학부모',
         kakaoNotifiedAt: new Date().toISOString()
       });
+      ChatMessage.recentHistory.mockResolvedValue([
+        { role: 'parent', content: '수업 시간은?' },
+        { role: 'bot', content: '오전 10시입니다.' }
+      ]);
       generateAnswer.mockResolvedValue({ answered: true, answer: 'ok', usedFaqIds: [3], status: 'ok' });
       req.body = { visitorKey: 'v1', message: '하나 더 질문이요' };
 
       await postMessage(req, res);
 
-      expect(sendFaqInquiryKakaoMessage).not.toHaveBeenCalled();
+      expect(sendFaqInquiryKakaoMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ question: '하나 더 질문이요', isFollowUp: true })
+      );
+      expect(ChatSession.recordKakaoNotified).toHaveBeenCalledWith(11);
+    });
+
+    it('AI 답변이 꺼진 대화에서도 학부모 메시지 알림은 나간다', async () => {
+      ChatSession.getByVisitorKey.mockResolvedValue({
+        id: 11,
+        visitorName: '학부모',
+        aiEnabled: false
+      });
+      ChatMessage.create.mockResolvedValue({ id: 401, createdAt: 'now' });
+      req.body = { visitorKey: 'v1', message: '접수만 해주세요' };
+
+      await postMessage(req, res);
+
+      expect(generateAnswer).not.toHaveBeenCalled();
+      expect(sendFaqInquiryKakaoMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ question: '접수만 해주세요' })
+      );
+    });
+
+    it('알림 발송이 끝난 뒤에 학부모에게 응답한다', async () => {
+      ChatSession.getByVisitorKey.mockResolvedValue({ id: 11, visitorName: '학부모' });
+      let notified = false;
+      sendFaqInquiryKakaoMessage.mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(() => {
+              notified = true;
+              resolve({ success: true });
+            }, 10)
+          )
+      );
+      generateAnswer.mockResolvedValue({ answered: true, answer: 'ok', usedFaqIds: [3], status: 'ok' });
+      req.body = { visitorKey: 'v1', message: '질문' };
+
+      await postMessage(req, res);
+
+      expect(notified).toBe(true);
     });
 
     it('관리자가 보고 있으면 이미 확인 중이므로 카카오 알림을 보내지 않는다', async () => {

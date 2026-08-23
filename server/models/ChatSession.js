@@ -106,7 +106,7 @@ class ChatSession {
     return result.rows.length > 0 ? result.rows[0] : null;
   }
 
-  // 새 문의 카카오 알림을 보낸 시각 (쿨다운 판정용)
+  // 이 대화에 마지막으로 카카오 알림을 보낸 시각 (발송 여부 추적용)
   static async recordKakaoNotified(sessionId) {
     const result = await pool.query(
       `UPDATE chat_sessions
