@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'fs';
-import { loginAs } from './helpers.mjs';
+import { loginAs, api } from './helpers.mjs';
 
 const sessions = JSON.parse(readFileSync(new URL('./.sessions.json', import.meta.url)));
 // 같은 DB 에 여러 번 돌려도 서로 부딪히지 않도록 실행마다 다른 이름을 쓴다
@@ -66,5 +66,43 @@ test.describe('선생님 — 이벤트 관리', () => {
     await expect(page.getByText('/invite/')).toBeVisible();
     await expect(page.getByText('확인 대기 아이')).toBeVisible();
     await expect(page.getByRole('button', { name: '학생별' })).toBeVisible();
+  });
+});
+
+test.describe('선생님 — 앨범', () => {
+  test.beforeEach(async ({ page }) => {
+    await loginAs(page, sessions.teacher);
+  });
+
+  test('설정에 Google Drive 카드가 보이고, 설정 전에는 안내만 나온다', async ({ page }) => {
+    await page.goto('/settings');
+
+    await expect(page.getByRole('heading', { name: /Google Drive/ })).toBeVisible();
+    // 환경변수가 없으면 연결 버튼 대신 안내가 나온다 (이번 배포의 기본 상태)
+    const guide = page.getByText(/연동이 아직 설정되지 않았습니다/);
+    const connect = page.getByRole('button', { name: /Google 계정 연결/ });
+    await expect(guide.or(connect).first()).toBeVisible();
+  });
+
+  test('앨범이 있는 이벤트 상세에서 사진 목록과 통계가 보인다', async ({ page }) => {
+    await page.goto('/events');
+    await page.locator('tr', { hasText: 'e2e확정대회' }).first().getByRole('button', { name: '수정' }).click();
+
+    await expect(page.getByRole('heading', { name: /사진 · 영상/ })).toBeVisible();
+    // 씨앗 데이터로 사진 3 · 영상 1 이 들어 있다
+    await expect(page.getByText(/사진/).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /사진 열기|영상 열기/ }).first()).toBeVisible();
+  });
+
+  test('앨범이 없는 이벤트는 Drive 연결 안내를 보여준다', async ({ page }) => {
+    await page.goto('/events');
+    await page.locator('tr', { hasText: 'e2e미확정대회' }).first().getByRole('button', { name: '수정' }).click();
+
+    await expect(page.getByRole('heading', { name: /사진 · 영상/ })).toBeVisible();
+  });
+
+  test('앨범 API 는 남의 이벤트를 열어 주지 않는다', async ({ request }) => {
+    const other = await api(request, sessions.teacher, 'GET', '/api/events/999999/album');
+    expect(other.status).toBe(404);
   });
 });

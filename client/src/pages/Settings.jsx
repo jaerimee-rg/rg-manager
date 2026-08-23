@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { fetchWithAuth } from '../utils/api';
 import { useIsMobile } from '../hooks/useMediaQuery';
+import DriveAccountCard from './Settings/DriveAccountCard';
 
 function Settings() {
   const { user, logout, updateUserName } = useAuth();
@@ -278,6 +279,9 @@ function Settings() {
           </div>
         </div>
       )}
+
+      {/* Google Drive Card */}
+      <DriveAccountCard />
 
       {/* Admin Dashboard Card */}
       {user?.role === 'admin' && (

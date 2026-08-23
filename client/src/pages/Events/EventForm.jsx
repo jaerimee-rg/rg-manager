@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import { EVENT_TYPES } from '../../utils/eventFormat';
 import OptionsEditor from './OptionsEditor';
+import EventAlbumSection from './EventAlbumSection';
 
 const TYPE_HINTS = {
   competition: '신청 → 확정 → 참가 학생',
@@ -321,6 +322,8 @@ function EventForm({ basePath = '/events' }) {
           </button>
         </div>
       </form>
+
+      {editing && form.type !== 'closure' && <EventAlbumSection event={editing} />}
     </div>
   );
 }

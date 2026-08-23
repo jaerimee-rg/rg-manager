@@ -77,7 +77,8 @@ export const getAlbum = async (req, res) => {
         configured: isDriveConfigured(),
         connected: Boolean(account),
         status: driveStatus,
-        email: account?.googleEmail || null
+        email: account?.googleEmail || null,
+        rootFolderName: account?.rootFolderName || 'RG Manager'
       },
       counts: { images: 0, videos: 0, hidden: 0, untagged: 0, candidates: 0, unanalyzed: 0 },
       totalSize: 0
