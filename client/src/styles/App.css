@@ -2232,7 +2232,8 @@ tbody tr:last-child td {
   font-size: 0.75rem;
   color: var(--color-gray-400);
   cursor: pointer;
-  opacity: 0;
+  /* 항상 보여준다 — hover 로만 나오면 수정할 수 있다는 걸 모르고 지나친다 */
+  opacity: 0.75;
   transition: opacity 0.15s, color 0.15s;
 }
 
@@ -2273,7 +2274,6 @@ tbody tr:last-child td {
   margin-top: var(--spacing-sm);
 }
 
-/* 터치 기기는 hover 가 없으므로 항상 보여준다 */
 @media (hover: none) {
   .chat-msg-action {
     opacity: 1;
@@ -2816,6 +2816,27 @@ tbody tr:last-child td {
   margin-top: var(--spacing-xl);
   padding-top: var(--spacing-lg);
   border-top: 1px solid var(--color-gray-100);
+}
+
+/* 답변 폼 하단 줄 — 왼쪽 AI 스위치, 오른쪽 보내기 버튼 */
+.chat-reply-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.chat-reply-actions .chat-session-ai {
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .chat-reply-actions .btn {
+    width: 100%;
+  }
 }
 
 .chat-reply textarea {

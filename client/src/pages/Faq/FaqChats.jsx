@@ -414,8 +414,6 @@ function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
           </div>
         )}
 
-        {renderSessionAiSwitch()}
-
         <div className="chat-thread-scroll" ref={scrollRef} onScroll={handleScroll}>
         {thread.messages.map((m) => (
           <div
@@ -531,9 +529,12 @@ function FaqChats({ filterUserId, onCountChange, channel, onToggleAi }) {
             rows={2}
             maxLength={500}
           />
-          <button type="submit" className="btn btn-primary" disabled={!reply.trim() || replying}>
-            {replying ? '전송 중...' : '답변 보내기'}
-          </button>
+          <div className="chat-reply-actions">
+            {renderSessionAiSwitch()}
+            <button type="submit" className="btn btn-primary" disabled={!reply.trim() || replying}>
+              {replying ? '전송 중...' : '답변 보내기'}
+            </button>
+          </div>
         </form>
       </>
     );

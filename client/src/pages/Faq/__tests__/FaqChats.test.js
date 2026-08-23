@@ -347,3 +347,43 @@ describe('FaqChats — 메시지 수정 / 스크롤', () => {
     expect(await screen.findByText('(수정됨)')).toBeInTheDocument();
   });
 });
+
+describe('FaqChats — 답변 폼 하단 배치', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    window.confirm = jest.fn(() => true);
+    fetchWithAuth.mockImplementation((url) => routeFetch(url));
+  });
+
+  const open = async () => {
+    render(<FaqChats channel={channel} onToggleAi={jest.fn().mockResolvedValue(true)} />);
+    const item = await screen.findByText('민수 어머니');
+    await act(async () => {
+      fireEvent.click(item);
+    });
+  };
+
+  it('AI 스위치가 답변 보내기 버튼과 같은 줄, 버튼보다 앞에 온다', async () => {
+    await open();
+
+    const row = document.querySelector('.chat-reply-actions');
+    expect(row).toBeInTheDocument();
+
+    const aiSwitch = row.querySelector('.chat-session-ai');
+    const sendButton = row.querySelector('button[type="submit"]');
+    expect(aiSwitch).toBeInTheDocument();
+    expect(sendButton).toHaveTextContent('답변 보내기');
+
+    // DOM 순서상 스위치가 버튼보다 먼저 = 왼쪽에 배치된다
+    expect(
+      aiSwitch.compareDocumentPosition(sendButton) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it('스위치는 답변 폼 안에만 하나 있다 (상단에서 옮겨왔다)', async () => {
+    await open();
+
+    expect(document.querySelectorAll('.chat-session-ai')).toHaveLength(1);
+    expect(document.querySelector('.chat-reply-actions .chat-session-ai')).toBeInTheDocument();
+  });
+});
