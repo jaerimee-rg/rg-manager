@@ -25,6 +25,22 @@ npm start                # Start production server on port 5001
 npm run dev              # Start with nodemon (auto-restart)
 ```
 
+### Local Database
+PostgreSQL is required — `server/database.js` exits if `DATABASE_URL` is unset.
+
+```bash
+brew install postgresql   # macOS
+createdb rg_manager
+```
+
+Then put the connection string in the project-root `.env` (loaded by `server/loadEnv.js`):
+```
+DATABASE_URL=postgresql://localhost/rg_manager
+```
+
+Tables are created automatically on first server start. The default admin account is
+`admin` / `admin123` (override with `ADMIN_INITIAL_PASSWORD`) — change it immediately.
+
 ### Both (Development Mode)
 Run these in separate terminals:
 1. `cd client && npm run dev` - Client on http://localhost:3000
@@ -34,9 +50,9 @@ Run these in separate terminals:
 
 ### Tech Stack
 - **Frontend**: React 18, React Router, Vite
-- **Backend**: Node.js, Express, better-sqlite3
-- **Database**: SQLite (file-based at `server/attendance.db`)
-- **Authentication**: Session-based with localStorage
+- **Backend**: Node.js, Express, `pg` (node-postgres)
+- **Database**: PostgreSQL (connection string in `DATABASE_URL`)
+- **Authentication**: JWT (30-day), stored in localStorage + cookie (`client/src/utils/tokenStorage.js`)
 
 ### Data Flow & API Architecture
 
@@ -57,7 +73,7 @@ fetch('http://localhost:5001/api/students')
 
 ### Database Schema
 
-SQLite database with 4 main tables (defined in `server/database.js`):
+PostgreSQL. All tables are defined in `server/database.js`; the core four are:
 
 1. **students**: Student information
    - `birthdate` (TEXT) - stored as date string, age calculated dynamically
@@ -105,7 +121,7 @@ When modifying forms/lists, ensure mobile view uses:
 **MVC-like Pattern**:
 - `routes/` - Express route definitions (students, classes, attendance, auth)
 - `controllers/` - Business logic handlers
-- `database.js` - SQLite connection and schema initialization
+- `database.js` - PostgreSQL pool and schema initialization (runs on module load)
 - `server.js` - Main entry point, serves static React build in production
 
 **API Endpoints**:
@@ -164,7 +180,7 @@ const calculateAge = (birthdate) => {
 };
 ```
 
-### JSON Array Handling in SQLite
+### JSON Array Handling
 Student `classIds` stored as JSON string:
 ```javascript
 // Save
@@ -199,7 +215,11 @@ useEffect(() => {
 3. Add navigation link to header in `App.jsx`
 
 ### Modifying Database Schema
-1. Update table definition in `server/database.js`
-2. Delete `server/attendance.db` to recreate with new schema
-3. Update corresponding controllers
-4. Note: No migration system - database recreates from scratch
+There is no migration tool. `initDatabase()` in `server/database.js` runs on every boot
+(including Vercel cold starts), so every statement must be safe to re-run:
+
+1. Add `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` (or `CREATE TABLE IF NOT EXISTS`)
+   to `server/database.js` — never edit an existing table definition in place, since
+   `CREATE TABLE IF NOT EXISTS` will not alter a table that already exists
+2. Treat new columns as nullable / defaulted so existing rows stay valid
+3. Update the corresponding model and controller
