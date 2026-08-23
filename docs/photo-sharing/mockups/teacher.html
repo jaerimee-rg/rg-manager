@@ -1,0 +1,867 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사진 공유 목업 — 선생님 화면</title>
+<style>
+:root{
+  --color-primary:#3182F6; --color-primary-dark:#1B64DA; --color-primary-bg:#EBF4FF;
+  --color-success:#00C471; --color-success-bg:#E8FAF0;
+  --color-danger:#FF4848; --color-danger-bg:#FFEDED;
+  --color-warning:#FF9F00; --color-warning-bg:#FFF4E0;
+  --color-purple:#7C5CFC; --color-purple-bg:#F0EBFF;
+  --color-gray-50:#F9FAFB; --color-gray-100:#F2F4F6; --color-gray-200:#E5E8EB; --color-gray-300:#D1D6DB;
+  --color-gray-400:#B0B8C1; --color-gray-500:#8B95A1; --color-gray-600:#6B7684;
+  --color-gray-700:#4E5968; --color-gray-800:#333D4B; --color-gray-900:#191F28;
+  --bg-primary:#F2F4F6; --bg-secondary:#FFFFFF; --bg-tertiary:#F7F8FA;
+  --radius-sm:8px; --radius-md:12px; --radius-lg:16px; --radius-full:9999px;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.05); --shadow-md:0 2px 8px rgba(0,0,0,.08); --shadow-lg:0 8px 32px rgba(0,0,0,.18);
+  --font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font-family);background:var(--color-gray-200);color:var(--color-gray-900);line-height:1.5;font-size:15px;letter-spacing:-.3px;-webkit-font-smoothing:antialiased;min-height:100vh}
+button,input,select,textarea{font-family:inherit}
+
+/* 목업 크롬 */
+.mock-bar{background:var(--color-gray-900);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:.8125rem}
+.mock-bar strong{font-weight:700}
+.mock-bar .spacer{flex:1}
+.mock-bar a{color:#9DC4FF;text-decoration:none;font-weight:600}
+.seg{display:inline-flex;background:rgba(255,255,255,.12);border-radius:var(--radius-full);padding:3px}
+.seg button{background:none;border:none;color:rgba(255,255,255,.7);font:inherit;font-weight:600;padding:5px 12px;border-radius:var(--radius-full);cursor:pointer}
+.seg button.on{background:#fff;color:var(--color-gray-900)}
+.mock-note{background:#FFF9E6;border-bottom:1px solid #F5E3A8;color:#7A5D00;font-size:.8125rem;padding:8px 16px;text-align:center}
+
+/* 프레임 */
+.frame{margin:24px auto;background:var(--bg-primary);border-radius:20px;overflow:hidden;box-shadow:var(--shadow-lg);max-width:1100px;transition:max-width .25s ease;position:relative;min-height:760px}
+.frame.mobile{max-width:400px}
+.app-header{background:var(--bg-secondary);padding:16px 20px;border-bottom:1px solid var(--color-gray-100)}
+.app-header .row{display:flex;align-items:center;justify-content:space-between}
+.app-header h1{font-size:1.25rem;font-weight:700;letter-spacing:-.5px}
+.hamburger{display:none;border:none;background:none;font-size:1.4rem;cursor:pointer}
+.desktop-nav{display:flex;gap:4px;margin-top:12px;flex-wrap:wrap;align-items:center}
+.desktop-nav a{padding:8px 12px;border-radius:var(--radius-sm);color:var(--color-gray-600);text-decoration:none;font-size:.9375rem;font-weight:500}
+.desktop-nav a.active{background:var(--color-primary-bg);color:var(--color-primary);font-weight:700}
+.desktop-nav .push{flex:1}
+.frame.mobile .desktop-nav{display:none}
+.frame.mobile .hamburger{display:block}
+.app-main{padding:24px 20px 48px}
+.frame.mobile .app-main{padding:16px 12px 40px}
+
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px}
+.page-title{font-size:1.5rem;font-weight:800;letter-spacing:-.6px}
+.page-desc{font-size:.875rem;color:var(--color-gray-500);margin-top:4px}
+.page-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.frame.mobile .page-title{font-size:1.25rem}
+.crumb{font-size:.8125rem;color:var(--color-gray-500);margin-bottom:6px}
+.crumb b{color:var(--color-gray-700)}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 16px;border:none;border-radius:var(--radius-md);cursor:pointer;font-size:.9375rem;font-weight:600;letter-spacing:-.2px;white-space:nowrap;transition:all .15s ease}
+.btn-primary{background:var(--color-primary);color:#fff}
+.btn-primary:hover{background:var(--color-primary-dark)}
+.btn-outline{background:#fff;color:var(--color-gray-700);border:1px solid var(--color-gray-300)}
+.btn-ghost{background:transparent;color:var(--color-gray-600)}
+.btn-danger{background:var(--color-danger-bg);color:var(--color-danger)}
+.btn-success{background:var(--color-success-bg);color:#059669}
+.btn-google{background:#fff;border:1px solid var(--color-gray-300);color:var(--color-gray-800);font-weight:700}
+.btn-sm{padding:7px 11px;font-size:.8125rem;border-radius:var(--radius-sm)}
+.btn-xs{padding:4px 8px;font-size:.75rem;border-radius:6px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.icon-btn{width:40px;height:40px;flex-shrink:0;border-radius:var(--radius-md);border:1px solid var(--color-gray-200);background:#fff;color:var(--color-gray-600);display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:var(--radius-full);font-size:.6875rem;font-weight:700;white-space:nowrap}
+.badge-primary{background:var(--color-primary-bg);color:var(--color-primary)}
+.badge-gray{background:var(--color-gray-100);color:var(--color-gray-600)}
+.badge-success{background:var(--color-success-bg);color:#059669}
+.badge-danger{background:var(--color-danger-bg);color:var(--color-danger)}
+.badge-warning{background:var(--color-warning-bg);color:#B26A00}
+.badge-purple{background:var(--color-purple-bg);color:var(--color-purple)}
+.badge-outline{background:#fff;border:1px solid var(--color-gray-200);color:var(--color-gray-600)}
+
+.card{background:#fff;border-radius:var(--radius-lg);padding:18px;margin-bottom:14px}
+.card h3{font-size:1rem;font-weight:800;display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.card .sub{font-size:.8125rem;color:var(--color-gray-500);line-height:1.6}
+.sec-title{font-size:.8125rem;font-weight:800;color:var(--color-gray-500);margin:0 0 10px;display:flex;align-items:center;gap:8px}
+.sec-title::after{content:'';flex:1;height:1px;background:var(--color-gray-100)}
+.notice{font-size:.8125rem;padding:11px 13px;border-radius:var(--radius-md);line-height:1.6}
+.notice.warn{background:var(--color-warning-bg);color:#7A5D00}
+.notice.ok{background:var(--color-success-bg);color:#047857}
+.notice.gray{background:var(--color-gray-100);color:var(--color-gray-600)}
+.notice.info{background:var(--color-primary-bg);color:var(--color-primary-dark)}
+.notice.danger{background:var(--color-danger-bg);color:#C62828}
+.notice .btn{margin-top:8px}
+
+.sw{width:44px;height:26px;border-radius:13px;background:var(--color-gray-300);position:relative;cursor:pointer;border:none;flex-shrink:0;transition:background .15s}
+.sw::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:var(--shadow-sm)}
+.sw.on{background:var(--color-success)}
+.sw.on::after{left:21px}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid var(--color-gray-100);font-size:.9rem}
+.toggle-row .d{font-size:.75rem;color:var(--color-gray-500);font-weight:400;margin-top:2px}
+
+/* Drive 카드 */
+.drive-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.g-ico{width:42px;height:42px;border-radius:var(--radius-md);background:linear-gradient(135deg,#FFD04D,#4285F4 60%,#0F9D58);display:inline-flex;align-items:center;justify-content:center;font-size:1.1rem;color:#fff;font-weight:900;flex-shrink:0}
+.quota{margin-top:12px}
+.quota .l{display:flex;justify-content:space-between;font-size:.75rem;color:var(--color-gray-500);margin-bottom:5px}
+.quota .bar{height:8px;border-radius:5px;background:var(--color-gray-200);overflow:hidden}
+.quota .bar i{display:block;height:100%;background:var(--color-primary)}
+.quota .bar i.warn{background:var(--color-warning)}
+.kv-list{margin-top:12px}
+.kv-row{display:flex;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--color-gray-100);font-size:.875rem}
+.kv-row .k{width:120px;flex-shrink:0;color:var(--color-gray-500);font-size:.8125rem;font-weight:600}
+.kv-row .v{flex:1;min-width:0;word-break:break-all}
+
+/* 통계 */
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}
+.frame.mobile .stats{grid-template-columns:repeat(2,1fr)}
+.stat{background:#fff;border-radius:var(--radius-lg);padding:12px 14px}
+.stat .k{font-size:.75rem;color:var(--color-gray-500);font-weight:600}
+.stat .v{font-size:1.375rem;font-weight:800;letter-spacing:-.5px;margin-top:2px}
+.stat.warn .v{color:#B26A00}
+.stat.ok .v{color:#059669}
+
+/* 툴바 · 칩 */
+.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.chips{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+.chip{padding:7px 12px;border-radius:var(--radius-full);border:1px solid var(--color-gray-200);background:#fff;font-size:.8125rem;font-weight:600;color:var(--color-gray-700);cursor:pointer}
+.chip.on{background:var(--color-primary);border-color:var(--color-primary);color:#fff}
+.chip .n{opacity:.7;font-size:.6875rem;font-weight:700;margin-left:3px}
+.btnbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+
+/* 그리드 */
+.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.frame.mobile .grid{grid-template-columns:repeat(3,1fr)}
+.tile{position:relative;aspect-ratio:1/1;border-radius:var(--radius-sm);overflow:hidden;cursor:pointer;background:var(--color-gray-200)}
+.tile .fig{position:absolute;font-size:2.4rem;user-select:none}
+.tile.dark::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.38))}
+.tile .play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.6rem;text-shadow:0 1px 6px rgba(0,0,0,.5);z-index:2}
+.tile .chk{position:absolute;left:6px;top:6px;width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,.9);background:rgba(0,0,0,.25);z-index:3;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:.7rem;font-weight:900}
+.tile.sel{outline:3px solid var(--color-primary);outline-offset:-3px}
+.tile.sel .chk{background:var(--color-primary);border-color:#fff}
+.tile .tags{position:absolute;left:5px;bottom:5px;right:5px;display:flex;gap:3px;flex-wrap:wrap;z-index:3}
+.tile .tg{font-size:.625rem;font-weight:800;padding:2px 6px;border-radius:var(--radius-full);background:rgba(49,130,246,.92);color:#fff}
+.tile .tg.manual{background:rgba(124,92,252,.92)}
+.tile .tg.cand{background:rgba(255,159,0,.92)}
+.tile .tg.none{background:rgba(25,31,40,.55)}
+.tile .vid{position:absolute;right:5px;top:5px;background:rgba(0,0,0,.6);color:#fff;font-size:.625rem;font-weight:700;padding:2px 6px;border-radius:var(--radius-full);z-index:3}
+.tile .hid{position:absolute;inset:0;background:rgba(25,31,40,.62);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:800;z-index:4}
+.tile .up{position:absolute;right:5px;bottom:5px;background:rgba(255,255,255,.9);color:var(--color-gray-700);font-size:.625rem;font-weight:700;padding:1px 6px;border-radius:var(--radius-full);z-index:3}
+
+/* 선택 액션 바 */
+.bulk{position:sticky;bottom:12px;margin-top:14px;background:var(--color-gray-900);color:#fff;border-radius:var(--radius-lg);padding:10px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;box-shadow:var(--shadow-lg);z-index:20}
+.bulk .n{font-weight:800;font-size:.875rem;margin-right:4px}
+.bulk .sp{flex:1}
+.bulk .btn{background:rgba(255,255,255,.14);color:#fff;border:none}
+.bulk .btn.danger{background:rgba(255,72,72,.25);color:#FFC0C0}
+
+/* 진행률 */
+.prog{background:#fff;border:1px solid var(--color-primary);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:14px}
+.prog .l{display:flex;justify-content:space-between;font-size:.8125rem;font-weight:700;margin-bottom:6px}
+.prog .bar{height:6px;border-radius:4px;background:var(--color-gray-200);overflow:hidden}
+.prog .bar i{display:block;height:100%;width:0;background:var(--color-primary);transition:width .2s}
+
+/* 활동 로그 */
+.log-row{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--color-gray-100);font-size:.8125rem}
+.log-row:first-child{border-top:none}
+.log-row .t{color:var(--color-gray-400);font-size:.75rem;width:78px;flex-shrink:0}
+.log-row .b{flex:1;min-width:0;color:var(--color-gray-700)}
+.log-row .b b{font-weight:700;color:var(--color-gray-900)}
+
+/* 모달 */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:200;padding:16px}
+.modal.on{display:flex}
+.modal-box{background:#fff;border-radius:var(--radius-lg);width:100%;max-width:640px;max-height:92vh;display:flex;flex-direction:column;box-shadow:var(--shadow-lg)}
+.modal-box.wide{max-width:820px}
+.modal-head{padding:18px 20px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--color-gray-100)}
+.modal-head h3{font-size:1.0625rem;font-weight:800}
+.modal-body{padding:16px 20px;overflow-y:auto}
+.modal-foot{padding:12px 20px 16px;border-top:1px solid var(--color-gray-100);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.x{border:none;background:none;font-size:1.25rem;cursor:pointer;color:var(--color-gray-500);width:36px;height:36px;border-radius:var(--radius-sm)}
+.x:hover{background:var(--color-gray-100)}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:.8125rem;font-weight:700;color:var(--color-gray-700);margin-bottom:6px}
+.field .hint{font-size:.75rem;color:var(--color-gray-500);margin-top:5px;line-height:1.55}
+.input{width:100%;padding:11px 13px;border:1px solid var(--color-gray-300);border-radius:var(--radius-md);font:inherit;font-size:.9375rem;background:#fff}
+.input:focus{outline:none;border-color:var(--color-primary)}
+.path{font-size:.75rem;color:var(--color-gray-500);background:var(--bg-tertiary);border-radius:var(--radius-sm);padding:8px 10px;margin-top:8px;word-break:break-all}
+.path b{color:var(--color-gray-800)}
+
+/* 사진 상세 */
+.det{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:16px}
+.frame.mobile .det,.modal-box.wide .det.narrow{grid-template-columns:1fr}
+.photo-wrap{position:relative;border-radius:var(--radius-md);overflow:hidden;aspect-ratio:4/3;background:var(--color-gray-200)}
+.photo-wrap .fig{position:absolute;font-size:5rem}
+.fbox{position:absolute;border:2px solid #00E07B;border-radius:4px;box-shadow:0 0 0 2px rgba(0,0,0,.25)}
+.fbox.matched{border-color:#3182F6}
+.fbox.cand{border-color:#FF9F00}
+.fbox .lb{position:absolute;left:-2px;top:-22px;background:#3182F6;color:#fff;font-size:.625rem;font-weight:800;padding:2px 6px;border-radius:4px;white-space:nowrap}
+.fbox.cand .lb{background:#FF9F00}
+.fbox.none .lb{background:#00A862}
+.tag-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--color-gray-100);font-size:.8125rem}
+.tag-row .sp{flex:1}
+.meta-row{display:flex;gap:8px;font-size:.75rem;color:var(--color-gray-500);padding:5px 0}
+.meta-row .k{width:64px;flex-shrink:0}
+.meta-row .v{flex:1;min-width:0;color:var(--color-gray-800);word-break:break-all}
+.stu-pick{border:1px solid var(--color-gray-200);border-radius:var(--radius-md);padding:8px;margin-top:8px}
+.stu-pick .row{display:flex;align-items:center;gap:8px;padding:6px;border-radius:var(--radius-sm);cursor:pointer;font-size:.8125rem}
+.stu-pick .row:hover{background:var(--color-primary-bg)}
+.stu-pick .row .av{width:26px;height:26px;border-radius:50%;background:var(--color-gray-100);color:var(--color-gray-700);font-weight:800;font-size:.7rem;display:inline-flex;align-items:center;justify-content:center}
+
+/* 목업 상태 바 */
+.mockctl{border:1px dashed var(--color-gray-300);background:repeating-linear-gradient(45deg,#fff,#fff 8px,#FAFBFC 8px,#FAFBFC 16px);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.mockctl .lb{font-size:.75rem;font-weight:800;color:var(--color-gray-500);white-space:nowrap}
+.mockctl .chip{font-size:.75rem;padding:5px 10px}
+
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(16px);background:rgba(25,31,40,.94);color:#fff;padding:11px 18px;border-radius:var(--radius-md);font-size:.875rem;font-weight:600;opacity:0;transition:all .2s;z-index:300;max-width:90vw;text-align:center;line-height:1.5;pointer-events:none}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.hidden{display:none !important}
+</style>
+</head>
+<body>
+
+<div class="mock-bar">
+  <strong>사진 공유 목업</strong>
+  <span>선생님 화면</span>
+  <div class="seg"><button id="segAlbum" class="on" onclick="showPage('album')">이벤트 상세 · 앨범</button><button id="segSettings" onclick="showPage('settings')">설정 · Drive 연결</button></div>
+  <div class="seg"><button id="btnDesktop" class="on" onclick="setView('desktop')">데스크톱</button><button id="btnMobile" onclick="setView('mobile')">모바일</button></div>
+  <div class="spacer"></div>
+  <a href="./parent.html">학부모 화면 목업 →</a>
+</div>
+<div class="mock-note">실제 동작하지 않는 화면 목업입니다. 선생님이 <b>설정에서 Google 계정을 한 번 연결</b>하고, <b>이벤트 상세에서 이름을 넣어 앨범 폴더를 만들면</b> 그 뒤로 학부모가 사진을 올립니다. 썸네일은 자리표시용 그래픽입니다.</div>
+
+<div class="frame" id="frame">
+  <header class="app-header">
+    <div class="row"><h1>리듬체조 출석</h1><button class="hamburger">☰</button></div>
+    <nav class="desktop-nav">
+      <a href="#">대시보드</a><a href="#">학생 관리</a><a href="#">수업 관리</a>
+      <a href="#" id="navEvents" class="active" onclick="showPage('album');return false">이벤트 관리</a>
+      <a href="#">출석 체크</a><a href="#">학생별 대회</a><a href="#">학부모</a><a href="#">FAQ</a>
+      <span class="push"></span><a href="#" id="navSettings" onclick="showPage('settings');return false">설정</a><a href="#">로그아웃</a>
+    </nav>
+  </header>
+
+  <main class="app-main">
+
+    <!-- ═══ 설정 · Drive 연결 ═══ -->
+    <section id="pageSettings" class="hidden">
+      <div class="page-head">
+        <div><div class="page-title">설정</div><div class="page-desc">앨범 사진은 선생님의 Google Drive 에 저장됩니다. 한 번만 연결하면 이후 모든 이벤트에서 앨범을 만들 수 있어요.</div></div>
+      </div>
+
+      <div class="mockctl">
+        <span class="lb">목업 상태</span>
+        <button class="chip" id="dsNone" onclick="setDrive('none')">미연결</button>
+        <button class="chip on" id="dsOk" onclick="setDrive('connected')">연결됨</button>
+        <button class="chip" id="dsErr" onclick="setDrive('error')">연결 오류(권한 철회)</button>
+        <button class="chip" id="dsFull" onclick="setDrive('full')">용량 부족</button>
+      </div>
+
+      <div class="card" id="driveCard"></div>
+
+      <div class="card">
+        <h3>📁 앨범 폴더</h3>
+        <div class="sub">이벤트마다 하나씩 만들어집니다. 폴더는 모두 <b>내 Drive의 RG Manager</b> 아래에 생겨요.</div>
+        <div class="kv-list" id="folderList"></div>
+      </div>
+    </section>
+
+    <!-- ═══ 이벤트 상세 · 앨범 ═══ -->
+    <section id="pageAlbum">
+      <div class="page-head">
+        <div>
+          <div class="crumb">이벤트 관리 › <b>2026 서울시 리듬체조 대회</b></div>
+          <div class="page-title">2026 서울시 리듬체조 대회</div>
+          <div class="page-desc">2026-09-12(토) 09:00 · 올림픽공원 체조경기장 · 참가 학생 12명 · 신청 14건</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-outline btn-sm" onclick="toast('이벤트 수정 화면 (학부모 포털 목업)')">이벤트 수정</button>
+          <button class="btn btn-outline btn-sm" onclick="toast('신청 현황 패널 (학부모 포털 목업)')">신청 현황</button>
+        </div>
+      </div>
+
+      <div class="mockctl">
+        <span class="lb">목업 상태</span>
+        <button class="chip" id="asNone" onclick="setAlbum('none')">폴더 없음</button>
+        <button class="chip on" id="asReady" onclick="setAlbum('ready')">폴더 있음(정상)</button>
+        <button class="chip" id="asUnshared" onclick="setAlbum('unshared')">링크 공유 꺼짐</button>
+        <button class="chip" id="asMissing" onclick="setAlbum('missing')">Drive 에서 폴더 삭제됨</button>
+      </div>
+
+      <div class="card" id="albumCard"></div>
+
+      <div id="albumManage" class="hidden">
+        <div class="stats" id="albumStats"></div>
+        <div id="progWrap"></div>
+        <div class="btnbar" id="albumBtns"></div>
+        <div class="toolbar"><div class="chips" id="albumChips"></div></div>
+        <div class="grid" id="albumGrid"></div>
+        <div id="bulkBar"></div>
+
+        <div class="card" style="margin-top:16px">
+          <div class="sec-title">최근 활동</div>
+          <div id="logList"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- 폴더 만들기 모달 -->
+<div class="modal" id="modalFolder">
+  <div class="modal-box">
+    <div class="modal-head"><h3>앨범 폴더 만들기</h3><button class="x" onclick="closeModal('modalFolder')">✕</button></div>
+    <div class="modal-body">
+      <div class="notice info" style="margin-bottom:14px">이름을 넣으면 <b>선생님의 Google Drive</b> 에 폴더가 만들어집니다. 이후 이 이벤트에 올라오는 사진·영상은 모두 이 폴더에 저장돼요.</div>
+      <div class="field">
+        <label>폴더 이름</label>
+        <input class="input" id="folderName" maxlength="100" value="2026-09-12 2026 서울시 리듬체조 대회">
+        <div class="path">만들어질 위치: 내 드라이브 / <b>RG Manager</b> / <b id="pathPreview">2026-09-12 2026 서울시 리듬체조 대회</b></div>
+        <div class="hint">1~100자 · <code>/ \ : * ? " &lt; &gt; |</code> 는 쓸 수 없어요. 나중에 이름을 바꿀 수 있어요.</div>
+      </div>
+      <div class="notice warn">폴더는 <b>"링크가 있는 모든 사용자 — 보기"</b> 로 공유됩니다. 앱에서 사진을 보여주기 위해 필요하며, 링크는 <b>확정된 학부모에게만</b> 보여집니다.</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeModal('modalFolder')">취소</button>
+      <button class="btn btn-primary" onclick="createFolder()">폴더 만들고 앨범 열기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 이름 변경 모달 -->
+<div class="modal" id="modalRename">
+  <div class="modal-box">
+    <div class="modal-head"><h3>폴더 이름 변경</h3><button class="x" onclick="closeModal('modalRename')">✕</button></div>
+    <div class="modal-body">
+      <div class="field"><label>폴더 이름</label><input class="input" id="renameInput" maxlength="100"><div class="hint">Google Drive 의 폴더 이름도 함께 바뀝니다.</div></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-outline" onclick="closeModal('modalRename')">취소</button><button class="btn btn-primary" onclick="doRename()">변경</button></div>
+  </div>
+</div>
+
+<!-- 사진 상세 모달 -->
+<div class="modal" id="modalPhoto">
+  <div class="modal-box wide">
+    <div class="modal-head"><h3 id="photoTitle">사진</h3><button class="x" onclick="closeModal('modalPhoto')">✕</button></div>
+    <div class="modal-body" id="photoBody"></div>
+    <div class="modal-foot" id="photoFoot"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ───────── 예시 데이터 ───────── */
+const students = [
+  { id: 1, name: '김하은' }, { id: 2, name: '박서연' }, { id: 3, name: '이지우' },
+  { id: 4, name: '최유나' }, { id: 5, name: '김서준' }, { id: 6, name: '정예린' }
+];
+let driveState = 'connected';   // none | connected | error | full
+let albumState = 'ready';       // none | ready | unshared | missing
+let uploadOpen = true;
+let folderName = '2026-09-12 2026 서울시 리듬체조 대회';
+
+function rnd(seed){ let s = seed; return () => (s = (s * 1103515245 + 12345) % 2147483648) / 2147483648; }
+
+const PALETTES = [
+  ['#FFE3EE','#FFAFD0'], ['#E4ECFF','#AFC9FF'], ['#E7F7EA','#B4E4BD'],
+  ['#FFF2DE','#FFD79F'], ['#F1EAFF','#CFBCFF'], ['#DEF5F8','#A6E1E9'],
+  ['#FFE9E1','#FFC0AD'], ['#EFF1F4','#C7CED7']
+];
+const FIGS = ['🤸‍♀️','🎀','🩰','💃','🏅','🎽','🤾‍♀️','⭐'];
+const UPLOADERS = [
+  { key: 'teacher', label: '선생님' },
+  { key: 'p1', label: '하은엄마' },
+  { key: 'p2', label: '서연아빠' },
+  { key: 'p3', label: '유나엄마' }
+];
+
+let seq = 200;
+function makeMedia(n){
+  const r = rnd(11), out = [];
+  const times = ['09:12','09:41','10:05','10:24','10:52','11:08','11:33','12:02','13:15','13:44','14:20','14:58'];
+  for (let i = 0; i < n; i++){
+    const kind = r() > 0.87 ? 'video' : 'image';
+    const up = UPLOADERS[Math.floor(r() * UPLOADERS.length)];
+    const id = ++seq;
+    const faces = [];
+    if (kind === 'image'){
+      const fc = r() < 0.1 ? 0 : r() < 0.65 ? 1 : 2;
+      for (let f = 0; f < fc; f++){
+        const w = 0.10 + r() * 0.10;
+        faces.push({
+          id: id * 10 + f,
+          x: 0.12 + r() * 0.6, y: 0.12 + r() * 0.5, w, h: w * 1.25,
+          score: (0.72 + r() * 0.27).toFixed(2),
+          match: null
+        });
+      }
+    }
+    const m = {
+      id, kind, uploader: up,
+      name: kind === 'video' ? `VID_${4000 + Math.floor(r()*900)}.MOV` : `IMG_${4000 + Math.floor(r()*900)}.JPG`,
+      time: times[Math.floor(r() * times.length)],
+      size: kind === 'video' ? `${(40 + r() * 180).toFixed(0)}MB` : `${(2 + r() * 4).toFixed(1)}MB`,
+      dur: kind === 'video' ? `0:${String(12 + Math.floor(r() * 45)).padStart(2,'0')}` : null,
+      faces,
+      tags: [],
+      faceStatus: kind === 'video' ? 'skipped' : (r() < 0.07 ? 'failed' : faces.length ? 'done' : 'none'),
+      hidden: false
+    };
+    /* 자동 태그: 얼굴이 있으면 일부를 학생과 매칭 */
+    m.faces.forEach(f => {
+      const x = r();
+      if (m.kind === 'image' && m.faceStatus === 'done'){
+        if (x < 0.45){
+          const st = students[Math.floor(r() * 4)];
+          const dist = +(0.28 + r() * 0.21).toFixed(2);
+          f.match = { studentId: st.id, distance: dist };
+          m.tags.push({ studentId: st.id, source: 'face', distance: dist, faceId: f.id });
+        } else if (x < 0.62){
+          const st = students[Math.floor(r() * 4)];
+          const dist = +(0.51 + r() * 0.09).toFixed(2);
+          f.match = { studentId: st.id, distance: dist, candidate: true };
+          m.tags.push({ studentId: st.id, source: 'candidate', distance: dist, faceId: f.id });
+        }
+      }
+    });
+    out.push(m);
+  }
+  return out;
+}
+let media = makeMedia(30);
+media[2].tags = [{ studentId: 3, source: 'manual', distance: null, faceId: null }];
+media[5].hidden = true;
+
+let logs = [
+  { t: '오늘 15:22', b: '<b>하은엄마</b> 님이 사진 4장 · 영상 1개를 올렸어요' },
+  { t: '오늘 13:05', b: '<b>서연아빠</b> 님이 사진 8장을 올렸어요' },
+  { t: '어제 21:40', b: '<b>선생님</b>이 사진 18장 · 영상 2개를 올렸어요' },
+  { t: '어제 21:32', b: '앨범 폴더 <b>2026-09-12 2026 서울시 리듬체조 대회</b> 를 만들었어요' }
+];
+
+/* ───────── 유틸 ───────── */
+const esc = s => { const t = document.createElement('div'); t.textContent = s; return t.innerHTML; };
+const stName = id => (students.find(s => s.id === id) || { name: '?' }).name;
+function art(m){
+  const p = PALETTES[m.id % PALETTES.length];
+  const ang = 110 + (m.id * 37) % 130;
+  return {
+    bg: m.kind === 'video' ? `linear-gradient(${ang}deg,#4E5968,#191F28)` : `linear-gradient(${ang}deg,${p[0]},${p[1]})`,
+    fig: FIGS[(m.id * 3) % FIGS.length],
+    left: 12 + (m.id * 17) % 54, top: 8 + (m.id * 29) % 48
+  };
+}
+function figSpan(m, big){ const a = art(m); return `<span class="fig" style="left:${a.left}%;top:${a.top}%${big?';font-size:5rem':''}">${a.fig}</span>`; }
+
+/* ───────── 설정 · Drive ───────── */
+function setDrive(s){
+  driveState = s;
+  ['dsNone','dsOk','dsErr','dsFull'].forEach(id => document.getElementById(id).classList.remove('on'));
+  document.getElementById({ none:'dsNone', connected:'dsOk', error:'dsErr', full:'dsFull' }[s]).classList.add('on');
+  renderDrive(); renderAlbum();
+}
+function renderDrive(){
+  const c = document.getElementById('driveCard');
+  if (driveState === 'none'){
+    c.innerHTML = `<h3><span class="g-ico">G</span> Google Drive</h3>
+      <div class="sub" style="margin:8px 0 14px">아직 연결되지 않았어요. 연결하면 이벤트마다 <b>앨범 폴더</b>를 만들 수 있고, 학부모가 앱에서 바로 사진·영상을 올릴 수 있어요.
+      앱은 <b>앱이 만든 폴더와 파일만</b> 볼 수 있어요 — 선생님의 다른 파일에는 접근하지 않습니다.</div>
+      <button class="btn btn-google" onclick="setDrive('connected');toast('Google 계정을 연결했어요 · 내 드라이브에 RG Manager 폴더를 만들었어요')"><span class="g-ico" style="width:20px;height:20px;font-size:.7rem">G</span> Google 계정 연결하기</button>`;
+    return;
+  }
+  const err = driveState === 'error';
+  const full = driveState === 'full';
+  const used = full ? 14.6 : 4.2, limit = 15;
+  const pct = Math.round(used / limit * 100);
+  c.innerHTML = `
+    ${err ? `<div class="notice danger" style="margin-bottom:14px">⚠️ <b>Google Drive 연결이 끊어졌어요.</b> 권한이 철회되어 업로드·삭제·분석이 멈춰 있어요. 앨범 조회는 계속됩니다.
+      <button class="btn btn-primary btn-sm" onclick="setDrive('connected');toast('다시 연결했어요')">다시 연결</button></div>` : ''}
+    ${full ? `<div class="notice warn" style="margin-bottom:14px">⚠️ <b>Drive 용량이 거의 찼어요 (남은 용량 0.4GB).</b> 새 업로드가 실패할 수 있어요. 저장용량을 늘리거나 지난 앨범을 정리해 주세요.</div>` : ''}
+    <div class="drive-row">
+      <span class="g-ico">G</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:800">jaerim.rg@gmail.com</div>
+        <div class="sub">${err ? '<span style="color:var(--color-danger);font-weight:700">연결 오류</span>' : '<span style="color:#059669;font-weight:700">연결됨</span>'} · 권한: 앱이 만든 파일만 (drive.file)</div>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="toast('연결을 해제하면 새 앨범을 만들 수 없어요. Drive 의 사진은 그대로 남습니다.')">연결 해제</button>
+    </div>
+    <div class="quota">
+      <div class="l"><span>Drive 사용량</span><span>${used}GB / ${limit}GB</span></div>
+      <div class="bar"><i class="${pct > 85 ? 'warn' : ''}" style="width:${pct}%"></i></div>
+    </div>
+    <div class="kv-list">
+      <div class="kv-row"><div class="k">루트 폴더</div><div class="v">내 드라이브 / <b>RG Manager</b></div>
+        <button class="btn btn-ghost btn-xs" onclick="toast('폴더 이름을 바꾸면 Drive 이름도 함께 바뀝니다')">이름 변경</button></div>
+      <div class="kv-row"><div class="k">앨범 수</div><div class="v">3개 · 사진 84장 · 영상 6개</div></div>
+      <div class="kv-row"><div class="k">얼굴 인식</div><div class="v">사진이 올라올 때 자동으로 분석해 <b>얼굴 특징값만</b> 저장합니다 (사진 속 얼굴 이미지는 저장하지 않아요)</div></div>
+    </div>`;
+}
+function renderFolders(){
+  const rows = [
+    { t: '2026-09-12 2026 서울시 리듬체조 대회', d: '사진 27 · 영상 3 · 어제 만듦', ok: true },
+    { t: '2026-08-29 한강 러닝 클래스', d: '사진 14 · 영상 2', ok: true },
+    { t: '2026-08-10 여름 오픈 대회', d: '사진 43 · 영상 1 · 업로드 마감', ok: true }
+  ];
+  document.getElementById('folderList').innerHTML = rows.map(r =>
+    `<div class="kv-row"><div class="k">📁</div><div class="v"><b>${esc(r.t)}</b><div style="font-size:.75rem;color:var(--color-gray-500)">${r.d}</div></div>
+     <button class="btn btn-ghost btn-xs" onclick="toast('Drive 폴더가 새 창으로 열려요')">Drive 에서 열기</button></div>`).join('');
+}
+
+/* ───────── 앨범 상태 ───────── */
+function setAlbum(s){
+  albumState = s;
+  ['asNone','asReady','asUnshared','asMissing'].forEach(id => document.getElementById(id).classList.remove('on'));
+  document.getElementById({ none:'asNone', ready:'asReady', unshared:'asUnshared', missing:'asMissing' }[s]).classList.add('on');
+  renderAlbum();
+}
+function renderAlbum(){
+  const card = document.getElementById('albumCard');
+  const manage = document.getElementById('albumManage');
+  if (albumState === 'none'){
+    manage.classList.add('hidden');
+    card.innerHTML = `<h3>📷 사진 · 영상</h3>
+      <div class="sub" style="margin:8px 0 14px">아직 앨범이 없어요. <b>폴더 이름을 넣으면</b> 선생님의 Google Drive 에 앨범 폴더가 만들어지고,
+      그 뒤로 <b>확정된 학부모</b>가 앱에서 사진·영상을 올릴 수 있어요.</div>
+      ${driveState === 'none'
+        ? `<div class="notice warn">먼저 <b>설정 &gt; Google Drive</b> 에서 계정을 연결해 주세요.
+            <button class="btn btn-primary btn-sm" onclick="showPage('settings')">설정으로 가기</button></div>`
+        : `<button class="btn btn-primary" onclick="openFolderModal()">＋ 앨범 폴더 만들기</button>`}`;
+    return;
+  }
+  manage.classList.remove('hidden');
+  const err = driveState === 'error';
+  card.innerHTML = `
+    <h3>📷 사진 · 영상 <span class="badge badge-success">앨범 있음</span></h3>
+    <div class="sub" style="margin:8px 0 12px">📁 내 드라이브 / RG Manager / <b>${esc(folderName)}</b></div>
+    ${albumState === 'missing' ? `<div class="notice danger" style="margin-bottom:12px">Drive 에서 폴더를 찾을 수 없어요. 폴더가 삭제되었거나 다른 계정으로 옮겨졌을 수 있어요.
+      <button class="btn btn-primary btn-sm" onclick="setAlbum('ready');toast('새 폴더를 만들었어요')">새 폴더 만들기</button></div>` : ''}
+    ${albumState === 'unshared' ? `<div class="notice warn" style="margin-bottom:12px">폴더의 <b>링크 공유가 꺼져</b> 있어 학부모 화면에서 사진이 보이지 않아요.
+      <button class="btn btn-primary btn-sm" onclick="setAlbum('ready');toast('링크 공유(보기)를 다시 켰어요')">공유 다시 켜기</button></div>` : ''}
+    ${err ? `<div class="notice danger" style="margin-bottom:12px">Google Drive 연결이 끊어져 <b>업로드·삭제·분석</b>을 할 수 없어요. 조회는 그대로 됩니다.
+      <button class="btn btn-primary btn-sm" onclick="showPage('settings')">설정에서 다시 연결</button></div>` : ''}
+    <div class="toggle-row">
+      <div>학부모 업로드 받기<div class="d">끄면 학부모 화면의 [올리기] 버튼이 "업로드 마감" 으로 바뀝니다. 선생님은 계속 올릴 수 있어요.</div></div>
+      <button class="sw ${uploadOpen?'on':''}" onclick="uploadOpen=!uploadOpen;renderAlbum();toast(uploadOpen?'학부모 업로드를 다시 받습니다':'학부모 업로드를 마감했어요')"></button>
+    </div>
+    <div class="toggle-row">
+      <div>링크 공유 (보기)<div class="d">앱에서 사진을 보여주기 위해 필요해요. 링크는 확정된 학부모에게만 보여집니다.</div></div>
+      <span class="badge ${albumState==='unshared'?'badge-danger':'badge-success'}">${albumState==='unshared'?'꺼짐':'켜짐'}</span>
+    </div>`;
+  renderStats(); renderBtns(); renderChips(); renderGrid(); renderLogs();
+}
+
+/* ───────── 통계 · 버튼 · 필터 ───────── */
+function counts(){
+  const vis = media;
+  return {
+    images: vis.filter(m => m.kind === 'image').length,
+    videos: vis.filter(m => m.kind === 'video').length,
+    untagged: vis.filter(m => m.kind === 'image' && !m.tags.filter(t => t.source !== 'candidate').length).length,
+    cands: vis.filter(m => m.tags.some(t => t.source === 'candidate')).length,
+    unanalyzed: vis.filter(m => m.kind === 'image' && (m.faceStatus === 'failed' || m.faceStatus === 'pending')).length,
+    hidden: vis.filter(m => m.hidden).length
+  };
+}
+function renderStats(){
+  const c = counts();
+  const done = c.images - c.unanalyzed;
+  document.getElementById('albumStats').innerHTML = `
+    <div class="stat"><div class="k">사진</div><div class="v">${c.images}</div></div>
+    <div class="stat"><div class="k">영상</div><div class="v">${c.videos}</div></div>
+    <div class="stat ok"><div class="k">얼굴 분석</div><div class="v">${Math.round(done / Math.max(c.images,1) * 100)}%</div></div>
+    <div class="stat warn"><div class="k">태그 없는 사진</div><div class="v">${c.untagged}</div></div>
+    <div class="stat"><div class="k">사용 용량</div><div class="v">1.8<span style="font-size:.9rem">GB</span></div></div>`;
+}
+function renderBtns(){
+  const dis = driveState === 'error' || albumState === 'missing' ? 'disabled' : '';
+  document.getElementById('albumBtns').innerHTML = `
+    <button class="btn btn-primary btn-sm" ${dis} onclick="toast('파일 선택 창이 열립니다 (브라우저 → Drive 직접 업로드)')">＋ 사진·영상 올리기</button>
+    <button class="btn btn-outline btn-sm" ${dis} onclick="runAnalyze()">🔍 미분석 다시 분석 <span class="badge badge-warning" style="margin-left:4px">${counts().unanalyzed}</span></button>
+    <button class="btn btn-outline btn-sm" ${dis} onclick="runRematch()">🔗 다시 매칭</button>
+    <button class="btn btn-outline btn-sm" onclick="toast('Drive 폴더를 다시 읽어 변경사항을 반영했어요')">🔄 새로고침</button>
+    <button class="btn btn-outline btn-sm" onclick="toast('Drive 폴더가 새 창으로 열려요')">Drive 에서 열기</button>
+    <button class="btn btn-ghost btn-sm" ${dis} onclick="openRename()">폴더 이름 변경</button>`;
+}
+let filter = 'all';
+function renderChips(){
+  const c = counts();
+  const list = [['all','전체',media.length],['teacher','선생님',media.filter(m=>m.uploader.key==='teacher').length],
+    ['parent','학부모',media.filter(m=>m.uploader.key!=='teacher').length],['untagged','태그 없음',c.untagged],
+    ['cand','확인 필요',c.cands],['unanalyzed','미분석',c.unanalyzed],['hidden','숨김',c.hidden]];
+  document.getElementById('albumChips').innerHTML = list.map(([k,l,n]) =>
+    `<button class="chip ${filter===k?'on':''}" onclick="filter='${k}';selected.clear();renderChips();renderGrid()">${l}<span class="n">${n}</span></button>`).join('');
+}
+function filtered(){
+  return media.filter(m => {
+    if (filter === 'hidden') return m.hidden;
+    if (m.hidden && filter !== 'all') return false;
+    if (filter === 'teacher') return m.uploader.key === 'teacher';
+    if (filter === 'parent') return m.uploader.key !== 'teacher';
+    if (filter === 'untagged') return m.kind === 'image' && !m.tags.filter(t => t.source !== 'candidate').length;
+    if (filter === 'cand') return m.tags.some(t => t.source === 'candidate');
+    if (filter === 'unanalyzed') return m.kind === 'image' && (m.faceStatus === 'failed' || m.faceStatus === 'pending');
+    return true;
+  });
+}
+
+/* ───────── 그리드 · 선택 ───────── */
+let selected = new Set();
+function renderGrid(){
+  const list = filtered();
+  const g = document.getElementById('albumGrid');
+  if (!list.length){ g.innerHTML = `<div class="notice gray" style="grid-column:1/-1;text-align:center">해당하는 사진이 없어요</div>`; renderBulk(); return; }
+  g.innerHTML = list.map(m => {
+    const a = art(m);
+    const real = m.tags.filter(t => t.source !== 'candidate');
+    const cand = m.tags.filter(t => t.source === 'candidate');
+    let tags = real.map(t => `<span class="tg ${t.source==='manual'?'manual':''}">${esc(stName(t.studentId))}</span>`).join('');
+    if (cand.length) tags += `<span class="tg cand">? ${esc(stName(cand[0].studentId))}</span>`;
+    if (!real.length && !cand.length && m.kind === 'image')
+      tags = `<span class="tg none">${m.faceStatus === 'failed' ? '분석 실패' : m.faceStatus === 'none' ? '얼굴 없음' : '태그 없음'}</span>`;
+    return `<div class="tile ${m.kind==='video'?'dark':''} ${selected.has(m.id)?'sel':''}" style="background:${a.bg}" onclick="tileClick(event,${m.id})">
+      ${figSpan(m)}
+      <span class="chk" onclick="event.stopPropagation();toggleSel(${m.id})">${selected.has(m.id)?'✓':''}</span>
+      ${m.kind === 'video' ? `<span class="play">▶</span><span class="vid">${m.dur}</span>` : ''}
+      <div class="tags">${tags}</div>
+      ${m.uploader.key !== 'teacher' ? `<span class="up">${esc(m.uploader.label)}</span>` : ''}
+      ${m.hidden ? '<span class="hid">숨김</span>' : ''}
+    </div>`;
+  }).join('');
+  renderBulk();
+}
+function tileClick(e, id){ if (selected.size) toggleSel(id); else openPhoto(id); }
+function toggleSel(id){ selected.has(id) ? selected.delete(id) : selected.add(id); renderGrid(); }
+function renderBulk(){
+  const b = document.getElementById('bulkBar');
+  if (!selected.size){ b.innerHTML = ''; return; }
+  b.innerHTML = `<div class="bulk">
+    <span class="n">${selected.size}개 선택</span>
+    <button class="btn btn-sm" onclick="bulk('hide')">숨기기</button>
+    <button class="btn btn-sm" onclick="bulk('show')">보이기</button>
+    <button class="btn btn-sm" onclick="bulk('tag')">학생 태그</button>
+    <span class="sp"></span>
+    <button class="btn btn-sm danger" onclick="bulk('delete')">삭제</button>
+    <button class="btn btn-sm" onclick="selected.clear();renderGrid()">선택 해제</button>
+  </div>`;
+}
+function bulk(action){
+  const ids = [...selected];
+  if (action === 'hide'){ ids.forEach(i => media.find(m => m.id === i).hidden = true); toast(`${ids.length}개를 숨겼어요 · 학부모에게 보이지 않아요`); }
+  if (action === 'show'){ ids.forEach(i => media.find(m => m.id === i).hidden = false); toast(`${ids.length}개를 다시 보이게 했어요`); }
+  if (action === 'delete'){
+    media = media.filter(m => !selected.has(m.id));
+    logs.unshift({ t: '방금', b: `<b>선생님</b>이 ${ids.length}개를 삭제했어요 (Drive 휴지통)` });
+    toast(`${ids.length}개를 Drive 휴지통으로 옮겼어요 · 30일 안에 복구할 수 있어요`);
+  }
+  if (action === 'tag'){
+    const st = students[0];
+    ids.forEach(i => {
+      const m = media.find(x => x.id === i);
+      if (!m) return;
+      m.tags = m.tags.filter(t => t.studentId !== st.id);
+      m.tags.push({ studentId: st.id, source: 'manual', distance: null, faceId: null });
+    });
+    toast(`${ids.length}개에 <b>${st.name}</b> 태그를 붙였어요 (수동 태그는 다시 매칭해도 유지돼요)`);
+  }
+  selected.clear();
+  renderStats(); renderChips(); renderGrid(); renderLogs();
+}
+
+/* ───────── 분석 · 매칭 ───────── */
+function runAnalyze(){
+  const targets = media.filter(m => m.kind === 'image' && (m.faceStatus === 'failed' || m.faceStatus === 'pending'));
+  if (!targets.length){ toast('분석할 사진이 없어요'); return; }
+  const wrap = document.getElementById('progWrap');
+  let done = 0;
+  const paint = () => wrap.innerHTML = `<div class="prog"><div class="l"><span>🔍 얼굴 분석 중… (5장씩 처리)</span><span>${done}/${targets.length}장</span></div>
+    <div class="bar"><i style="width:${Math.round(done/targets.length*100)}%"></i></div></div>`;
+  paint();
+  const timer = setInterval(() => {
+    done = Math.min(targets.length, done + 1);
+    const m = targets[done - 1];
+    if (m){ m.faceStatus = Math.random() < 0.85 ? 'done' : 'failed'; if (m.faceStatus === 'done' && !m.faces.length) m.faces.push({ id: m.id*10, x:.3, y:.25, w:.16, h:.2, score:'0.91', match:null }); }
+    paint();
+    if (done >= targets.length){
+      clearInterval(timer);
+      setTimeout(() => {
+        wrap.innerHTML = '';
+        const failed = targets.filter(t => t.faceStatus === 'failed').length;
+        toast(`${targets.length}장 분석 완료${failed ? ` · ${failed}장 실패(다음에 다시 시도할 수 있어요)` : ''}`);
+        renderStats(); renderChips(); renderGrid();
+      }, 500);
+    }
+  }, 280);
+}
+function runRematch(){
+  let added = 0, cands = 0;
+  media.forEach(m => {
+    m.faces.forEach(f => {
+      if (f.match && !m.tags.some(t => t.studentId === f.match.studentId)){
+        m.tags.push({ studentId: f.match.studentId, source: f.match.candidate ? 'candidate' : 'face', distance: f.match.distance, faceId: f.id });
+        f.match.candidate ? cands++ : added++;
+      }
+    });
+  });
+  toast(`다시 매칭했어요 · 자동 태그 ${added}개 추가, 확인 필요 ${cands}개<br><span style="opacity:.75;font-weight:600">선생님이 붙인 태그는 그대로 유지됩니다</span>`);
+  renderStats(); renderChips(); renderGrid();
+}
+
+/* ───────── 사진 상세 ───────── */
+let curPhoto = null;
+function openPhoto(id){
+  curPhoto = media.find(m => m.id === id);
+  renderPhoto();
+  document.getElementById('modalPhoto').classList.add('on');
+}
+function renderPhoto(){
+  const m = curPhoto; if (!m) return;
+  const a = art(m);
+  document.getElementById('photoTitle').textContent = m.name;
+  const boxes = m.faces.map(f => {
+    const cls = f.match ? (f.match.candidate ? 'cand' : 'matched') : 'none';
+    const lb = f.match ? `${stName(f.match.studentId)} · ${f.match.distance}${f.match.candidate?' (확인 필요)':''}` : '미지정';
+    return `<div class="fbox ${cls}" style="left:${f.x*100}%;top:${f.y*100}%;width:${f.w*100}%;height:${f.h*100}%" onclick="pickStudent(${f.id})">
+      <span class="lb">${esc(lb)}</span></div>`;
+  }).join('');
+  const real = m.tags.filter(t => t.source !== 'candidate');
+  const cand = m.tags.filter(t => t.source === 'candidate');
+  const srcLabel = { face: '자동', manual: '선생님', parent_confirmed: '학부모 확인', candidate: '확인 필요' };
+  document.getElementById('photoBody').innerHTML = `
+    <div class="det">
+      <div>
+        <div class="photo-wrap" style="background:${a.bg}">
+          ${figSpan(m, true)}
+          ${m.kind === 'video' ? '<span class="play" style="font-size:3rem">▶</span>' : boxes}
+        </div>
+        <div style="font-size:.75rem;color:var(--color-gray-500);margin-top:8px;line-height:1.6">
+          ${m.kind === 'video'
+            ? '영상은 얼굴을 분석하지 않아요. 필요하면 오른쪽에서 학생을 직접 붙여 주세요.'
+            : `초록 = 검출된 얼굴 · 파랑 = 자동 매칭 · 주황 = 확인 필요 &nbsp;|&nbsp; <b>얼굴 상자를 클릭</b>하면 학생을 지정할 수 있어요.<br>
+               저장하는 것은 <b>특징값과 위치</b>뿐이고 얼굴 이미지는 저장하지 않아요.`}
+        </div>
+      </div>
+      <div>
+        <div class="sec-title">태그</div>
+        ${real.length ? real.map(t => `<div class="tag-row">
+          <span class="badge ${t.source==='manual'?'badge-purple':'badge-primary'}">${srcLabel[t.source]}</span>
+          <b>${esc(stName(t.studentId))}</b>
+          ${t.distance !== null && t.distance !== undefined ? `<span style="color:var(--color-gray-400);font-size:.75rem">거리 ${t.distance}</span>` : ''}
+          <span class="sp"></span>
+          <button class="btn btn-ghost btn-xs" onclick="untag(${t.studentId})">해제</button></div>`).join('')
+          : '<div class="notice gray">아직 태그가 없어요</div>'}
+        ${cand.length ? `<div class="sec-title" style="margin-top:14px">확인 필요</div>` + cand.map(t => `<div class="tag-row">
+          <span class="badge badge-warning">확인 필요</span><b>${esc(stName(t.studentId))}</b>
+          <span style="color:var(--color-gray-400);font-size:.75rem">거리 ${t.distance}</span>
+          <span class="sp"></span>
+          <button class="btn btn-ghost btn-xs" onclick="promote(${t.studentId})">맞음</button>
+          <button class="btn btn-ghost btn-xs" onclick="untag(${t.studentId})">아님</button></div>`).join('') : ''}
+
+        <div class="sec-title" style="margin-top:14px">학생 직접 지정</div>
+        <div class="stu-pick">${students.map(s => `<div class="row" onclick="addTag(${s.id})"><span class="av">${esc(s.name.charAt(0))}</span>${esc(s.name)}</div>`).join('')}</div>
+
+        <div class="sec-title" style="margin-top:14px">정보</div>
+        <div class="meta-row"><span class="k">올린 사람</span><span class="v">${esc(m.uploader.label)}</span></div>
+        <div class="meta-row"><span class="k">촬영</span><span class="v">2026-09-12 ${m.time}</span></div>
+        <div class="meta-row"><span class="k">파일</span><span class="v">${esc(m.name)} · ${m.size}</span></div>
+        <div class="meta-row"><span class="k">분석</span><span class="v">${{done:'완료',none:'얼굴 없음',failed:'실패',skipped:'영상(분석 안 함)',pending:'대기'}[m.faceStatus]} · 얼굴 ${m.faces.length}개</span></div>
+      </div>
+    </div>`;
+  document.getElementById('photoFoot').innerHTML = `
+    <button class="btn btn-outline btn-sm" onclick="toast('Drive 에서 원본이 새 창으로 열려요')">Drive 에서 열기</button>
+    <button class="btn btn-outline btn-sm" onclick="toggleHide()">${m.hidden ? '다시 보이기' : '학부모에게 숨기기'}</button>
+    <button class="btn btn-danger btn-sm" onclick="deleteOne()">삭제</button>`;
+}
+function addTag(studentId){
+  curPhoto.tags = curPhoto.tags.filter(t => t.studentId !== studentId);
+  curPhoto.tags.push({ studentId, source: 'manual', distance: null, faceId: null });
+  toast(`<b>${stName(studentId)}</b> 태그를 붙였어요`);
+  renderPhoto(); renderStats(); renderChips(); renderGrid();
+}
+function untag(studentId){
+  curPhoto.tags = curPhoto.tags.filter(t => t.studentId !== studentId);
+  toast('태그를 해제했어요 · 다시 매칭해도 되살아나지 않아요');
+  renderPhoto(); renderStats(); renderChips(); renderGrid();
+}
+function promote(studentId){
+  const t = curPhoto.tags.find(x => x.studentId === studentId);
+  if (t) t.source = 'manual';
+  toast(`<b>${stName(studentId)}</b> 로 확정했어요`);
+  renderPhoto(); renderStats(); renderChips(); renderGrid();
+}
+function pickStudent(faceId){
+  const f = curPhoto.faces.find(x => x.id === faceId);
+  if (!f) return;
+  toast('오른쪽 <b>학생 직접 지정</b> 목록에서 학생을 고르면 이 얼굴에 붙습니다');
+}
+function toggleHide(){
+  curPhoto.hidden = !curPhoto.hidden;
+  toast(curPhoto.hidden ? '학부모에게 보이지 않아요' : '다시 보이게 했어요');
+  renderPhoto(); renderStats(); renderChips(); renderGrid();
+}
+function deleteOne(){
+  media = media.filter(m => m.id !== curPhoto.id);
+  logs.unshift({ t: '방금', b: '<b>선생님</b>이 사진 1장을 삭제했어요 (Drive 휴지통)' });
+  closeModal('modalPhoto');
+  toast('Drive 휴지통으로 옮겼어요 · 얼굴 특징값·태그도 함께 지워졌어요');
+  renderStats(); renderChips(); renderGrid(); renderLogs();
+}
+
+/* ───────── 폴더 모달 ───────── */
+function openFolderModal(){
+  document.getElementById('modalFolder').classList.add('on');
+  const inp = document.getElementById('folderName');
+  inp.oninput = () => document.getElementById('pathPreview').textContent = inp.value || '(이름 없음)';
+}
+function createFolder(){
+  const name = document.getElementById('folderName').value.trim();
+  if (!name){ toast('폴더 이름을 입력해 주세요'); return; }
+  if (/[\/\\:*?"<>|]/.test(name)){ toast('폴더 이름에 쓸 수 없는 문자가 있어요'); return; }
+  folderName = name;
+  closeModal('modalFolder');
+  setAlbum('ready');
+  logs.unshift({ t: '방금', b: `앨범 폴더 <b>${esc(name)}</b> 를 만들었어요 · 링크 공유(보기) 켜짐` });
+  toast(`Drive 에 <b>${esc(name)}</b> 폴더를 만들었어요<br><span style="opacity:.75;font-weight:600">이제 확정된 학부모가 사진을 올릴 수 있어요</span>`);
+  renderLogs();
+}
+function openRename(){
+  document.getElementById('renameInput').value = folderName;
+  document.getElementById('modalRename').classList.add('on');
+}
+function doRename(){
+  const v = document.getElementById('renameInput').value.trim();
+  if (!v){ toast('이름을 입력해 주세요'); return; }
+  folderName = v; closeModal('modalRename'); renderAlbum();
+  toast('폴더 이름을 바꿨어요 · Drive 이름도 함께 바뀝니다');
+}
+function closeModal(id){ document.getElementById(id).classList.remove('on'); }
+
+function renderLogs(){
+  document.getElementById('logList').innerHTML = logs.slice(0, 6).map(l =>
+    `<div class="log-row"><div class="t">${l.t}</div><div class="b">${l.b}</div></div>`).join('');
+}
+
+/* ───────── 페이지 · 뷰 ───────── */
+function showPage(p){
+  document.getElementById('pageAlbum').classList.toggle('hidden', p !== 'album');
+  document.getElementById('pageSettings').classList.toggle('hidden', p !== 'settings');
+  document.getElementById('segAlbum').classList.toggle('on', p === 'album');
+  document.getElementById('segSettings').classList.toggle('on', p === 'settings');
+  document.getElementById('navEvents').classList.toggle('active', p === 'album');
+  document.getElementById('navSettings').classList.toggle('active', p === 'settings');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (p === 'settings'){ renderDrive(); renderFolders(); }
+}
+function setView(v){
+  document.getElementById('frame').classList.toggle('mobile', v === 'mobile');
+  document.getElementById('btnDesktop').classList.toggle('on', v === 'desktop');
+  document.getElementById('btnMobile').classList.toggle('on', v === 'mobile');
+}
+let toastTimer;
+function toast(msg){ const t = document.getElementById('toast'); t.innerHTML = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 3000); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape'){ ['modalFolder','modalRename','modalPhoto'].forEach(closeModal); } });
+
+renderDrive(); renderFolders(); renderAlbum();
+</script>
+</body>
+</html>
