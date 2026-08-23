@@ -64,7 +64,16 @@ describe('eventController', () => {
       expect(Event.getAll).toHaveBeenCalledWith(7, 'user', expect.objectContaining({ includePast: false }));
     });
 
-    it('관리자는 사용자 필터로 다른 선생님 이벤트를 본다', async () => {
+    it('관리자는 기본으로 전체를 본다 (대회 화면과 같은 규칙)', async () => {
+      req.user.role = 'admin';
+      Event.getAll.mockResolvedValue([]);
+
+      await getEvents(req, res);
+
+      expect(Event.getAll).toHaveBeenCalledWith(null, 'admin', expect.anything());
+    });
+
+    it('관리자는 사용자 필터로 한 선생님만 볼 수 있다', async () => {
       req.user.role = 'admin';
       req.query.filterUserId = '3';
       Event.getAll.mockResolvedValue([]);

@@ -68,15 +68,14 @@ export const getEvents = async (req, res) => {
     const { id: userId, role } = req.user;
     const { type, includePast, filterUserId } = req.query;
 
-    let targetUserId = userId;
-    if (role === 'admin' && filterUserId) {
-      if (filterUserId === 'all') {
-        targetUserId = null;
-      } else {
-        const parsed = parseInt(filterUserId, 10);
-        if (isNaN(parsed)) return res.status(400).json({ error: '잘못된 사용자 ID입니다.' });
-        targetUserId = parsed;
-      }
+    // 관리자는 기본이 전체 조회다 (기존 대회 화면과 같은 규칙).
+    // 선생님은 filterUserId 를 줘도 본인 것만 본다.
+    let targetUserId = role === 'admin' ? null : userId;
+
+    if (role === 'admin' && filterUserId && filterUserId !== 'all') {
+      const parsed = parseInt(filterUserId, 10);
+      if (isNaN(parsed)) return res.status(400).json({ error: '잘못된 사용자 ID입니다.' });
+      targetUserId = parsed;
     }
 
     const events = await Event.getAll(targetUserId, role, {
