@@ -37,6 +37,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:e2e": "playwright test",
-    "test:e2e:setup": "node e2e/setup.mjs"
+    "test:e2e:setup": "node e2e/setup.mjs",
+    "smoke:prod": "node e2e/smoke-prod.mjs"
   }
 }

@@ -359,7 +359,15 @@ set explicitly. `KAKAO_REDIRECT_URI` must also be registered in the Kakao develo
 
 **Notes**:
 - `server/server.js` skips `app.listen` when `process.env.VERCEL` is set and exports the app
-- `initDatabase()` runs on module load, so schema migrations apply on the first cold start
+- `initDatabase()` runs on module load, so schema migrations apply on the first cold start.
+  **It is fire-and-forget** (`initDatabase().catch(console.error)`) — no request awaits it, and
+  Vercel may freeze the instance as soon as a response is sent. A small migration usually slips
+  through; a large one (the album feature added 5 tables, 7 columns and 8 indexes) does **not**.
+  After deploying a sizeable schema change, verify the tables exist in production and, if they
+  do not, apply the same DDL directly (Supabase SQL editor / MCP `apply_migration`) and
+  `ALTER TABLE <t> OWNER TO rg_app` so the app can write to them. Re-running `initDatabase()`
+  afterwards is a no-op because every statement is `IF NOT EXISTS`.
+  `client/e2e/smoke-prod.mjs` (`npm run smoke:prod`) checks the deployed app end to end
 - There is no migration tool — add `ADD COLUMN IF NOT EXISTS` / `CREATE TABLE IF NOT EXISTS`
   statements to `server/database.js` so they are safe to re-run
 
