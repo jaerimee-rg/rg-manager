@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
+// 로그인하지 않은 학부모 화면이므로 fetchWithAuth(401 시 /login 이동)를 사용하지 않는다.
+import { getVisitorKey } from '../utils/visitorStorage';
 
 const MESSAGE_MAX = 500;
 const NAME_MAX = 20;
@@ -8,26 +10,6 @@ const POLL_INTERVAL_MS = 12000;
 // 한도를 넘었을 때 기본 대기 시간 (서버가 알려주면 그 값을 쓴다)
 const POLL_BACKOFF_MS = 60000;
 const POLL_BACKOFF_MAX_MS = 5 * 60 * 1000;
-const VISITOR_KEY_STORAGE = 'faqChatVisitorKey';
-
-// 로그인하지 않은 학부모 화면이므로 fetchWithAuth(401 시 /login 이동)를 사용하지 않는다.
-const createVisitorKey = () => {
-  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
-  return `v-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-};
-
-const getVisitorKey = () => {
-  try {
-    let key = localStorage.getItem(VISITOR_KEY_STORAGE);
-    if (!key) {
-      key = createVisitorKey();
-      localStorage.setItem(VISITOR_KEY_STORAGE, key);
-    }
-    return key;
-  } catch (e) {
-    return createVisitorKey();
-  }
-};
 
 const formatTime = (iso) => {
   const d = iso ? new Date(iso) : new Date();
