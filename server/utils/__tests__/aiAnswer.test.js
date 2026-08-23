@@ -83,6 +83,150 @@ describe('generateAnswer', () => {
   });
 });
 
+describe('generateAnswer — OpenAI 제공자', () => {
+  const FAQS = [
+    { id: 1, question: '수업 시간이 어떻게 되나요?', answer: '평일 오후 3시부터입니다.', displayOrder: 0 },
+    { id: 2, question: '수업료는 얼마인가요?', answer: '월 15만원입니다.', displayOrder: 1 }
+  ];
+
+  const originalFetch = global.fetch;
+  const originalKey = process.env.OEPNAI_API_KEY;
+
+  const okResponse = (parsed, usage = {}) => ({
+    ok: true,
+    json: async () => ({
+      choices: [{ message: { content: JSON.stringify(parsed) } }],
+      usage
+    })
+  });
+
+  beforeEach(() => {
+    process.env.OEPNAI_API_KEY = 'sk-test-key';
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    if (originalKey === undefined) delete process.env.OEPNAI_API_KEY;
+    else process.env.OEPNAI_API_KEY = originalKey;
+  });
+
+  const call = (question = '수업 시간이 어떻게 되나요?') =>
+    generateAnswer({ faqs: FAQS, history: [], question, provider: 'openai' });
+
+  it('OpenAI 엔드포인트를 키와 함께 호출한다', async () => {
+    global.fetch.mockResolvedValue(okResponse({ answered: true, usedFaqIds: [1], suggestedFaqIds: [] }));
+
+    await call();
+
+    const [url, options] = global.fetch.mock.calls[0];
+    expect(url).toBe('https://api.openai.com/v1/chat/completions');
+    expect(options.headers.Authorization).toBe('Bearer sk-test-key');
+  });
+
+  it('시스템 지시와 질문을 messages 로 보낸다', async () => {
+    global.fetch.mockResolvedValue(okResponse({ answered: true, usedFaqIds: [1], suggestedFaqIds: [] }));
+
+    await generateAnswer({
+      faqs: FAQS,
+      history: [{ role: 'parent', content: '안녕하세요' }, { role: 'bot', content: '네 안녕하세요' }],
+      question: '수업료는요?',
+      provider: 'openai'
+    });
+
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.messages[0].role).toBe('system');
+    expect(body.messages[0].content).toContain('[id:1]');
+    // bot 답변은 OpenAI 규격의 assistant 로 바꿔 보낸다.
+    expect(body.messages[1]).toEqual({ role: 'user', content: '안녕하세요' });
+    expect(body.messages[2]).toEqual({ role: 'assistant', content: '네 안녕하세요' });
+    expect(body.messages[3]).toEqual({ role: 'user', content: '수업료는요?' });
+    expect(body.response_format.type).toBe('json_schema');
+    expect(body.response_format.json_schema.strict).toBe(true);
+  });
+
+  it('고른 FAQ 답변 원문을 그대로 돌려준다', async () => {
+    global.fetch.mockResolvedValue(
+      okResponse({ answered: true, usedFaqIds: [1], suggestedFaqIds: [] }, { prompt_tokens: 120, completion_tokens: 8 })
+    );
+
+    const result = await call();
+
+    expect(result.answered).toBe(true);
+    expect(result.answer).toBe('평일 오후 3시부터입니다.');
+    expect(result.usedFaqIds).toEqual([1]);
+    expect(result.status).toBe('ok');
+    expect(result.provider).toBe('openai');
+    expect(result.inputTokens).toBe(120);
+    expect(result.outputTokens).toBe(8);
+  });
+
+  it('등록되지 않은 id 를 고르면 답하지 않는다 (지어낸 근거 차단)', async () => {
+    global.fetch.mockResolvedValue(okResponse({ answered: true, usedFaqIds: [99], suggestedFaqIds: [] }));
+
+    const result = await call();
+
+    expect(result.answered).toBe(false);
+    expect(result.answer).toBe('');
+  });
+
+  it('안전 정책으로 거부하면 ai_error 로 돌려준다', async () => {
+    global.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { refusal: '거부합니다', content: null } }], usage: {} })
+    });
+
+    const result = await call();
+
+    expect(result.answered).toBe(false);
+    expect(result.status).toBe('ai_error');
+  });
+
+  it('HTTP 오류는 ai_error 로 돌려주고 답변하지 않는다', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    global.fetch.mockResolvedValue({ ok: false, status: 401, text: async () => 'invalid api key' });
+
+    const result = await call();
+
+    expect(result.answered).toBe(false);
+    expect(result.answer).toBe('');
+    expect(result.status).toBe('ai_error');
+    errorSpy.mockRestore();
+  });
+
+  it('OpenAI 를 골랐는데 키가 없으면 호출하지 않는다', async () => {
+    delete process.env.OEPNAI_API_KEY;
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await call();
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(result.status).toBe('ai_error');
+    errorSpy.mockRestore();
+  });
+
+  it('알 수 없는 제공자를 넘기면 기본 제공자(Gemini)로 되돌린다', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const originalGemini = process.env.GEMINI_API_KEY;
+    delete process.env.GEMINI_API_KEY;
+
+    const result = await generateAnswer({
+      faqs: FAQS,
+      history: [],
+      question: '수업 시간?',
+      provider: 'claude'
+    });
+
+    // Gemini 로 되돌아갔고, 그 키가 없으므로 OpenAI 호출은 일어나지 않는다.
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(result.status).toBe('ai_error');
+
+    if (originalGemini === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = originalGemini;
+    errorSpy.mockRestore();
+  });
+});
+
 describe('pickFaqIds', () => {
   const faqs = [
     { id: 1, question: 'Q1', answer: 'A1' },

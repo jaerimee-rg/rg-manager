@@ -32,6 +32,7 @@ import AdminUsers from './pages/admin/AdminUsers';
 import AdminLogs from './pages/admin/AdminLogs';
 import AdminNotifications from './pages/admin/AdminNotifications';
 import AdminFaq from './pages/admin/AdminFaq';
+import AdminSettings from './pages/admin/AdminSettings';
 
 function AuthLoading() {
   return (
@@ -170,6 +171,7 @@ function App() {
           <Route path="logs" element={<AdminLogs />} />
           <Route path="notifications" element={<AdminNotifications />} />
           <Route path="faq" element={<AdminFaq />} />
+          <Route path="settings" element={<AdminSettings />} />
         </Route>
         <Route path="*" element={<Navigate to="/admin/students" />} />
       </Routes>
