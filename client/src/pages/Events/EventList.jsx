@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import { useIsMobile } from '../../hooks/useMediaQuery';
-import { typeOf, formatRange, formatWhen, isPast, isAcceptingRegistration } from '../../utils/eventFormat';
+import { typeOf, formatRange, formatWhen, isPast, isAcceptingRegistration, todayString } from '../../utils/eventFormat';
 import EventRegistrations from './EventRegistrations';
 
 const FILTERS = [
@@ -30,7 +30,7 @@ function StatusBadges({ event }) {
 function EventList({ basePath = '/events' }) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const [events, setEvents] = useState([]);
+  const [allEvents, setAllEvents] = useState([]);
   const [filter, setFilter] = useState('all');
   const [includePast, setIncludePast] = useState(false);
   const [openRegistrations, setOpenRegistrations] = useState(null);
@@ -38,12 +38,13 @@ function EventList({ basePath = '/events' }) {
 
   const load = async () => {
     try {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ includePast: 'true' });
       if (filter !== 'all') params.set('type', filter);
-      if (includePast) params.set('includePast', 'true');
 
+      // 지난 일정까지 한 번에 받아 두면 토글이 즉시 반응하고,
+      // "지난 일정이 몇 건인지" 를 화면에서 알려줄 수 있다.
       const response = await fetchWithAuth(`/api/events?${params}`);
-      if (response.ok) setEvents(await response.json());
+      if (response.ok) setAllEvents(await response.json());
     } catch (error) {
       console.error('이벤트 목록 조회 실패:', error);
     } finally {
@@ -53,7 +54,12 @@ function EventList({ basePath = '/events' }) {
 
   useEffect(() => {
     load();
-  }, [filter, includePast]);
+  }, [filter]);
+
+  const today = todayString();
+  const pastEvents = allEvents.filter((e) => isPast(e, today));
+  const upcomingEvents = allEvents.filter((e) => !isPast(e, today));
+  const events = includePast ? allEvents : upcomingEvents;
 
   const remove = async (event) => {
     const extra = event.type === 'competition'
@@ -139,9 +145,12 @@ function EventList({ basePath = '/events' }) {
             </button>
           ))}
         </div>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.8125rem', cursor: 'pointer' }}>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.8125rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
           <input type="checkbox" checked={includePast} onChange={(e) => setIncludePast(e.target.checked)} />
           지난 일정 보기
+          {pastEvents.length > 0 && (
+            <span style={{ color: 'var(--color-gray-500)' }}>({pastEvents.length})</span>
+          )}
         </label>
       </div>
 
@@ -157,7 +166,19 @@ function EventList({ basePath = '/events' }) {
             </div>
           ) : events.length === 0 ? (
             <div className="card" style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--color-gray-500)' }}>
-              등록된 이벤트가 없습니다. [+ 이벤트] 로 첫 일정을 올려보세요.
+              {pastEvents.length > 0 ? (
+                <>
+                  <div style={{ fontWeight: 700, color: 'var(--color-gray-700)' }}>다가오는 일정이 없습니다</div>
+                  <div style={{ fontSize: '0.875rem', marginTop: '6px' }}>
+                    지난 일정 {pastEvents.length}건은 그대로 있어요. 기존 대회도 여기에 들어 있습니다.
+                  </div>
+                  <button className="btn btn-outline btn-sm" style={{ marginTop: '12px' }} onClick={() => setIncludePast(true)}>
+                    지난 일정 {pastEvents.length}건 보기
+                  </button>
+                </>
+              ) : (
+                '등록된 이벤트가 없습니다. [+ 이벤트] 로 첫 일정을 올려보세요.'
+              )}
             </div>
           ) : isMobile ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
