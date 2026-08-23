@@ -174,6 +174,62 @@ describe('PublicChat — 추천 질문', () => {
     expect(JSON.parse(sent[1].body).message).toBe('수업 시간이 어떻게 되나요?');
   });
 
+  // 답변과 추천이 다른 순간에 그려지면 빈 줄이 잠깐 보였다가 채워져 깜빡인다.
+  it('보낸 직후 답변과 추천을 같은 순간에 그린다', async () => {
+    global.fetch.mockImplementation((url, opts) => {
+      if (opts?.method === 'POST' && String(url).includes('/messages')) {
+        return jsonResponse({
+          messageId: 9,
+          answered: false,
+          reply: '',
+          suggestions: [{ id: 3, question: '수업 시간이 어떻게 되나요?' }],
+          createdAt: '2026-08-23T01:00:02.000Z'
+        });
+      }
+      if (String(url).includes('/messages')) {
+        return jsonResponse({ visitorName: '학부모', messages: [] });
+      }
+      return jsonResponse({ name: '문의', greeting: '안녕하세요', isActive: true, suggestedQuestions: [] });
+    });
+
+    await renderPage();
+
+    const box = await screen.findByPlaceholderText('궁금한 점을 입력해 주세요');
+    fireEvent.change(box, { target: { value: '수업' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '전송' }));
+    });
+
+    // 폴링(refreshMessages)이 채워주기를 기다리지 않고 바로 보여야 한다.
+    expect(screen.getByRole('button', { name: '수업 시간이 어떻게 되나요?' })).toBeInTheDocument();
+  });
+
+  it('보여줄 것이 없는 봇 메시지는 빈 줄로 남기지 않는다', async () => {
+    withMessages([
+      { id: 1, role: 'parent', content: '수업', createdAt: '2026-08-23T01:00:00.000Z' },
+      {
+        id: 2,
+        role: 'bot',
+        content: '',
+        answered: false,
+        createdAt: '2026-08-23T01:00:01.000Z',
+        suggestions: []
+      }
+    ]);
+
+    const { container } = await renderPage();
+
+    await screen.findByText('수업');
+
+    // 내용도 추천도 없는 줄이 남아 있으면 안 된다 (아바타만 뜬 빈 줄).
+    const emptyRows = [...container.querySelectorAll('.pchat-row')].filter(
+      (row) =>
+        !row.querySelector('.pchat-bubble')?.textContent.trim() && !row.querySelector('.pchat-sug')
+    );
+    expect(emptyRows).toHaveLength(0);
+  });
+
   it('추천이 없으면 아무 것도 보여주지 않는다', async () => {
     withMessages([
       { id: 2, role: 'bot', content: '못 찾았습니다.', answered: false, createdAt: '2026-08-23T01:00:01.000Z', suggestions: [] }

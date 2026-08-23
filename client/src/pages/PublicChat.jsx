@@ -250,6 +250,9 @@ function PublicChat() {
           role: 'bot',
           content: data.reply,
           answered: data.answered,
+          // 추천을 함께 넣어야 답변과 같은 순간에 그려진다.
+          // 빠뜨리면 문구만 있는 빈 줄이 잠깐 보였다가 폴링이 채우면서 깜빡인다.
+          suggestions: data.suggestions,
           createdAt: data.createdAt
         }
       ]);
@@ -407,7 +410,9 @@ function PublicChat() {
           </div>
         )}
 
-        {messages.map((m) => (
+        {messages
+          .filter((m) => m.content || m.role !== 'bot' || m.suggestions?.length > 0)
+          .map((m) => (
           <div key={m.id} className={`pchat-row ${m.role === 'parent' ? 'me' : 'bot'}`}>
             {m.role === 'parent' && <div className="pchat-who">{visitorName}</div>}
             {m.role === 'bot' && (
@@ -449,8 +454,8 @@ function PublicChat() {
             )}
 
             <div className="pchat-time">{formatTime(m.createdAt)}</div>
-          </div>
-        ))}
+            </div>
+          ))}
 
         {sending && (
           <div className="pchat-row bot">
