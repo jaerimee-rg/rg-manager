@@ -44,6 +44,9 @@ export const getThresholds = async () => {
   }
 };
 
+/** 한 번의 새로고침에서 Drive 에 물어볼 파일 수 (서버리스 시간 제한 안에 들도록) */
+export const REFRESH_BATCH = 40;
+
 /** 앨범 폴더를 만들고 링크 공유까지 켠다 (FR-220~221). */
 export const createAlbumFolder = async (userId, event, folderName) => {
   const root = await ensureRootFolder(userId);
@@ -101,9 +104,15 @@ export const refreshAlbum = async (userId, event) => runWithDrive(userId, async 
 
   const missing = [];
   let checked = 0;
+  let remaining = 0;
 
   if (albumStatus !== 'missing') {
-    const rows = await EventMedia.listReadyIds(event.id);
+    // 사진 수만큼 Drive 를 부르면 서버리스 시간 제한(10초)에 걸린다.
+    // 한 번에 정해진 양만 확인하고, 남은 것은 다음 새로고침에서 이어서 본다.
+    const all = await EventMedia.listReadyIds(event.id);
+    const rows = all.slice(0, REFRESH_BATCH);
+    remaining = Math.max(0, all.length - rows.length);
+
     for (const row of rows) {
       checked += 1;
       try {
@@ -128,7 +137,7 @@ export const refreshAlbum = async (userId, event) => runWithDrive(userId, async 
   await EventMedia.cleanupStale(event.id);
   const updated = await Event.updateAlbum(event.id, { albumStatus, albumCheckedAt: new Date().toISOString() });
 
-  return { event: updated, albumStatus, checked, missing: missing.length };
+  return { event: updated, albumStatus, checked, missing: missing.length, remaining };
 });
 
 /**
@@ -218,7 +227,12 @@ export const completeUpload = async (userId, event, media, { driveFileId, takenA
   });
 
   const indexed = await indexFaces(event, ready, faces);
-  return { media: { ...ready, ...indexed.media }, ...indexed };
+  return {
+    media: indexed.media || ready,
+    faceStatus: indexed.faceStatus,
+    faceCount: indexed.faceCount,
+    tags: indexed.tags
+  };
 };
 
 /**

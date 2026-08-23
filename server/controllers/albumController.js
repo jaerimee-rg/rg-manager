@@ -170,7 +170,7 @@ export const refreshAlbum = async (req, res) => {
     if (!event.driveFolderId) return res.status(400).json({ error: '아직 앨범이 없습니다.', reason: 'no_album' });
 
     const result = await albumService.refreshAlbum(ownerOf(event), event);
-    res.json({ albumStatus: result.albumStatus, checked: result.checked, missing: result.missing });
+    res.json({ albumStatus: result.albumStatus, checked: result.checked, missing: result.missing, remaining: result.remaining || 0 });
   } catch (error) {
     driveErrorResponse(res, error, '앨범을 새로고침하지 못했습니다.');
   }
