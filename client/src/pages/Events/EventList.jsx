@@ -174,7 +174,7 @@ function EventList({ basePath = '/events' }) {
       <EmptyState
         icon="calendar"
         title="등록된 이벤트가 없습니다"
-        description="[+ 이벤트] 로 첫 일정을 올려보세요."
+        description="위 [이벤트] 버튼으로 첫 일정을 올려보세요."
         action={<Button variant="primary" icon="plus" onClick={() => navigate(`${basePath}/new`)}>이벤트</Button>}
       />
     );

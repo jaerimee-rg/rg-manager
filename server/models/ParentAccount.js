@@ -1,4 +1,5 @@
 import pool from '../database.js';
+import { displayNameSql } from '../utils/usernames.js';
 import ParentTeacher from './ParentTeacher.js';
 
 /**
@@ -65,7 +66,7 @@ class ParentAccount {
     const result = await pool.query(
       `SELECT a."userId", pt."teacherId", a."createdAt", a."lastLoginAt", a."displayName",
               u.username, u.email,
-              COALESCE(NULLIF(t."displayName", ''), t.username) AS "teacherName",
+              ${displayNameSql('t')} AS "teacherName",
               c.id AS "childId", c."childName", c."childBirthdate", c.status,
               c."studentId", c."linkedBy", c."teacherId" AS "childTeacherId",
               s.name AS "studentName", s.birthdate AS "studentBirthdate"
@@ -88,10 +89,10 @@ class ParentAccount {
     const result = await pool.query(
       `SELECT a."userId", a."teacherId", a."createdAt", a."lastLoginAt", a."displayName",
               u.username, u.email,
-              COALESCE(NULLIF(t."displayName", ''), t.username) AS "teacherName",
+              ${displayNameSql('t')} AS "teacherName",
               c.id AS "childId", c."childName", c."childBirthdate", c.status,
               c."studentId", c."linkedBy", c."teacherId" AS "childTeacherId",
-              COALESCE(NULLIF(ct."displayName", ''), ct.username) AS "childTeacherName",
+              ${displayNameSql('ct')} AS "childTeacherName",
               s.name AS "studentName", s.birthdate AS "studentBirthdate"
          FROM parent_accounts a
          JOIN users u ON u.id = a."userId"

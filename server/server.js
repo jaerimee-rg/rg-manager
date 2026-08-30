@@ -67,12 +67,20 @@ app.use(cors({
   credentials: true
 }));
 
+/* 한도는 환경변수로만 올릴 수 있다 — **기본값이 운영 값**이라 아무것도 설정하지 않으면
+   지금까지와 완전히 같다. e2e 는 한 IP(로컬호스트)에서 수백 번을 치기 때문에 운영 한도
+   그대로는 전체 스위트가 끝까지 못 간다(뒤쪽 테스트가 429 를 받는다). */
+const limitFromEnv = (value, fallback) => {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : fallback;
+};
+
 // 레이트 리미팅 - 인증 엔드포인트
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15분
   // 같은 Wi-Fi 에서 학부모 여러 명이 한꺼번에 가입해도 막히지 않도록 넉넉히 둔다.
   // (한 번 가입에 인가 URL 요청 + 콜백 = 2회씩 쓴다)
-  max: 60,
+  max: limitFromEnv(process.env.AUTH_RATE_LIMIT_MAX, 60),
   message: { error: '너무 많은 요청입니다. 잠시 후 다시 시도해주세요.' },
   standardHeaders: true,
   legacyHeaders: false
@@ -81,7 +89,7 @@ const authLimiter = rateLimit({
 // 레이트 리미팅 - 일반 API
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
+  max: limitFromEnv(process.env.API_RATE_LIMIT_MAX, 200),
   message: { error: '너무 많은 요청입니다. 잠시 후 다시 시도해주세요.' },
   // 공개 채팅은 아래 전용 한도를 쓴다. 여기서 또 세면 더 낮은 쪽(200, IP 기준)이
   // 실제 상한이 되어 학부모 여러 명이 한 칸을 나눠 쓰게 된다.

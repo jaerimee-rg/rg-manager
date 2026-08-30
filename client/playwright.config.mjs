@@ -5,8 +5,14 @@ import { defineConfig, devices } from '@playwright/test';
  * 서버·DB 는 미리 띄워 두고 E2E_BASE_URL 로 알려준다.
  *
  *   cd client && npm run build
- *   cd server && DATABASE_URL=postgresql://<user>@localhost:5432/rg_manager PORT=5055 node server.js
+ *   cd server && DATABASE_URL=postgresql://<user>@localhost:5432/rg_manager PORT=5055 \
+ *                JWT_SECRET=local-dev-secret API_RATE_LIMIT_MAX=100000 AUTH_RATE_LIMIT_MAX=100000 node server.js
+ *   cd client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e:setup
  *   cd client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e
+ *
+ * JWT_SECRET 은 setup.mjs 가 토큰을 서명할 때 쓰는 값(local-dev-secret)과 같아야 한다 —
+ * 다르면 모든 화면이 로그인으로 튕긴다. 레이트 리밋은 운영 한도(200/15분·IP)라
+ * 올려두지 않으면 스위트 뒤쪽 테스트가 429 를 받는다.
  *
  * 카카오 로그인은 자동화할 수 없어 테스트가 토큰을 직접 넣는다(로그인 이후 흐름을 검증).
  */

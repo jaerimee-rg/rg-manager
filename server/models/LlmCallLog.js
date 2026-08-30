@@ -1,10 +1,11 @@
 import pool from '../database.js';
+import { displayNameSql } from '../utils/usernames.js';
 
 // 프롬프트 원문은 FAQ 전체가 들어가 길다. 목록 조회에서는 빼고, 상세에서만 읽는다.
 const LIST_COLUMNS = `
   l.id, l."createdAt", l."userId", l."visitorName", l."promptId", l.provider, l.model,
   l.status, l.answered, l."inputTokens", l."outputTokens", l."latencyMs", l."sessionId",
-  COALESCE(NULLIF(u."displayName", ''), u.username) AS "instructorName"
+  ${displayNameSql('u')} AS "instructorName"
 `;
 
 class LlmCallLog {
@@ -92,7 +93,7 @@ class LlmCallLog {
   // 상세는 프롬프트 원문까지 함께 준다.
   static async getById(id) {
     const result = await pool.query(
-      `SELECT l.*, COALESCE(NULLIF(u."displayName", ''), u.username) AS "instructorName"
+      `SELECT l.*, ${displayNameSql('u')} AS "instructorName"
        FROM llm_call_logs l
        LEFT JOIN users u ON u.id = l."userId"
        WHERE l.id = $1`,
