@@ -23,7 +23,9 @@ import EventList from './pages/Events/EventList';
 import EventForm from './pages/Events/EventForm';
 import ParentList from './pages/Parents/ParentList';
 import InviteLanding from './pages/parent/InviteLanding';
+import TeacherInviteLanding from './pages/TeacherInviteLanding';
 import ParentApp from './components/parent/ParentApp';
+import RoleSwitcher from './components/common/RoleSwitcher';
 
 // Admin components
 import AdminRoute from './components/admin/AdminRoute';
@@ -39,6 +41,7 @@ import AdminFaq from './pages/admin/AdminFaq';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminEvents from './pages/admin/AdminEvents';
 import AdminParents from './pages/admin/AdminParents';
+import AdminTeacherInvites from './pages/admin/AdminTeacherInvites';
 
 function AuthLoading() {
   return (
@@ -118,13 +121,16 @@ function App() {
   // 초대 링크도 마찬가지다. 학부모가 처음 여는 화면이라 앱 메뉴가 끼어들면 안 되고,
   // 선생님이 자기 링크를 눌러 확인할 때도 같은 화면을 보여야 한다.
   const isInvitePage = location.pathname.startsWith('/invite/');
+  // 관리자가 보낸 선생님 초대 링크도 같은 성격이다 (로그인 전에 여는 화면).
+  const isTeacherInvitePage = location.pathname.startsWith('/teacher-invite/');
 
   // 로그인과 무관한 화면이므로 인증 확인을 기다리지 않는다.
-  if (isPublicChatPage || isInvitePage) {
+  if (isPublicChatPage || isInvitePage || isTeacherInvitePage) {
     return (
       <Routes>
         <Route path="/chat/:publicId" element={<PublicChat />} />
         <Route path="/invite/:token" element={<InviteLanding />} />
+        <Route path="/teacher-invite/:token" element={<TeacherInviteLanding />} />
       </Routes>
     );
   }
@@ -188,6 +194,7 @@ function App() {
           <Route path="events/new" element={<EventForm basePath="/admin/events" />} />
           <Route path="events/edit" element={<EventForm basePath="/admin/events" />} />
           <Route path="parents" element={<AdminParents />} />
+          <Route path="teachers" element={<AdminTeacherInvites />} />
           <Route path="attendance" element={<AdminAttendance />} />
           <Route path="users" element={<AdminUsers />} />
           <Route path="logs" element={<AdminLogs />} />
@@ -225,6 +232,7 @@ function App() {
                 {link.label}
               </Link>
             ))}
+            <RoleSwitcher variant="menu" />
             <Link
               to="/settings"
               className={isActive('/settings') ? 'active' : ''}
@@ -270,6 +278,11 @@ function App() {
               </Link>
             ))}
           </div>
+          <div className="mobile-menu-section">
+            <div className="mobile-menu-section-title">역할</div>
+            <RoleSwitcher variant="list" onNavigate={closeMobileMenu} />
+          </div>
+
           <div className="mobile-menu-section">
             <div className="mobile-menu-section-title">계정</div>
             <Link

@@ -29,12 +29,16 @@ function ParentSchedule() {
   const [data, setData] = useState(null);
   const [currentChild, setCurrentChild] = useState(null);
   const [filter, setFilter] = useState('all');
+  // 선생님이 여럿일 때만 쓰는 필터 (docs/accounts-roles FR-357)
+  const [teacherFilter, setTeacherFilter] = useState('all');
   const [openEvent, setOpenEvent] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  const load = async (teacherId = 'all') => {
     try {
-      const response = await fetchWithAuth('/api/parent/events');
+      // 연결된 선생님이 여럿이면 서버가 전부 모아 주고, 칩을 고르면 그 선생님 것만 받는다
+      const query = teacherId && teacherId !== 'all' ? `?teacherId=${teacherId}` : '';
+      const response = await fetchWithAuth(`/api/parent/events${query}`);
       if (!response.ok) return;
 
       const payload = await response.json();
@@ -48,8 +52,8 @@ function ParentSchedule() {
   };
 
   useEffect(() => {
-    load();
-  }, []);
+    load(teacherFilter);
+  }, [teacherFilter]);
 
   if (loading) {
     return (
@@ -61,6 +65,9 @@ function ParentSchedule() {
 
   const today = data?.today || '';
   const children = data?.children || [];
+  const teachers = data?.teachers || [];
+  // 선생님이 한 명이면 칩도 배지도 군더더기라 숨긴다
+  const manyTeachers = teachers.length > 1;
   const visible = filterRemainingThisYear(data?.events || [], today)
     .filter((e) => filter === 'all' || e.type === filter);
   const groups = groupByMonth(visible);
@@ -68,6 +75,30 @@ function ParentSchedule() {
 
   return (
     <ParentLayout title="일정" subtitle={`${year}년 남은 일정`}>
+      {manyTeachers && (
+        <div className="teacher-filter" role="group" aria-label="선생님 필터">
+          <button
+            type="button"
+            className={`teacher-filter-chip ${teacherFilter === 'all' ? 'active' : ''}`}
+            aria-pressed={teacherFilter === 'all'}
+            onClick={() => setTeacherFilter('all')}
+          >
+            전체
+          </button>
+          {teachers.map((teacher) => (
+            <button
+              key={teacher.id}
+              type="button"
+              className={`teacher-filter-chip ${String(teacherFilter) === String(teacher.id) ? 'active' : ''}`}
+              aria-pressed={String(teacherFilter) === String(teacher.id)}
+              onClick={() => setTeacherFilter(teacher.id)}
+            >
+              {teacher.name} 선생님
+            </button>
+          ))}
+        </div>
+      )}
+
       {children.length > 1 && (
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
           {children.map((child) => (
@@ -175,6 +206,10 @@ function ParentSchedule() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                       <span className={`badge ${meta.className}`}>{meta.emoji} {meta.short}</span>
+                      {/* 선생님이 둘 이상일 때만 — 어느 학원 일정인지 구분해야 한다 */}
+                      {manyTeachers && event.teacherName && (
+                        <span className="badge badge-gray">{event.teacherName}</span>
+                      )}
                       <span style={{
                         marginLeft: 'auto', fontSize: '0.6875rem', fontWeight: 800,
                         color: dd.urgent ? 'var(--color-danger)' : 'var(--color-gray-500)'

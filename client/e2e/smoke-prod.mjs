@@ -57,6 +57,23 @@ check('인증 없는 학부모 앨범 API 는 401', parentAlbums.status === 401,
 const photos = await get('/parent/photos');
 check('학부모 사진 경로가 앱으로 열림', photos.status === 200 && photos.text.includes('<div id="root">'));
 
+// 5) 계정·역할·초대 (docs/accounts-roles)
+const roles = await get('/api/auth/roles');
+check('인증 없는 역할 조회는 401', roles.status === 401, `status ${roles.status}`);
+
+const switchRole = await get('/api/auth/switch-role', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"role":"admin"}' });
+check('인증 없는 역할 전환은 401', switchRole.status === 401, `status ${switchRole.status}`);
+
+const teacherInvites = await get('/api/teacher-invites');
+check('인증 없는 선생님 초대 목록은 401', teacherInvites.status === 401, `status ${teacherInvites.status}`);
+
+// 공개 확인 경로는 열려 있되, 없는 토큰은 404 여야 한다
+const badInvite = await get('/api/teacher-invite/not-a-real-token');
+check('없는 선생님 초대 토큰은 404', badInvite.status === 404, `status ${badInvite.status}`);
+
+const inviteLanding = await get('/teacher-invite/xyz');
+check('선생님 초대 랜딩이 앱으로 열림', inviteLanding.status === 200 && inviteLanding.text.includes('<div id="root">'));
+
 console.log('');
 const failed = results.filter((r) => !r.ok);
 console.log(failed.length ? `실패 ${failed.length}건: ${failed.map((r) => r.name).join(', ')}` : `모두 통과 (${results.length}건)`);

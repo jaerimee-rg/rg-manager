@@ -15,6 +15,7 @@ import eventRoutes from './routes/events.js';
 import parentAdminRoutes from './routes/parents.js';
 import driveRoutes from './routes/drive.js';
 import inviteRoutes from './routes/invite.js';
+import { adminRouter as teacherInviteRoutes, publicRouter as teacherInvitePublicRoutes } from './routes/teacherInvites.js';
 import parentRoutes from './routes/parent.js';
 import faqRoutes from './routes/faqs.js';
 import chatRoutes from './routes/chat.js';
@@ -159,8 +160,12 @@ app.use('/api/parents', rejectParents, parentAdminRoutes);
 // /api/drive/callback 만 Google 이 브라우저를 되돌려 보내는 공개 경로다.
 app.use('/api/drive', rejectParents, driveRoutes);
 
-// 초대 링크 확인은 비로그인 학부모가 여는 공개 경로다.
+// 초대 링크 확인은 비로그인 학부모·선생님이 여는 공개 경로다.
 app.use('/api/invite', inviteRoutes);
+app.use('/api/teacher-invite', teacherInvitePublicRoutes);
+
+// 선생님 초대 발급·회수 (관리자 전용). 라우터 안에서 requireRole('admin') 도 건다.
+app.use('/api/teacher-invites', rejectParents, teacherInviteRoutes);
 
 // 학부모 전용 API (라우터 안에서 role='parent' 만 통과시킨다)
 app.use('/api/parent', parentRoutes);

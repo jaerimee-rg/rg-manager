@@ -60,6 +60,28 @@ const saveLog = async (req, action, target, responseData) => {
       details = `ID: ${target}`;
     } else if (action === 'LOGIN') {
       details = `로그인 성공`;
+    } else if (action === 'KAKAO_LOGIN' && responseData) {
+      // 어느 역할로 들어왔는지 남긴다 (한 카카오 계정이 여러 역할을 가질 수 있다)
+      const label = { admin: '관리자', user: '선생님', parent: '학부모' }[responseData.role] || responseData.role;
+      details = `역할: ${label}${responseData.isNewUser ? ' (가입)' : ''}`;
+    } else if (action === 'SWITCH_ROLE' && responseData) {
+      const label = (r) => ({ admin: '관리자', user: '선생님', parent: '학부모' }[r] || r);
+      details = `${label(req.user?.role)} → ${label(responseData.role)}`;
+    } else if (action === 'ADD_ROLE' && responseData) {
+      const label = (r) => ({ admin: '관리자', user: '선생님', parent: '학부모' }[r] || r);
+      details = responseData.linkedOnly
+        ? `${label(req.user?.role)} → 선생님 연결 추가`
+        : `${label(req.user?.role)} → ${label(responseData.role)} 계정 생성`;
+    } else if (action === 'GRANT_ADMIN' && responseData?.user) {
+      details = `관리자 계정 ${responseData.user.username}`;
+    } else if (action === 'CREATE_TEACHER_INVITE' && responseData) {
+      details = `메모: ${responseData.label || '(없음)'}${responseData.expiresAt ? ` · 만료: ${responseData.expiresAt.slice(0, 10)}` : ' · 만료 없음'}`;
+    } else if (action === 'REVOKE_TEACHER_INVITE' && req.params) {
+      details = `초대 ID: ${req.params.id}`;
+    } else if (action === 'ADD_PARENT_TEACHER' && responseData) {
+      details = `선생님 연결 추가`;
+    } else if (action === 'REMOVE_PARENT_TEACHER' && req.params) {
+      details = `학부모 ${req.params.userId} ↔ 선생님 ${req.params.teacherId} 연결 해제`;
     } else if (action === 'SIGNUP' && req.body) {
       details = `사용자명: ${req.body.username}`;
     } else if (action === 'CREATE_COMPETITION' && responseData) {

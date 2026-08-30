@@ -1,4 +1,4 @@
-import ParentAccount from '../models/ParentAccount.js';
+import { teacherIdsOf } from '../services/parentScope.js';
 import ParentChild from '../models/ParentChild.js';
 import Student from '../models/Student.js';
 import Event from '../models/Event.js';
@@ -24,7 +24,9 @@ import { MAX_FILES_PER_UPLOAD } from '../utils/mediaValidation.js';
 
 const notFound = (res) => res.status(404).json({ error: '찾을 수 없습니다.' });
 
-const teacherOf = async (userId) => ParentAccount.getByUserId(userId);
+/* 학부모가 볼 수 있는 범위 = **연결된 선생님 전부** (docs/accounts-roles FR-358).
+   예전에는 소속 선생님 한 명이었다. */
+const teachersOf = (userId) => teacherIdsOf(userId);
 
 /** 연결이 끝난(linked) 자녀의 학생 id 와 이름 */
 const linkedChildren = async (parentUserId) => {
@@ -55,13 +57,14 @@ const confirmationFor = async (event, studentIds) => {
 
 /** 앨범 화면에 필요한 것을 한 번에 모은다. */
 const loadAlbumContext = async (req) => {
-  const account = await teacherOf(req.user.id);
-  if (!account) return { error: notFound };
+  const teacherIds = await teachersOf(req.user.id);
+  if (!teacherIds.length) return { error: notFound };
 
   const eventId = parseInt(req.params.id ?? req.params.eventId, 10);
   if (isNaN(eventId)) return { error: notFound };
 
-  const event = await Event.getPublishedForParent(eventId, account.teacherId);
+  // 연결되지 않은 선생님의 이벤트는 존재 자체를 알리지 않는다 (404)
+  const event = await Event.getPublishedForParent(eventId, teacherIds);
   if (!event) return { error: notFound };
 
   const children = await linkedChildren(req.user.id);
@@ -80,7 +83,7 @@ const loadAlbumContext = async (req) => {
     };
   }
 
-  return { account, event, children, studentIds, confirmedIds };
+  return { teacherIds, event, children, studentIds, confirmedIds };
 };
 
 const studentNamesOf = (children) =>
@@ -89,13 +92,13 @@ const studentNamesOf = (children) =>
 /** GET /api/parent/albums — 사진 탭 */
 export const listAlbums = async (req, res) => {
   try {
-    const account = await teacherOf(req.user.id);
-    if (!account) return notFound(res);
+    const teacherIds = await teachersOf(req.user.id);
+    if (!teacherIds.length) return res.json({ items: [] });
 
     const children = await linkedChildren(req.user.id);
     const studentIds = children.map((child) => child.studentId);
 
-    const events = await Event.listWithAlbumsForParent(account.teacherId);
+    const events = await Event.listWithAlbumsForParent(teacherIds);
     if (!events.length) return res.json({ items: [] });
 
     // 확정된 이벤트만 남긴다.
@@ -329,14 +332,12 @@ export const confirmTag = async (req, res) => {
 
 /** 자녀가 내 아이인지, 연결이 끝났는지 확인한다. */
 const loadChild = async (req) => {
-  const account = await teacherOf(req.user.id);
-  if (!account) return null;
-
   const children = await ParentChild.listByParent(req.user.id);
   const child = children.find((row) => String(row.id) === String(req.params.childId));
   if (!child || !child.studentId || child.status !== 'linked') return null;
 
-  return { account, child };
+  // 얼굴 매칭은 그 아이가 다니는 선생님의 앨범에서만 한다
+  return { child, teacherId: child.teacherId };
 };
 
 /** GET /api/parent/children/:childId/faces */
@@ -393,14 +394,14 @@ export const addFace = async (req, res) => {
 
     const profile = await ChildFaceProfile.create({
       studentId: loaded.child.studentId,
-      teacherUserId: loaded.account.teacherId,
+      teacherUserId: loaded.teacherId,
       parentUserId: req.user.id,
       createdBy: 'parent',
       descriptor: encodeDescriptor(descriptor),
       consentAt: new Date().toISOString()
     });
 
-    const matched = await albumService.matchStudentAcrossAlbums(loaded.account.teacherId, loaded.child.studentId);
+    const matched = await albumService.matchStudentAcrossAlbums(loaded.teacherId, loaded.child.studentId);
 
     res.status(201).json({
       profile: { id: profile.id, createdAt: profile.createdAt, mine: true },
@@ -433,7 +434,7 @@ export const deleteFace = async (req, res) => {
     if (remaining === 0) {
       await MediaTag.removeAutoTagsForStudent(loaded.child.studentId);
     } else {
-      await albumService.matchStudentAcrossAlbums(loaded.account.teacherId, loaded.child.studentId);
+      await albumService.matchStudentAcrossAlbums(loaded.teacherId, loaded.child.studentId);
     }
 
     res.json({ message: '얼굴 사진을 지웠어요.', remaining });

@@ -3364,3 +3364,90 @@ body.pchat-lock {
   color: var(--color-gray-500);
   font-style: italic;
 }
+
+/* ───────── 역할 전환 (docs/accounts-roles) ─────────
+   한 카카오 계정이 관리자·선생님·학부모 계정을 각각 가질 수 있어,
+   화면마다 "다른 역할로 가기" 를 같은 모양으로 보여준다. */
+
+.role-switch-menu { position: relative; display: inline-flex; }
+
+.role-switch-trigger {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 11px; border: 1px solid var(--color-gray-200); border-radius: 999px;
+  background: #fff; font-family: inherit; font-size: 0.8125rem; cursor: pointer;
+  white-space: nowrap;
+}
+.role-switch-trigger:hover { border-color: var(--color-primary); }
+.role-switch-name { font-weight: 600; color: var(--color-gray-900); }
+
+.role-switch-backdrop { position: fixed; inset: 0; z-index: 40; }
+
+.role-switch-dropdown {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 41;
+  width: 268px; padding: 8px; text-align: left;
+  background: #fff; border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg, 0 8px 24px rgba(0,0,0,.12));
+}
+.role-switch-current { padding: 8px 10px; font-size: 0.75rem; color: var(--color-gray-500); }
+
+.role-switch-list { display: flex; flex-direction: column; }
+
+.role-switch-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; padding: 10px; border: none; background: none; cursor: pointer;
+  border-radius: var(--radius-sm, 8px); font-family: inherit; font-size: 0.875rem;
+  color: var(--color-gray-900); text-align: left;
+}
+.role-switch-item:hover:not(:disabled) { background: var(--color-gray-50); }
+.role-switch-item:disabled { opacity: 0.5; cursor: not-allowed; }
+.role-switch-item small { color: var(--color-gray-400); font-size: 0.75rem; white-space: nowrap; }
+
+.role-switch-help {
+  margin-top: 4px; padding: 8px 10px; font-size: 0.6875rem; line-height: 1.5;
+  color: var(--color-gray-400); border-top: 1px solid var(--color-gray-100);
+}
+.role-switch-error {
+  margin-top: 6px; padding: 8px 10px; font-size: 0.8125rem;
+  color: var(--color-danger); background: var(--color-danger-bg); border-radius: var(--radius-sm, 8px);
+}
+
+/* 관리자 사이드바 안에서는 메뉴 항목처럼 보이게 */
+.admin-sidebar-footer .role-switch-item,
+.admin-mobile-menu-content .role-switch-item { font-size: 0.8125rem; padding: 9px 10px; }
+
+/* ── 역할 계정 만들기 다이얼로그 ── */
+.role-dialog-backdrop {
+  position: fixed; inset: 0; z-index: 60; display: flex;
+  align-items: center; justify-content: center; padding: 20px;
+  background: rgba(0, 0, 0, 0.35);
+}
+.role-dialog {
+  width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto;
+  background: #fff; border-radius: var(--radius-lg); padding: 22px;
+  box-shadow: var(--shadow-md);
+}
+.role-dialog-title { font-size: 1.0625rem; font-weight: 800; margin: 0 0 6px; }
+.role-dialog-desc { font-size: 0.8125rem; color: var(--color-gray-500); line-height: 1.6; margin: 0 0 14px; word-break: keep-all; }
+.role-dialog-hint { font-size: 0.75rem; color: var(--color-gray-400); line-height: 1.6; margin: 8px 0 0; text-align: center; word-break: keep-all; }
+.role-dialog-or { margin: 14px 0 4px; text-align: center; font-size: 0.75rem; color: var(--color-gray-400); }
+.role-dialog-label { display: block; font-size: 0.75rem; color: var(--color-gray-500); margin-bottom: 5px; }
+.role-dialog-input {
+  width: 100%; padding: 12px; font-size: 16px; font-family: inherit;
+  border: 1px solid var(--color-gray-200); border-radius: var(--radius-md);
+}
+.role-dialog-error {
+  margin-top: 10px; padding: 10px 12px; font-size: 0.8125rem;
+  color: var(--color-danger); background: var(--color-danger-bg); border-radius: var(--radius-md);
+}
+
+/* ── 학부모: 선생님 필터 칩 ── */
+.teacher-filter { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 4px; }
+.teacher-filter-chip {
+  flex-shrink: 0; padding: 7px 14px; border: 1px solid var(--color-gray-200);
+  border-radius: 999px; background: #fff; font-family: inherit; font-size: 0.8125rem;
+  white-space: nowrap; cursor: pointer; color: var(--color-gray-900);
+}
+.teacher-filter-chip.active {
+  background: var(--color-primary); border-color: var(--color-primary);
+  color: #fff; font-weight: 700;
+}

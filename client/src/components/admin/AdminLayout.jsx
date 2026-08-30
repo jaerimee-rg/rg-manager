@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useIsMobile } from '../../hooks/useMediaQuery';
+import RoleSwitcher from '../common/RoleSwitcher';
 
 const adminMenuItems = [
   { path: '/admin/students', label: '학생', icon: '👥' },
   { path: '/admin/classes', label: '수업', icon: '📚' },
   { path: '/admin/competitions', label: '대회', icon: '🏆' },
   { path: '/admin/events', label: '이벤트', icon: '📅' },
+  { path: '/admin/teachers', label: '선생님', icon: '🎀' },
   { path: '/admin/parents', label: '학부모', icon: '👨‍👩‍👧' },
   { path: '/admin/attendance', label: '출석', icon: '✓' },
   { path: '/admin/users', label: '사용자', icon: '👤' },
@@ -75,6 +77,8 @@ function AdminLayout() {
           ))}
         </nav>
         <div className="admin-sidebar-footer">
+          {/* 같은 카카오 계정의 다른 역할로 (관리자 → 선생님 → 학부모) */}
+          <RoleSwitcher variant="list" />
           <Link to="/" className="admin-sidebar-back">
             <span>←</span>
             <span>메인으로 돌아가기</span>
@@ -130,6 +134,10 @@ function AdminLayout() {
                 <span className="admin-mobile-menu-label">{item.label}</span>
               </button>
             ))}
+          </div>
+          <div className="admin-mobile-menu-section">
+            <div className="admin-mobile-menu-section-title">역할</div>
+            <RoleSwitcher variant="list" onNavigate={() => setMobileMenuOpen(false)} />
           </div>
           <div className="admin-mobile-menu-section">
             <div className="admin-mobile-menu-section-title">이동</div>

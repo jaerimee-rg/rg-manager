@@ -12,10 +12,20 @@ jest.unstable_mockModule('../../models/Student.js', () => ({
   default: { getById: jest.fn() }
 }));
 
+// 학부모 ↔ 선생님 다대다 — "그 학부모의 선생님" 이 하나가 아니므로 연결 여부로 판정한다
+jest.unstable_mockModule('../../models/ParentTeacher.js', () => ({
+  default: {
+    isLinked: jest.fn().mockResolvedValue(true),
+    listTeachers: jest.fn().mockResolvedValue([]),
+    unlink: jest.fn().mockResolvedValue(true)
+  }
+}));
+
 const ParentAccount = (await import('../../models/ParentAccount.js')).default;
 const ParentChild = (await import('../../models/ParentChild.js')).default;
+const ParentTeacher = (await import('../../models/ParentTeacher.js')).default;
 const Student = (await import('../../models/Student.js')).default;
-const { getParents, linkChild, unlinkChild, addChildLink, deleteParent } =
+const { getParents, linkChild, unlinkChild, addChildLink, deleteParent, unlinkTeacher } =
   await import('../parentAdminController.js');
 
 describe('parentAdminController', () => {
@@ -27,6 +37,8 @@ describe('parentAdminController', () => {
     res = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() };
     jest.spyOn(console, 'error').mockImplementation(() => {});
     ParentChild.hasStudent.mockResolvedValue(false);
+    ParentTeacher.isLinked.mockResolvedValue(true);
+    ParentTeacher.unlink.mockResolvedValue(true);
   });
 
   describe('목록', () => {
@@ -170,13 +182,14 @@ describe('parentAdminController', () => {
       await addChildLink(req, res);
 
       expect(ParentChild.create).toHaveBeenCalledWith(expect.objectContaining({
-        parentUserId: 20, childName: '한소율', childBirthdate: '2019-09-02', studentId: 10, linkedBy: 'teacher'
+        parentUserId: 20, teacherId: 7, childName: '한소율', childBirthdate: '2019-09-02', studentId: 10, linkedBy: 'teacher'
       }));
       expect(res.status).toHaveBeenCalledWith(201);
     });
 
-    it('다른 선생님의 학부모는 404', async () => {
+    it('연결되지 않은 학부모는 404', async () => {
       ParentAccount.getByUserId.mockResolvedValue({ userId: 20, teacherId: 99 });
+      ParentTeacher.isLinked.mockResolvedValue(false);
       req.params.userId = '20';
       req.body.studentId = 10;
 
@@ -186,9 +199,22 @@ describe('parentAdminController', () => {
     });
   });
 
-  describe('삭제', () => {
-    it('본인 학부모만 지운다', async () => {
-      ParentAccount.getByUserId.mockResolvedValue({ userId: 20, teacherId: 7 });
+  describe('삭제 · 연결 해제 (다대다)', () => {
+    it('선생님은 계정을 지우지 않고 자기 연결만 끊는다', async () => {
+      // 그 학부모가 다른 선생님에게도 다닐 수 있으므로 계정을 지울 권한이 없다
+      ParentAccount.getByUserId.mockResolvedValue({ userId: 20 });
+      req.params.userId = '20';
+
+      await deleteParent(req, res);
+
+      expect(ParentTeacher.unlink).toHaveBeenCalledWith(20, 7);
+      expect(ParentAccount.delete).not.toHaveBeenCalled();
+      expect(res.json.mock.calls[0][0].unlinkedOnly).toBe(true);
+    });
+
+    it('관리자는 계정을 삭제한다', async () => {
+      req.user = { id: 1, role: 'admin' };
+      ParentAccount.getByUserId.mockResolvedValue({ userId: 20 });
       req.params.userId = '20';
 
       await deleteParent(req, res);
@@ -196,14 +222,52 @@ describe('parentAdminController', () => {
       expect(ParentAccount.delete).toHaveBeenCalledWith(20);
     });
 
-    it('남의 학부모는 404', async () => {
-      ParentAccount.getByUserId.mockResolvedValue({ userId: 20, teacherId: 99 });
+    it('연결되지 않은 학부모는 404', async () => {
+      ParentAccount.getByUserId.mockResolvedValue({ userId: 20 });
+      ParentTeacher.isLinked.mockResolvedValue(false);
       req.params.userId = '20';
 
       await deleteParent(req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
-      expect(ParentAccount.delete).not.toHaveBeenCalled();
+      expect(ParentTeacher.unlink).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('선생님 연결 해제', () => {
+    it('선생님은 자기 연결만 끊을 수 있다', async () => {
+      req.params = { userId: '20', teacherId: '7' };
+
+      await unlinkTeacher(req, res);
+
+      expect(ParentTeacher.unlink).toHaveBeenCalledWith(20, 7);
+    });
+
+    it('남의 연결은 403', async () => {
+      req.params = { userId: '20', teacherId: '99' };
+
+      await unlinkTeacher(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(ParentTeacher.unlink).not.toHaveBeenCalled();
+    });
+
+    it('관리자는 아무 연결이나 끊을 수 있다', async () => {
+      req.user = { id: 1, role: 'admin' };
+      req.params = { userId: '20', teacherId: '99' };
+
+      await unlinkTeacher(req, res);
+
+      expect(ParentTeacher.unlink).toHaveBeenCalledWith(20, 99);
+    });
+
+    it('없는 연결은 404', async () => {
+      req.params = { userId: '20', teacherId: '7' };
+      ParentTeacher.unlink.mockResolvedValue(false);
+
+      await unlinkTeacher(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
     });
   });
 });

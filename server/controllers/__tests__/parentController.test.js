@@ -1,7 +1,21 @@
 import { jest } from '@jest/globals';
 
 jest.unstable_mockModule('../../models/ParentAccount.js', () => ({
-  default: { getByUserId: jest.fn() }
+  default: { getByUserId: jest.fn(), create: jest.fn() }
+}));
+
+jest.unstable_mockModule('../../models/ParentInvite.js', () => ({
+  default: { getByToken: jest.fn(), isUsable: jest.fn(() => false) }
+}));
+
+// 학부모 ↔ 선생님 다대다 — 학부모가 볼 수 있는 범위를 만드는 유일한 곳
+jest.unstable_mockModule('../../models/ParentTeacher.js', () => ({
+  default: {
+    listTeachers: jest.fn(),
+    teacherIds: jest.fn(),
+    isLinked: jest.fn().mockResolvedValue(false),
+    link: jest.fn()
+  }
 }));
 
 jest.unstable_mockModule('../../models/ParentChild.js', () => ({
@@ -37,17 +51,24 @@ jest.unstable_mockModule('../../utils/kakaoMessage.js', () => ({
 }));
 
 const ParentAccount = (await import('../../models/ParentAccount.js')).default;
+const ParentInvite = (await import('../../models/ParentInvite.js')).default;
+const ParentTeacher = (await import('../../models/ParentTeacher.js')).default;
 const ParentChild = (await import('../../models/ParentChild.js')).default;
 const Student = (await import('../../models/Student.js')).default;
 const Event = (await import('../../models/Event.js')).default;
 const EventRegistration = (await import('../../models/EventRegistration.js')).default;
 const { sendEventRegistrationKakaoMessage } = await import('../../utils/kakaoMessage.js');
-const { getMe, addChildren, getEvents, getEvent, registerChild, cancelChild } =
+const { getMe, addChildren, getEvents, getEvent, registerChild, cancelChild, addTeacher } =
   await import('../parentController.js');
 
-const account = { userId: 20, teacherId: 7, teacherName: '이재림' };
-const linkedChild = { id: 1, childName: '김민서', childBirthdate: '2018-03-05', status: 'linked', studentId: 100, studentName: '김민서' };
-const pendingChild = { id: 2, childName: '김준호', childBirthdate: '2020-11-12', status: 'pending', studentId: null };
+// 선생님 1명과 연결된 기본 상태 (기존 동작이 그대로인지 확인하는 기준)
+const teacherA = { id: 7, name: '이재림', since: '2026-02-10' };
+const teacherB = { id: 8, name: '박지우', since: '2026-08-30' };
+
+const linkedChild = { id: 1, teacherId: 7, teacherName: '이재림', childName: '김민서', childBirthdate: '2018-03-05', status: 'linked', studentId: 100, studentName: '김민서' };
+const pendingChild = { id: 2, teacherId: 7, teacherName: '이재림', childName: '김준호', childBirthdate: '2020-11-12', status: 'pending', studentId: null };
+// 다른 선생님(박지우)에게 다니는 아이
+const otherTeacherChild = { id: 3, teacherId: 8, teacherName: '박지우', childName: '김나윤', childBirthdate: '2019-06-15', status: 'linked', studentId: 200, studentName: '김나윤' };
 
 // 신청할 수 있는 미래 이벤트를 만든다 (오늘 기준 상대 날짜)
 const futureDate = (days) => {
@@ -56,7 +77,8 @@ const futureDate = (days) => {
 };
 
 const openEvent = {
-  id: 5, type: 'competition', title: '대회', date: futureDate(20), startTime: '09:00',
+  id: 5, userId: 7, teacherName: '이재림',
+  type: 'competition', title: '대회', date: futureDate(20), startTime: '09:00',
   isPublished: true, registrationOpen: true, registrationDeadline: null,
   options: [{ id: 'opt_a', label: '볼' }, { id: 'opt_b', label: '후프' }], requireOption: false
 };
@@ -69,7 +91,8 @@ describe('parentController', () => {
     req = { body: {}, params: {}, query: {}, user: { id: 20, username: '민서엄마', role: 'parent' } };
     res = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() };
     jest.spyOn(console, 'error').mockImplementation(() => {});
-    ParentAccount.getByUserId.mockResolvedValue(account);
+    ParentTeacher.listTeachers.mockResolvedValue([teacherA]);
+    ParentTeacher.teacherIds.mockResolvedValue([7]);
     ParentChild.listByParent.mockResolvedValue([linkedChild, pendingChild]);
     ParentChild.hasStudent.mockResolvedValue(false);
     EventRegistration.listForStudents.mockResolvedValue([]);
@@ -77,20 +100,37 @@ describe('parentController', () => {
   });
 
   describe('getMe', () => {
-    it('선생님 이름과 자녀 목록을 돌려준다', async () => {
+    it('연결된 선생님 목록과 자녀를 돌려준다', async () => {
       await getMe(req, res);
 
       const payload = res.json.mock.calls[0][0];
-      expect(payload.teacher).toEqual({ name: '이재림' });
+      expect(payload.teachers).toEqual([teacherA]);
       expect(payload.children).toHaveLength(2);
-      // 내부 식별자는 노출하지 않는다
-      expect(payload.teacher).not.toHaveProperty('id');
+      // 옛 클라이언트 호환 — 대표 선생님도 함께 내려보낸다
+      expect(payload.teacher).toEqual({ name: '이재림' });
     });
 
-    it('학부모 계정이 없으면 404', async () => {
-      ParentAccount.getByUserId.mockResolvedValue(null);
+    it('선생님이 여럿이면 전부 돌려준다', async () => {
+      ParentTeacher.listTeachers.mockResolvedValue([teacherA, teacherB]);
+      ParentChild.listByParent.mockResolvedValue([linkedChild, otherTeacherChild]);
+
       await getMe(req, res);
-      expect(res.status).toHaveBeenCalledWith(404);
+
+      const payload = res.json.mock.calls[0][0];
+      expect(payload.teachers).toHaveLength(2);
+      // 자녀마다 어느 선생님 아이인지 표시된다
+      expect(payload.children.map((c) => c.teacherName)).toEqual(['이재림', '박지우']);
+    });
+
+    it('연결된 선생님이 없으면 빈 목록으로 답한다 (오류가 아니다)', async () => {
+      ParentTeacher.listTeachers.mockResolvedValue([]);
+      ParentChild.listByParent.mockResolvedValue([]);
+
+      await getMe(req, res);
+
+      expect(res.status).not.toHaveBeenCalledWith(404);
+      expect(res.json.mock.calls[0][0].teachers).toEqual([]);
+      expect(res.json.mock.calls[0][0].teacher).toBeNull();
     });
   });
 
@@ -164,8 +204,9 @@ describe('parentController', () => {
 
       await getEvents(req, res);
 
-      const [teacherId, from, to] = Event.listUpcomingForParent.mock.calls[0];
-      expect(teacherId).toBe(7);
+      const [teacherIds, from, to] = Event.listUpcomingForParent.mock.calls[0];
+      // 연결된 선생님 전부를 스코프로 조회한다
+      expect(teacherIds).toEqual([7]);
       expect(to).toBe(`${from.slice(0, 4)}-12-31`);
       expect(to >= from).toBe(true);
     });
@@ -221,7 +262,7 @@ describe('parentController', () => {
 
       await getEvent(req, res);
 
-      expect(Event.getPublishedForParent).toHaveBeenCalledWith('5', 7);
+      expect(Event.getPublishedForParent).toHaveBeenCalledWith('5', [7]);
       expect(res.status).toHaveBeenCalledWith(404);
     });
 
@@ -397,6 +438,200 @@ describe('parentController', () => {
       await cancelChild(req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
+    });
+  });
+
+  describe('여러 선생님과 연결된 학부모 (docs/accounts-roles §5.6~5.7)', () => {
+    beforeEach(() => {
+      ParentTeacher.listTeachers.mockResolvedValue([teacherA, teacherB]);
+      ParentTeacher.teacherIds.mockResolvedValue([7, 8]);
+      ParentChild.listByParent.mockResolvedValue([linkedChild, otherTeacherChild]);
+    });
+
+    it('일정은 연결된 선생님 전부를 스코프로 조회한다', async () => {
+      Event.listUpcomingForParent.mockResolvedValue([]);
+
+      await getEvents(req, res);
+
+      expect(Event.listUpcomingForParent.mock.calls[0][0]).toEqual([7, 8]);
+      expect(res.json.mock.calls[0][0].teachers).toHaveLength(2);
+    });
+
+    it('선생님 필터를 주면 그 선생님 일정만 조회한다', async () => {
+      Event.listUpcomingForParent.mockResolvedValue([]);
+      req.query.teacherId = '8';
+
+      await getEvents(req, res);
+
+      expect(Event.listUpcomingForParent.mock.calls[0][0]).toEqual([8]);
+    });
+
+    it('연결되지 않은 선생님으로 필터하면 무시하고 전체를 본다', async () => {
+      Event.listUpcomingForParent.mockResolvedValue([]);
+      req.query.teacherId = '999';
+
+      await getEvents(req, res);
+
+      expect(Event.listUpcomingForParent.mock.calls[0][0]).toEqual([7, 8]);
+    });
+
+    it('이벤트 카드에 어느 선생님 일정인지 담는다', async () => {
+      Event.listUpcomingForParent.mockResolvedValue([openEvent]);
+
+      await getEvents(req, res);
+
+      const event = res.json.mock.calls[0][0].events[0];
+      expect(event.teacherId).toBe(7);
+      expect(event.teacherName).toBe('이재림');
+    });
+
+    it('이벤트마다 그 선생님의 아이만 신청 후보로 담는다', async () => {
+      Event.listUpcomingForParent.mockResolvedValue([openEvent]);
+
+      await getEvents(req, res);
+
+      // 이재림 선생님 대회에 박지우 선생님 아이(김나윤)는 나오지 않는다
+      const names = res.json.mock.calls[0][0].events[0].children.map((c) => c.childName);
+      expect(names).toEqual(['김민서']);
+    });
+
+    it('다른 선생님의 아이로는 신청할 수 없다 (404)', async () => {
+      Event.getPublishedForParent.mockResolvedValue(openEvent);
+      req.params = { id: '5', childId: '3' }; // 김나윤 = 박지우 선생님 아이
+
+      await registerChild(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(EventRegistration.upsertRegistered).not.toHaveBeenCalled();
+    });
+
+    it('연결되지 않은 선생님의 이벤트는 상세도 404 (존재를 알리지 않는다)', async () => {
+      Event.getPublishedForParent.mockResolvedValue(null);
+      req.params.id = '99';
+
+      await getEvent(req, res);
+
+      expect(Event.getPublishedForParent).toHaveBeenCalledWith('99', [7, 8]);
+      expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it('알림은 학부모의 소속이 아니라 **이벤트를 만든 선생님**에게 간다', async () => {
+      const eventOfB = { ...openEvent, id: 6, userId: 8, teacherName: '박지우' };
+      Event.getPublishedForParent.mockResolvedValue(eventOfB);
+      EventRegistration.upsertRegistered.mockResolvedValue({ status: 'registered', optionIds: [] });
+      req.params = { id: '6', childId: '3' }; // 박지우 선생님 아이
+
+      await registerChild(req, res);
+
+      expect(sendEventRegistrationKakaoMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 8 })
+      );
+    });
+  });
+
+  describe('addChildren — 선생님 선택 (FR-355)', () => {
+    beforeEach(() => {
+      ParentChild.listByParent.mockResolvedValue([]);
+      ParentChild.create.mockImplementation(async (data) => ({ id: 1, ...data }));
+      Student.getAll.mockResolvedValue([]);
+      req.body = { children: [{ name: '김나윤', birthdate: '2019-06-15' }] };
+    });
+
+    it('선생님이 1명이면 자동으로 그 선생님으로 정한다', async () => {
+      await addChildren(req, res);
+
+      expect(Student.getAll).toHaveBeenCalledWith(7, 'user');
+      expect(ParentChild.create).toHaveBeenCalledWith(expect.objectContaining({ teacherId: 7 }));
+    });
+
+    it('선생님이 여럿인데 고르지 않으면 400 으로 되묻는다', async () => {
+      ParentTeacher.listTeachers.mockResolvedValue([teacherA, teacherB]);
+
+      await addChildren(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json.mock.calls[0][0].needsTeacher).toBe(true);
+      expect(ParentChild.create).not.toHaveBeenCalled();
+    });
+
+    it('고른 선생님의 학생 명단에서만 매칭한다', async () => {
+      ParentTeacher.listTeachers.mockResolvedValue([teacherA, teacherB]);
+      Student.getAll.mockResolvedValue([{ id: 200, name: '김나윤', birthdate: '2019-06-15' }]);
+      req.body.teacherId = 8;
+
+      await addChildren(req, res);
+
+      expect(Student.getAll).toHaveBeenCalledWith(8, 'user');
+      expect(ParentChild.create).toHaveBeenCalledWith(
+        expect.objectContaining({ teacherId: 8, studentId: 200 })
+      );
+    });
+
+    it('연결되지 않은 선생님을 고르면 400', async () => {
+      ParentTeacher.listTeachers.mockResolvedValue([teacherA]);
+      req.body.teacherId = 999;
+
+      await addChildren(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(ParentChild.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('addTeacher — 초대 링크로 선생님 추가 (FR-353)', () => {
+    it('유효한 초대면 연결을 더한다', async () => {
+      ParentInvite.getByToken.mockResolvedValue({ id: 3, userId: 8 });
+      ParentInvite.isUsable.mockReturnValue(true);
+      ParentTeacher.isLinked.mockResolvedValue(false);
+      ParentTeacher.listTeachers.mockResolvedValue([teacherA, teacherB]);
+      req.body = { invite: 'TOK' };
+
+      await addTeacher(req, res);
+
+      expect(ParentAccount.create).toHaveBeenCalledWith({ userId: 20, teacherId: 8, inviteId: 3 });
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json.mock.calls[0][0].teachers).toHaveLength(2);
+    });
+
+    it('초대 링크 전체를 붙여넣어도 받아준다', async () => {
+      ParentInvite.getByToken.mockResolvedValue({ id: 3, userId: 8 });
+      ParentInvite.isUsable.mockReturnValue(true);
+      req.body = { invite: 'https://rg-manager.vercel.app/invite/TOK9' };
+
+      await addTeacher(req, res);
+
+      expect(ParentInvite.getByToken).toHaveBeenCalledWith('TOK9');
+    });
+
+    it('이미 연결된 선생님이면 200 으로 알려준다', async () => {
+      ParentInvite.getByToken.mockResolvedValue({ id: 3, userId: 7 });
+      ParentInvite.isUsable.mockReturnValue(true);
+      ParentTeacher.isLinked.mockResolvedValue(true);
+      req.body = { invite: 'TOK' };
+
+      await addTeacher(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json.mock.calls[0][0].alreadyLinked).toBe(true);
+    });
+
+    it('무효한 초대는 400', async () => {
+      ParentInvite.getByToken.mockResolvedValue(null);
+      ParentInvite.isUsable.mockReturnValue(false);
+      req.body = { invite: 'GONE' };
+
+      await addTeacher(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(ParentAccount.create).not.toHaveBeenCalled();
+    });
+
+    it('빈 입력은 400', async () => {
+      req.body = {};
+
+      await addTeacher(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
     });
   });
 });

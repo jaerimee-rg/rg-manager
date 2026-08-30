@@ -1,5 +1,5 @@
 import express from 'express';
-import { getMe, addChildren, getEvents, getEvent, registerChild, cancelChild } from '../controllers/parentController.js';
+import { getMe, addChildren, getEvents, getEvent, registerChild, cancelChild, addTeacher } from '../controllers/parentController.js';
 import {
   listAlbums,
   listMedia,
@@ -13,6 +13,7 @@ import {
 } from '../controllers/parentAlbumController.js';
 import { verifyToken } from '../middleware/auth.js';
 import { requireRole } from '../middleware/roles.js';
+import { logAction } from '../middleware/logger.js';
 
 const router = express.Router();
 
@@ -21,6 +22,8 @@ router.use(verifyToken, requireRole('parent'));
 
 router.get('/me', getMe);
 router.post('/children', addChildren);
+// 초대 링크를 붙여넣어 선생님을 추가한다 (학부모가 여러 선생님과 연결될 수 있다)
+router.post('/teachers', logAction('ADD_PARENT_TEACHER'), addTeacher);
 router.get('/events', getEvents);
 router.get('/events/:id', getEvent);
 router.put('/events/:id/registrations/:childId', registerChild);

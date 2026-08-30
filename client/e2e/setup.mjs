@@ -125,12 +125,110 @@ for (const mediaId of mediaIds.slice(0, 2)) {
   );
 }
 
+/* ───────── 계정 · 역할 · 초대 (docs/accounts-roles) ─────────
+   한 카카오 계정이 역할마다 계정을 갖고, 학부모가 선생님 여럿과 연결되는 상태를 만든다. */
+
+// 위 학부모를 다대다 연결 표에도 넣는다 (initDatabase 백필과 같은 모양)
+await pool.query(
+  `INSERT INTO parent_teachers ("parentUserId","teacherId","inviteId","createdAt")
+   VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+  [parent.id, teacher.id, inv.rows[0].id, now]
+);
+
+// 두 번째 선생님 + 그 선생님의 학생 + 같은 학부모의 두 번째 자녀
+const t2 = await pool.query(
+  `INSERT INTO users (username, password, role, "createdAt") VALUES ($1,$2,'user',$3) RETURNING id, username, role`,
+  [`e2e선생님B_${stamp}`, pw, now]
+);
+const teacher2 = t2.rows[0];
+
+const s2 = await pool.query(
+  `INSERT INTO students (name, birthdate, "classIds", "userId", "createdAt") VALUES ($1,$2,'[]',$3,$4) RETURNING id, name, birthdate`,
+  [`나윤B${stamp}`, '2019-06-15', teacher2.id, now]
+);
+const studentB = s2.rows[0];
+
+const invB = await pool.query(
+  `INSERT INTO parent_invites ("userId", token, "createdAt", "updatedAt") VALUES ($1,$2,$3,$3) RETURNING id, token`,
+  [teacher2.id, `e2e-b-${stamp}`, now]
+);
+
+/* 위 `parent` 는 선생님 **1명**으로 남긴다 — 기존 e2e(온보딩 → 신청)가
+   "선생님을 고를 필요가 없는" 단일 선생님 상태를 전제한다.
+   다중 선생님은 아래 parentMulti 로 따로 검증한다. */
+
+// 두 번째 선생님의 공개 이벤트 (학부모 일정에 함께 보여야 한다)
+const eventB = await pool.query(
+  `INSERT INTO events ("userId", type, title, date, location, options, "isPublished", "registrationOpen", "createdAt", "updatedAt")
+   VALUES ($1,'special',$2,'2026-11-15','한강공원','[]',TRUE,TRUE,$3,$3) RETURNING id`,
+  [teacher2.id, `e2eB러닝_${stamp}`, now]
+);
+
+/* 다중 선생님 시나리오는 **별도 학부모**로 만든다.
+   위의 `parent` 는 기존 e2e(가입 → 온보딩 → 신청)가 "아이가 아직 없는 상태" 를
+   전제하므로, 여기에 자녀·두 번째 선생님을 붙이면 그 시나리오가 깨진다. */
+const p2 = await pool.query(
+  `INSERT INTO users (username, password, role, "createdAt", "kakaoId") VALUES ($1,$2,'parent',$3,$4) RETURNING id, username, role`,
+  [`e2e다중학부모_${stamp}`, parentPw, now, `e2e-kakao-multi-${stamp}`]
+);
+const parentMulti = p2.rows[0];
+
+await pool.query(
+  `INSERT INTO parent_accounts ("userId","teacherId","inviteId","createdAt","lastLoginAt") VALUES ($1,$2,$3,$4,$4)`,
+  [parentMulti.id, teacher.id, inv.rows[0].id, now]
+);
+
+for (const [teacherId, inviteId] of [[teacher.id, inv.rows[0].id], [teacher2.id, invB.rows[0].id]]) {
+  await pool.query(
+    `INSERT INTO parent_teachers ("parentUserId","teacherId","inviteId","createdAt")
+     VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+    [parentMulti.id, teacherId, inviteId, now]
+  );
+}
+
+// 선생님마다 자녀 하나씩 — "다른 선생님 아이로는 신청 불가" 를 검증하기 위한 구성
+await pool.query(
+  `INSERT INTO parent_children ("parentUserId","teacherId","studentId","childName","childBirthdate",status,"linkedAt","linkedBy","createdAt")
+   VALUES ($1,$2,$3,$4,$5,'linked',$6,'auto',$6)`,
+  [parentMulti.id, teacher.id, students[0].id, students[0].name, students[0].birthdate, now]
+);
+await pool.query(
+  `INSERT INTO parent_children ("parentUserId","teacherId","studentId","childName","childBirthdate",status,"linkedAt","linkedBy","createdAt")
+   VALUES ($1,$2,$3,$4,$5,'linked',$6,'auto',$6)`,
+  [parentMulti.id, teacher2.id, studentB.id, studentB.name, studentB.birthdate, now]
+);
+
+/* 관리자: 첫 번째 선생님과 **같은 카카오 계정** 을 쓴다.
+   역할 전환(관리자 ↔ 선생님)을 카카오 화면 없이 검증하기 위한 구성이다. */
+const sharedKakao = `e2e-shared-${stamp}`;
+await pool.query('UPDATE users SET "kakaoId" = $1 WHERE id = $2', [sharedKakao, teacher.id]);
+
+const a = await pool.query(
+  `INSERT INTO users (username, password, role, "createdAt", "kakaoId") VALUES ($1,$2,'admin',$3,$4) RETURNING id, username, role`,
+  [`e2e관리자_${stamp}`, pw, now, sharedKakao]
+);
+const adminUser = a.rows[0];
+
+// 아직 쓰지 않은 선생님 초대 (관리자 화면에서 목록·회수를 확인한다)
+const tinv = await pool.query(
+  `INSERT INTO teacher_invites (token, "createdBy", label, "expiresAt", "createdAt")
+   VALUES ($1,$2,$3,$4,$5) RETURNING id, token`,
+  [`e2e-tinv-${stamp}`, adminUser.id, `e2e초대_${stamp}`,
+   new Date(Date.now() + 14 * 86400000).toISOString(), now]
+);
+
 const sessions = {
   album: { eventId: albumEventId, lockedEventId, mediaIds, taggedCount: 2, totalCount: 4 },
   teacher: { token: sign(teacher), user: { id: teacher.id, username: teacher.username, role: 'user' } },
   parent: { token: sign(parent), user: { id: parent.id, username: parent.username, role: 'parent' } },
+  parentMulti: { token: sign(parentMulti), user: { id: parentMulti.id, username: parentMulti.username, role: 'parent' } },
+  admin: { token: sign(adminUser), user: { id: adminUser.id, username: adminUser.username, role: 'admin' } },
+  teacher2: { id: teacher2.id, username: teacher2.username, invite: invB.rows[0].token, eventId: eventB.rows[0].id },
+  teacherInvite: { id: tinv.rows[0].id, token: tinv.rows[0].token },
+  sharedKakao,
   invite: inv.rows[0].token,
   students,
+  studentB,
   stamp
 };
 

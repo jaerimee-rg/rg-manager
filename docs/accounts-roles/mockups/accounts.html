@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>계정 · 역할 · 초대 체계 — 화면 목업</title>
+<style>
+  :root{--primary:#3182F6;--primary-bg:#EBF4FF;--g50:#F9FAFB;--g100:#F2F4F6;--g200:#E5E8EB;--g400:#B0B8C1;--g500:#8B95A1;--g900:#191F28;--danger:#F04452;--danger-bg:#FEECEE;--warn:#B8860B;--warn-bg:#FFF7DC;--ok:#1B8A4C;--ok-bg:#E8F7EE;--kakao:#FEE500;--r:16px}
+  *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",sans-serif;background:#DDE1E6;color:var(--g900)}
+  .shell{display:grid;grid-template-columns:280px 1fr;min-height:100vh}
+  .panel{background:#fff;border-right:1px solid var(--g200);padding:18px 14px;position:sticky;top:0;height:100vh;overflow:auto}
+  .panel h1{font-size:15px;margin:0 0 4px}.panel p{font-size:12px;color:var(--g500);margin:0 0 12px;line-height:1.5}
+  .panel button{display:block;width:100%;text-align:left;border:1px solid var(--g200);background:#fff;border-radius:10px;padding:9px 10px;margin-bottom:6px;font-size:13px;cursor:pointer;font-family:inherit}
+  .panel button.on{border-color:var(--primary);background:var(--primary-bg);font-weight:600}
+  .panel .tog{display:flex;gap:6px;margin:10px 0}.panel .tog button{margin:0;text-align:center}
+  .panel .grp{font-size:11px;color:var(--g400);margin:14px 2px 6px;font-weight:700}
+  .stage{padding:26px;display:flex;justify-content:center;align-items:flex-start}
+  .frame{background:var(--g100);border-radius:22px;box-shadow:0 8px 30px rgba(0,0,0,.15);overflow:hidden;width:980px;min-height:660px;transition:width .2s;position:relative}
+  .frame.mobile{width:414px}
+  .screen{display:none;min-height:660px}.screen.on{display:block}
+  .center{display:flex;justify-content:center;align-items:center;min-height:660px;padding:24px}.col{width:100%;max-width:400px}
+  .logo{width:80px;height:80px;border-radius:20px;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:40px;margin:0 auto 20px}
+  .title{font-size:25px;font-weight:700;text-align:center;margin:0 0 6px}.sub{font-size:15px;color:var(--g500);text-align:center;margin:0 0 26px;line-height:1.6;word-break:keep-all}
+  .card{background:#fff;border-radius:var(--r);padding:22px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+  .kakao{width:100%;padding:16px 20px;background:var(--kakao);border:0;border-radius:var(--r);font-size:17px;font-weight:600;display:flex;gap:8px;align-items:center;justify-content:center;cursor:pointer;font-family:inherit}
+  .hint{color:var(--g400);font-size:13px;line-height:1.6;margin:14px 0 0;word-break:keep-all}.hint.c{text-align:center}
+  .btn{display:inline-flex;align-items:center;justify-content:center;padding:11px 16px;border-radius:12px;border:1px solid var(--g200);background:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}.btn.ghost{border-color:transparent;color:var(--g500);font-weight:500}
+  .btn.w{width:100%;margin-top:10px}.btn.sm{padding:7px 11px;font-size:13px}.btn[disabled]{opacity:.45;cursor:not-allowed}
+  .pill{display:inline-block;font-size:12px;padding:2px 9px;border-radius:999px;font-weight:600;white-space:nowrap;line-height:1.5}
+  .pill.admin{background:var(--primary-bg);color:var(--primary)}.pill.teacher{background:var(--ok-bg);color:var(--ok)}.pill.parent{background:#FFF1E6;color:#C25E00}
+  .pill.pending{background:var(--warn-bg);color:var(--warn)}.pill.used{background:var(--g100);color:var(--g500)}.pill.dead{background:var(--danger-bg);color:var(--danger)}
+  .big{font-size:40px;text-align:center;margin-bottom:10px}
+  .field{margin-top:12px}.field label{display:block;font-size:12px;color:var(--g500);margin-bottom:5px}
+  .field input,.field select{width:100%;padding:12px;border:1px solid var(--g200);border-radius:12px;font-size:15px;font-family:inherit;background:#fff}
+  .row2{display:flex;gap:10px}.row2>*{flex:1}
+  /* teacher app */
+  .hdr{background:#fff;border-bottom:1px solid var(--g200);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}.hdr h2{margin:0;font-size:17px;white-space:nowrap}
+  .nav{display:flex;gap:14px;font-size:14px;color:var(--g500);align-items:center;flex-wrap:wrap}.nav b{color:var(--primary)}.frame.mobile .nav{display:none}
+  .burger{display:none;border:0;background:none;font-size:22px;cursor:pointer}.frame.mobile .burger{display:block}
+  .rolebtn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--g200);border-radius:999px;padding:5px 11px;font-size:13px;background:#fff;cursor:pointer;font-family:inherit;position:relative}
+  .dd{position:absolute;top:38px;right:0;width:268px;background:#fff;border:1px solid var(--g200);border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:8px;text-align:left;z-index:5}
+  .dd .cur{padding:8px 10px;font-size:12px;color:var(--g500)}.dd .it{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px;border-radius:10px;font-size:14px;cursor:pointer}.dd .it:hover{background:var(--g50)}.dd .it small{color:var(--g400);white-space:nowrap}
+  .dd .help{padding:8px 10px;font-size:11px;color:var(--g400);border-top:1px solid var(--g100);margin-top:4px;line-height:1.5}
+  .body{padding:20px}.body h3{margin:0 0 12px;font-size:19px}.ph{background:#fff;border-radius:12px;height:120px;display:flex;align-items:center;justify-content:center;color:var(--g400);font-size:13px}
+  .mob{position:absolute;inset:0;background:#fff;padding:20px;display:none;overflow:auto}.frame.mobile .mob.on{display:block}
+  .mob a{display:block;padding:12px 6px;border-bottom:1px solid var(--g100);font-size:16px;color:var(--g900);text-decoration:none;cursor:pointer}.mob .sec{font-size:12px;color:var(--g500);margin:16px 6px 4px}
+  /* admin layout (클래스 이름이 .pill.admin 과 겹치지 않게 adminlayout 을 쓴다) */
+  .adminlayout{display:grid;grid-template-columns:206px 1fr;min-height:660px}.frame.mobile .adminlayout{grid-template-columns:1fr}
+  .side{background:#fff;border-right:1px solid var(--g200);padding:16px;display:flex;flex-direction:column}.frame.mobile .side{display:none}
+  .side h2{font-size:15px;margin:0 0 12px}.side a{display:flex;justify-content:space-between;padding:9px 10px;border-radius:10px;font-size:14px;color:var(--g900);text-decoration:none;cursor:pointer}
+  .side a.on{background:var(--primary-bg);color:var(--primary);font-weight:600}
+  .side .foot{margin-top:auto;border-top:1px solid var(--g100);padding-top:10px}.side .foot a{color:var(--g500);font-size:13px}.side .foot a.sw{color:var(--g900);font-weight:600}
+  .main{padding:20px;position:relative;min-width:0}.main h3{margin:0 0 12px;font-size:19px}
+  .tw{overflow-x:auto;max-width:100%}table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;font-size:14px;min-width:520px}
+  th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--g100);vertical-align:middle}th{background:var(--g50);color:var(--g500);font-weight:600;font-size:12px;white-space:nowrap}
+  td small{color:var(--g500);display:block;font-size:12px}
+  .sel{padding:6px 8px;border:1px solid var(--g200);border-radius:8px;font-size:13px;font-family:inherit}.sel:disabled{background:var(--g100);color:var(--g400)}
+  /* parent */
+  .pwrap{min-height:600px;padding:18px}
+  .pbar{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--g200);display:flex;justify-content:space-around;padding:10px 0;font-size:12px;color:var(--g500)}.pbar b{color:var(--primary)}
+  .chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:10px;margin-bottom:6px}
+  .chip{border:1px solid var(--g200);background:#fff;border-radius:999px;padding:7px 14px;font-size:13px;white-space:nowrap;cursor:pointer;font-family:inherit}
+  .chip.on{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600}
+  .ev{background:#fff;border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+  .ev .top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.ev b{font-size:15px}.ev .d{font-size:12px;color:var(--g500);margin-top:3px}
+  .mon{font-size:12px;color:var(--g500);font-weight:700;margin:14px 2px 8px}
+  .rolerow{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-top:1px solid var(--g100);gap:10px;flex-wrap:wrap}.rolerow:first-of-type{border-top:0}
+  .modal{position:absolute;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;padding:20px;z-index:9}.modal .card{width:100%;max-width:420px;max-height:90%;overflow:auto}
+  @media (max-width:900px){.shell{grid-template-columns:1fr}.panel{position:static;height:auto;border-right:0;border-bottom:1px solid var(--g200)}.stage{padding:12px}.frame,.frame.mobile{width:100%}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="panel">
+    <h1>계정 · 역할 · 초대 체계 목업</h1>
+    <p>정적 HTML · 서버 통신 없음 · 2026-08-30</p>
+    <div class="tog"><button class="on" id="tDesk" onclick="setW(false)">데스크톱</button><button id="tMob" onclick="setW(true)">모바일</button></div>
+    <div class="grp">가입 · 초대</div>
+    <button class="on" onclick="go('login',this)">① 로그인 (변경 없음)</button>
+    <button onclick="go('noinvite',this)">② 초대가 없을 때</button>
+    <button onclick="go('tinvite',this)">③ 선생님 초대 랜딩</button>
+    <button onclick="go('invites',this)">④ 관리자 &gt; 선생님 초대</button>
+    <div class="grp">역할 전환</div>
+    <button onclick="go('teacher',this)">⑤ 선생님 헤더 — 역할 메뉴</button>
+    <button onclick="go('adminside',this)">⑥ 관리자 사이드바 — 전환</button>
+    <button onclick="go('psettings',this)">⑦ 학부모 내 정보 — 선생님 여러 명</button>
+    <div class="grp">학부모 다중 선생님</div>
+    <button onclick="go('schedule',this)">⑧ 학부모 일정 — 선생님 필터</button>
+    <button onclick="go('onboard',this)">⑨ 자녀 등록 — 선생님 선택</button>
+    <div class="grp">관리자</div>
+    <button onclick="go('users',this)">⑩ 관리자 &gt; 사용자 — 배지</button>
+  </aside>
+
+  <main class="stage"><div class="frame" id="frame">
+
+    <!-- ① 로그인 -->
+    <section class="screen on" id="s-login"><div class="center"><div class="col">
+      <div class="logo">🎀</div><h1 class="title">리듬체조 출석 관리</h1><p class="sub">카카오 계정으로 간편하게 시작하세요</p>
+      <div class="card"><button class="kakao">💬 카카오로 시작하기</button>
+        <p class="hint c">초대를 받은 분만 가입할 수 있어요.<br>초대 링크가 있으면 그 링크를 눌러 주세요.</p></div>
+      <p class="hint c">화면은 바뀌지 않는다. 계정이 여러 개면 <b>마지막에 쓰던 역할</b>(없으면 관리자 &gt; 선생님 &gt; 학부모)로 로그인된다.</p>
+    </div></div></section>
+
+    <!-- ② 초대 없음 -->
+    <section class="screen" id="s-noinvite"><div class="center"><div class="col">
+      <div class="card" style="text-align:center">
+        <div class="big">🔗</div>
+        <h1 class="title" style="font-size:20px">가입에는 초대가 필요해요</h1>
+        <p class="sub" style="margin-bottom:18px">
+          <b>선생님</b>이라면 관리자에게,<br><b>학부모</b>라면 다니는 학원 선생님에게<br>초대 링크를 요청해 주세요.
+        </p>
+        <button class="kakao">💬 다른 카카오 계정으로 로그인</button>
+        <button class="btn ghost w" onclick="go('login')">처음으로</button>
+        <p class="hint">이 화면에서는 <b>계정이 만들어지지 않는다</b>(FR-303). 예전에는 여기서 선생님 계정이 자동 생성됐다.</p>
+      </div>
+    </div></div></section>
+
+    <!-- ③ 선생님 초대 랜딩 -->
+    <section class="screen" id="s-tinvite"><div class="center"><div class="col">
+      <div class="logo">🎀</div>
+      <h1 class="title">선생님 초대</h1>
+      <p class="sub">관리자(박원장)가 <b>선생님</b> 계정을 초대했어요.<br>카카오로 시작하면 선생님 계정이 만들어져요.</p>
+      <div class="card">
+        <button class="kakao">💬 카카오로 시작하기</button>
+        <p class="hint c">이 링크는 <b>한 번만</b> 사용할 수 있어요 · 2026-09-13 만료</p>
+      </div>
+      <div class="card" style="margin-top:14px;background:var(--danger-bg)">
+        <div style="font-size:13px;color:var(--danger);font-weight:600;margin-bottom:4px">무효일 때 (같은 화면)</div>
+        <div style="font-size:13px;color:var(--danger);line-height:1.6">🔗 유효하지 않은 초대 링크예요.<br>이미 사용됐거나 만료·회수됐을 수 있어요. 관리자에게 새 링크를 요청해 주세요.</div>
+      </div>
+    </div></div></section>
+
+    <!-- ④ 관리자 > 선생님 초대 -->
+    <section class="screen" id="s-invites"><div class="adminlayout">
+      <nav class="side"><h2>관리자</h2>
+        <a>👥 학생</a><a>📚 수업</a><a>📅 이벤트</a><a class="on">🎀 선생님</a><a>👨‍👩‍👧 학부모</a><a onclick="go('users')">👤 사용자</a><a>📝 로그</a><a>⚙️ 설정</a>
+        <div class="foot"><a class="sw" onclick="go('teacher')">🎀 선생님 계정으로 전환 →</a><a>← 메인으로 돌아가기</a></div></nav>
+      <div class="main"><h3>선생님 초대</h3>
+        <div class="card" style="margin-bottom:16px">
+          <b style="font-size:15px">초대 링크 만들기</b>
+          <p class="hint" style="margin:6px 0 0">선생님은 이 링크로만 가입할 수 있어요. 링크는 <b>한 번</b> 쓰면 사라집니다.</p>
+          <div class="row2" style="margin-top:10px">
+            <div class="field" style="margin:0"><label>메모 (누구에게 주는 링크인가요?)</label><input placeholder="예: 김리듬 선생님"></div>
+            <div class="field" style="margin:0;max-width:150px"><label>만료</label><select><option>14일 (기본)</option><option>7일</option><option>30일</option><option>만료 없음</option></select></div>
+          </div>
+          <button class="btn primary w">초대 링크 만들기</button>
+        </div>
+        <div class="tw"><table><thead><tr><th>메모</th><th>상태</th><th>만든 날</th><th>만료</th><th>사용한 계정</th><th>관리</th></tr></thead><tbody>
+          <tr><td>김리듬 선생님</td><td><span class="pill pending">대기</span></td><td>08-30</td><td>09-13</td><td>-</td><td><button class="btn sm">링크 복사</button> <button class="btn sm">회수</button></td></tr>
+          <tr><td>박지우 선생님</td><td><span class="pill used">사용됨</span></td><td>08-12</td><td>08-26</td><td>박지우</td><td><span class="hint" style="margin:0;font-size:12px">08-13 가입</span></td></tr>
+          <tr><td>(메모 없음)</td><td><span class="pill dead">만료</span></td><td>07-20</td><td>08-03</td><td>-</td><td><button class="btn sm" disabled>회수</button></td></tr>
+          <tr><td>이코치 선생님</td><td><span class="pill dead">회수됨</span></td><td>08-05</td><td>08-19</td><td>-</td><td><span class="hint" style="margin:0;font-size:12px">08-06 회수</span></td></tr>
+        </tbody></table></div>
+        <p class="hint">목록에 <b>토큰 원문은 보이지 않는다</b>(NFR-306). [링크 복사]가 전체 URL 을 클립보드에 넣는다.</p>
+      </div>
+    </div></section>
+
+    <!-- ⑤ 선생님 헤더 -->
+    <section class="screen" id="s-teacher">
+      <div class="hdr"><h2>리듬체조 출석</h2>
+        <div class="nav"><span>대시보드</span><b>학생 관리</b><span>수업</span><span>이벤트</span><span>출석</span><span>학부모</span>
+          <button class="rolebtn" onclick="toggleDD(event)"><span class="pill teacher">선생님</span> 김리듬 ▾
+            <div class="dd" id="dd" style="display:none">
+              <div class="cur">현재: <b>선생님</b> 김리듬</div>
+              <div class="it" onclick="go('psettings');event.stopPropagation()">👨‍👩‍👧 학부모 화면으로 <small>김리듬_2</small></div>
+              <div class="it" onclick="go('adminside');event.stopPropagation()">🛠️ 관리자 화면으로 <small>있을 때만</small></div>
+              <div class="it" onclick="openM('mParent');event.stopPropagation()">＋ 학부모 계정 만들기 <small>없을 때</small></div>
+              <div class="help">전환하면 이 브라우저의 모든 탭이 그 역할로 바뀝니다.</div>
+            </div>
+          </button><span>설정</span></div>
+        <button class="burger" onclick="document.getElementById('mob').classList.toggle('on')">☰</button>
+      </div>
+      <div class="body"><h3>학생 관리</h3><div class="ph">(기존 화면 그대로)</div>
+        <p class="hint">데스크톱은 헤더 우측 <b>역할 메뉴</b>, 모바일은 ☰ 아래 "역할" 섹션.</p></div>
+      <div class="mob" id="mob">
+        <a>대시보드</a><a>학생 관리</a><a>수업 관리</a><a>이벤트 관리</a><a>출석 체크</a><a>학부모</a><a>설정</a>
+        <div class="sec">역할 · 현재 선생님(김리듬)</div>
+        <a onclick="go('psettings')">👨‍👩‍👧 학부모 화면으로</a><a onclick="openM('mParent')">＋ 학부모 계정 만들기</a>
+        <a style="color:var(--g500)">로그아웃</a>
+      </div>
+      <div class="modal" id="mParent" style="display:none"><div class="card">
+        <b style="font-size:17px">학부모 계정 만들기</b>
+        <p class="hint" style="margin:6px 0 12px">같은 카카오 계정으로 학부모 계정을 하나 더 만듭니다. 만든 뒤 아이를 등록해요.</p>
+        <button class="btn primary w" onclick="closeM('mParent');go('onboard')">내 학원 학부모로 가입</button>
+        <p class="hint c" style="margin:6px 0 0">선생님일 때만 보임 · 소속 = 김리듬 선생님</p>
+        <div style="text-align:center;color:var(--g400);font-size:12px;margin:12px 0 0">또는</div>
+        <div class="field"><label>다른 선생님의 초대 링크</label><input placeholder="https://rg-manager.vercel.app/invite/…"></div>
+        <button class="btn w" onclick="closeM('mParent');go('onboard')">초대 링크로 가입</button>
+        <button class="btn w ghost" onclick="closeM('mParent')">취소</button>
+      </div></div>
+    </section>
+
+    <!-- ⑥ 관리자 사이드바 -->
+    <section class="screen" id="s-adminside"><div class="adminlayout">
+      <nav class="side"><h2>관리자</h2>
+        <a>👥 학생</a><a>📚 수업</a><a>📅 이벤트</a><a onclick="go('invites')">🎀 선생님</a><a>👨‍👩‍👧 학부모</a><a class="on" onclick="go('users')">👤 사용자</a><a>📝 로그</a><a>⚙️ 설정</a>
+        <div class="foot">
+          <a class="sw" onclick="go('teacher')">🎀 선생님 계정으로 전환 →</a>
+          <a class="sw" onclick="go('psettings')">👨‍👩‍👧 학부모 화면으로 →</a>
+          <a style="font-size:12px">＋ 선생님 계정 만들기 <span style="color:var(--g400)">(없을 때 · 관리자는 초대 불필요)</span></a>
+          <a>← 메인으로 돌아가기</a>
+        </div></nav>
+      <div class="main"><h3>사용자 관리</h3><div class="ph">(목록은 ⑩ 참고)</div>
+        <div class="card" style="margin-top:14px"><b>역할 전환</b>
+          <p class="hint" style="margin:6px 0 4px">설정(<code>/admin/settings</code>)에도 같은 카드가 있다.</p>
+          <div class="rolerow"><div><span class="pill admin">관리자</span> <b>박원장</b> <small style="color:var(--g500)">· 현재</small></div><div></div></div>
+          <div class="rolerow"><div><span class="pill teacher">선생님</span> <b>박원장_2</b></div><button class="btn sm primary" onclick="go('teacher')">선생님 화면으로</button></div>
+          <div class="rolerow"><div><span class="pill parent">학부모</span> <small style="color:var(--g500)">계정 없음</small></div><button class="btn sm" onclick="go('teacher')">학부모 계정 만들기</button></div>
+        </div>
+        <p class="hint">기존 <b>[메인으로 돌아가기]</b>(같은 관리자 계정으로 선생님 UI 보기)는 그대로 두고, 전환 항목을 그 위에 둔다(FR-327).</p>
+      </div>
+    </div></section>
+
+    <!-- ⑦ 학부모 내 정보 -->
+    <section class="screen" id="s-psettings">
+      <div class="pwrap">
+        <h3 style="margin:0 0 12px;font-size:19px">내 정보</h3>
+        <div class="card" style="margin-bottom:12px"><b>김리듬_2</b> <span class="pill parent">학부모</span>
+          <p class="hint" style="margin-top:5px">카카오 계정 · 자녀 2명</p></div>
+
+        <div class="card" style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center"><b>연결된 선생님</b><button class="btn sm" onclick="openM('mTeacher')">＋ 선생님 추가</button></div>
+          <div class="rolerow" style="margin-top:6px"><div><b>김리듬 선생님</b> <small style="color:var(--g500)">· 2026-02-10 연결</small></div><span class="pill teacher">가은</span></div>
+          <div class="rolerow"><div><b>박지우 선생님</b> <small style="color:var(--g500)">· 2026-08-30 연결</small></div><span class="pill teacher">나윤</span></div>
+          <p class="hint">연결 해제는 선생님께 문의해 주세요. 초대 링크를 받으면 [선생님 추가]로 바로 연결돼요.</p>
+        </div>
+
+        <div class="card" style="margin-bottom:12px"><b>역할 전환</b>
+          <div class="rolerow" style="margin-top:6px"><div><span class="pill teacher">선생님</span> <b>김리듬</b></div><button class="btn sm primary" onclick="go('teacher')">선생님 화면으로</button></div>
+          <div class="rolerow"><div><span class="pill admin">관리자</span> <small style="color:var(--g500)">계정 없음 · 관리자가 부여</small></div><div></div></div>
+          <p class="hint">전환하면 이 브라우저의 모든 탭이 바뀝니다.</p>
+        </div>
+        <button class="btn w">로그아웃</button>
+      </div>
+      <div class="pbar"><span onclick="go('schedule')">📅 일정</span><span>📷 사진</span><span>💬 채팅</span><b>👤 내 정보</b></div>
+      <div class="modal" id="mTeacher" style="display:none"><div class="card">
+        <b style="font-size:17px">선생님 추가</b>
+        <p class="hint" style="margin:6px 0 10px">선생님께 받은 초대 링크를 붙여넣으면 계정에 <b>연결만 추가</b>돼요. 새 계정을 만들지 않아요.</p>
+        <div class="field"><label>초대 링크 또는 토큰</label><input placeholder="https://rg-manager.vercel.app/invite/…"></div>
+        <button class="btn primary w" onclick="closeM('mTeacher')">연결하기</button>
+        <button class="btn w ghost" onclick="closeM('mTeacher')">취소</button>
+      </div></div>
+    </section>
+
+    <!-- ⑧ 학부모 일정 -->
+    <section class="screen" id="s-schedule">
+      <div class="pwrap">
+        <h3 style="margin:0 0 10px;font-size:19px">일정</h3>
+        <div class="chips">
+          <button class="chip on" onclick="chip(this)">전체</button>
+          <button class="chip" onclick="chip(this)">김리듬 선생님</button>
+          <button class="chip" onclick="chip(this)">박지우 선생님</button>
+        </div>
+        <div class="mon">9월</div>
+        <div class="ev"><div class="top"><div><b>가을 리듬체조 대회</b><div class="d">9/14 (토) 09:00 · 올림픽공원 제2체육관</div></div><span class="pill teacher">김리듬</span></div>
+          <div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap"><span class="pill used">가은 · 신청함</span><button class="btn sm">상세</button></div></div>
+        <div class="ev"><div class="top"><div><b>토요 러닝</b><div class="d">9/21 (토) 10:00 · 한강공원</div></div><span class="pill teacher">박지우</span></div>
+          <div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap"><span class="pill pending">나윤 · 신청 가능</span><button class="btn sm primary">신청</button></div></div>
+        <div class="mon">10월</div>
+        <div class="ev"><div class="top"><div><b>추석 휴관</b><div class="d">10/3 ~ 10/6 · 휴관일</div></div><span class="pill teacher">김리듬</span></div></div>
+        <p class="hint">선생님이 <b>2명 이상일 때만</b> 필터 칩이 보인다(FR-357). 카드마다 어느 선생님 일정인지 배지로 표시한다.<br>
+          <b>가은</b>은 김리듬 선생님 학생이라 박지우 선생님 이벤트에는 신청할 수 없다(AC-323).</p>
+      </div>
+      <div class="pbar"><b>📅 일정</b><span>📷 사진</span><span>💬 채팅</span><span onclick="go('psettings')">👤 내 정보</span></div>
+    </section>
+
+    <!-- ⑨ 자녀 등록 -->
+    <section class="screen" id="s-onboard"><div class="center"><div class="col">
+      <h1 class="title" style="font-size:21px">아이 정보를 알려주세요</h1>
+      <p class="sub">선생님이 등록한 학생 정보와 대조해 자동으로 연결해요.</p>
+      <div class="card">
+        <div class="field" style="margin-top:0"><label>어느 선생님의 학생인가요?</label>
+          <select><option>김리듬 선생님</option><option>박지우 선생님</option></select></div>
+        <p class="hint" style="margin-top:6px">연결된 선생님이 1명이면 이 칸은 보이지 않고 이름만 안내돼요(FR-355).</p>
+        <div class="field"><label>아이 이름</label><input placeholder="김가은"></div>
+        <div class="field"><label>생년월일</label><input type="date" value="2018-04-01"></div>
+        <button class="btn ghost w" style="font-size:13px">＋ 아이 더 추가</button>
+        <button class="btn primary w">저장하고 시작하기</button>
+        <p class="hint c">이름·생년월일이 <b>고른 선생님의 학생 명단</b>과 정확히 맞으면 바로 연결되고,<br>아니면 "확인 대기"로 남아 선생님이 연결해 줘요.</p>
+      </div>
+    </div></div></section>
+
+    <!-- ⑩ 관리자 > 사용자 -->
+    <section class="screen" id="s-users"><div class="adminlayout">
+      <nav class="side"><h2>관리자</h2>
+        <a>👥 학생</a><a>📚 수업</a><a>📅 이벤트</a><a onclick="go('invites')">🎀 선생님</a><a>👨‍👩‍👧 학부모</a><a class="on">👤 사용자</a><a>📝 로그</a><a>⚙️ 설정</a>
+        <div class="foot"><a class="sw" onclick="go('teacher')">🎀 선생님 계정으로 전환 →</a><a>← 메인으로 돌아가기</a></div></nav>
+      <div class="main"><h3>사용자 관리</h3>
+        <div class="tw"><table><thead><tr><th>이름</th><th>역할</th><th>계정</th><th>가입일</th><th>관리</th></tr></thead><tbody>
+          <tr><td>admin</td><td><span class="pill admin">관리자</span></td><td>일반(비밀번호)</td><td>2025-12-18</td><td><select class="sel"><option>관리자</option><option>선생님</option></select> <button class="btn sm">수정</button></td></tr>
+          <tr><td>박원장<small>같은 카카오 계정: 선생님</small></td><td><span class="pill admin">관리자</span></td><td>💬 카카오</td><td>2026-01-04</td><td><select class="sel"><option>관리자</option><option>선생님</option></select> <button class="btn sm">수정</button></td></tr>
+          <tr><td>박원장_2<small>같은 카카오 계정: 관리자</small></td><td><span class="pill teacher">선생님</span></td><td>💬 카카오</td><td>2026-08-30</td><td><select class="sel"><option>선생님</option><option>관리자</option></select> <span class="hint" style="margin:0;font-size:11px">관리자 계정 있음</span></td></tr>
+          <tr><td>김리듬<small>같은 카카오 계정: 학부모</small></td><td><span class="pill teacher">선생님</span></td><td>💬 카카오</td><td>2026-02-10</td><td><select class="sel"><option>선생님</option><option>관리자</option></select> <button class="btn sm primary">관리자 계정 추가</button></td></tr>
+          <tr><td>김리듬_2<small>같은 카카오 계정: 선생님 · 연결 2명</small></td><td><span class="pill parent">학부모</span></td><td>💬 카카오</td><td>2026-08-30</td><td><select class="sel" disabled><option>학부모</option></select> <button class="btn sm">삭제</button></td></tr>
+          <tr><td>박지우</td><td><span class="pill teacher">선생님</span></td><td>💬 카카오</td><td>2026-08-13</td><td><select class="sel"><option>선생님</option><option>관리자</option></select> <button class="btn sm primary">관리자 계정 추가</button></td></tr>
+        </tbody></table></div>
+        <p class="hint">역할 셀렉트 옆 도움말: "선생님을 관리자로 <b>승격</b>하면 선생님 계정이 사라집니다. 대신 <b>[관리자 계정 추가]</b>로 따로 만들 수 있어요."<br>
+          학부모 행은 역할 변경 불가 · 자기 자신은 삭제 불가(FR-384, 386).</p>
+      </div>
+    </div></section>
+
+  </div></main>
+</div>
+<script>
+  function go(id, btn){
+    document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on', s.id==='s-'+id));
+    if(!btn) btn=[...document.querySelectorAll('.panel button')].find(b=>(b.getAttribute('onclick')||'').includes("'"+id+"'"));
+    document.querySelectorAll('.panel button').forEach(b=>{ if(!b.closest('.tog')) b.classList.toggle('on', b===btn); });
+    var dd=document.getElementById('dd'); if(dd) dd.style.display='none';
+    var mob=document.getElementById('mob'); if(mob) mob.classList.remove('on');
+    document.querySelectorAll('.modal').forEach(m=>m.style.display='none');
+    window.scrollTo(0,0);
+  }
+  function toggleDD(e){ e.stopPropagation(); var dd=document.getElementById('dd'); dd.style.display = dd.style.display==='none' ? 'block' : 'none'; }
+  function openM(id){ document.getElementById(id).style.display='flex'; }
+  function closeM(id){ document.getElementById(id).style.display='none'; }
+  function chip(el){ el.parentNode.querySelectorAll('.chip').forEach(c=>c.classList.remove('on')); el.classList.add('on'); }
+  function setW(m){ document.getElementById('frame').classList.toggle('mobile', m); document.getElementById('tDesk').classList.toggle('on',!m); document.getElementById('tMob').classList.toggle('on',m); }
+</script>
+</body>
+</html>

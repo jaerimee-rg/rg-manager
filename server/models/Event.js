@@ -3,6 +3,13 @@ import { parseOptions } from '../services/eventService.js';
 
 const hydrate = (row) => (row ? { ...row, options: parseOptions(row.options) } : row);
 
+/**
+ * 학부모용 조회는 **연결된 선생님 전부**를 스코프로 받는다
+ * (docs/accounts-roles FR-357). 하나만 넘겨도 동작하도록 감싸 준다.
+ */
+const toIdArray = (value) =>
+  (Array.isArray(value) ? value : [value]).filter((id) => id !== null && id !== undefined);
+
 class Event {
   static async getAll(userId, role, { type, includePast, today } = {}) {
     const params = [];
@@ -119,24 +126,35 @@ class Event {
    * 학부모 일정: 오늘(KST)부터 그 해 12월 31일까지의 공개 이벤트.
    * 시작일이 지났어도 종료일이 남은 기간 이벤트(진행 중)는 포함한다.
    */
-  static async listUpcomingForParent(teacherId, today, endOfYear) {
+  static async listUpcomingForParent(teacherIds, today, endOfYear) {
+    const ids = toIdArray(teacherIds);
+    if (!ids.length) return [];
+
     const result = await pool.query(
-      `SELECT * FROM events
-       WHERE "userId" = $1
-         AND "isPublished" IS NOT FALSE
-         AND COALESCE("endDate", date) >= $2
-         AND date <= $3
-       ORDER BY date ASC, "startTime" ASC NULLS FIRST, id ASC`,
-      [teacherId, today, endOfYear]
+      `SELECT e.*, u.username AS "teacherName"
+         FROM events e
+         JOIN users u ON u.id = e."userId"
+        WHERE e."userId" = ANY($1)
+          AND e."isPublished" IS NOT FALSE
+          AND COALESCE(e."endDate", e.date) >= $2
+          AND e.date <= $3
+        ORDER BY e.date ASC, e."startTime" ASC NULLS FIRST, e.id ASC`,
+      [ids, today, endOfYear]
     );
     return result.rows.map(hydrate);
   }
 
-  // 학부모용 단건 조회 (공개된 것만, 소속 선생님 것만)
-  static async getPublishedForParent(id, teacherId) {
+  // 학부모용 단건 조회 (공개된 것만, **연결된 선생님** 것만)
+  static async getPublishedForParent(id, teacherIds) {
+    const ids = toIdArray(teacherIds);
+    if (!ids.length) return null;
+
     const result = await pool.query(
-      `SELECT * FROM events WHERE id = $1 AND "userId" = $2 AND "isPublished" IS NOT FALSE`,
-      [id, teacherId]
+      `SELECT e.*, u.username AS "teacherName"
+         FROM events e
+         JOIN users u ON u.id = e."userId"
+        WHERE e.id = $1 AND e."userId" = ANY($2) AND e."isPublished" IS NOT FALSE`,
+      [id, ids]
     );
     return result.rows.length > 0 ? hydrate(result.rows[0]) : null;
   }
@@ -170,15 +188,20 @@ class Event {
    * 학부모 사진 탭: 앨범 폴더가 있는 공개 이벤트를 최근 순으로.
    * 확정 여부는 컨트롤러가 걸러낸다 (신청·참가 학생을 함께 봐야 하기 때문).
    */
-  static async listWithAlbumsForParent(teacherId) {
+  static async listWithAlbumsForParent(teacherIds) {
+    const ids = toIdArray(teacherIds);
+    if (!ids.length) return [];
+
     const result = await pool.query(
-      `SELECT * FROM events
-        WHERE "userId" = $1
-          AND "isPublished" IS NOT FALSE
-          AND "driveFolderId" IS NOT NULL
-          AND type <> 'closure'
-        ORDER BY date DESC, id DESC`,
-      [teacherId]
+      `SELECT e.*, u.username AS "teacherName"
+         FROM events e
+         JOIN users u ON u.id = e."userId"
+        WHERE e."userId" = ANY($1)
+          AND e."isPublished" IS NOT FALSE
+          AND e."driveFolderId" IS NOT NULL
+          AND e.type <> 'closure'
+        ORDER BY e.date DESC, e.id DESC`,
+      [ids]
     );
     return result.rows.map(hydrate);
   }

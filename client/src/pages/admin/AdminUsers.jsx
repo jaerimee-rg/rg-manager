@@ -3,6 +3,14 @@ import { useAuth } from '../../context/AuthContext';
 import { fetchWithAuth } from '../../utils/api';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 
+/* 한 카카오 계정이 역할마다 계정을 가질 수 있어(docs/accounts-roles FR-310),
+   목록에 세 역할이 모두 섞여 나온다. 예전에는 학부모가 "일반 사용자" 로 보였다. */
+const ROLE_BADGE = {
+  admin: { label: '관리자', className: 'badge-primary' },
+  user: { label: '선생님', className: 'badge-success' },
+  parent: { label: '학부모', className: 'badge-warning' }
+};
+
 function AdminUsers() {
   const [users, setUsers] = useState([]);
   const [formData, setFormData] = useState({ username: '', password: '', role: 'user' });
@@ -84,6 +92,36 @@ function AdminUsers() {
     setIsEditing(true);
     setEditId(targetUser.id);
     setFormError('');
+  };
+
+  /** 같은 카카오 계정이 가진 다른 역할 계정 (docs/accounts-roles FR-383) */
+  const otherAccountsOf = (target) =>
+    target.kakaoId ? users.filter((u) => u.kakaoId === target.kakaoId && u.id !== target.id) : [];
+
+  /** 이 카카오 계정에 이미 관리자 행이 있는가 */
+  const hasAdminAccount = (target) =>
+    Boolean(target.kakaoId) && users.some((u) => u.kakaoId === target.kakaoId && u.role === 'admin');
+
+  /**
+   * 같은 카카오 계정에 관리자 계정을 하나 더 만든다 (FR-382).
+   * 역할 편집(승격)과 달리 기존 선생님 계정과 그 학생·수업이 그대로 남는다.
+   */
+  const handleGrantAdmin = async (target) => {
+    if (!confirm(`${target.username} 님에게 관리자 계정을 추가할까요?\n기존 계정과 데이터는 그대로 유지됩니다.`)) return;
+
+    try {
+      const response = await fetchWithAuth(`/api/auth/users/${target.id}/grant-admin`, { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok) {
+        alert(data.error || '관리자 계정을 추가할 수 없습니다.');
+        return;
+      }
+      await loadUsers();
+      alert(`관리자 계정 ${data.user.username} 을(를) 만들었습니다.`);
+    } catch (error) {
+      console.error('관리자 계정 부여 실패:', error);
+      alert('관리자 계정 추가에 실패했습니다.');
+    }
   };
 
   const handleDelete = async (id) => {
@@ -248,10 +286,19 @@ function AdminUsers() {
                 <select
                   value={formData.role}
                   onChange={(e) => setFormData({...formData, role: e.target.value})}
+                  /* 학부모 행은 소속·자녀 연결이 걸려 있어 역할을 바꿀 수 없다 (FR-384) */
+                  disabled={formData.role === 'parent'}
                 >
-                  <option value="user">일반 사용자</option>
+                  {formData.role === 'parent' && <option value="parent">학부모</option>}
+                  <option value="user">선생님</option>
                   <option value="admin">관리자</option>
                 </select>
+                {formData.role !== 'parent' && (
+                  <p style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', lineHeight: 1.5, marginTop: '6px' }}>
+                    선생님을 관리자로 <b>승격</b>하면 선생님 계정이 사라집니다.
+                    대신 목록의 <b>[관리자 계정 추가]</b>로 관리자 계정을 따로 만들 수 있어요.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -344,6 +391,11 @@ function AdminUsers() {
                               </span>
                             )}
                           </div>
+                          {otherAccountsOf(u).length > 0 && (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', marginTop: '2px' }}>
+                              같은 카카오 계정: {otherAccountsOf(u).map((o) => ROLE_BADGE[o.role]?.label || o.role).join(' · ')}
+                            </div>
+                          )}
                         </td>
                         <td>
                           <span style={{ color: 'var(--color-gray-600)', fontSize: '0.875rem' }}>
@@ -351,8 +403,8 @@ function AdminUsers() {
                           </span>
                         </td>
                         <td>
-                          <span className={`badge ${u.role === 'admin' ? 'badge-primary' : 'badge-gray'}`}>
-                            {u.role === 'admin' ? '관리자' : '일반 사용자'}
+                          <span className={`badge ${ROLE_BADGE[u.role]?.className || 'badge-gray'}`}>
+                            {ROLE_BADGE[u.role]?.label || u.role}
                           </span>
                         </td>
                         <td>
@@ -382,16 +434,29 @@ function AdminUsers() {
                           </span>
                         </td>
                         <td>
-                          <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+                          <div style={{ display: 'flex', gap: 'var(--spacing-sm)', flexWrap: 'wrap' }}>
                             <button
                               className="btn btn-secondary btn-sm"
                               onClick={() => handleEdit(u)}
                             >
                               수정
                             </button>
+                            {/* 같은 카카오 계정에 관리자 행을 따로 만든다 (승격과 달리 기존 계정이 남는다) */}
+                            {u.kakaoId && !hasAdminAccount(u) && (
+                              <button className="btn btn-primary btn-sm" onClick={() => handleGrantAdmin(u)}>
+                                관리자 계정 추가
+                              </button>
+                            )}
+                            {u.kakaoId && hasAdminAccount(u) && u.role !== 'admin' && (
+                              <span style={{ fontSize: '0.75rem', color: 'var(--color-gray-400)', alignSelf: 'center' }}>
+                                관리자 계정 있음
+                              </span>
+                            )}
                             <button
                               className="btn btn-danger btn-sm"
                               onClick={() => handleDelete(u.id)}
+                              /* 관리자가 1명이라 자기 자신을 지우면 아무도 관리할 수 없다 */
+                              disabled={u.id === user?.id}
                             >
                               삭제
                             </button>
@@ -438,8 +503,8 @@ function AdminUsers() {
                             💬
                           </span>
                         )}
-                        <span className={`badge ${u.role === 'admin' ? 'badge-primary' : 'badge-gray'}`} style={{ marginLeft: '4px' }}>
-                          {u.role === 'admin' ? '관리자' : '일반'}
+                        <span className={`badge ${ROLE_BADGE[u.role]?.className || 'badge-gray'}`} style={{ marginLeft: '4px' }}>
+                          {ROLE_BADGE[u.role]?.label || u.role}
                         </span>
                       </div>
                       <div className="list-item-subtitle">
@@ -551,7 +616,8 @@ function AdminUsers() {
                   onChange={(e) => setTransferFrom(e.target.value)}
                 >
                   <option value="">선택하세요</option>
-                  {users.filter(u => u.role !== 'admin').map(u => (
+                  {/* 학부모는 학생·수업을 갖지 않으므로 이전 대상이 아니다 */}
+                  {users.filter(u => u.role !== 'parent').map(u => (
                     <option key={u.id} value={u.id}>
                       {u.username} (#{u.id})
                     </option>
@@ -575,7 +641,8 @@ function AdminUsers() {
                   onChange={(e) => setTransferTo(e.target.value)}
                 >
                   <option value="">선택하세요</option>
-                  {users.filter(u => u.role !== 'admin' && u.id !== parseInt(transferFrom)).map(u => (
+                  {/* 받는 쪽은 선생님만 — 데이터의 실제 소유자가 되어야 한다 */}
+                  {users.filter(u => u.role === 'user' && u.id !== parseInt(transferFrom)).map(u => (
                     <option key={u.id} value={u.id}>
                       {u.username} (#{u.id})
                     </option>

@@ -222,6 +222,51 @@ render time only, preserving the "answer is used verbatim" rule.
 `sandbox="allow-scripts allow-popups ..."` without `allow-same-origin` — a second barrier
 independent of the CSP header. Teacher-facing list screens render file-name links only (no iframes).
 
+### Accounts, Roles & Invites
+
+Design docs: `docs/accounts-roles/`. Three things changed at once — **who may sign up**, **how many
+accounts one person has**, and **which teacher(s) a parent belongs to**.
+
+- **Signup is invite-only.** Kakao login alone no longer creates anything. `kakaoCallback` returns
+  **403 `{ outcome: 'needsInvite' }`** when there is no invite and no existing account (it used to
+  create a teacher silently — that was the hole). Teachers need an **admin-issued one-time token**
+  (`teacher_invites`), parents need a **teacher's reusable link** (`parent_invites`, unchanged).
+  Accounts that already exist log in without any invite.
+- **One Kakao account = one row per role.** The single UNIQUE on `users."kakaoId"` was replaced by
+  `idx_users_kakao_role` on `("kakaoId", role)` (partial, `kakaoId IS NOT NULL`). So a person can be
+  admin **and** teacher **and** parent, with separate data. `User.getByKakaoId(kakaoId, role)` now
+  **requires** the role and throws without it; `listByKakaoId()` returns all of a person's rows.
+  Callback picks one via `pickAccount()` — the browser's last-used role (`prefer` in the OAuth
+  `state`), else admin > user > parent.
+- **`state` carries three things** now (`utils/oauthState.js`): `prefer` (role hint), `invite`
+  (parent), `tinvite` (teacher). A bare non-decodable string is still read as an old parent invite
+  token, so links sent before this change keep working. With none of the three, no `state` is sent
+  at all and the authorize URL is byte-identical to before.
+- **Role switching** — `GET /api/auth/roles`, `POST /api/auth/switch-role`, `POST /api/auth/roles`
+  (create the missing role), `POST /api/auth/users/:id/grant-admin` (admin only). The target row is
+  always found via **the current token's own `kakaoId`** (read from the DB, never the request body),
+  so no input can switch you into someone else's account. `services/roleAccounts.js` holds the
+  creation rules; new teacher/admin rows **copy the current row's Kakao tokens** so notifications
+  work without re-login. UI: `components/common/RoleSwitcher.jsx` in the teacher header, admin
+  sidebar, and parent 내 정보.
+- **Parents belong to many teachers** (`parent_teachers`, many-to-many). `parent_accounts.teacherId`
+  is kept as the **대표 선생님** for backward compatibility and is not read by new code.
+  `parent_children.teacherId` was added because with several teachers a join through
+  `parent_accounts` can no longer tell which teacher a child belongs to. **All parent scoping goes
+  through `services/parentScope.js`** — `Event.listUpcomingForParent` / `getPublishedForParent` /
+  `listWithAlbumsForParent` take an **array** of teacher ids. A parent sees only linked teachers'
+  events; an unlinked teacher's event id returns **404**, not 403.
+- **A child can only register for its own teacher's event** (`childBelongsToEvent`). Registration
+  notifications go to **`event.userId`** (the event's owner), not the parent's teacher — with
+  multiple links the old code could notify the wrong teacher.
+- **Deleting a teacher** unlinks their parents and deletes only parent accounts left with no links
+  (`ParentAccount.deleteByTeacher`). A teacher's own "delete parent" action now only **unlinks**;
+  only an admin deletes the account.
+- **Known limit**: one active role per browser. Switching replaces the token, so other tabs follow
+  on their next request.
+- **Production was cleaned on 2026-08-30**: teacher rows other than 이재림 were removed (all three
+  were empty — 0 students/classes/attendance/events).
+
 ### Parent Portal
 
 Parents get their own accounts and a separate app under `/parent/*`. Design docs live in

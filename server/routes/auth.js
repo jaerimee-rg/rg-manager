@@ -1,6 +1,7 @@
 import express from 'express';
-import { login, signup, getUsers, updateUser, deleteUser, verifyTokenEndpoint, getKakaoAuthUrl, kakaoCallback, transferUserData, updateKakaoMessageConsent, getKakaoMessageLogs, sendKakaoMessage, getKakaoUsers, testKakaoMessage, updateUsername } from '../controllers/authController.js';
+import { login, signup, getUsers, updateUser, deleteUser, verifyTokenEndpoint, getKakaoAuthUrl, kakaoCallback, transferUserData, updateKakaoMessageConsent, getKakaoMessageLogs, sendKakaoMessage, getKakaoUsers, testKakaoMessage, updateUsername, getRoles, switchRole, addRole, grantAdmin } from '../controllers/authController.js';
 import { verifyToken } from '../middleware/auth.js';
+import { requireRole } from '../middleware/roles.js';
 import { logAction } from '../middleware/logger.js';
 
 const router = express.Router();
@@ -14,6 +15,15 @@ router.delete('/users/:id', verifyToken, logAction('DELETE_USER'), deleteUser);
 
 // 데이터 이전 (관리자 전용)
 router.post('/users/transfer', verifyToken, logAction('TRANSFER_DATA'), transferUserData);
+
+// 관리자 계정 부여 (관리자 전용) — 같은 카카오 계정에 관리자 행을 하나 더 만든다
+router.post('/users/:id/grant-admin', verifyToken, requireRole('admin'), logAction('GRANT_ADMIN'), grantAdmin);
+
+/* 역할 조회·전환·생성. 학부모도 써야 하므로 server.js 의 rejectParents 목록에
+   넣지 않는다 (docs/accounts-roles 02 §6). */
+router.get('/roles', verifyToken, getRoles);
+router.post('/roles', verifyToken, logAction('ADD_ROLE'), addRole);
+router.post('/switch-role', verifyToken, logAction('SWITCH_ROLE'), switchRole);
 
 // 카카오 로그인
 router.get('/kakao', getKakaoAuthUrl);

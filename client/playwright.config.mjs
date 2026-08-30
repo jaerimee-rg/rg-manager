@@ -37,6 +37,12 @@ export default defineConfig({
         hasTouch: true
       },
       testMatch: /parent\.spec\.mjs/
+    },
+    {
+      // 계정·역할·초대 (docs/accounts-roles). 카카오 인가 화면은 자동화하지 않는다.
+      name: 'accounts',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: /accounts\.spec\.mjs/
     }
   ]
 });

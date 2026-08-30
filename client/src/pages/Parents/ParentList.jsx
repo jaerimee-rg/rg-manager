@@ -108,11 +108,14 @@ function ParentList({ filterUserId = null, embedded = false }) {
   };
 
   const removeParent = async (parent) => {
-    if (!confirm(`${parent.username} 학부모 계정을 삭제할까요?\n연결된 자녀 정보와 신청 내역도 함께 삭제됩니다.`)) return;
+    /* 학부모가 다른 선생님에게도 다닐 수 있어(docs/accounts-roles FR-350) 선생님은
+       계정을 지우지 않고 **자기 연결만** 끊는다. 서버가 그렇게 처리한다. */
+    if (!confirm(`${parent.username} 학부모와의 연결을 해제할까요?\n내 일정·사진을 더 이상 볼 수 없게 됩니다. (다른 선생님과의 연결은 그대로예요)`)) return;
 
     const response = await fetchWithAuth(`/api/parents/${parent.userId}`, { method: 'DELETE' });
     if (response.ok) {
-      showToast('학부모 계정을 삭제했어요');
+      const data = await response.json().catch(() => ({}));
+      showToast(data.unlinkedOnly ? '학부모 연결을 해제했어요' : '학부모 계정을 삭제했어요');
       load();
     }
   };
@@ -201,9 +204,16 @@ function ParentList({ filterUserId = null, embedded = false }) {
                 <div>
                   <div style={{ fontWeight: 700 }}>
                     {parent.username} <span className="badge badge-gray">카카오</span>
-                    {filterUserId && parent.teacherName && (
-                      <span className="badge badge-primary" style={{ marginLeft: '4px' }}>{parent.teacherName} 선생님</span>
-                    )}
+                    {/* 관리자가 전체를 볼 때는 연결된 선생님을 모두 보여준다 (학부모 ↔ 선생님 다대다) */}
+                    {(parent.teachers || []).length > 0
+                      ? parent.teachers.map((teacher) => (
+                          <span key={teacher.id} className="badge badge-primary" style={{ marginLeft: '4px' }}>
+                            {teacher.name} 선생님
+                          </span>
+                        ))
+                      : filterUserId && parent.teacherName && (
+                          <span className="badge badge-primary" style={{ marginLeft: '4px' }}>{parent.teacherName} 선생님</span>
+                        )}
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)' }}>
                     가입 {(parent.createdAt || '').slice(0, 10)}
@@ -211,7 +221,7 @@ function ParentList({ filterUserId = null, embedded = false }) {
                   </div>
                 </div>
                 <span style={{ flex: 1 }} />
-                <button className="btn btn-ghost btn-sm" onClick={() => removeParent(parent)}>삭제</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => removeParent(parent)}>연결 해제</button>
               </div>
 
               {parent.children.map((child) => (

@@ -6,6 +6,8 @@ import {
   getUser,
   removeUser,
   clearAuth,
+  saveLastRole,
+  getLastRole,
 } from '../tokenStorage';
 
 describe('tokenStorage', () => {
@@ -369,6 +371,36 @@ describe('tokenStorage', () => {
       const result = getToken();
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe('마지막 역할 (한 카카오 계정, 여러 역할)', () => {
+    it('저장한 역할을 그대로 돌려준다', () => {
+      saveLastRole('parent');
+      expect(getLastRole()).toBe('parent');
+    });
+
+    it('저장한 적이 없으면 null', () => {
+      expect(getLastRole()).toBeNull();
+    });
+
+    it('빈 값은 저장하지 않는다', () => {
+      saveLastRole('user');
+      saveLastRole('');
+      expect(getLastRole()).toBe('user');
+    });
+
+    it('로그아웃(clearAuth)해도 남는다 — 다음 로그인의 힌트라서', () => {
+      saveLastRole('admin');
+      clearAuth();
+      expect(getLastRole()).toBe('admin');
+    });
+
+    it('localStorage 를 못 써도 던지지 않는다', () => {
+      const original = Storage.prototype.setItem;
+      Storage.prototype.setItem = () => { throw new Error('nope'); };
+      expect(() => saveLastRole('user')).not.toThrow();
+      Storage.prototype.setItem = original;
     });
   });
 });

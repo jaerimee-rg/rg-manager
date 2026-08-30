@@ -46,7 +46,8 @@ function ParentApp() {
   }
 
   const needsOnboarding = me && (me.children || []).length === 0;
-  const teacherName = me?.teacher?.name || '';
+  // 학부모가 여러 선생님과 연결될 수 있어 온보딩이 선생님을 고를 수 있어야 한다
+  const teachers = me?.teachers || [];
 
   return (
     <Routes>
@@ -55,7 +56,7 @@ function ParentApp() {
           (읽지 않으면 저장에 성공하고도 온보딩으로 되돌아온다) */}
       <Route
         path="/parent/onboarding"
-        element={<ParentOnboarding teacherName={teacherName} onDone={loadMe} />}
+        element={<ParentOnboarding teachers={teachers} onDone={loadMe} />}
       />
       {needsOnboarding ? (
         <Route path="*" element={<Navigate to="/parent/onboarding" replace />} />

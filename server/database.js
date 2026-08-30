@@ -219,6 +219,18 @@ const initDatabase = async () => {
       ADD COLUMN IF NOT EXISTS "kakaoMessageConsent" BOOLEAN DEFAULT FALSE
     `);
 
+    /* 한 카카오 계정이 역할마다 계정을 하나씩 가질 수 있게 한다
+       (docs/accounts-roles FR-310). 순서가 중요하다 — 복합 인덱스를 먼저 만들어
+       단일 UNIQUE 를 지우는 사이에도 중복이 끼어들지 못하게 한다.
+       부분 인덱스라 비밀번호 전용 계정(kakaoId NULL)에는 영향이 없다. */
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_users_kakao_role
+      ON users ("kakaoId", role)
+      WHERE "kakaoId" IS NOT NULL
+    `);
+
+    await client.query('ALTER TABLE users DROP CONSTRAINT IF EXISTS "users_kakaoId_key"');
+
     // 카카오 메시지 로그 테이블
     await client.query(`
       CREATE TABLE IF NOT EXISTS kakao_message_logs (
@@ -491,6 +503,37 @@ const initDatabase = async () => {
 
     await client.query('CREATE INDEX IF NOT EXISTS idx_parent_accounts_teacher ON parent_accounts ("teacherId")');
 
+    /* 학부모 ↔ 선생님 다대다 (docs/accounts-roles FR-350).
+       parent_accounts 는 학부모 "프로필" 로 남고, 실제 소속은 여기서 읽는다.
+       parent_accounts."teacherId" 는 대표 선생님으로 계속 채워 두어(FR-351)
+       배포 중간 상태의 옛 코드가 깨지지 않게 한다. */
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS parent_teachers (
+        id SERIAL PRIMARY KEY,
+        "parentUserId" INTEGER NOT NULL,
+        "teacherId" INTEGER NOT NULL,
+        "inviteId" INTEGER,
+        "createdAt" TEXT NOT NULL,
+        UNIQUE ("parentUserId", "teacherId"),
+        FOREIGN KEY ("parentUserId") REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY ("teacherId") REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY ("inviteId") REFERENCES parent_invites(id) ON DELETE SET NULL
+      )
+    `);
+
+    await client.query('CREATE INDEX IF NOT EXISTS idx_parent_teachers_teacher ON parent_teachers ("teacherId")');
+
+    // 기존 단일 소속을 다대다로 옮긴다 (멱등 — 이미 있으면 건너뛴다)
+    await client.query(`
+      INSERT INTO parent_teachers ("parentUserId", "teacherId", "inviteId", "createdAt")
+      SELECT a."userId", a."teacherId", a."inviteId", a."createdAt"
+        FROM parent_accounts a
+       WHERE a."teacherId" IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM parent_teachers t
+            WHERE t."parentUserId" = a."userId" AND t."teacherId" = a."teacherId")
+    `);
+
     // 학부모가 입력한 아이. studentId 가 있으면 선생님 학생과 연결된 상태
     await client.query(`
       CREATE TABLE IF NOT EXISTS parent_children (
@@ -517,6 +560,43 @@ const initDatabase = async () => {
       ON parent_children ("parentUserId", "studentId")
       WHERE "studentId" IS NOT NULL
     `);
+
+    /* 자녀는 선생님 1명의 학생에 대응한다 (docs/accounts-roles FR-354).
+       학부모가 여러 선생님과 연결되면 parent_accounts 조인으로는 어느 선생님인지
+       결정할 수 없으므로 명시 컬럼을 둔다. 연결 전(pending)에도 필요하다.
+       FK 는 붙이지 않는다 — ADD CONSTRAINT 가 멱등이 아니라 재실행에서 실패한다. */
+    await client.query('ALTER TABLE parent_children ADD COLUMN IF NOT EXISTS "teacherId" INTEGER');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_parent_children_teacher ON parent_children ("teacherId")');
+
+    // 연결된 학생의 소유 선생님 → 없으면 학부모의 대표 선생님으로 채운다 (멱등)
+    await client.query(`
+      UPDATE parent_children c
+         SET "teacherId" = COALESCE(
+               (SELECT s."userId" FROM students s WHERE s.id = c."studentId"),
+               (SELECT a."teacherId" FROM parent_accounts a WHERE a."userId" = c."parentUserId"))
+       WHERE c."teacherId" IS NULL
+    `);
+
+    /* 선생님 초대 (관리자 발급, 일회용) — docs/accounts-roles FR-340.
+       학부모 초대(parent_invites)와 달리 재사용되지 않고 회수할 수 있다.
+       상태(대기/사용/만료/회수)는 컬럼이 아니라 usedAt·revokedAt·expiresAt 에서 파생한다. */
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS teacher_invites (
+        id SERIAL PRIMARY KEY,
+        token TEXT NOT NULL UNIQUE,
+        "createdBy" INTEGER NOT NULL,
+        label TEXT,
+        "expiresAt" TEXT,
+        "usedByUserId" INTEGER,
+        "usedAt" TEXT,
+        "revokedAt" TEXT,
+        "createdAt" TEXT NOT NULL,
+        FOREIGN KEY ("createdBy") REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY ("usedByUserId") REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    await client.query('CREATE INDEX IF NOT EXISTS idx_teacher_invites_creator ON teacher_invites ("createdBy")');
 
     // 일정의 단일 출처. 대회형(type='competition')은 competitions 행과 1:1
     await client.query(`

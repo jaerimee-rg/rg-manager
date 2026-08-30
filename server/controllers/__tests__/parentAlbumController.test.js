@@ -1,5 +1,10 @@
 import { jest } from '@jest/globals';
 
+// 학부모가 볼 수 있는 범위 = 연결된 선생님 전부 (다대다)
+jest.unstable_mockModule('../../models/ParentTeacher.js', () => ({
+  default: { teacherIds: jest.fn().mockResolvedValue([7]), listTeachers: jest.fn().mockResolvedValue([]) }
+}));
+
 jest.unstable_mockModule('../../models/ParentAccount.js', () => ({
   default: { getByUserId: jest.fn() }
 }));
@@ -57,6 +62,7 @@ jest.unstable_mockModule('../../utils/googleDrive.js', () => {
 });
 
 const ParentAccount = (await import('../../models/ParentAccount.js')).default;
+const ParentTeacher = (await import('../../models/ParentTeacher.js')).default;
 const ParentChild = (await import('../../models/ParentChild.js')).default;
 const Event = (await import('../../models/Event.js')).default;
 const EventRegistration = (await import('../../models/EventRegistration.js')).default;
@@ -81,7 +87,8 @@ const event = (overrides = {}) => ({
 });
 
 const child = (overrides = {}) => ({
-  id: 100, studentId: 5, childName: '김하은', studentName: '김하은', status: 'linked', ...overrides
+  // 자녀는 선생님 1명의 학생이다 — 얼굴 매칭도 그 선생님 앨범에서만 한다
+  id: 100, teacherId: 7, studentId: 5, childName: '김하은', studentName: '김하은', status: 'linked', ...overrides
 });
 
 let req;
@@ -100,7 +107,8 @@ beforeEach(() => {
   MediaTag.listByMediaIds.mockResolvedValue({});
   ChildFaceProfile.countByParentAndStudent.mockResolvedValue(0);
   ChildFaceProfile.countByStudent.mockResolvedValue(0);
-  ParentAccount.getByUserId.mockResolvedValue({ userId: 42, teacherId: 7, teacherName: '이재림' });
+  ParentTeacher.teacherIds.mockResolvedValue([7]);
+  ParentAccount.getByUserId.mockResolvedValue({ userId: 42, teacherId: 7 });
   ParentChild.listByParent.mockResolvedValue([child()]);
   Event.getPublishedForParent.mockResolvedValue(event());
   GoogleDriveAccount.getByUserId.mockResolvedValue({ id: 11, status: 'connected' });
@@ -141,12 +149,12 @@ describe('listAlbums — 확정된 이벤트만 보인다', () => {
     expect(res.json).toHaveBeenCalledWith({ items: [] });
   });
 
-  it('학부모 계정이 아니면 404', async () => {
-    ParentAccount.getByUserId.mockResolvedValue(null);
+  it('연결된 선생님이 없으면 빈 목록이다', async () => {
+    ParentTeacher.teacherIds.mockResolvedValue([]);
 
     await listAlbums(req, res);
 
-    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ items: [] });
   });
 });
 

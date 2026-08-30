@@ -87,9 +87,25 @@ class User {
     await pool.query('DELETE FROM users WHERE id = $1', [id]);
   }
 
-  static async getByKakaoId(kakaoId) {
-    const result = await pool.query('SELECT * FROM users WHERE "kakaoId" = $1', [kakaoId]);
+  /**
+   * 카카오 계정 + 역할로 한 행을 찾는다 (docs/accounts-roles FR-311).
+   * 같은 카카오 계정이 역할마다 행을 가질 수 있으므로 역할 없이는 결정할 수 없다 —
+   * 옛 호출이 남아 있으면 조용히 엉뚱한 행을 쓰게 되므로 일부러 던진다.
+   */
+  static async getByKakaoId(kakaoId, role) {
+    if (!role) throw new Error('getByKakaoId: role is required');
+    const result = await pool.query('SELECT * FROM users WHERE "kakaoId" = $1 AND role = $2', [kakaoId, role]);
     return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  /** 이 카카오 계정이 가진 모든 계정 (로그인할 행 선택·역할 전환에 쓴다) */
+  static async listByKakaoId(kakaoId) {
+    if (!kakaoId) return [];
+    const result = await pool.query(
+      'SELECT id, username, role, "createdAt" FROM users WHERE "kakaoId" = $1 ORDER BY id',
+      [kakaoId]
+    );
+    return result.rows;
   }
 
   static async createWithKakao(data) {
@@ -208,6 +224,24 @@ class User {
 
       const parentsResult = await client.query(
         `UPDATE parent_accounts SET "teacherId" = $1 WHERE "teacherId" = $2`,
+        [toUserId, fromUserId]
+      );
+
+      /* 학부모 ↔ 선생님 연결과 자녀의 소속 선생님도 함께 옮긴다 (FR-363).
+         받는 선생님에게 이미 같은 학부모 연결이 있으면 UNIQUE 에 걸리므로 먼저 지운다. */
+      await client.query(
+        `DELETE FROM parent_teachers pt
+          WHERE pt."teacherId" = $1
+            AND EXISTS (SELECT 1 FROM parent_teachers x
+                         WHERE x."parentUserId" = pt."parentUserId" AND x."teacherId" = $2)`,
+        [fromUserId, toUserId]
+      );
+      await client.query(
+        `UPDATE parent_teachers SET "teacherId" = $1 WHERE "teacherId" = $2`,
+        [toUserId, fromUserId]
+      );
+      await client.query(
+        `UPDATE parent_children SET "teacherId" = $1 WHERE "teacherId" = $2`,
         [toUserId, fromUserId]
       );
 

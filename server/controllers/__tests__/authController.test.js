@@ -11,6 +11,7 @@ jest.unstable_mockModule('../../models/User.js', () => ({
     getByCredentials: jest.fn(),
     getByUsername: jest.fn(),
     getByKakaoId: jest.fn(),
+    listByKakaoId: jest.fn().mockResolvedValue([]),
     createWithKakao: jest.fn(),
     update: jest.fn(),
     updateUsername: jest.fn(),
@@ -35,10 +36,31 @@ jest.unstable_mockModule('../../models/ParentChild.js', () => ({
   default: { listByParent: jest.fn().mockResolvedValue([]) }
 }));
 
+jest.unstable_mockModule('../../models/ParentTeacher.js', () => ({
+  default: {
+    link: jest.fn(),
+    isLinked: jest.fn().mockResolvedValue(false),
+    listTeachers: jest.fn().mockResolvedValue([]),
+    teacherIds: jest.fn().mockResolvedValue([])
+  }
+}));
+
+jest.unstable_mockModule('../../models/TeacherInvite.js', () => ({
+  default: {
+    getByToken: jest.fn(),
+    isUsable: jest.fn(() => false),
+    markUsed: jest.fn(),
+    statusOf: jest.fn(() => 'pending')
+  },
+  DEFAULT_EXPIRES_DAYS: 14
+}));
+
 const User = (await import('../../models/User.js')).default;
 const ParentInvite = (await import('../../models/ParentInvite.js')).default;
 const ParentAccount = (await import('../../models/ParentAccount.js')).default;
 const ParentChild = (await import('../../models/ParentChild.js')).default;
+const ParentTeacher = (await import('../../models/ParentTeacher.js')).default;
+const TeacherInvite = (await import('../../models/TeacherInvite.js')).default;
 const authController = await import('../authController.js');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
@@ -555,16 +577,20 @@ describe('authController', () => {
     });
   });
 
-  describe('카카오 학부모 가입 (state = 초대 토큰)', () => {
+  describe('카카오 콜백 — 계정 선택과 초대 (docs/accounts-roles 02 §4.2 판정표)', () => {
     const kakaoOk = () => {
       global.fetch = jest.fn()
         .mockResolvedValueOnce({ json: () => Promise.resolve({ access_token: 'a', refresh_token: 'r', expires_in: 3600 }) })
         .mockResolvedValueOnce({ json: () => Promise.resolve({ id: 12345, properties: { nickname: '민서엄마' }, kakao_account: { email: 'm@example.com' } }) });
     };
 
+    // 클라이언트가 보내는 것과 같은 형식의 state
+    const stateFor = (payload) => Buffer.from(JSON.stringify({ v: 1, ...payload })).toString('base64url');
+
     beforeEach(() => {
       jest.clearAllMocks();
       ParentChild.listByParent.mockResolvedValue([]);
+      User.listByKakaoId.mockResolvedValue([]);
       req.body = { code: 'auth-code' };
     });
 
@@ -572,29 +598,153 @@ describe('authController', () => {
       delete global.fetch;
     });
 
-    it('state 가 없으면 기존 선생님 흐름 그대로다', async () => {
+    // ── 초대도 계정도 없을 때 (이번 변경의 핵심) ──
+    it('초대도 계정도 없으면 계정을 만들지 않고 403 으로 안내한다', async () => {
       kakaoOk();
-      User.getByKakaoId.mockResolvedValue(null);
-      User.createWithKakao.mockResolvedValue({ id: 9, username: '카카오_1', role: 'user' });
-      User.updateKakaoTokens.mockResolvedValue(null);
+      User.listByKakaoId.mockResolvedValue([]);
 
       await authController.kakaoCallback(req, res);
 
-      expect(ParentInvite.getByToken).not.toHaveBeenCalled();
-      expect(User.createWithKakao).toHaveBeenCalledWith(expect.not.objectContaining({ role: 'parent' }));
+      expect(User.createWithKakao).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(403);
       const payload = res.json.mock.calls[0][0];
-      expect(payload.isNewUser).toBe(true);
-      expect(payload.needsOnboarding).toBe(false);
+      expect(payload.outcome).toBe('needsInvite');
+      expect(payload.token).toBeUndefined();
     });
 
-    it('유효한 초대면 학부모 계정을 만들고 선생님에 묶는다', async () => {
+    // ── 이미 있는 계정으로 로그인 ──
+    it('계정이 하나면 그 계정으로 로그인한다', async () => {
+      kakaoOk();
+      User.listByKakaoId.mockResolvedValue([{ id: 9, username: '이재림', role: 'user' }]);
+      User.getByKakaoId.mockResolvedValue({ id: 9, username: '이재림', role: 'user' });
+      User.updateKakaoTokens.mockResolvedValue({ id: 9, username: '이재림', role: 'user' });
+
+      await authController.kakaoCallback(req, res);
+
+      expect(User.getByKakaoId).toHaveBeenCalledWith('12345', 'user');
+      expect(User.createWithKakao).not.toHaveBeenCalled();
+      const payload = res.json.mock.calls[0][0];
+      expect(payload.role).toBe('user');
+      expect(payload.isNewUser).toBe(false);
+    });
+
+    it('계정이 여럿이면 마지막에 쓰던 역할(prefer)로 로그인한다', async () => {
+      kakaoOk();
+      User.listByKakaoId.mockResolvedValue([
+        { id: 9, username: '이재림', role: 'user' },
+        { id: 20, username: '이재림_2', role: 'parent' }
+      ]);
+      User.getByKakaoId.mockResolvedValue({ id: 20, username: '이재림_2', role: 'parent' });
+      req.body.state = stateFor({ p: 'parent' });
+
+      await authController.kakaoCallback(req, res);
+
+      expect(User.getByKakaoId).toHaveBeenCalledWith('12345', 'parent');
+      expect(ParentAccount.touchLogin).toHaveBeenCalledWith(20);
+      expect(res.json.mock.calls[0][0].role).toBe('parent');
+    });
+
+    it('힌트가 없으면 관리자 > 선생님 > 학부모 순으로 고른다', async () => {
+      kakaoOk();
+      User.listByKakaoId.mockResolvedValue([
+        { id: 20, username: '박원장_3', role: 'parent' },
+        { id: 8, username: '박원장', role: 'admin' },
+        { id: 9, username: '박원장_2', role: 'user' }
+      ]);
+      User.getByKakaoId.mockResolvedValue({ id: 8, username: '박원장', role: 'admin' });
+      User.updateKakaoTokens.mockResolvedValue({ id: 8, username: '박원장', role: 'admin' });
+
+      await authController.kakaoCallback(req, res);
+
+      expect(User.getByKakaoId).toHaveBeenCalledWith('12345', 'admin');
+      expect(res.json.mock.calls[0][0].role).toBe('admin');
+    });
+
+    it('응답에 이 카카오 계정의 다른 역할 계정을 함께 담는다', async () => {
+      kakaoOk();
+      User.listByKakaoId.mockResolvedValue([
+        { id: 9, username: '이재림', role: 'user' },
+        { id: 20, username: '이재림_2', role: 'parent' }
+      ]);
+      User.getByKakaoId.mockResolvedValue({ id: 9, username: '이재림', role: 'user' });
+      User.updateKakaoTokens.mockResolvedValue({ id: 9, username: '이재림', role: 'user' });
+
+      await authController.kakaoCallback(req, res);
+
+      expect(res.json.mock.calls[0][0].accounts).toEqual([
+        { role: 'user', username: '이재림' },
+        { role: 'parent', username: '이재림_2' }
+      ]);
+    });
+
+    // ── 선생님 초대 ──
+    it('유효한 선생님 초대면 선생님 계정을 만들고 초대를 소비한다', async () => {
+      kakaoOk();
+      TeacherInvite.getByToken.mockResolvedValue({ id: 5, token: 'T1' });
+      TeacherInvite.isUsable.mockReturnValue(true);
+      TeacherInvite.markUsed.mockResolvedValue({ id: 5 });
+      User.createWithKakao.mockResolvedValue({ id: 30, username: '카카오_1', role: 'user' });
+      req.body.state = stateFor({ t: 'T1' });
+
+      await authController.kakaoCallback(req, res);
+
+      expect(User.createWithKakao).toHaveBeenCalledWith(expect.objectContaining({ role: 'user' }));
+      expect(TeacherInvite.markUsed).toHaveBeenCalledWith(5, 30);
+      const payload = res.json.mock.calls[0][0];
+      expect(payload.role).toBe('user');
+      expect(payload.isNewUser).toBe(true);
+    });
+
+    it('무효·만료·회수된 선생님 초대는 카카오에 가기 전에 400 으로 막는다', async () => {
+      TeacherInvite.getByToken.mockResolvedValue({ id: 5, revokedAt: 'x' });
+      TeacherInvite.isUsable.mockReturnValue(false);
+      req.body.state = stateFor({ t: 'T1' });
+
+      await authController.kakaoCallback(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(global.fetch).toBeUndefined();
+      expect(User.createWithKakao).not.toHaveBeenCalled();
+    });
+
+    it('이미 선생님 계정이 있으면 로그인만 하고 초대를 쓰지 않는다', async () => {
+      kakaoOk();
+      TeacherInvite.getByToken.mockResolvedValue({ id: 5 });
+      TeacherInvite.isUsable.mockReturnValue(true);
+      User.listByKakaoId.mockResolvedValue([{ id: 9, username: '이재림', role: 'user' }]);
+      User.getByKakaoId.mockResolvedValue({ id: 9, username: '이재림', role: 'user' });
+      User.updateKakaoTokens.mockResolvedValue({ id: 9, username: '이재림', role: 'user' });
+      req.body.state = stateFor({ t: 'T1' });
+
+      await authController.kakaoCallback(req, res);
+
+      expect(User.createWithKakao).not.toHaveBeenCalled();
+      expect(TeacherInvite.markUsed).not.toHaveBeenCalled();
+      expect(res.json.mock.calls[0][0].role).toBe('user');
+    });
+
+    it('같은 링크를 동시에 열어 초대를 뺏기면 만든 계정을 되돌리고 409', async () => {
+      kakaoOk();
+      TeacherInvite.getByToken.mockResolvedValue({ id: 5 });
+      TeacherInvite.isUsable.mockReturnValue(true);
+      TeacherInvite.markUsed.mockResolvedValue(null); // 경합에서 졌다
+      User.createWithKakao.mockResolvedValue({ id: 30, username: '카카오_1', role: 'user' });
+      req.body.state = stateFor({ t: 'T1' });
+
+      await authController.kakaoCallback(req, res);
+
+      expect(User.delete).toHaveBeenCalledWith(30);
+      expect(res.status).toHaveBeenCalledWith(409);
+    });
+
+    // ── 학부모 초대 ──
+    it('유효한 학부모 초대면 학부모 계정을 만들고 선생님에 묶는다', async () => {
       kakaoOk();
       ParentInvite.getByToken.mockResolvedValue({ id: 3, userId: 7, token: 'tok' });
       ParentInvite.isUsable.mockReturnValue(true);
-      User.getByKakaoId.mockResolvedValue(null);
       User.getByUsername.mockResolvedValue(null);
       User.createWithKakao.mockResolvedValue({ id: 20, username: '민서엄마', role: 'parent' });
-      req.body.state = 'tok';
+      req.body.state = stateFor({ i: 'tok' });
 
       await authController.kakaoCallback(req, res);
 
@@ -611,20 +761,19 @@ describe('authController', () => {
       kakaoOk();
       ParentInvite.getByToken.mockResolvedValue({ id: 3, userId: 7 });
       ParentInvite.isUsable.mockReturnValue(true);
-      User.getByKakaoId.mockResolvedValue(null);
       User.getByUsername.mockResolvedValueOnce({ id: 1 }).mockResolvedValue(null);
       User.createWithKakao.mockResolvedValue({ id: 21, username: '민서엄마_2', role: 'parent' });
-      req.body.state = 'tok';
+      req.body.state = stateFor({ i: 'tok' });
 
       await authController.kakaoCallback(req, res);
 
       expect(User.createWithKakao).toHaveBeenCalledWith(expect.objectContaining({ username: '민서엄마_2' }));
     });
 
-    it('만료·위조 토큰이면 400 으로 막는다', async () => {
+    it('만료·위조 학부모 토큰이면 400 으로 막는다', async () => {
       ParentInvite.getByToken.mockResolvedValue(null);
       ParentInvite.isUsable.mockReturnValue(false);
-      req.body.state = 'gone';
+      req.body.state = stateFor({ i: 'gone' });
 
       await authController.kakaoCallback(req, res);
 
@@ -632,21 +781,40 @@ describe('authController', () => {
       expect(global.fetch).toBeUndefined();
     });
 
-    it('선생님 카카오로 초대 링크에 들어오면 409 로 거절한다', async () => {
+    it('선생님 카카오로 학부모 초대에 들어와도 거절하지 않고 학부모 계정을 만든다', async () => {
       kakaoOk();
       ParentInvite.getByToken.mockResolvedValue({ id: 3, userId: 7 });
       ParentInvite.isUsable.mockReturnValue(true);
-      User.getByKakaoId.mockResolvedValue({ id: 5, username: '이재림', role: 'user' });
-      req.body.state = 'tok';
+      // 선생님 계정은 있지만 학부모 계정은 없다
+      User.listByKakaoId.mockResolvedValue([{ id: 5, username: '이재림', role: 'user' }]);
+      User.getByUsername.mockResolvedValue(null);
+      User.createWithKakao.mockResolvedValue({ id: 21, username: '민서엄마', role: 'parent' });
+      req.body.state = stateFor({ i: 'tok' });
 
       await authController.kakaoCallback(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(409);
-      expect(ParentAccount.create).not.toHaveBeenCalled();
+      expect(res.status).not.toHaveBeenCalledWith(409);
+      expect(User.createWithKakao).toHaveBeenCalledWith(expect.objectContaining({ role: 'parent' }));
+      expect(res.json.mock.calls[0][0].role).toBe('parent');
+    });
+
+    it('이미 학부모 계정이 있으면 계정을 만들지 않고 선생님 연결만 더한다', async () => {
+      kakaoOk();
+      ParentInvite.getByToken.mockResolvedValue({ id: 9, userId: 11 });
+      ParentInvite.isUsable.mockReturnValue(true);
+      User.listByKakaoId.mockResolvedValue([{ id: 20, username: '민서엄마', role: 'parent' }]);
+      User.getByKakaoId.mockResolvedValue({ id: 20, username: '민서엄마', role: 'parent' });
+      req.body.state = stateFor({ i: 'tok2' });
+
+      await authController.kakaoCallback(req, res);
+
+      expect(User.createWithKakao).not.toHaveBeenCalled();
+      expect(ParentAccount.create).toHaveBeenCalledWith({ userId: 20, teacherId: 11, inviteId: 9 });
     });
 
     it('이미 가입한 학부모는 초대 없이도 로그인된다', async () => {
       kakaoOk();
+      User.listByKakaoId.mockResolvedValue([{ id: 20, username: '민서엄마', role: 'parent' }]);
       User.getByKakaoId.mockResolvedValue({ id: 20, username: '민서엄마', role: 'parent' });
       ParentChild.listByParent.mockResolvedValue([{ id: 1 }]);
 
@@ -659,19 +827,63 @@ describe('authController', () => {
       expect(payload.role).toBe('parent');
       expect(payload.needsOnboarding).toBe(false);
     });
+
+    // ── 하위 호환 ──
+    it('옛 형식(초대 토큰 원문) state 도 학부모 흐름으로 받아준다', async () => {
+      kakaoOk();
+      ParentInvite.getByToken.mockResolvedValue({ id: 3, userId: 7 });
+      ParentInvite.isUsable.mockReturnValue(true);
+      User.getByUsername.mockResolvedValue(null);
+      User.createWithKakao.mockResolvedValue({ id: 22, username: '민서엄마', role: 'parent' });
+      req.body.state = 'legacy-raw-token';
+
+      await authController.kakaoCallback(req, res);
+
+      expect(ParentInvite.getByToken).toHaveBeenCalledWith('legacy-raw-token');
+      expect(res.json.mock.calls[0][0].role).toBe('parent');
+    });
+
+    // ── 마이그레이션 미적용 감지 ──
+    it('옛 UNIQUE 제약이 남아 있으면(23505) 409 로 안내한다', async () => {
+      kakaoOk();
+      ParentInvite.getByToken.mockResolvedValue({ id: 3, userId: 7 });
+      ParentInvite.isUsable.mockReturnValue(true);
+      User.getByUsername.mockResolvedValue(null);
+      const dup = new Error('duplicate key');
+      dup.code = '23505';
+      User.createWithKakao.mockRejectedValue(dup);
+      req.body.state = stateFor({ i: 'tok' });
+
+      await authController.kakaoCallback(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(409);
+      expect(res.json.mock.calls[0][0].error).toContain('관리자에게 문의');
+    });
   });
 
   describe('getKakaoAuthUrl', () => {
-    it('invite 쿼리가 있으면 state 에 실어 보낸다', () => {
+    const stateOf = (url) => {
+      const raw = decodeURIComponent(new URL(url).searchParams.get('state'));
+      return JSON.parse(Buffer.from(raw, 'base64url').toString());
+    };
+
+    it('invite 쿼리를 state 에 실어 보낸다', () => {
       req.query = { invite: 'tok123' };
 
       authController.getKakaoAuthUrl(req, res);
 
-      const { url } = res.json.mock.calls[0][0];
-      expect(url).toContain('state=tok123');
+      expect(stateOf(res.json.mock.calls[0][0].url)).toEqual({ v: 1, i: 'tok123' });
     });
 
-    it('invite 가 없으면 state 를 붙이지 않는다', () => {
+    it('선생님 초대와 역할 힌트도 실어 보낸다', () => {
+      req.query = { tinvite: 'T9', prefer: 'parent' };
+
+      authController.getKakaoAuthUrl(req, res);
+
+      expect(stateOf(res.json.mock.calls[0][0].url)).toEqual({ v: 1, p: 'parent', t: 'T9' });
+    });
+
+    it('아무 것도 없으면 state 를 붙이지 않는다 (지금까지와 같은 URL)', () => {
       req.query = {};
 
       authController.getKakaoAuthUrl(req, res);
@@ -679,4 +891,302 @@ describe('authController', () => {
       expect(res.json.mock.calls[0][0].url).not.toContain('state=');
     });
   });
+
+  describe('switchRole — 역할 전환', () => {
+    beforeEach(() => {
+      req.user = { id: 9, username: '이재림', role: 'user' };
+      User.getById.mockResolvedValue({ id: 9, username: '이재림', role: 'user', kakaoId: 'K1' });
+    });
+
+    it('같은 카카오 계정의 다른 역할로 새 토큰을 발급한다', async () => {
+      req.body = { role: 'parent' };
+      User.getByKakaoId.mockResolvedValue({ id: 20, username: '이재림_2', role: 'parent', kakaoId: 'K1' });
+
+      await authController.switchRole(req, res);
+
+      // 대상은 **현재 계정의 kakaoId** 로만 찾는다
+      expect(User.getByKakaoId).toHaveBeenCalledWith('K1', 'parent');
+      const payload = res.json.mock.calls[0][0];
+      expect(payload.role).toBe('parent');
+      expect(jwt.verify(payload.token, JWT_SECRET).id).toBe(20);
+      expect(ParentAccount.touchLogin).toHaveBeenCalledWith(20);
+    });
+
+    it('요청 본문에 kakaoId 를 넣어도 남의 계정으로 전환되지 않는다', async () => {
+      req.body = { role: 'admin', kakaoId: 'SOMEONE_ELSE', id: 1 };
+      User.getByKakaoId.mockResolvedValue(null);
+      User.listByKakaoId.mockResolvedValue([{ id: 9, role: 'user' }]);
+
+      await authController.switchRole(req, res);
+
+      expect(User.getByKakaoId).toHaveBeenCalledWith('K1', 'admin');
+      expect(User.getByKakaoId).not.toHaveBeenCalledWith('SOMEONE_ELSE', expect.anything());
+      expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it('그 역할 계정이 없으면 404 와 만들 수 있는지 여부를 준다', async () => {
+      req.body = { role: 'parent' };
+      User.getByKakaoId.mockResolvedValue(null);
+      User.listByKakaoId.mockResolvedValue([{ id: 9, role: 'user' }]);
+
+      await authController.switchRole(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json.mock.calls[0][0].canCreate).toBe(true);
+    });
+
+    it('카카오 계정이 아니면 400', async () => {
+      req.body = { role: 'parent' };
+      User.getById.mockResolvedValue({ id: 1, username: 'admin', role: 'admin', kakaoId: null });
+
+      await authController.switchRole(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('같은 역할이면 토큰만 다시 발급한다', async () => {
+      req.body = { role: 'user' };
+
+      await authController.switchRole(req, res);
+
+      expect(User.getByKakaoId).not.toHaveBeenCalled();
+      expect(res.json.mock.calls[0][0].role).toBe('user');
+    });
+
+    it('잘못된 역할은 400', async () => {
+      req.body = { role: 'superuser' };
+
+      await authController.switchRole(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+  });
+
+  describe('addRole — 역할 계정 만들기', () => {
+    beforeEach(() => {
+      req.user = { id: 9, username: '이재림', role: 'user' };
+      User.getById.mockResolvedValue({ id: 9, username: '이재림', role: 'user', kakaoId: 'K1' });
+      User.getByUsername.mockResolvedValue(null);
+      User.getKakaoTokens.mockResolvedValue({ kakaoAccessToken: 'a' });
+    });
+
+    it('관리자 계정은 이 경로로 만들 수 없다', async () => {
+      req.body = { role: 'admin' };
+
+      await authController.addRole(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(User.createWithKakao).not.toHaveBeenCalled();
+    });
+
+    it('선생님 계정은 초대 없이 만들 수 없다', async () => {
+      req.body = { role: 'user' };
+      TeacherInvite.isUsable.mockReturnValue(false);
+
+      await authController.addRole(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json.mock.calls[0][0].needsInvite).toBe(true);
+      expect(User.createWithKakao).not.toHaveBeenCalled();
+    });
+
+    it('관리자는 초대 없이 선생님 계정을 만들 수 있다', async () => {
+      req.user = { id: 8, username: '박원장', role: 'admin' };
+      User.getById.mockResolvedValue({ id: 8, username: '박원장', role: 'admin', kakaoId: 'K2' });
+      User.getByKakaoId.mockResolvedValue(null);
+      User.createWithKakao.mockResolvedValue({ id: 31, username: '카카오_2', role: 'user' });
+      req.body = { role: 'user' };
+
+      await authController.addRole(req, res);
+
+      expect(TeacherInvite.getByToken).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json.mock.calls[0][0].isNewUser).toBe(true);
+    });
+
+    it('유효한 선생님 초대가 있으면 만들고 초대를 소비한다', async () => {
+      req.body = { role: 'user', invite: 'T1' };
+      TeacherInvite.getByToken.mockResolvedValue({ id: 5 });
+      TeacherInvite.isUsable.mockReturnValue(true);
+      TeacherInvite.markUsed.mockResolvedValue({ id: 5 });
+      User.getByKakaoId.mockResolvedValue(null);
+      User.createWithKakao.mockResolvedValue({ id: 32, username: '카카오_3', role: 'user' });
+
+      await authController.addRole(req, res);
+
+      expect(TeacherInvite.markUsed).toHaveBeenCalledWith(5, 32);
+      expect(res.status).toHaveBeenCalledWith(201);
+    });
+
+    it('초대 링크 전체를 붙여넣어도 토큰을 뽑아 쓴다', async () => {
+      req.body = { role: 'user', invite: 'https://rg-manager.vercel.app/teacher-invite/T7' };
+      TeacherInvite.getByToken.mockResolvedValue({ id: 6 });
+      TeacherInvite.isUsable.mockReturnValue(true);
+      TeacherInvite.markUsed.mockResolvedValue({ id: 6 });
+      User.getByKakaoId.mockResolvedValue(null);
+      User.createWithKakao.mockResolvedValue({ id: 33, username: '카카오_4', role: 'user' });
+
+      await authController.addRole(req, res);
+
+      expect(TeacherInvite.getByToken).toHaveBeenCalledWith('T7');
+    });
+
+    it('선생님은 초대 없이 자기 학원 학부모가 될 수 있다', async () => {
+      req.body = { role: 'parent' };
+      User.getByKakaoId.mockResolvedValue(null);
+      User.createWithKakao.mockResolvedValue({ id: 40, username: '이재림_2', role: 'parent' });
+
+      await authController.addRole(req, res);
+
+      // 소속은 자기 자신(선생님 행)
+      expect(ParentAccount.create).toHaveBeenCalledWith({ userId: 40, teacherId: 9, inviteId: null });
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json.mock.calls[0][0].needsOnboarding).toBe(true);
+    });
+
+    it('관리자는 초대 없이 학부모가 될 수 없다', async () => {
+      req.user = { id: 8, username: '박원장', role: 'admin' };
+      User.getById.mockResolvedValue({ id: 8, username: '박원장', role: 'admin', kakaoId: 'K2' });
+      req.body = { role: 'parent' };
+
+      await authController.addRole(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json.mock.calls[0][0].needsInvite).toBe(true);
+    });
+
+    it('학부모 초대가 있으면 그 선생님에게 연결한다', async () => {
+      req.body = { role: 'parent', invite: 'P1' };
+      ParentInvite.getByToken.mockResolvedValue({ id: 3, userId: 77 });
+      ParentInvite.isUsable.mockReturnValue(true);
+      User.getByKakaoId.mockResolvedValue(null);
+      User.createWithKakao.mockResolvedValue({ id: 41, username: '이재림_2', role: 'parent' });
+
+      await authController.addRole(req, res);
+
+      expect(ParentAccount.create).toHaveBeenCalledWith({ userId: 41, teacherId: 77, inviteId: 3 });
+    });
+
+    it('이미 학부모 계정이 있으면 계정을 만들지 않고 연결만 더한다', async () => {
+      req.body = { role: 'parent', invite: 'P1' };
+      ParentInvite.getByToken.mockResolvedValue({ id: 3, userId: 77 });
+      ParentInvite.isUsable.mockReturnValue(true);
+      User.getByKakaoId.mockResolvedValue({ id: 42, username: '이재림_2', role: 'parent' });
+      ParentTeacher.isLinked.mockResolvedValue(false);
+
+      await authController.addRole(req, res);
+
+      expect(User.createWithKakao).not.toHaveBeenCalled();
+      expect(ParentAccount.create).toHaveBeenCalledWith({ userId: 42, teacherId: 77, inviteId: 3 });
+      expect(res.json.mock.calls[0][0].linkedOnly).toBe(true);
+    });
+
+    it('선생님 계정이 이미 있으면 409', async () => {
+      req.user = { id: 8, username: '박원장', role: 'admin' };
+      User.getById.mockResolvedValue({ id: 8, username: '박원장', role: 'admin', kakaoId: 'K2' });
+      User.getByKakaoId.mockResolvedValue({ id: 31, role: 'user' });
+      req.body = { role: 'user' };
+
+      await authController.addRole(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(409);
+    });
+
+    it('카카오 계정이 아니면 400', async () => {
+      User.getById.mockResolvedValue({ id: 1, username: 'admin', role: 'admin', kakaoId: null });
+      req.body = { role: 'user' };
+
+      await authController.addRole(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+  });
+
+  describe('getRoles', () => {
+    it('가진 계정과 만들 수 있는 역할을 알려준다', async () => {
+      req.user = { id: 9, role: 'user' };
+      User.getById.mockResolvedValue({ id: 9, username: '이재림', role: 'user', kakaoId: 'K1' });
+      User.listByKakaoId.mockResolvedValue([
+        { id: 9, username: '이재림', role: 'user' },
+        { id: 20, username: '이재림_2', role: 'parent' }
+      ]);
+
+      await authController.getRoles(req, res);
+
+      const payload = res.json.mock.calls[0][0];
+      expect(payload.accounts).toHaveLength(2);
+      expect(payload.canCreate).toEqual({ admin: false, user: false, parent: false });
+      // 선생님은 자기 학원 학부모가 될 수 있으므로 초대가 필요 없다
+      expect(payload.parentNeedsInvite).toBe(false);
+      expect(payload.teacherNeedsInvite).toBe(true);
+    });
+
+    it('비밀번호 전용 계정은 다른 역할을 가질 수 없다', async () => {
+      req.user = { id: 1, role: 'admin' };
+      User.getById.mockResolvedValue({ id: 1, username: 'admin', role: 'admin', kakaoId: null });
+
+      await authController.getRoles(req, res);
+
+      const payload = res.json.mock.calls[0][0];
+      expect(payload.kakao).toBe(false);
+      expect(payload.canCreate).toEqual({ admin: false, user: false, parent: false });
+    });
+
+    it('관리자는 초대 없이 선생님 계정을 만들 수 있다고 알려준다', async () => {
+      req.user = { id: 8, role: 'admin' };
+      User.getById.mockResolvedValue({ id: 8, username: '박원장', role: 'admin', kakaoId: 'K2' });
+      User.listByKakaoId.mockResolvedValue([{ id: 8, username: '박원장', role: 'admin' }]);
+
+      await authController.getRoles(req, res);
+
+      const payload = res.json.mock.calls[0][0];
+      expect(payload.canCreate.user).toBe(true);
+      expect(payload.teacherNeedsInvite).toBe(false);
+    });
+  });
+
+  describe('grantAdmin — 관리자 계정 부여', () => {
+    it('같은 카카오 계정에 관리자 행을 만든다', async () => {
+      req.params = { id: '9' };
+      User.getById.mockResolvedValue({ id: 9, username: '이재림', role: 'user', kakaoId: 'K1' });
+      User.getByKakaoId.mockResolvedValue(null);
+      User.getByUsername.mockResolvedValue(null);
+      User.getKakaoTokens.mockResolvedValue({});
+      User.createWithKakao.mockResolvedValue({ id: 50, username: '이재림_2', role: 'admin' });
+
+      await authController.grantAdmin(req, res);
+
+      expect(User.createWithKakao).toHaveBeenCalledWith(expect.objectContaining({ role: 'admin', kakaoId: 'K1' }));
+      expect(res.status).toHaveBeenCalledWith(201);
+    });
+
+    it('이미 관리자 계정이 있으면 409', async () => {
+      req.params = { id: '9' };
+      User.getById.mockResolvedValue({ id: 9, username: '이재림', role: 'user', kakaoId: 'K1' });
+      User.getByKakaoId.mockResolvedValue({ id: 50, role: 'admin' });
+
+      await authController.grantAdmin(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(409);
+    });
+
+    it('카카오 계정이 아니면 400', async () => {
+      req.params = { id: '1' };
+      User.getById.mockResolvedValue({ id: 1, username: 'admin', role: 'admin', kakaoId: null });
+
+      await authController.grantAdmin(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('없는 사용자는 404', async () => {
+      req.params = { id: '999' };
+      User.getById.mockResolvedValue(null);
+
+      await authController.grantAdmin(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+    });
+  });
+
 });

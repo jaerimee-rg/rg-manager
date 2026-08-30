@@ -8,12 +8,17 @@ const emptyChild = () => ({ name: '', birthdate: '' });
  * 가입 직후 아이 등록.
  * 이름·생년월일이 선생님 학생과 맞으면 자동 연결되고, 아니면 확인 대기로 남는다.
  */
-function ParentOnboarding({ teacherName = '', onDone }) {
+function ParentOnboarding({ teachers = [], onDone }) {
   const navigate = useNavigate();
   const [children, setChildren] = useState([emptyChild()]);
+  /* 아이는 선생님 1명의 학생에 대응한다 (docs/accounts-roles FR-354~355).
+     선생님이 한 명이면 고를 것이 없으므로 자동으로 정해진다. */
+  const [teacherId, setTeacherId] = useState(teachers.length === 1 ? teachers[0].id : '');
   const [agreed, setAgreed] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const selectedName = teachers.find((x) => String(x.id) === String(teacherId))?.name || '';
 
   const update = (index, patch) =>
     setChildren((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)));
@@ -29,13 +34,14 @@ function ParentOnboarding({ teacherName = '', onDone }) {
     if (cleaned.length === 0) return setError('아이 이름과 생년월일을 입력해주세요.');
     if (cleaned.some((c) => !c.name)) return setError('아이 이름을 입력해주세요.');
     if (cleaned.some((c) => !c.birthdate)) return setError('생년월일을 선택해주세요.');
+    if (teachers.length > 1 && !teacherId) return setError('어느 선생님의 아이인지 선택해 주세요.');
     if (!agreed) return setError('안내에 동의해 주세요.');
 
     setSaving(true);
     try {
       const response = await fetchWithAuth('/api/parent/children', {
         method: 'POST',
-        body: JSON.stringify({ children: cleaned })
+        body: JSON.stringify({ teacherId: teacherId || undefined, children: cleaned })
       });
 
       const data = await response.json();
@@ -62,9 +68,28 @@ function ParentOnboarding({ teacherName = '', onDone }) {
       }}>
         <h1 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '6px' }}>아이 정보를 알려 주세요</h1>
         <p style={{ fontSize: '0.9rem', color: 'var(--color-gray-600)', lineHeight: 1.6, marginBottom: '20px' }}>
-          {teacherName ? `${teacherName} 선생님이 ` : '선생님이 '}등록한 학생 정보와 대조해 자동으로 연결해요.
+          {selectedName ? `${selectedName} 선생님이 ` : '선생님이 '}등록한 학생 정보와 대조해 자동으로 연결해요.
           아이가 여러 명이면 모두 추가해 주세요.
         </p>
+
+        {teachers.length > 1 && (
+          <div style={{ marginBottom: '14px' }}>
+            <label htmlFor="onboarding-teacher" style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 700, marginBottom: '6px' }}>
+              어느 선생님의 아이인가요? <span style={{ color: 'var(--color-danger)' }}>*</span>
+            </label>
+            <select
+              id="onboarding-teacher"
+              value={teacherId}
+              onChange={(e) => setTeacherId(e.target.value)}
+              style={{ width: '100%', padding: '12px', border: '1px solid var(--color-gray-300)', borderRadius: 'var(--radius-md)', fontSize: '16px', fontFamily: 'inherit', background: '#fff' }}
+            >
+              <option value="">선생님을 선택해 주세요</option>
+              {teachers.map((teacher) => (
+                <option key={teacher.id} value={teacher.id}>{teacher.name} 선생님</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {children.map((child, index) => (
           <div
@@ -130,7 +155,7 @@ function ParentOnboarding({ teacherName = '', onDone }) {
 
         <label style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', fontSize: '0.75rem', color: 'var(--color-gray-600)', lineHeight: 1.5, marginBottom: '14px' }}>
           <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} style={{ marginTop: '3px' }} />
-          입력한 아이 이름·생년월일은 {teacherName ? `${teacherName} 선생님` : '선생님'}이 학생 정보와 대조하는 데에만 사용됩니다.
+          입력한 아이 이름·생년월일은 {selectedName ? `${selectedName} 선생님` : '선생님'}이 학생 정보와 대조하는 데에만 사용됩니다.
         </label>
 
         {error && (

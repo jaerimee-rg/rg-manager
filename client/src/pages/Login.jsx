@@ -1,10 +1,16 @@
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 function Login() {
+  const [searchParams] = useSearchParams();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { getKakaoLoginUrl } = useAuth();
+
+  /* 초대 없이 카카오로 들어와 계정이 만들어지지 않은 경우 (FR-306).
+     예전에는 여기서 선생님 계정이 자동으로 생겼다. */
+  const needsInvite = searchParams.get('outcome') === 'needsInvite';
 
   const handleKakaoLogin = async () => {
     setError('');
@@ -78,6 +84,26 @@ function Login() {
             </div>
           )}
 
+          {needsInvite && (
+            <div
+              role="alert"
+              style={{
+                marginBottom: 'var(--spacing-lg)',
+                background: 'var(--color-warning-bg, #FFF7DC)',
+                color: 'var(--color-warning, #B8860B)',
+                padding: '13px 15px',
+                borderRadius: 'var(--radius-md)',
+                fontSize: '0.875rem',
+                lineHeight: 1.6,
+                wordBreak: 'keep-all'
+              }}
+            >
+              <b>가입에는 초대가 필요해요.</b><br />
+              <b>선생님</b>이라면 관리자에게, <b>학부모</b>라면 다니는 학원 선생님에게
+              초대 링크를 요청해 주세요.
+            </div>
+          )}
+
           {/* 카카오 로그인 버튼 */}
           <button
             type="button"
@@ -114,7 +140,7 @@ function Login() {
             fontSize: '0.8125rem',
             lineHeight: 1.6
           }}>
-            처음이시면 자동으로 가입됩니다
+            초대를 받은 분만 가입할 수 있어요.<br />초대 링크가 있으면 그 링크를 눌러 주세요.
           </p>
         </div>
       </div>
