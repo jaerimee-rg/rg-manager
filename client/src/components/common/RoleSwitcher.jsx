@@ -20,7 +20,7 @@ const ICONS = { admin: '🛠️', user: '🎀', parent: '👨‍👩‍👧' };
  *   card — 설정·내 정보의 카드
  */
 function RoleSwitcher({ variant = 'card', onNavigate }) {
-  const { user, listRoles, switchRole } = useAuth();
+  const { user, listRoles, switchRole, impersonator } = useAuth();
   const navigate = useNavigate();
 
   const [info, setInfo] = useState(null);
@@ -62,6 +62,8 @@ function RoleSwitcher({ variant = 'card', onNavigate }) {
     setDialog(role);
   };
 
+  // 관리자가 다른 계정으로 들어와 있으면 서버가 전환을 막는다(403) — 메뉴도 보이지 않는다 (FR-388)
+  if (impersonator) return null;
   if (!info || !info.kakao) return null;
 
   const others = ROLE_ORDER.filter(

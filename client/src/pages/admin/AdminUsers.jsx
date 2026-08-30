@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { fetchWithAuth } from '../../utils/api';
 import { useIsMobile } from '../../hooks/useMediaQuery';
+import { homePathFor } from '../../utils/roleRoutes';
+import { hardNavigate } from '../../utils/navigation';
 
 /* 한 카카오 계정이 역할마다 계정을 가질 수 있어(docs/accounts-roles FR-310),
    목록에 세 역할이 모두 섞여 나온다. 예전에는 학부모가 "일반 사용자" 로 보였다. */
@@ -23,7 +25,7 @@ function AdminUsers() {
   const [transferFrom, setTransferFrom] = useState('');
   const [transferTo, setTransferTo] = useState('');
   const [transferLoading, setTransferLoading] = useState(false);
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, impersonate } = useAuth();
 
   useEffect(() => {
     loadUsers();
@@ -121,6 +123,23 @@ function AdminUsers() {
     } catch (error) {
       console.error('관리자 계정 부여 실패:', error);
       alert('관리자 계정 추가에 실패했습니다.');
+    }
+  };
+
+  /**
+   * 이 계정으로 로그인 (FR-388). 돌아올 관리자 세션은 AuthContext 가 챙기고,
+   * 화면은 전체 새로고침으로 그 역할의 시작 화면을 연다.
+   */
+  const handleImpersonate = async (target) => {
+    const label = ROLE_BADGE[target.role]?.label || target.role;
+    if (!confirm(`${target.username} (${label}) 계정으로 로그인할까요?\n화면 위 배너의 [관리자로 돌아가기]로 언제든 돌아올 수 있습니다.`)) return;
+
+    try {
+      const data = await impersonate(target.id);
+      hardNavigate(homePathFor(data.role));
+    } catch (error) {
+      console.error('다른 계정으로 로그인 실패:', error);
+      alert(error.message || '해당 계정으로 로그인할 수 없습니다.');
     }
   };
 
@@ -362,7 +381,7 @@ function AdminUsers() {
                       <th>역할</th>
                       <th>카카오 알림</th>
                       <th>가입일</th>
-                      <th style={{ width: '160px' }}>관리</th>
+                      <th style={{ width: '260px' }}>관리</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -441,6 +460,16 @@ function AdminUsers() {
                             >
                               수정
                             </button>
+                            {/* 그 사용자가 보는 화면을 그대로 본다 — 지금 로그인한 계정은 제외 (FR-388) */}
+                            {u.id !== user?.id && (
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => handleImpersonate(u)}
+                                title="이 사용자의 화면을 그대로 봅니다. 배너에서 관리자로 돌아올 수 있어요."
+                              >
+                                이 계정으로 로그인
+                              </button>
+                            )}
                             {/* 같은 카카오 계정에 관리자 행을 따로 만든다 (승격과 달리 기존 계정이 남는다) */}
                             {u.kakaoId && !hasAdminAccount(u) && (
                               <button className="btn btn-primary btn-sm" onClick={() => handleGrantAdmin(u)}>
@@ -531,16 +560,25 @@ function AdminUsers() {
                         </div>
                       )}
                     </div>
-                    <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+                    <div style={{ display: 'flex', gap: 'var(--spacing-sm)', flexWrap: 'wrap' }}>
                       <button
                         className="btn btn-secondary btn-sm"
                         onClick={() => handleEdit(u)}
                       >
                         수정
                       </button>
+                      {u.id !== user?.id && (
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => handleImpersonate(u)}
+                        >
+                          이 계정으로 로그인
+                        </button>
+                      )}
                       <button
                         className="btn btn-danger btn-sm"
                         onClick={() => handleDelete(u.id)}
+                        disabled={u.id === user?.id}
                       >
                         삭제
                       </button>

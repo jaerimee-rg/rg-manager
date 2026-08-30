@@ -10,11 +10,20 @@ jest.mock('../../../hooks/useMediaQuery', () => ({
 }));
 
 const mockRefreshUser = jest.fn().mockResolvedValue({});
+const mockImpersonate = jest.fn();
 jest.mock('../../../context/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 1, username: 'admin', role: 'admin' }, refreshUser: mockRefreshUser })
+  useAuth: () => ({
+    user: { id: 1, username: 'admin', role: 'admin' },
+    refreshUser: mockRefreshUser,
+    impersonate: mockImpersonate
+  })
 }));
 
+// jsdom 은 페이지 이동을 못 한다 — 어디로 가려 했는지만 본다
+jest.mock('../../../utils/navigation', () => ({ hardNavigate: jest.fn() }));
+
 import { fetchWithAuth } from '../../../utils/api';
+import { hardNavigate } from '../../../utils/navigation';
 import AdminUsers from '../AdminUsers';
 
 const USERS = [
@@ -159,5 +168,78 @@ describe('AdminUsers — 사용자 이름 변경', () => {
     });
 
     expect(mockRefreshUser).not.toHaveBeenCalled();
+  });
+});
+
+describe('AdminUsers — 이 계정으로 로그인 (FR-388)', () => {
+  const IMPERSONATE = '이 계정으로 로그인';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    window.alert = jest.fn();
+    window.confirm = jest.fn(() => true);
+    mockApi(jsonResponse({}));
+  });
+
+  it('다른 사용자 행에는 버튼이 있고 지금 로그인한 내 행에는 없다', async () => {
+    await renderPage();
+
+    const mine = screen.getByText('admin').closest('tr');
+    const other = screen.getByText('최재웅').closest('tr');
+
+    expect(within(other).getByRole('button', { name: IMPERSONATE })).toBeInTheDocument();
+    expect(within(mine).queryByRole('button', { name: IMPERSONATE })).toBeNull();
+  });
+
+  it('확인하면 그 계정으로 들어가고 역할의 시작 화면을 새로 연다', async () => {
+    mockImpersonate.mockResolvedValue({ role: 'user', user: { id: 2, username: '최재웅', role: 'user' } });
+
+    await renderPage();
+    const row = screen.getByText('최재웅').closest('tr');
+    await act(async () => {
+      fireEvent.click(within(row).getByRole('button', { name: IMPERSONATE }));
+    });
+
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('최재웅 (선생님)'));
+    expect(mockImpersonate).toHaveBeenCalledWith(2);
+    expect(hardNavigate).toHaveBeenCalledWith('/');
+  });
+
+  it('학부모 계정이면 학부모 시작 화면으로 간다', async () => {
+    mockImpersonate.mockResolvedValue({ role: 'parent', user: { id: 2, role: 'parent' } });
+
+    await renderPage();
+    const row = screen.getByText('최재웅').closest('tr');
+    await act(async () => {
+      fireEvent.click(within(row).getByRole('button', { name: IMPERSONATE }));
+    });
+
+    expect(hardNavigate).toHaveBeenCalledWith('/parent/schedule');
+  });
+
+  it('취소하면 아무 것도 하지 않는다', async () => {
+    window.confirm = jest.fn(() => false);
+
+    await renderPage();
+    const row = screen.getByText('최재웅').closest('tr');
+    await act(async () => {
+      fireEvent.click(within(row).getByRole('button', { name: IMPERSONATE }));
+    });
+
+    expect(mockImpersonate).not.toHaveBeenCalled();
+    expect(hardNavigate).not.toHaveBeenCalled();
+  });
+
+  it('실패하면 이유를 알려주고 화면을 옮기지 않는다', async () => {
+    mockImpersonate.mockRejectedValue(new Error('이 기능에 접근할 권한이 없습니다.'));
+
+    await renderPage();
+    const row = screen.getByText('최재웅').closest('tr');
+    await act(async () => {
+      fireEvent.click(within(row).getByRole('button', { name: IMPERSONATE }));
+    });
+
+    expect(window.alert).toHaveBeenCalledWith('이 기능에 접근할 권한이 없습니다.');
+    expect(hardNavigate).not.toHaveBeenCalled();
   });
 });

@@ -10,6 +10,7 @@ import { encodeState, decodeState, pickAccount, extractInviteToken } from '../ut
 import { uniqueUsername } from '../utils/usernames.js';
 import {
   issueToken,
+  issueImpersonationToken,
   describeRoles,
   createTeacherAccount,
   createParentAccount,
@@ -183,7 +184,9 @@ export const verifyTokenEndpoint = async (req, res) => {
       return res.status(401).json({ error: '사용자를 찾을 수 없습니다.', tokenExpired: true });
     }
     const { password: _, ...userWithoutPassword } = user;
-    res.json({ user: userWithoutPassword });
+    // 관리자가 다른 계정으로 들어와 있으면(FR-388) 화면이 배너를 그릴 수 있게 알려준다
+    const actor = impersonatedBy(req);
+    res.json({ user: userWithoutPassword, ...(actor ? { impersonatedBy: actor } : {}) });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -683,6 +686,12 @@ export const testKakaoMessage = async (req, res) => {
 /** 현재 로그인한 사람의 DB 행 (kakaoId 는 여기서만 읽는다 — 요청 본문을 믿지 않는다) */
 const currentUserRow = (req) => User.getById(req.user.id);
 
+/** 관리자가 다른 계정으로 들어와 있으면 그 관리자, 아니면 null (FR-388) */
+const impersonatedBy = (req) => req.user?.act || null;
+
+const IMPERSONATING_CANNOT_SWITCH =
+  '다른 계정으로 로그인 중에는 역할을 바꿀 수 없습니다. 먼저 관리자로 돌아가세요.';
+
 /** 이 카카오 계정이 가진 계정들과 만들 수 있는 역할 (FR-320) */
 export const getRoles = async (req, res) => {
   try {
@@ -703,6 +712,11 @@ export const getRoles = async (req, res) => {
  */
 export const switchRole = async (req, res) => {
   try {
+    // 대신 로그인한 토큰으로 전환하면 `act` 가 빠진 토큰이 나와 추적이 끊긴다
+    if (impersonatedBy(req)) {
+      return res.status(403).json({ error: IMPERSONATING_CANNOT_SWITCH });
+    }
+
     const role = String(req.body?.role || '').trim();
     if (!['admin', 'user', 'parent'].includes(role)) {
       return res.status(400).json({ error: '잘못된 역할입니다.' });
@@ -744,6 +758,10 @@ export const switchRole = async (req, res) => {
  */
 export const addRole = async (req, res) => {
   try {
+    if (impersonatedBy(req)) {
+      return res.status(403).json({ error: IMPERSONATING_CANNOT_SWITCH });
+    }
+
     const role = String(req.body?.role || '').trim();
     const inviteInput = extractInviteToken(req.body?.invite);
 
@@ -841,6 +859,46 @@ export const grantAdmin = async (req, res) => {
     res.status(201).json({ user: created.user });
   } catch (error) {
     console.error('관리자 계정 부여 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/**
+ * 관리자가 다른 사용자 계정으로 로그인 (FR-388) — 관리자 전용.
+ *
+ * 역할 전환(FR-321)과 달리 대상이 누구든 된다 — 관리자는 이미 모든 데이터를 다룰 수
+ * 있으므로 권한이 늘어나지 않는다. 대신 발급한 토큰의 `act` 에 원래 관리자를 남겨
+ * 로그(`middleware/logger.js`)와 화면 배너가 누가 보고 있는지 알 수 있게 한다.
+ * 관리자 여부는 토큰이 아니라 DB 행으로 다시 확인한다 — 30일짜리 토큰이 살아 있는
+ * 동안 역할이 바뀌었을 수 있다.
+ */
+export const impersonate = async (req, res) => {
+  try {
+    // 대신 로그인한 채로 또 들어가면 원래 관리자가 누구인지 잃어버린다
+    if (impersonatedBy(req)) {
+      return res.status(403).json({ error: '다른 계정으로 로그인 중에는 또 다른 계정으로 들어갈 수 없습니다.' });
+    }
+
+    const targetId = parseInt(req.params.id, 10);
+    if (Number.isNaN(targetId)) return res.status(400).json({ error: '잘못된 사용자입니다.' });
+    if (targetId === req.user.id) return res.status(400).json({ error: '지금 로그인한 계정입니다.' });
+
+    const admin = await currentUserRow(req);
+    if (!admin) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+    if (admin.role !== 'admin') return res.status(403).json({ error: '이 기능에 접근할 권한이 없습니다.' });
+
+    const target = await User.getById(targetId);
+    if (!target) return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+
+    const { password: _, ...userWithoutPassword } = target;
+    res.json({
+      user: userWithoutPassword,
+      token: issueImpersonationToken(target, admin),
+      role: target.role,
+      impersonator: { id: admin.id, username: admin.username }
+    });
+  } catch (error) {
+    console.error('다른 계정으로 로그인 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
   }
 };

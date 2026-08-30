@@ -11,6 +11,20 @@ export const loginAs = async (page, session) => {
   }, session);
 };
 
+/**
+ * 세션을 **한 번만** 넣는다. `loginAs` 는 init script 라 페이지를 새로 열 때마다 다시 주입되므로,
+ * 앱이 세션을 통째로 갈아 끼우고 전체 새로고침하는 흐름(다른 계정으로 로그인 → 돌아가기)에는
+ * 이쪽을 써야 한다 — 아니면 새로고침마다 원래 세션으로 되돌아가 버린다.
+ */
+export const loginOnceAs = async (page, session) => {
+  await page.goto('/login');
+  await page.evaluate(({ token, user }) => {
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(user));
+    localStorage.removeItem('impersonator');
+  }, session);
+};
+
 export const api = async (request, session, method, path, body) => {
   const response = await request.fetch(path, {
     method,

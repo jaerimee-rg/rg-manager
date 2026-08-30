@@ -39,6 +39,10 @@ const saveLog = async (req, action, target, responseData) => {
     }
     username = username || 'unknown';
 
+    // 관리자가 다른 계정으로 들어와 있으면(FR-388) 실제로 누가 한 일인지 남긴다
+    const actor = req.user?.act?.username;
+    if (actor) username = `${actor} → ${username}`;
+
     let details = null;
 
     // 액션별 상세 정보 생성
@@ -74,6 +78,9 @@ const saveLog = async (req, action, target, responseData) => {
         : `${label(req.user?.role)} → ${label(responseData.role)} 계정 생성`;
     } else if (action === 'GRANT_ADMIN' && responseData?.user) {
       details = `관리자 계정 ${responseData.user.username}`;
+    } else if (action === 'IMPERSONATE' && responseData?.user) {
+      const label = { admin: '관리자', user: '선생님', parent: '학부모' }[responseData.role] || responseData.role;
+      details = `대상: ${responseData.user.username} (${label})`;
     } else if (action === 'CREATE_TEACHER_INVITE' && responseData) {
       details = `메모: ${responseData.label || '(없음)'}${responseData.expiresAt ? ` · 만료: ${responseData.expiresAt.slice(0, 10)}` : ' · 만료 없음'}`;
     } else if (action === 'REVOKE_TEACHER_INVITE' && req.params) {
