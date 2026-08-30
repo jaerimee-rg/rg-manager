@@ -1,0 +1,154 @@
+/* ===================================================================
+   RG Manager Design System — Tokens
+   -------------------------------------------------------------------
+   구조는 Deel 앱에서 관찰한 디자인 시스템 문법을 따랐다.
+   (평면 + 1px 보더 서피스, 중간 라운드, 40px 컨트롤, pill 배지,
+    14/24 본문, 400·500 위주의 가벼운 웨이트)
+   색·서체는 rg-manager 고유 브랜드(Pretendard / 블루)를 유지한다.
+   =================================================================== */
+
+:root {
+  /* ---- Brand accent (rg-manager 고유) ---------------------------- */
+  --brand-50:  #EFF6FF;
+  --brand-100: #DBEAFE;
+  --brand-200: #BFDBFE;
+  --brand-300: #93C5FD;
+  --brand-500: #3182F6;
+  --brand-600: #1B64DA;
+  --brand-700: #1650B0;
+
+  /* ---- Ink / neutral ramp ---------------------------------------- */
+  --ink-900: #1B1B1B;   /* 본문·제목 기본 잉크 */
+  --ink-700: #4B4B4B;
+  --ink-600: #6B6B6B;   /* 보조 텍스트 */
+  --ink-500: #8A8A8A;   /* 플레이스홀더·캡션 */
+  --ink-400: #A8A8A8;
+  --ink-300: #D4D4D4;
+  --ink-200: #E9E9E9;   /* 기본 보더 */
+  --ink-100: #F2F2F2;   /* 구분선·연한 채움 */
+  --ink-50:  #FAFAFA;   /* 선택/호버 채움 */
+
+  /* ---- Surfaces --------------------------------------------------- */
+  --surface:        #FFFFFF;
+  --surface-sunken: #F7F7F5;  /* 페이지 배경 */
+  --surface-muted:  #FAFAFA;  /* 카드 안쪽 보조 블록 */
+  --surface-inverse:#1B1B1B;
+
+  --border:         var(--ink-200);
+  --border-strong:  var(--ink-300);
+  --border-focus:   var(--brand-500);
+  --border-popover: #DEDEDE;
+
+  /* 링크는 본문 잉크와 구분되는 파랑 한 가지만 쓴다 */
+  --link: #1F74B3;
+
+  /* ---- Semantic tones (배지·알림 공용) ---------------------------- */
+  --success-fg: #0F7A4A;  --success-bg: #EAF7F0;  --success-border: #A8DEC3;
+  --warning-fg: #8A5A00;  --warning-bg: #FFF7E5;  --warning-border: #FFE27C;
+  --danger-fg:  #B42318;  --danger-bg:  #FEF0EF;  --danger-border: #FCC9C4;
+  --info-fg:    var(--brand-700); --info-bg: var(--brand-50); --info-border: var(--brand-200);
+  --neutral-fg: var(--ink-700);   --neutral-bg: var(--ink-100); --neutral-border: var(--ink-200);
+
+  /* ---- Typography -------------------------------------------------- */
+  /* Variable 서브셋을 쓰므로 'Pretendard Variable' 이 먼저다.
+     정적 버전이 깔린 기기를 위해 'Pretendard' 도 남겨 둔다. */
+  --font-sans: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont,
+               'Apple SD Gothic Neo', 'Segoe UI', Roboto, sans-serif;
+  --font-num: var(--font-sans);
+
+  /* size / line-height 쌍 */
+  --text-2xs: 11px;  --leading-2xs: 16px;
+  --text-xs:  12px;  --leading-xs:  16px;
+  --text-sm:  13px;  --leading-sm:  18px;
+  --text-md:  14px;  --leading-md:  20px;
+  --text-base:14px;  --leading-base:24px;   /* 본문 기본 */
+  --text-lg:  16px;  --leading-lg:  24px;
+  --text-xl:  18px;  --leading-xl:  26px;
+  --text-2xl: 20px;  --leading-2xl: 28px;
+  --text-3xl: 24px;  --leading-3xl: 32px;
+  --text-4xl: 32px;  --leading-4xl: 40px;   /* 데스크탑 페이지 타이틀 */
+
+  --weight-regular: 400;
+  --weight-medium:  500;
+  --weight-semibold:600;
+  --weight-bold:    700;
+
+  --tracking-tight: -0.2px;
+  --tracking-title: -0.4px;
+
+  /* ---- Spacing (4px 기반) ------------------------------------------ */
+  --space-0: 0;     --space-1: 4px;   --space-2: 8px;   --space-3: 12px;
+  --space-4: 16px;  --space-5: 20px;  --space-6: 24px;  --space-7: 32px;
+  --space-8: 40px;  --space-9: 48px;  --space-10: 64px;
+
+  /* ---- Radius ------------------------------------------------------ */
+  --radius-xs:   6px;
+  --radius-sm:   8px;
+  --radius-md:  10px;   /* 버튼·인풋 */
+  --radius-lg:  12px;
+  --radius-xl:  16px;   /* 카드 */
+  --radius-2xl: 24px;   /* 시트·큰 패널 */
+  --radius-pill: 999px;
+
+  /* ---- Control heights --------------------------------------------- */
+  --control-xs: 28px;
+  --control-sm: 32px;
+  --control-md: 40px;   /* 기본 */
+  --control-lg: 48px;   /* 모바일 주요 액션 (44px 터치 타깃 이상) */
+
+  /* ---- Elevation ---------------------------------------------------
+     Deel 문법을 따라 기본 서피스는 그림자 없이 보더로 구분한다.
+     그림자는 실제로 떠 있는 것(팝오버·시트·모달)에만 쓴다. */
+  --shadow-none: none;
+  --shadow-popover: 0 4px 16px rgba(27, 27, 27, 0.10);
+  --shadow-overlay: 0 12px 40px rgba(27, 27, 27, 0.16);
+
+  --overlay-scrim: rgba(27, 27, 27, 0.45);
+
+  /* ---- Motion ------------------------------------------------------- */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 120ms;
+  --duration-normal: 180ms;
+  --duration-slow: 260ms;
+
+  /* ---- Layout ------------------------------------------------------- */
+  --shell-gutter: var(--space-4);       /* 모바일 */
+  --shell-max: 100%;                    /* 데스크탑은 전체 폭 사용 */
+  --sidebar-width: 236px;
+  --sidebar-width-compact: 200px;
+  --header-height: 56px;
+
+  --z-header: 100;
+  --z-sticky-bar: 120;
+  --z-popover: 200;
+  --z-overlay: 220;
+  --z-toast: 300;
+}
+
+/* 태블릿 */
+@media (min-width: 768px) {
+  :root {
+    --shell-gutter: var(--space-6);
+    --header-height: 60px;
+  }
+}
+
+/* 데스크탑 — 전체 폭을 쓰고 여백만 넓힌다 */
+@media (min-width: 1280px) {
+  :root {
+    --shell-gutter: var(--space-7);
+    --header-height: 64px;
+  }
+}
+
+@media (min-width: 1600px) {
+  :root { --shell-gutter: var(--space-8); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+    --duration-slow: 0ms;
+  }
+}

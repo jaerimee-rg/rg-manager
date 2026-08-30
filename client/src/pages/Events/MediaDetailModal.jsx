@@ -3,6 +3,7 @@ import { fetchWithAuth } from '../../utils/api';
 import { formatSize } from '../../utils/mediaUrls';
 import { formatTime } from '../../utils/albumFilter';
 import { useIsMobile } from '../../hooks/useMediaQuery';
+import { Button, Modal } from '../../components/ui';
 
 /**
  * 사진 한 장의 상세 — 얼굴 박스와 태그를 한 화면에서 다룬다.
@@ -144,23 +145,32 @@ function MediaDetailModal({ eventId, media, students = [], onClose, onChanged })
   const pickable = students.filter((student) =>
     !query.trim() || (student.name || '').includes(query.trim()));
 
-  return (
-    <div className="faq-modal-overlay" onClick={(event) => event.target === event.currentTarget && onClose?.()}>
-      <div className="faq-modal" role="dialog" aria-label="사진 상세" style={{ maxWidth: '820px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 'var(--spacing-lg)' }}>
-          <h3 className="faq-modal-title" style={{ flex: 1, marginBottom: 0, wordBreak: 'break-all' }}>
-            {media.fileName || '사진'}
-          </h3>
-          <button
-            type="button" onClick={onClose} aria-label="닫기"
-            style={{
-              border: 'none', background: 'none', fontSize: '1.25rem', cursor: 'pointer',
-              color: 'var(--color-gray-500)', fontFamily: 'inherit'
-            }}
-          >✕</button>
-        </div>
+  const footer = (
+    <>
+      {media.originalUrl && (
+        <Button as="a" size="sm" href={media.originalUrl} target="_blank" rel="noreferrer" iconEnd="external">
+          Drive 에서 열기
+        </Button>
+      )}
+      <Button size="sm" disabled={busy} onClick={toggleHidden}>
+        {media.isHidden ? '다시 보이기' : '학부모에게 숨기기'}
+      </Button>
+      <Button size="sm" variant="danger" disabled={busy} onClick={deleteOne}>삭제</Button>
+    </>
+  );
 
-        <div style={{
+  return (
+    <Modal
+      open
+      mode="modal"
+      size="lg"
+      onClose={onClose}
+      title={media.fileName || '사진'}
+      aria-label="사진 상세"
+      footer={footer}
+      className="ui-media-modal"
+    >
+      <div style={{
           display: 'grid',
           gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) 260px',
           gap: '16px'
@@ -325,21 +335,7 @@ function MediaDetailModal({ eventId, media, students = [], onClose, onChanged })
           </div>
         </div>
 
-        <div className="faq-modal-actions" style={{ flexWrap: 'wrap' }}>
-          {media.originalUrl && (
-            <a className="btn btn-outline btn-sm" href={media.originalUrl} target="_blank" rel="noreferrer">Drive 에서 열기</a>
-          )}
-          <button
-            type="button" className="btn btn-outline btn-sm" disabled={busy}
-            onClick={toggleHidden} style={{ fontFamily: 'inherit' }}
-          >{media.isHidden ? '다시 보이기' : '학부모에게 숨기기'}</button>
-          <button
-            type="button" className="btn btn-danger btn-sm" disabled={busy}
-            onClick={deleteOne} style={{ fontFamily: 'inherit' }}
-          >삭제</button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

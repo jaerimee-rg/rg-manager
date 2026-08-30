@@ -106,15 +106,37 @@ PostgreSQL. All tables are defined in `server/database.js`; the core four are:
 - `context/` - React Context providers (AuthContext)
 - `utils/` - Utility functions and API configuration
 
-**Mobile Responsiveness Pattern**:
-Components use `isMobile` state (window.innerWidth <= 768) to toggle between:
-- Desktop: Table layouts
-- Mobile: Card-based layouts with full-width buttons
+**Design System** — see `docs/design-system/README.md`, and `/design-system` in the running app.
 
-When modifying forms/lists, ensure mobile view uses:
-- `whiteSpace: 'nowrap'` for labels to prevent vertical text
-- `flexWrap: 'wrap'` for button groups
-- Card layout instead of tables on mobile
+Before building a screen, look in `client/src/components/ui` first. Do not re-create a
+button/card/badge/modal/table shape inline; import it:
+
+```jsx
+import { Button, Card, DataTable, Modal, PageHeader } from '../components/ui';
+```
+
+- `client/src/styles/tokens.css` — every constant (color, type, spacing, radius, control
+  height, breakpoints). Never write a raw number or hex in a component.
+- `client/src/styles/ui.css` — component styles, one block per component.
+- `client/src/styles/App.css` — legacy classes (`.btn`, `.card`, …). Its `:root` **aliases**
+  the new tokens, and the `DESIGN SYSTEM BRIDGE` block at the bottom restyles the old classes
+  so unmigrated screens follow the new look. `--radius-sm/md/lg/xl` are deliberately **not**
+  aliased there — redefining them would override the new components. New code must not use
+  these legacy classes.
+- The visual language follows Deel's design-system *structure* (flat 1px-bordered surfaces,
+  no shadows except on floating things, 10/16/24 radii, 40px controls, pill badges, 14/24
+  body, 400·500 weights). Color and typeface stay rg-manager's own.
+
+**Mobile Responsiveness Pattern**:
+Responsiveness is **CSS's job**, not JSX's. Breakpoints: mobile `<768`, tablet `768–1279`,
+desktop `≥1280` (content uses the **full width** — `--shell-max: 100%`; only reading-flow
+screens narrow via `<Container width="reading">`).
+
+Do NOT branch on `useIsMobile()` to render a table for desktop and cards for mobile — that
+duplication is what the system removes. `DataTable` takes one column definition and renders
+a table on desktop and stacked labelled cards on mobile. `Modal` is a centred dialog on
+desktop and a bottom sheet on mobile. Use `useIsMobile()` only when *behaviour* genuinely
+differs, not layout.
 
 ### Backend Structure
 
