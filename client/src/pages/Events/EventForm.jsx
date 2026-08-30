@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
-import { EVENT_TYPES } from '../../utils/eventFormat';
+import { EVENT_TYPES, splitDeadline, joinDeadline } from '../../utils/eventFormat';
 import OptionsEditor from './OptionsEditor';
 import EventAlbumSection from './EventAlbumSection';
 
@@ -22,7 +22,8 @@ const emptyForm = {
   requireOption: false,
   isPublished: true,
   registrationOpen: true,
-  registrationDeadline: ''
+  deadlineDate: '',
+  deadlineTime: ''
 };
 
 function Toggle({ checked, onChange, label, description, id }) {
@@ -63,6 +64,7 @@ function EventForm({ basePath = '/events' }) {
   useEffect(() => {
     if (!editing) return;
 
+    const deadline = splitDeadline(editing.registrationDeadline);
     setForm({
       type: editing.type,
       title: editing.title || '',
@@ -74,7 +76,8 @@ function EventForm({ basePath = '/events' }) {
       requireOption: editing.requireOption === true,
       isPublished: editing.isPublished !== false,
       registrationOpen: editing.registrationOpen !== false,
-      registrationDeadline: editing.registrationDeadline ? editing.registrationDeadline.slice(0, 16) : ''
+      deadlineDate: deadline.date,
+      deadlineTime: deadline.time
     });
     setOptions(editing.options || []);
 
@@ -103,6 +106,9 @@ function EventForm({ basePath = '/events' }) {
     if (!form.date) return setError('날짜를 선택해주세요.');
     if (!isClosure && !form.location.trim()) return setError('장소를 입력해주세요.');
     if (form.endDate && form.endDate < form.date) return setError('종료일은 시작일보다 빠를 수 없습니다.');
+    if (!isClosure && form.deadlineTime && !form.deadlineDate) {
+      return setError('접수 마감 날짜를 선택해주세요.');
+    }
     if (!isClosure && form.requireOption && options.length === 0) {
       return setError('옵션을 1개 이상 등록하거나 "옵션 1개 이상 필수" 를 꺼주세요.');
     }
@@ -116,7 +122,7 @@ function EventForm({ basePath = '/events' }) {
         description: form.description.trim(),
         endDate: form.endDate || null,
         startTime: form.startTime || null,
-        registrationDeadline: form.registrationDeadline || null,
+        registrationDeadline: joinDeadline(form.deadlineDate, form.deadlineTime),
         options: options.map((o) => (o.id ? { id: o.id, label: o.label } : o.label))
       };
 
@@ -281,15 +287,27 @@ function EventForm({ basePath = '/events' }) {
               description='끄면 학부모 화면에 "접수 마감" 으로 보여요'
             />
 
-            <div className="form-group" style={{ marginTop: '12px' }}>
-              <label htmlFor="ev-deadline">
-                접수 마감 일시{' '}
-                <span style={{ fontWeight: 400, color: 'var(--color-gray-400)' }}>(비우면 이벤트 시작 전까지)</span>
-              </label>
-              <input
-                id="ev-deadline" type="datetime-local" value={form.registrationDeadline}
-                onChange={(e) => set({ registrationDeadline: e.target.value })}
-              />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
+              <div className="form-group">
+                <label htmlFor="ev-deadline-date">
+                  마감 날짜{' '}
+                  <span style={{ fontWeight: 400, color: 'var(--color-gray-400)' }}>(비우면 시작 전까지)</span>
+                </label>
+                <input
+                  id="ev-deadline-date" type="date" value={form.deadlineDate}
+                  onChange={(e) => set({ deadlineDate: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="ev-deadline-time">
+                  마감 시간{' '}
+                  <span style={{ fontWeight: 400, color: 'var(--color-gray-400)' }}>(비우면 23:59)</span>
+                </label>
+                <input
+                  id="ev-deadline-time" type="time" value={form.deadlineTime}
+                  onChange={(e) => set({ deadlineTime: e.target.value })}
+                />
+              </div>
             </div>
           </>
         )}

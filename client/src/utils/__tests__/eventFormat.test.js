@@ -1,5 +1,6 @@
 import {
-  formatDate, formatRange, formatWhen, typeOf, todayString, isPast, isAcceptingRegistration
+  formatDate, formatRange, formatWhen, typeOf, todayString, isPast, isAcceptingRegistration,
+  splitDeadline, joinDeadline
 } from '../eventFormat';
 
 describe('날짜 표시', () => {
@@ -60,5 +61,44 @@ describe('접수 중 판정', () => {
 
   it('지난 이벤트는 false', () => {
     expect(isAcceptingRegistration({ ...base, date: '2026-08-01' }, now)).toBe(false);
+  });
+});
+
+describe('접수 마감 일시 나누기/합치기', () => {
+  it('저장된 값을 날짜·시간 칸으로 나눈다', () => {
+    expect(splitDeadline('2026-09-10T18:00:00+09:00')).toEqual({ date: '2026-09-10', time: '18:00' });
+  });
+
+  it('시간대가 없던 예전 값도 그대로 읽는다', () => {
+    expect(splitDeadline('2026-09-10T18:00')).toEqual({ date: '2026-09-10', time: '18:00' });
+  });
+
+  it('마감이 없으면 두 칸 모두 빈 값', () => {
+    expect(splitDeadline(null)).toEqual({ date: '', time: '' });
+    expect(splitDeadline('')).toEqual({ date: '', time: '' });
+  });
+
+  it('날짜와 시간을 합쳐 한국 시간으로 저장한다', () => {
+    expect(joinDeadline('2026-09-10', '18:00')).toBe('2026-09-10T18:00:00+09:00');
+  });
+
+  it('시간을 비우면 그날 끝(23:59)으로 본다', () => {
+    expect(joinDeadline('2026-09-10', '')).toBe('2026-09-10T23:59:00+09:00');
+  });
+
+  it('날짜가 없으면 마감 없음', () => {
+    expect(joinDeadline('', '18:00')).toBeNull();
+    expect(joinDeadline('', '')).toBeNull();
+  });
+
+  it('나눴다 합치면 원래 값으로 돌아온다', () => {
+    const stored = '2026-09-10T18:00:00+09:00';
+    const { date, time } = splitDeadline(stored);
+    expect(joinDeadline(date, time)).toBe(stored);
+  });
+
+  it('합친 값은 브라우저 시간대와 무관하게 한국 시간으로 읽힌다', () => {
+    // +09:00 을 붙이지 않으면 UTC 로 도는 서버에서 9시간 밀린다.
+    expect(Date.parse(joinDeadline('2026-09-10', '18:00'))).toBe(Date.parse('2026-09-10T09:00:00Z'));
   });
 });
