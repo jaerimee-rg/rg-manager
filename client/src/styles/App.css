@@ -3396,11 +3396,17 @@ body.pchat-lock {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   width: 100%; padding: 10px; border: none; background: none; cursor: pointer;
   border-radius: var(--radius-sm, 8px); font-family: inherit; font-size: 0.875rem;
-  color: var(--color-gray-900); text-align: left;
+  color: var(--color-gray-900); text-align: left; overflow: hidden;
 }
+/* 좁은 사이드바에서도 라벨("선생님 화면으로")은 한 줄로 두고,
+   길어질 수 있는 계정 이름 쪽을 줄인다. */
+.role-switch-item > span { flex: none; white-space: nowrap; }
 .role-switch-item:hover:not(:disabled) { background: var(--color-gray-50); }
 .role-switch-item:disabled { opacity: 0.5; cursor: not-allowed; }
-.role-switch-item small { color: var(--color-gray-400); font-size: 0.75rem; white-space: nowrap; }
+.role-switch-item small {
+  color: var(--color-gray-400); font-size: 0.75rem; white-space: nowrap;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis;
+}
 
 .role-switch-help {
   margin-top: 4px; padding: 8px 10px; font-size: 0.6875rem; line-height: 1.5;

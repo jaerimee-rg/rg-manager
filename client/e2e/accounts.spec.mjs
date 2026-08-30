@@ -86,6 +86,24 @@ test.describe('역할 전환 (같은 카카오 계정)', () => {
     await expect(page.getByRole('button', { name: /관리자 화면으로|선생님/ }).first()).toBeVisible();
   });
 
+  test('좁은 관리자 사이드바에서도 전환 항목이 한 줄로 들어간다', async ({ page }) => {
+    await loginAs(page, sessions.admin);
+    await page.goto('/admin/users');
+
+    const item = page.locator('.admin-sidebar-footer .role-switch-item').first();
+    await expect(item).toBeVisible();
+
+    // 긴 계정 이름이 라벨을 밀어 여러 줄로 접히던 문제(사이드바 밖으로도 넘쳤다)
+    const box = await item.boundingBox();
+    expect(box.height).toBeLessThan(48);
+
+    const overflow = await item.evaluate((el) => {
+      const parent = el.closest('.admin-sidebar-footer');
+      return el.getBoundingClientRect().right - parent.getBoundingClientRect().right;
+    });
+    expect(overflow).toBeLessThanOrEqual(1);
+  });
+
   test('관리자 계정은 이 경로로 만들 수 없다', async ({ request }) => {
     const res = await api(request, sessions.teacher, 'POST', '/api/auth/roles', { role: 'admin' });
     expect(res.status).toBe(400);
