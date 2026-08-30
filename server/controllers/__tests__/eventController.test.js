@@ -131,6 +131,31 @@ describe('eventController', () => {
       expect(res.status).toHaveBeenCalledWith(201);
     });
 
+    it('휴관일은 시간을 보내도 날짜만 남는다', async () => {
+      req.body = { type: 'closure', title: '여름 휴관', date: '2026-08-25', startTime: '09:00' };
+      Event.create.mockResolvedValue({ id: 1 });
+
+      await createEvent(req, res);
+
+      expect(Event.create).toHaveBeenCalledWith(
+        expect.objectContaining({ date: '2026-08-25', startTime: null }),
+        mockClient
+      );
+      expect(res.status).toHaveBeenCalledWith(201);
+    });
+
+    it('휴관일이 아니면 시간을 그대로 저장한다', async () => {
+      req.body = { type: 'special', title: '특강', date: '2026-08-25', location: 'x', startTime: '09:00' };
+      Event.create.mockResolvedValue({ id: 1 });
+
+      await createEvent(req, res);
+
+      expect(Event.create).toHaveBeenCalledWith(
+        expect.objectContaining({ startTime: '09:00' }),
+        mockClient
+      );
+    });
+
     it('종료일이 시작일보다 빠르면 400', async () => {
       req.body = { type: 'closure', title: 'x', date: '2026-08-27', endDate: '2026-08-25' };
       await createEvent(req, res);
@@ -229,6 +254,17 @@ describe('eventController', () => {
       await updateEvent(req, res);
 
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ removedOptionRegistrations: 1 }));
+    });
+
+    it('시간이 남아 있던 옛 휴관일을 수정하면 시간이 지워진다', async () => {
+      Event.getById.mockResolvedValue({ id: 6, type: 'closure', startTime: '09:00', options: [] });
+      Event.update.mockResolvedValue({ id: 6 });
+      req.params.id = '6';
+      req.body = { title: '추석 휴관', date: '2026-09-25', startTime: '09:00' };
+
+      await updateEvent(req, res);
+
+      expect(Event.update.mock.calls[0][1]).toMatchObject({ startTime: null });
     });
 
     it('대회형은 competitions 행도 함께 갱신한다', async () => {

@@ -42,10 +42,15 @@ test.describe('선생님 — 이벤트 관리', () => {
 
     await page.getByRole('button', { name: /휴관일/ }).click();
 
-    // 휴관일에는 장소·옵션·접수 설정이 없어야 한다
+    // 휴관일에는 시간·장소·옵션·접수 설정이 없어야 한다 (날짜만 받는다)
+    await expect(page.getByLabel(/^시간/)).toHaveCount(0);
     await expect(page.getByLabel('장소')).toHaveCount(0);
     await expect(page.getByRole('textbox', { name: '새 옵션' })).toHaveCount(0);
     await expect(page.getByText('접수 받기')).toHaveCount(0);
+
+    // 날짜·종료일은 남는다 (며칠짜리 휴관)
+    await expect(page.getByLabel(/^날짜/)).toHaveCount(1);
+    await expect(page.getByLabel(/^종료일/)).toHaveCount(1);
 
     await page.getByLabel('이벤트 이름').fill(`e2e 휴관 ${run}`);
     await page.getByLabel('날짜', { exact: false }).first().fill('2026-12-24');
@@ -57,6 +62,22 @@ test.describe('선생님 — 이벤트 관리', () => {
   test('옛 대회 주소는 이벤트 관리로 이어진다', async ({ page }) => {
     await page.goto('/competitions');
     await expect(page).toHaveURL(/\/events$/);
+  });
+
+  // iOS Safari 는 값이 비어 있으면 날짜/시간 칸을 글자 높이만큼 내려앉힌다.
+  // 여기서 도는 엔진은 그 증상을 재현하지 않으므로, 대신 그 증상을 막는 안전장치
+  // (빈 칸도 채워진 칸과 같은 높이여야 한다)를 고정해 둔다 — CSS 를 걷어내면 깨진다.
+  test('날짜 칸은 비어 있어도 채워졌을 때와 같은 높이다', async ({ page }) => {
+    await page.goto('/events/new');
+
+    const date = page.getByLabel(/^날짜/);
+    const empty = (await date.boundingBox()).height;
+
+    await date.fill('2026-12-24');
+    const filled = (await date.boundingBox()).height;
+
+    expect(empty).toBeGreaterThanOrEqual(44); // 터치 타깃 최소치
+    expect(Math.abs(filled - empty)).toBeLessThanOrEqual(2);
   });
 
   test('학부모 메뉴에서 초대 링크와 요약이 보인다', async ({ page }) => {

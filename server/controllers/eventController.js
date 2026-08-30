@@ -33,10 +33,12 @@ const parseBody = (body, { type, previousOptions = [] }) => {
   if (endDate && !DATE_RE.test(endDate)) return { error: '종료일 형식이 올바르지 않습니다.' };
   if (endDate && endDate < date) return { error: '종료일은 시작일보다 빠를 수 없습니다.' };
 
-  const startTime = String(body.startTime ?? '').trim() || null;
+  const isClosure = type === 'closure';
+
+  // 휴관일은 하루(또는 며칠) 통째로 쉬는 날이라 시간이 없다 — 화면도 날짜만 받는다.
+  const startTime = isClosure ? null : (String(body.startTime ?? '').trim() || null);
   if (startTime && !TIME_RE.test(startTime)) return { error: '시간 형식이 올바르지 않습니다.' };
 
-  const isClosure = type === 'closure';
   const location = isClosure ? null : String(body.location ?? '').trim();
   if (!isClosure && !location) return { error: '장소를 입력해주세요.' };
 
