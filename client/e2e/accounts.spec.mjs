@@ -90,18 +90,30 @@ test.describe('역할 전환 (같은 카카오 계정)', () => {
     await loginAs(page, sessions.admin);
     await page.goto('/admin/users');
 
+    // 픽스처의 관리자는 선생님(e2e선생님_<stamp>, 긴 이름)과 카카오 계정을 공유하므로
+    // 첫 항목이 "선생님 화면으로 + 계정 이름" 이다.
     const item = page.locator('.admin-sidebar-footer .role-switch-item').first();
     await expect(item).toBeVisible();
+    await expect(item.locator('small')).toHaveText(sessions.teacher.user.username);
 
-    // 긴 계정 이름이 라벨을 밀어 여러 줄로 접히던 문제(사이드바 밖으로도 넘쳤다)
+    // 긴 계정 이름이 라벨을 밀어 네 줄로 접히던 문제: 수정 전 107px, 후 39px
     const box = await item.boundingBox();
     expect(box.height).toBeLessThan(48);
 
-    const overflow = await item.evaluate((el) => {
-      const parent = el.closest('.admin-sidebar-footer');
-      return el.getBoundingClientRect().right - parent.getBoundingClientRect().right;
+    // 라벨은 한 줄로 남고, 이름 쪽이 항목 안에서 말줄임된다(항목 밖으로 삐져나오지 않는다).
+    const metrics = await item.evaluate((el) => {
+      const me = el.getBoundingClientRect();
+      const name = el.querySelector('small');
+      return {
+        labelHeight: el.querySelector('span').getBoundingClientRect().height,
+        nameOverhang: name.getBoundingClientRect().right - me.right,
+        nameClipped: name.scrollWidth > name.clientWidth
+      };
     });
-    expect(overflow).toBeLessThanOrEqual(1);
+    expect(metrics.labelHeight).toBeLessThan(30);
+    expect(metrics.nameOverhang).toBeLessThanOrEqual(1);
+    // 양성 대조: 픽스처 이름이 항목 폭을 넘지 않으면 이 테스트는 접힘을 증명하지 못한다.
+    expect(metrics.nameClipped, '픽스처 이름이 항목 폭보다 길어야 한다').toBe(true);
   });
 
   test('관리자 계정은 이 경로로 만들 수 없다', async ({ request }) => {
