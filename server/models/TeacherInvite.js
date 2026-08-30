@@ -1,4 +1,5 @@
 import pool from '../database.js';
+import { displayNameSql } from '../utils/usernames.js';
 import { generatePublicId } from '../utils/publicId.js';
 
 const DEFAULT_EXPIRES_DAYS = 14;
@@ -45,7 +46,7 @@ class TeacherInvite {
 
   static async list() {
     const result = await pool.query(
-      `SELECT i.*, COALESCE(NULLIF(u."displayName", ''), u.username) AS "usedByName", COALESCE(NULLIF(c."displayName", ''), c.username) AS "createdByName"
+      `SELECT i.*, ${displayNameSql('u')} AS "usedByName", ${displayNameSql('c')} AS "createdByName"
          FROM teacher_invites i
          LEFT JOIN users u ON u.id = i."usedByUserId"
          LEFT JOIN users c ON c.id = i."createdBy"
@@ -61,7 +62,7 @@ class TeacherInvite {
 
   static async getByToken(token) {
     const result = await pool.query(
-      `SELECT i.*, COALESCE(NULLIF(c."displayName", ''), c.username) AS "createdByName"
+      `SELECT i.*, ${displayNameSql('c')} AS "createdByName"
          FROM teacher_invites i
          LEFT JOIN users c ON c.id = i."createdBy"
         WHERE i.token = $1`,

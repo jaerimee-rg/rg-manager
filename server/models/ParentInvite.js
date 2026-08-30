@@ -1,4 +1,5 @@
 import pool from '../database.js';
+import { displayNameSql } from '../utils/usernames.js';
 import { generatePublicId } from '../utils/publicId.js';
 
 class ParentInvite {
@@ -24,7 +25,7 @@ class ParentInvite {
 
   static async getByToken(token) {
     const result = await pool.query(
-      `SELECT i.*, COALESCE(NULLIF(u."displayName", ''), u.username) AS "teacherName"
+      `SELECT i.*, ${displayNameSql('u')} AS "teacherName"
        FROM parent_invites i
        JOIN users u ON u.id = i."userId"
        WHERE i.token = $1`,

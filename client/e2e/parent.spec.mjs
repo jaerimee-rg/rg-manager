@@ -133,7 +133,8 @@ test.describe('학부모 — 가입부터 신청까지', () => {
     await expect(sheet.getByText('휴관일 안내예요. 신청은 필요 없어요.')).toBeVisible();
     // 시트 안에는 닫기만 있고 신청 관련 버튼이 없다
     await expect(sheet.getByRole('button', { name: /신청/ })).toHaveCount(0);
-    await expect(sheet.getByRole('button', { name: '닫기' })).toBeVisible();
+    // 시트에는 '닫기' 가 둘이다 — 헤더의 X(aria-label)와 푸터 버튼. 행동 영역인 푸터를 본다.
+    await expect(sheet.locator('.ui-overlay__footer').getByRole('button', { name: '닫기' })).toBeVisible();
   });
 
   test('학부모 토큰으로는 선생님 API 에 닿지 않는다', async ({ request }) => {

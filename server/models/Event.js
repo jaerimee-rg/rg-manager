@@ -1,4 +1,5 @@
 import pool from '../database.js';
+import { displayNameSql } from '../utils/usernames.js';
 import { parseOptions } from '../services/eventService.js';
 
 const hydrate = (row) => (row ? { ...row, options: parseOptions(row.options) } : row);
@@ -131,7 +132,7 @@ class Event {
     if (!ids.length) return [];
 
     const result = await pool.query(
-      `SELECT e.*, COALESCE(NULLIF(u."displayName", ''), u.username) AS "teacherName"
+      `SELECT e.*, ${displayNameSql('u')} AS "teacherName"
          FROM events e
          JOIN users u ON u.id = e."userId"
         WHERE e."userId" = ANY($1)
@@ -150,7 +151,7 @@ class Event {
     if (!ids.length) return null;
 
     const result = await pool.query(
-      `SELECT e.*, COALESCE(NULLIF(u."displayName", ''), u.username) AS "teacherName"
+      `SELECT e.*, ${displayNameSql('u')} AS "teacherName"
          FROM events e
          JOIN users u ON u.id = e."userId"
         WHERE e.id = $1 AND e."userId" = ANY($2) AND e."isPublished" IS NOT FALSE`,
@@ -193,7 +194,7 @@ class Event {
     if (!ids.length) return [];
 
     const result = await pool.query(
-      `SELECT e.*, COALESCE(NULLIF(u."displayName", ''), u.username) AS "teacherName"
+      `SELECT e.*, ${displayNameSql('u')} AS "teacherName"
          FROM events e
          JOIN users u ON u.id = e."userId"
         WHERE e."userId" = ANY($1)

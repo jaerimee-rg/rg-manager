@@ -422,6 +422,30 @@ the rest of the app is unaffected.
 - When a class is deleted, it's removed from all student `classIds` arrays
 - Class enrollment managed via PUT requests to `/api/students/:id`
 
+## Running the e2e suite (Playwright)
+
+`client/e2e/*.spec.mjs` runs against the **built** app served by Express on a local Postgres —
+never the production DB. Three things must line up or almost everything fails in a confusing way:
+
+```bash
+cd client && npm run build
+cd ../server && DATABASE_URL=postgresql://<user>@localhost:5432/rg_manager PORT=5055 \
+  JWT_SECRET=local-dev-secret API_RATE_LIMIT_MAX=100000 AUTH_RATE_LIMIT_MAX=100000 node server.js &
+cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e:setup   # writes e2e/.sessions.json
+cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 54 tests
+```
+
+- **`JWT_SECRET` must be `local-dev-secret`** — that is what `e2e/setup.mjs` defaults to when signing
+  the fixture tokens. Any other value makes every request unauthenticated, so every screen redirects
+  to `/login` and ~50 tests fail on missing headings. The symptom looks nothing like the cause.
+- **Raise the rate limits.** The whole suite runs from one IP and makes far more than the production
+  `apiLimiter` allows (200 per 15 min), so without the override the *later* tests get `429` and fail
+  while the same tests pass when run alone. `AUTH_RATE_LIMIT_MAX` / `API_RATE_LIMIT_MAX` exist only
+  for this — **the defaults are the production values**, so leaving them unset changes nothing.
+- **Do not run the suite twice without re-running `test:e2e:setup`.** Some fixtures are one-time
+  (teacher invite tokens get consumed), so a second run without fresh setup fails.
+- **Never `NODE_ENV=production` locally** — it turns on SSL for Postgres and an HTTPS redirect.
+
 ## Deployment (Vercel)
 
 Production runs on Vercel at **https://rg-manager.vercel.app**, deployed automatically

@@ -1,4 +1,5 @@
 import pool from '../database.js';
+import { displayNameSql } from '../utils/usernames.js';
 
 /**
  * 앨범의 사진·영상 한 건. 바이트는 Drive 에 있고 여기에는 파일 id 와 메타만 둔다.
@@ -153,7 +154,7 @@ class EventMedia {
     params.push(Math.min(Number(limit) || 60, 200));
 
     const result = await pool.query(
-      `SELECT m.*, COALESCE(NULLIF(u."displayName", ''), u.username) AS "uploaderName"
+      `SELECT m.*, ${displayNameSql('u')} AS "uploaderName"
          FROM event_media m
          LEFT JOIN users u ON u.id = m."uploaderUserId"
         WHERE ${where.join(' AND ')}

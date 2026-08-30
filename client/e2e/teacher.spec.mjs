@@ -16,7 +16,9 @@ test.describe('선생님 — 이벤트 관리', () => {
     await page.goto('/events');
     await expect(page.getByRole('heading', { name: '이벤트 관리' })).toBeVisible();
 
-    await page.getByRole('button', { name: '+ 이벤트' }).click();
+    // 디자인 시스템 도입(#3) 후 버튼은 <Button icon="plus">이벤트</Button> 라 접근성 이름에 '+' 가 없다.
+    // 목록이 비면 EmptyState 에도 같은 이름의 버튼이 생기므로 헤더 쪽을 지목한다.
+    await page.locator('.ui-page-header').getByRole('button', { name: '이벤트' }).click();
     await expect(page.getByRole('heading', { name: '이벤트 등록' })).toBeVisible();
 
     await page.getByLabel('이벤트 이름').fill(title);
@@ -65,12 +67,18 @@ test.describe('선생님 — 이벤트 관리', () => {
   });
 
   // iOS Safari 는 값이 비어 있으면 날짜/시간 칸을 글자 높이만큼 내려앉힌다.
-  // 여기서 도는 엔진은 그 증상을 재현하지 않으므로, 대신 그 증상을 막는 안전장치
-  // (빈 칸도 채워진 칸과 같은 높이여야 한다)를 고정해 둔다 — CSS 를 걷어내면 깨진다.
+  // 여기서 도는 Chromium 은 자체 하한이 있어 증상 자체가 재현되지 않는다 —
+  // 높이만 재면 CSS 를 통째로 걷어내도 통과하므로, **안전장치가 실제로 걸려 있는지**를
+  // 계산된 스타일로 직접 확인한다. 이건 엔진과 무관하게 깨진다.
   test('날짜 칸은 비어 있어도 채워졌을 때와 같은 높이다', async ({ page }) => {
     await page.goto('/events/new');
 
     const date = page.getByLabel(/^날짜/);
+
+    // 안전장치: min-height 가 실제로 적용돼 있어야 한다 (CSS 를 지우면 auto/0px 이 된다)
+    const minHeight = await date.evaluate((el) => getComputedStyle(el).minHeight);
+    expect(parseFloat(minHeight)).toBeGreaterThanOrEqual(44);
+
     const empty = (await date.boundingBox()).height;
 
     await date.fill('2026-12-24');
