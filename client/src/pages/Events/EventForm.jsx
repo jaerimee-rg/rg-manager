@@ -121,7 +121,7 @@ function EventForm({ basePath = '/events' }) {
         location: isClosure ? null : form.location.trim(),
         description: form.description.trim(),
         endDate: form.endDate || null,
-        startTime: form.startTime || null,
+        startTime: isClosure ? null : (form.startTime || null),
         registrationDeadline: joinDeadline(form.deadlineDate, form.deadlineTime),
         options: options.map((o) => (o.id ? { id: o.id, label: o.label } : o.label))
       };
@@ -216,12 +216,13 @@ function EventForm({ basePath = '/events' }) {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-          <div className="form-group">
-            <label htmlFor="ev-time">시간 <span style={{ fontWeight: 400, color: 'var(--color-gray-400)' }}>(비우면 종일)</span></label>
-            <input id="ev-time" type="time" value={form.startTime} onChange={(e) => set({ startTime: e.target.value })} />
-          </div>
-          {!isClosure && (
+        {/* 휴관일은 하루(또는 며칠) 통째로 쉬는 날이라 시간·장소가 없다 — 날짜만 받는다. */}
+        {!isClosure && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="form-group">
+              <label htmlFor="ev-time">시간 <span style={{ fontWeight: 400, color: 'var(--color-gray-400)' }}>(비우면 종일)</span></label>
+              <input id="ev-time" type="time" value={form.startTime} onChange={(e) => set({ startTime: e.target.value })} />
+            </div>
             <div className="form-group">
               <label htmlFor="ev-loc">장소 <span style={{ color: 'var(--color-danger)' }}>*</span></label>
               <input
@@ -230,8 +231,8 @@ function EventForm({ basePath = '/events' }) {
                 placeholder="예: 올림픽공원 체조경기장"
               />
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         <div className="form-group">
           <label htmlFor="ev-desc">학부모 안내</label>

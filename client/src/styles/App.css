@@ -521,6 +521,30 @@ textarea:focus {
   box-shadow: 0 0 0 3px var(--color-primary-bg);
 }
 
+/* ── iOS Safari: 아직 입력하지 않은 날짜/시간 칸이 작아 보이는 문제 ──────────
+   iOS 는 값이 비어 있으면 입력칸 안의 값 영역에 줄 상자가 생기지 않는다.
+   위 규칙은 높이를 글자 줄 높이로만 잡아 두기 때문에, 값이 없는 동안은 칸이
+   위아래 padding 만 남기고 내려앉는다 (날짜를 고르면 제 크기로 돌아온다).
+   그래서 "입력 전에만 작게 보이는" 증상이 된다.
+
+   값 영역에 줄 높이(1.5em = 위 line-height)를 보장해 채워졌을 때와 같은 높이를
+   유지하고, 가상 요소를 모르는 브라우저를 위해 min-height 로 한 번 더 받친다.
+   채워진 칸의 실제 높이(≈48.5px)보다 낮은 값이라 평소 모습은 달라지지 않는다.
+   .ui-input 은 자체 컨트롤 높이를 가지므로 건드리지 않는다. */
+input[type="date"]:not(.ui-input),
+input[type="time"]:not(.ui-input),
+input[type="datetime-local"]:not(.ui-input) {
+  min-height: var(--control-lg);
+}
+
+/* -webkit- 전용 가상 요소라 다른 브라우저는 이 규칙 전체를 무시한다 (무방하다). */
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value,
+input[type="datetime-local"]::-webkit-date-and-time-value {
+  min-height: 1.5em;
+  text-align: left;
+}
+
 input::placeholder,
 textarea::placeholder {
   color: var(--color-gray-400);
