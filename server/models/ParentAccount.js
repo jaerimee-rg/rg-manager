@@ -37,6 +37,18 @@ class ParentAccount {
     return result.rows.length > 0 ? result.rows[0] : null;
   }
 
+  /**
+   * 학부모가 정한 표시 이름 ("예림엄마").
+   * users.username 과 달리 UNIQUE 가 아니라 같은 별명이 여럿 있어도 된다.
+   */
+  static async updateDisplayName(userId, displayName) {
+    const result = await pool.query(
+      'UPDATE parent_accounts SET "displayName" = $1 WHERE "userId" = $2 RETURNING *',
+      [displayName, userId]
+    );
+    return result.rows.length > 0 ? result.rows[0] : null;
+  }
+
   static async touchLogin(userId) {
     await pool.query('UPDATE parent_accounts SET "lastLoginAt" = $1 WHERE "userId" = $2', [
       new Date().toISOString(),
@@ -51,7 +63,7 @@ class ParentAccount {
    */
   static async listByTeacher(teacherId) {
     const result = await pool.query(
-      `SELECT a."userId", pt."teacherId", a."createdAt", a."lastLoginAt",
+      `SELECT a."userId", pt."teacherId", a."createdAt", a."lastLoginAt", a."displayName",
               u.username, u.email,
               t.username AS "teacherName",
               c.id AS "childId", c."childName", c."childBirthdate", c.status,
@@ -74,7 +86,7 @@ class ParentAccount {
   /** 시스템 관리자: 전체 학부모 (연결된 선생님 전부와 자녀 전부) */
   static async listAll() {
     const result = await pool.query(
-      `SELECT a."userId", a."teacherId", a."createdAt", a."lastLoginAt",
+      `SELECT a."userId", a."teacherId", a."createdAt", a."lastLoginAt", a."displayName",
               u.username, u.email,
               t.username AS "teacherName",
               c.id AS "childId", c."childName", c."childBirthdate", c.status,
@@ -107,6 +119,8 @@ class ParentAccount {
         byUser.set(r.userId, {
           userId: r.userId,
           username: r.username,
+          // 학부모가 정한 별명. 없으면(옛 계정) 화면이 username 으로 되돌린다.
+          displayName: r.displayName || null,
           email: r.email,
           teacherId: r.teacherId,
           teacherName: r.teacherName,

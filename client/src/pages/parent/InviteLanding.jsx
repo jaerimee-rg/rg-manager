@@ -184,7 +184,7 @@ function InviteLanding() {
             lineHeight: 1.6,
             wordBreak: 'keep-all'
           }}>
-            카카오 닉네임·이메일과 다음 단계에서 입력하는 아이 이름·생년월일이
+            카카오 닉네임·이메일과 다음 단계에서 입력하는 학부모명·아이 이름·생년월일이
             {teacherName ? ` ${teacherName} 선생님` : ' 선생님'}에게 제공됩니다.<br />
             이미 가입했다면 카카오로 바로 로그인돼요.
           </p>

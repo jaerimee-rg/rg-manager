@@ -493,12 +493,21 @@ const initDatabase = async () => {
         "userId" INTEGER PRIMARY KEY,
         "teacherId" INTEGER NOT NULL,
         "inviteId" INTEGER,
+        "displayName" TEXT,
         "lastLoginAt" TEXT,
         "createdAt" TEXT NOT NULL,
         FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY ("teacherId") REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY ("inviteId") REFERENCES parent_invites(id) ON DELETE SET NULL
       )
+    `);
+
+    /* 학부모가 스스로 정한 표시 이름 ("예림엄마"). users.username 은 UNIQUE 라
+       "지우엄마" 가 둘이면 한 명이 "지우엄마_2" 가 되므로 별명은 여기에 따로 담는다.
+       users.username 은 카카오 닉네임(식별용)으로 그대로 둔다. */
+    await client.query(`
+      ALTER TABLE parent_accounts
+      ADD COLUMN IF NOT EXISTS "displayName" TEXT
     `);
 
     await client.query('CREATE INDEX IF NOT EXISTS idx_parent_accounts_teacher ON parent_accounts ("teacherId")');

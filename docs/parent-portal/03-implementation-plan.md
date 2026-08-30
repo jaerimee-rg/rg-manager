@@ -31,7 +31,7 @@
 | `kakaoCallback({ code })`: 토큰 발급 → `/v2/user/me` → `getByKakaoId` 없으면 `createWithKakao(role 기본 'user', username '카카오_<ts>')` → JWT → `isNewUser` 반환. 클라이언트는 `isNewUser` 면 `/register-name` | `state`(초대 토큰) 가 **없으면 지금 흐름 그대로**. 있으면 학부모 분기. 선생님 흐름은 변경 없음 |
 | `getKakaoAuthUrl` 은 항상 `scope=talk_message` | 학부모도 같은 URL 생성기를 쓰되 `state` 만 추가. scope 는 그대로 둬도 무해(학부모 토큰은 메시지 발송에 쓰지 않음) |
 | `createWithKakao` 는 `role` 파라미터를 이미 받는다(기본 `'user'`) | `role: 'parent'` 로 호출만 하면 됨. `users` 스키마 변경 불필요 |
-| `username` UNIQUE | 학부모 username = 카카오 닉네임 → 중복이면 `닉네임_숫자`. 선생님의 `/register-name` 흐름은 건드리지 않음 |
+| `username` UNIQUE | 학부모 username = 카카오 닉네임 → 중복이면 `닉네임_숫자`. 선생님의 `/register-name` 흐름은 건드리지 않음. **화면에 보이는 이름은 `parent_accounts.displayName`**(UNIQUE 아님) — "지우엄마" 가 둘이어도 접미사가 붙지 않는다 (FR-25a) |
 | `verifyTokenEndpoint`(`GET /api/auth/verify`) 는 `User.getById` 만 — 역할 무관 | 학부모도 앱 부팅 시 이 엔드포인트로 세션을 확인한다 → 가드의 **예외 목록**에 넣는다 |
 | `User.transferData` 는 students·classes·attendance·competitions 의 `userId` 를 옮긴다 | `events.userId`, `parent_accounts.teacherId`, `parent_invites.userId` 도 함께 옮겨야 선생님 계정 이전 후 학부모가 이벤트를 잃지 않는다 → S2/S4 에서 3줄 추가 |
 | `User.delete(id)` 단순 DELETE | 선생님 삭제 시 `parent_accounts` 는 CASCADE 로 지워지지만 학부모 `users` 행은 남는다 → 선생님 삭제 컨트롤러에서 소속 학부모 `users` 도 지운다(S4) |
