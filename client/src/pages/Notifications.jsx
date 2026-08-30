@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { userLabel } from '../utils/userName';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { fetchWithAuth } from '../utils/api';
@@ -155,7 +156,7 @@ function Notifications() {
                   <option value="">카카오 사용자를 선택하세요</option>
                   {kakaoUsers.map(u => (
                     <option key={u.id} value={u.id}>
-                      {u.username} ({u.email || '이메일 없음'})
+                      {userLabel(u)} ({u.email || '이메일 없음'})
                     </option>
                   ))}
                 </select>

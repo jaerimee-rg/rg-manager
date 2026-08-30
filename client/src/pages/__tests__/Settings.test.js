@@ -50,6 +50,17 @@ describe('Settings — 표시 이름 변경', () => {
     expect(screen.getByRole('button', { name: '이름 변경' })).toBeInTheDocument();
   });
 
+  it('표시 이름이 있으면 식별자 대신 그것을 보여주고 편집칸에도 채운다', async () => {
+    mockUser = { id: 12, username: '카카오_1788076610466', displayName: '최재웅', role: 'user', kakaoId: '123' };
+    await renderPage();
+
+    expect(screen.getByText('최재웅')).toBeInTheDocument();
+    expect(screen.queryByText('카카오_1788076610466')).not.toBeInTheDocument();
+
+    await startEdit();
+    expect(screen.getByLabelText('사용자명')).toHaveValue('최재웅');
+  });
+
   it('현재 이름이 채워진 상태로 편집을 시작한다', async () => {
     await renderPage();
     await startEdit();

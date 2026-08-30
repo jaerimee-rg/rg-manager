@@ -231,6 +231,34 @@ const initDatabase = async () => {
 
     await client.query('ALTER TABLE users DROP CONSTRAINT IF EXISTS "users_kakaoId_key"');
 
+    /* 사람에게 보이는 이름. username 은 UNIQUE 한 식별자라 같은 사람의 관리자·선생님 행이
+       같은 이름을 가질 수 없고, 초대·역할 추가로 만든 선생님 행은 `카카오_<ts>` 자동 이름을
+       받는다. 학부모의 parent_accounts.displayName 과 같은 규칙 — UNIQUE 아님, 없으면 username. */
+    await client.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS "displayName" TEXT
+    `);
+
+    /* 백필(멱등): 자동 이름만 가진 선생님·관리자 행에 **같은 카카오 계정의 다른 행**이 가진
+       이름을 넣는다 (같은 카카오 계정 = 같은 사람, FR-312 "새 행 기본 이름은 현재 계정 이름").
+       이미 표시 이름이 있거나 username 이 진짜 이름이면 건드리지 않는다. */
+    await client.query(`
+      UPDATE users t
+         SET "displayName" = src.name
+        FROM (
+          SELECT DISTINCT ON (s."kakaoId") s."kakaoId",
+                 COALESCE(NULLIF(s."displayName", ''), s.username) AS name
+            FROM users s
+           WHERE s."kakaoId" IS NOT NULL
+             AND COALESCE(NULLIF(s."displayName", ''), s.username) !~ '^카카오_?[0-9]+(_[0-9]+)?$'
+           ORDER BY s."kakaoId", s.id ASC
+        ) src
+       WHERE t."kakaoId" = src."kakaoId"
+         AND t.role IN ('user', 'admin')
+         AND t."displayName" IS NULL
+         AND t.username ~ '^카카오_?[0-9]+(_[0-9]+)?$'
+    `);
+
     // 카카오 메시지 로그 테이블
     await client.query(`
       CREATE TABLE IF NOT EXISTS kakao_message_logs (

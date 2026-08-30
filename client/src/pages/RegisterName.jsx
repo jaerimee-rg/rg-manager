@@ -1,12 +1,18 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { userLabel } from '../utils/userName';
+
+/** `카카오_1788076610466` 같은 자동 식별자는 이름이 아니므로 미리 채우지 않는다 */
+const PLACEHOLDER_RE = /^카카오_?\d+(_\d+)?$/;
 
 function RegisterName() {
-  const [name, setName] = useState('');
+  const { user, updateUserName } = useAuth();
+  // 초대·역할 추가로 만든 계정은 닉네임·현재 계정 이름이 표시 이름으로 미리 들어 있다
+  const initial = userLabel(user);
+  const [name, setName] = useState(PLACEHOLDER_RE.test(initial) ? '' : initial);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { user, updateUserName } = useAuth();
   const navigate = useNavigate();
 
   // 로그인 안 되어 있으면 로그인 페이지로

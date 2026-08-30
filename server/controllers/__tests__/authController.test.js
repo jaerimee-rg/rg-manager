@@ -14,7 +14,7 @@ jest.unstable_mockModule('../../models/User.js', () => ({
     listByKakaoId: jest.fn().mockResolvedValue([]),
     createWithKakao: jest.fn(),
     update: jest.fn(),
-    updateUsername: jest.fn(),
+    updateDisplayName: jest.fn(),
     updateKakaoInfo: jest.fn(),
     updateKakaoTokens: jest.fn(),
     getKakaoTokens: jest.fn(),
@@ -473,107 +473,97 @@ describe('authController', () => {
     });
   });
 
-  describe('updateUsername', () => {
-    it('should update username successfully', async () => {
-      const updatedUser = { id: 1, username: 'newname', role: 'user' };
+  describe('updateDisplayName (설정 → 이름 변경, /register-name)', () => {
+    it('표시 이름을 저장하고 사용자를 돌려준다', async () => {
+      const updatedUser = { id: 1, username: '카카오_1788076610466', displayName: '최재웅', role: 'user' };
 
       req.user = { id: 1 };
-      req.body = { username: 'newname' };
-      User.getByUsername.mockResolvedValue(null);
-      User.updateUsername.mockResolvedValue(updatedUser);
+      req.body = { username: '최재웅' };
+      User.updateDisplayName.mockResolvedValue(updatedUser);
 
-      await authController.updateUsername(req, res);
+      await authController.updateDisplayName(req, res);
 
-      expect(User.updateUsername).toHaveBeenCalledWith(1, 'newname');
+      expect(User.updateDisplayName).toHaveBeenCalledWith(1, '최재웅');
       expect(res.json).toHaveBeenCalledWith({
         message: '이름이 설정되었습니다.',
         user: updatedUser,
       });
     });
 
-    it('should return 400 for empty username', async () => {
+    it('username 은 건드리지 않는다 — UNIQUE 식별자라 같은 사람의 다른 역할 행과 겹쳐도 된다', async () => {
+      req.user = { id: 12 };
+      req.body = { username: '최재웅' };
+      // 관리자 행(id 8)이 이미 "최재웅" 이어도 확인하지 않고 그대로 저장한다
+      User.getByUsername.mockResolvedValue({ id: 8, username: '최재웅' });
+      User.updateDisplayName.mockResolvedValue({ id: 12, username: '카카오_1788076610466', displayName: '최재웅' });
+
+      await authController.updateDisplayName(req, res);
+
+      expect(User.getByUsername).not.toHaveBeenCalled();
+      expect(User.updateDisplayName).toHaveBeenCalledWith(12, '최재웅');
+      expect(res.status).not.toHaveBeenCalledWith(400);
+    });
+
+    it('displayName 키로 보내도 받는다', async () => {
+      req.user = { id: 1 };
+      req.body = { displayName: '이재림' };
+      User.updateDisplayName.mockResolvedValue({ id: 1, displayName: '이재림' });
+
+      await authController.updateDisplayName(req, res);
+
+      expect(User.updateDisplayName).toHaveBeenCalledWith(1, '이재림');
+    });
+
+    it('빈 이름은 400', async () => {
       req.user = { id: 1 };
       req.body = { username: '   ' };
 
-      await authController.updateUsername(req, res);
+      await authController.updateDisplayName(req, res);
 
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({ error: '이름을 입력해주세요.' });
-    });
-
-    it('should return 400 if username already taken', async () => {
-      req.user = { id: 1 };
-      req.body = { username: 'existingname' };
-      User.getByUsername.mockResolvedValue({ id: 2, username: 'existingname' });
-
-      await authController.updateUsername(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ error: '이미 사용 중인 이름입니다.' });
-    });
-
-    it('should allow updating to same username for same user', async () => {
-      const updatedUser = { id: 1, username: 'myname', role: 'user' };
-
-      req.user = { id: 1 };
-      req.body = { username: 'myname' };
-      User.getByUsername.mockResolvedValue({ id: 1, username: 'myname' });
-      User.updateUsername.mockResolvedValue(updatedUser);
-
-      await authController.updateUsername(req, res);
-
-      expect(User.updateUsername).toHaveBeenCalledWith(1, 'myname');
-      expect(res.json).toHaveBeenCalledWith({
-        message: '이름이 설정되었습니다.',
-        user: updatedUser,
-      });
+      expect(User.updateDisplayName).not.toHaveBeenCalled();
     });
 
     it('30자를 넘는 이름은 400 을 반환한다', async () => {
       req.user = { id: 1 };
       req.body = { username: 'ㄱ'.repeat(31) };
 
-      await authController.updateUsername(req, res);
+      await authController.updateDisplayName(req, res);
 
       expect(res.status).toHaveBeenCalledWith(400);
-      expect(User.updateUsername).not.toHaveBeenCalled();
+      expect(User.updateDisplayName).not.toHaveBeenCalled();
     });
 
     it('앞뒤 공백은 잘라서 저장한다', async () => {
       req.user = { id: 1 };
       req.body = { username: '  이재림  ' };
-      User.getByUsername.mockResolvedValue(null);
-      User.updateUsername.mockResolvedValue({ id: 1, username: '이재림' });
+      User.updateDisplayName.mockResolvedValue({ id: 1, displayName: '이재림' });
 
-      await authController.updateUsername(req, res);
+      await authController.updateDisplayName(req, res);
 
-      expect(User.updateUsername).toHaveBeenCalledWith(1, '이재림');
+      expect(User.updateDisplayName).toHaveBeenCalledWith(1, '이재림');
     });
 
-    it('저장 직전에 이름을 뺏기면 400 으로 안내한다', async () => {
-      req.user = { id: 1 };
-      req.body = { username: '이재림' };
-      User.getByUsername.mockResolvedValue(null);
-      const conflict = new Error('duplicate key');
-      conflict.code = '23505';
-      User.updateUsername.mockRejectedValue(conflict);
-
-      await authController.updateUsername(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({ error: '이미 사용 중인 이름입니다.' });
-    });
-
-      it('should return 404 if user not found', async () => {
+    it('사용자가 없으면 404', async () => {
       req.user = { id: 999 };
       req.body = { username: 'newname' };
-      User.getByUsername.mockResolvedValue(null);
-      User.updateUsername.mockResolvedValue(null);
+      User.updateDisplayName.mockResolvedValue(null);
 
-      await authController.updateUsername(req, res);
+      await authController.updateDisplayName(req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith({ error: '사용자를 찾을 수 없습니다.' });
+    });
+
+    it('저장에 실패하면 500', async () => {
+      req.user = { id: 1 };
+      req.body = { username: '이재림' };
+      User.updateDisplayName.mockRejectedValue(new Error('db down'));
+
+      await authController.updateDisplayName(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
     });
   });
 
@@ -1208,7 +1198,7 @@ describe('authController', () => {
       const payload = res.json.mock.calls[0][0];
       expect(payload.role).toBe('user');
       expect(payload.user).toEqual({ id: 9, username: '이재림', role: 'user', kakaoId: 'K1' });
-      expect(payload.impersonator).toEqual({ id: 1, username: 'admin' });
+      expect(payload.impersonator).toEqual({ id: 1, username: 'admin', displayName: null });
 
       const decoded = jwt.verify(payload.token, JWT_SECRET);
       expect(decoded).toMatchObject({ id: 9, username: '이재림', role: 'user', act: { id: 1, username: 'admin' } });

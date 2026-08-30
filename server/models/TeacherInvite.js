@@ -45,7 +45,7 @@ class TeacherInvite {
 
   static async list() {
     const result = await pool.query(
-      `SELECT i.*, u.username AS "usedByName", c.username AS "createdByName"
+      `SELECT i.*, COALESCE(NULLIF(u."displayName", ''), u.username) AS "usedByName", COALESCE(NULLIF(c."displayName", ''), c.username) AS "createdByName"
          FROM teacher_invites i
          LEFT JOIN users u ON u.id = i."usedByUserId"
          LEFT JOIN users c ON c.id = i."createdBy"
@@ -61,7 +61,7 @@ class TeacherInvite {
 
   static async getByToken(token) {
     const result = await pool.query(
-      `SELECT i.*, c.username AS "createdByName"
+      `SELECT i.*, COALESCE(NULLIF(c."displayName", ''), c.username) AS "createdByName"
          FROM teacher_invites i
          LEFT JOIN users c ON c.id = i."createdBy"
         WHERE i.token = $1`,

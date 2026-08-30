@@ -5,12 +5,12 @@ const SALT_ROUNDS = 10;
 
 class User {
   static async getAll() {
-    const result = await pool.query('SELECT id, username, role, "createdAt", email, "kakaoId", "kakaoMessageConsent" FROM users ORDER BY id');
+    const result = await pool.query('SELECT id, username, "displayName", role, "createdAt", email, "kakaoId", "kakaoMessageConsent" FROM users ORDER BY id');
     return result.rows;
   }
 
   static async getById(id) {
-    const result = await pool.query('SELECT id, username, role, "createdAt", email, "kakaoId", "kakaoMessageConsent" FROM users WHERE id = $1', [id]);
+    const result = await pool.query('SELECT id, username, "displayName", role, "createdAt", email, "kakaoId", "kakaoMessageConsent" FROM users WHERE id = $1', [id]);
     return result.rows.length > 0 ? result.rows[0] : null;
   }
 
@@ -49,7 +49,7 @@ class User {
     const result = await pool.query(
       `INSERT INTO users (username, password, role, "createdAt")
        VALUES ($1, $2, $3, $4)
-       RETURNING id, username, role, "createdAt"`,
+       RETURNING id, username, "displayName", role, "createdAt"`,
       [username, hashedPassword, role, createdAt]
     );
 
@@ -66,7 +66,7 @@ class User {
         `UPDATE users
          SET username = $1, password = $2, role = $3
          WHERE id = $4
-         RETURNING id, username, role, "createdAt"`,
+         RETURNING id, username, "displayName", role, "createdAt"`,
         [username, hashedPassword, role, id]
       );
       return result.rows.length > 0 ? result.rows[0] : null;
@@ -76,7 +76,7 @@ class User {
         `UPDATE users
          SET username = $1, role = $2
          WHERE id = $3
-         RETURNING id, username, role, "createdAt"`,
+         RETURNING id, username, "displayName", role, "createdAt"`,
         [username, role, id]
       );
       return result.rows.length > 0 ? result.rows[0] : null;
@@ -102,7 +102,7 @@ class User {
   static async listByKakaoId(kakaoId) {
     if (!kakaoId) return [];
     const result = await pool.query(
-      'SELECT id, username, role, "createdAt" FROM users WHERE "kakaoId" = $1 ORDER BY id',
+      'SELECT id, username, "displayName", role, "createdAt" FROM users WHERE "kakaoId" = $1 ORDER BY id',
       [kakaoId]
     );
     return result.rows;
@@ -114,6 +114,8 @@ class User {
       username,
       email,
       role = 'user',
+      // 사람에게 보이는 이름 (선택). username 은 식별자라 자동 이름일 수 있다.
+      displayName = null,
       accessToken = null,
       refreshToken = null,
       tokenExpiresAt = null
@@ -124,10 +126,10 @@ class User {
 
     const result = await pool.query(
       `INSERT INTO users (username, password, role, "createdAt", "kakaoId", email,
-       "kakaoAccessToken", "kakaoRefreshToken", "kakaoTokenExpiresAt")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING id, username, role, "createdAt", email, "kakaoId", "kakaoMessageConsent"`,
-      [username, randomPassword, role, createdAt, kakaoId, email, accessToken, refreshToken, tokenExpiresAt]
+       "kakaoAccessToken", "kakaoRefreshToken", "kakaoTokenExpiresAt", "displayName")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING id, username, "displayName", role, "createdAt", email, "kakaoId", "kakaoMessageConsent"`,
+      [username, randomPassword, role, createdAt, kakaoId, email, accessToken, refreshToken, tokenExpiresAt, displayName || null]
     );
 
     return result.rows[0];
@@ -137,7 +139,7 @@ class User {
     const { email } = data;
     const result = await pool.query(
       `UPDATE users SET email = $1 WHERE id = $2
-       RETURNING id, username, role, "createdAt", email, "kakaoId", "kakaoMessageConsent"`,
+       RETURNING id, username, "displayName", role, "createdAt", email, "kakaoId", "kakaoMessageConsent"`,
       [email, id]
     );
     return result.rows.length > 0 ? result.rows[0] : null;
@@ -152,7 +154,7 @@ class User {
            "kakaoRefreshToken" = $3,
            "kakaoTokenExpiresAt" = $4
        WHERE id = $5
-       RETURNING id, username, role, "createdAt", email, "kakaoId", "kakaoMessageConsent"`,
+       RETURNING id, username, "displayName", role, "createdAt", email, "kakaoId", "kakaoMessageConsent"`,
       [email, accessToken, refreshToken, tokenExpiresAt, id]
     );
     return result.rows.length > 0 ? result.rows[0] : null;
@@ -170,17 +172,21 @@ class User {
   static async updateMessageConsent(id, consent) {
     const result = await pool.query(
       `UPDATE users SET "kakaoMessageConsent" = $1 WHERE id = $2
-       RETURNING id, username, role, "createdAt", email, "kakaoId", "kakaoMessageConsent"`,
+       RETURNING id, username, "displayName", role, "createdAt", email, "kakaoId", "kakaoMessageConsent"`,
       [consent, id]
     );
     return result.rows.length > 0 ? result.rows[0] : null;
   }
 
-  static async updateUsername(id, username) {
+  /**
+   * 사람에게 보이는 이름 (설정 → 이름 변경). username 과 달리 UNIQUE 가 아니라서
+   * 같은 사람의 관리자·선생님 행이 같은 이름을 가질 수 있다.
+   */
+  static async updateDisplayName(id, displayName) {
     const result = await pool.query(
-      `UPDATE users SET username = $1 WHERE id = $2
-       RETURNING id, username, role, "createdAt", email, "kakaoId", "kakaoMessageConsent"`,
-      [username, id]
+      `UPDATE users SET "displayName" = $1 WHERE id = $2
+       RETURNING id, username, "displayName", role, "createdAt", email, "kakaoId", "kakaoMessageConsent"`,
+      [displayName, id]
     );
     return result.rows.length > 0 ? result.rows[0] : null;
   }

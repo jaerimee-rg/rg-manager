@@ -4,6 +4,7 @@ import { fetchWithAuth } from '../../utils/api';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { homePathFor } from '../../utils/roleRoutes';
 import { hardNavigate } from '../../utils/navigation';
+import { userLabel } from '../../utils/userName';
 
 /* 한 카카오 계정이 역할마다 계정을 가질 수 있어(docs/accounts-roles FR-310),
    목록에 세 역할이 모두 섞여 나온다. 예전에는 학부모가 "일반 사용자" 로 보였다. */
@@ -109,7 +110,7 @@ function AdminUsers() {
    * 역할 편집(승격)과 달리 기존 선생님 계정과 그 학생·수업이 그대로 남는다.
    */
   const handleGrantAdmin = async (target) => {
-    if (!confirm(`${target.username} 님에게 관리자 계정을 추가할까요?\n기존 계정과 데이터는 그대로 유지됩니다.`)) return;
+    if (!confirm(`${userLabel(target)} 님에게 관리자 계정을 추가할까요?\n기존 계정과 데이터는 그대로 유지됩니다.`)) return;
 
     try {
       const response = await fetchWithAuth(`/api/auth/users/${target.id}/grant-admin`, { method: 'POST' });
@@ -119,7 +120,7 @@ function AdminUsers() {
         return;
       }
       await loadUsers();
-      alert(`관리자 계정 ${data.user.username} 을(를) 만들었습니다.`);
+      alert(`관리자 계정 ${userLabel(data.user)} 을(를) 만들었습니다.`);
     } catch (error) {
       console.error('관리자 계정 부여 실패:', error);
       alert('관리자 계정 추가에 실패했습니다.');
@@ -132,7 +133,7 @@ function AdminUsers() {
    */
   const handleImpersonate = async (target) => {
     const label = ROLE_BADGE[target.role]?.label || target.role;
-    if (!confirm(`${target.username} (${label}) 계정으로 로그인할까요?\n화면 위 배너의 [관리자로 돌아가기]로 언제든 돌아올 수 있습니다.`)) return;
+    if (!confirm(`${userLabel(target)} (${label}) 계정으로 로그인할까요?\n화면 위 배너의 [관리자로 돌아가기]로 언제든 돌아올 수 있습니다.`)) return;
 
     try {
       const data = await impersonate(target.id);
@@ -213,7 +214,7 @@ function AdminUsers() {
     const fromUser = users.find(u => u.id === parseInt(transferFrom));
     const toUser = users.find(u => u.id === parseInt(transferTo));
 
-    if (!confirm(`"${fromUser?.username}"의 모든 데이터를 "${toUser?.username}"에게 이전하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) {
+    if (!confirm(`"${userLabel(fromUser)}"의 모든 데이터를 "${userLabel(toUser)}"에게 이전하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) {
       return;
     }
 
@@ -393,8 +394,12 @@ function AdminUsers() {
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
                             <span style={{ fontWeight: 600, color: 'var(--color-gray-900)' }}>
-                              {u.username}
+                              {userLabel(u)}
                             </span>
+                            {/* 표시 이름이 따로 있으면 식별자(username)도 작게 보여준다 */}
+                            {u.displayName && u.displayName !== u.username && (
+                              <span style={{ fontSize: '0.75rem', color: 'var(--color-gray-400)' }}>{u.username}</span>
+                            )}
                             {u.kakaoId && (
                               <span style={{
                                 display: 'inline-flex',
@@ -517,7 +522,10 @@ function AdminUsers() {
                   >
                     <div className="list-item-content">
                       <div className="list-item-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {u.username}
+                        {userLabel(u)}
+                        {u.displayName && u.displayName !== u.username && (
+                          <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--color-gray-400)' }}>{u.username}</span>
+                        )}
                         {u.kakaoId && (
                           <span style={{
                             display: 'inline-flex',
@@ -657,7 +665,7 @@ function AdminUsers() {
                   {/* 학부모는 학생·수업을 갖지 않으므로 이전 대상이 아니다 */}
                   {users.filter(u => u.role !== 'parent').map(u => (
                     <option key={u.id} value={u.id}>
-                      {u.username} (#{u.id})
+                      {userLabel(u)} (#{u.id})
                     </option>
                   ))}
                 </select>
@@ -682,7 +690,7 @@ function AdminUsers() {
                   {/* 받는 쪽은 선생님만 — 데이터의 실제 소유자가 되어야 한다 */}
                   {users.filter(u => u.role === 'user' && u.id !== parseInt(transferFrom)).map(u => (
                     <option key={u.id} value={u.id}>
-                      {u.username} (#{u.id})
+                      {userLabel(u)} (#{u.id})
                     </option>
                   ))}
                 </select>

@@ -28,7 +28,7 @@ class ParentTeacher {
   /** 연결된 선생님 (이름 포함, 먼저 연결한 순서) */
   static async listTeachers(parentUserId) {
     const result = await pool.query(
-      `SELECT pt."teacherId" AS id, u.username AS name, pt."createdAt" AS since
+      `SELECT pt."teacherId" AS id, COALESCE(NULLIF(u."displayName", ''), u.username) AS name, pt."createdAt" AS since
          FROM parent_teachers pt
          JOIN users u ON u.id = pt."teacherId"
         WHERE pt."parentUserId" = $1
@@ -60,7 +60,7 @@ class ParentTeacher {
     if (!parentUserIds.length) return {};
 
     const result = await pool.query(
-      `SELECT pt."parentUserId", pt."teacherId" AS id, u.username AS name, pt."createdAt" AS since
+      `SELECT pt."parentUserId", pt."teacherId" AS id, COALESCE(NULLIF(u."displayName", ''), u.username) AS name, pt."createdAt" AS since
          FROM parent_teachers pt
          JOIN users u ON u.id = pt."teacherId"
         WHERE pt."parentUserId" = ANY($1)

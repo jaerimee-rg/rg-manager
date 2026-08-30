@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { roleLabel } from '../../utils/roleRoutes';
 import { hardNavigate } from '../../utils/navigation';
+import { userLabel } from '../../utils/userName';
 
 /**
  * 관리자가 다른 계정으로 들어와 있는 동안 화면 맨 위에 붙는 띠 (docs/accounts-roles FR-388).
@@ -34,7 +35,7 @@ function ImpersonationBanner() {
   return (
     <div className="impersonation-banner" role="status" data-testid="impersonation-banner">
       <span className="impersonation-banner-text">
-        🕵️ <b>{impersonator.username}</b> 관리자가 <b>{user.username}</b>({roleLabel(user.role)}) 계정으로 보고 있어요
+        🕵️ <b>{userLabel(impersonator)}</b> 관리자가 <b>{userLabel(user)}</b>({roleLabel(user.role)}) 계정으로 보고 있어요
       </span>
       <button type="button" className="impersonation-banner-btn" disabled={busy} onClick={back}>
         {busy ? '돌아가는 중…' : canReturn ? '관리자로 돌아가기' : '로그아웃'}

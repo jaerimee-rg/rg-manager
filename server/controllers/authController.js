@@ -7,7 +7,7 @@ import TeacherInvite from '../models/TeacherInvite.js';
 import jwt from 'jsonwebtoken';
 import { KAKAO_REDIRECT_URI } from '../utils/appUrl.js';
 import { encodeState, decodeState, pickAccount, extractInviteToken } from '../utils/oauthState.js';
-import { uniqueUsername } from '../utils/usernames.js';
+import { uniqueUsername, isPlaceholderName, placeholderUsername } from '../utils/usernames.js';
 import {
   issueToken,
   issueImpersonationToken,
@@ -369,7 +369,9 @@ export const kakaoCallback = async (req, res) => {
       } else {
         user = await User.createWithKakao({
           kakaoId,
-          username: `카카오_${Date.now()}`,
+          // username 은 식별자, 보이는 이름은 카카오 닉네임으로 시작한다 (FR-312). /register-name 에서 바꾼다.
+          username: placeholderUsername(),
+          displayName: isPlaceholderName(nickname) ? null : nickname,
           email,
           role: 'user',
           accessToken,
@@ -562,27 +564,25 @@ export const getKakaoUsers = async (req, res) => {
 };
 
 // 사용자 이름 업데이트 (카카오 가입 후 이름 설정)
-export const updateUsername = async (req, res) => {
+/**
+ * 설정 → 이름 변경 / 가입 직후 /register-name.
+ * users.username 은 UNIQUE 한 식별자라 건드리지 않고 **표시 이름**만 바꾼다 — 같은
+ * 카카오 계정의 관리자 행이 이미 "최재웅" 이어도 선생님 행을 "최재웅" 으로 부를 수 있다.
+ * 학부모에게 보이는 선생님 이름도 이 값이다.
+ */
+export const updateDisplayName = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { username } = req.body;
+    const nextName = String(req.body?.displayName ?? req.body?.username ?? '').trim();
 
-    const nextUsername = (username || '').trim();
-
-    if (!nextUsername) {
+    if (!nextName) {
       return res.status(400).json({ error: '이름을 입력해주세요.' });
     }
-    if (nextUsername.length > USERNAME_MAX) {
+    if (nextName.length > USERNAME_MAX) {
       return res.status(400).json({ error: `이름은 ${USERNAME_MAX}자 이내로 입력해주세요.` });
     }
 
-    // 중복 확인
-    const existingUser = await User.getByUsername(nextUsername);
-    if (existingUser && existingUser.id !== userId) {
-      return res.status(400).json({ error: '이미 사용 중인 이름입니다.' });
-    }
-
-    const user = await User.updateUsername(userId, nextUsername);
+    const user = await User.updateDisplayName(userId, nextName);
 
     if (!user) {
       return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
@@ -593,10 +593,6 @@ export const updateUsername = async (req, res) => {
       user
     });
   } catch (error) {
-    // 확인과 UPDATE 사이에 같은 이름이 선점된 경우 (unique_violation)
-    if (error.code === '23505') {
-      return res.status(400).json({ error: '이미 사용 중인 이름입니다.' });
-    }
     console.error('이름 설정 오류:', error);
     res.status(500).json({ error: '이름 변경 중 오류가 발생했습니다.' });
   }
@@ -895,7 +891,7 @@ export const impersonate = async (req, res) => {
       user: userWithoutPassword,
       token: issueImpersonationToken(target, admin),
       role: target.role,
-      impersonator: { id: admin.id, username: admin.username }
+      impersonator: { id: admin.id, username: admin.username, displayName: admin.displayName || null }
     });
   } catch (error) {
     console.error('다른 계정으로 로그인 오류:', error);

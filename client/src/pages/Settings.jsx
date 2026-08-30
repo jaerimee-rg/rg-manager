@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { fetchWithAuth } from '../utils/api';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import DriveAccountCard from './Settings/DriveAccountCard';
+import { userLabel } from '../utils/userName';
 
 function Settings() {
   const { user, logout, updateUserName } = useAuth();
@@ -41,7 +42,7 @@ function Settings() {
   };
 
   const startEditName = () => {
-    setNameInput(user?.username || '');
+    setNameInput(userLabel(user));
     setNameError('');
     setEditingName(true);
   };
@@ -60,7 +61,7 @@ function Settings() {
       setNameError('이름을 입력해주세요.');
       return;
     }
-    if (nextName === user?.username) {
+    if (nextName === userLabel(user)) {
       cancelEditName();
       return;
     }
@@ -162,7 +163,7 @@ function Settings() {
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
                 <span style={{ fontWeight: 600, color: 'var(--color-gray-900)' }}>
-                  {user?.username}
+                  {userLabel(user)}
                 </span>
                 <button type="button" className="btn btn-secondary btn-sm" onClick={startEditName}>
                   이름 변경

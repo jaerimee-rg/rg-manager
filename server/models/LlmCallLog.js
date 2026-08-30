@@ -4,7 +4,7 @@ import pool from '../database.js';
 const LIST_COLUMNS = `
   l.id, l."createdAt", l."userId", l."visitorName", l."promptId", l.provider, l.model,
   l.status, l.answered, l."inputTokens", l."outputTokens", l."latencyMs", l."sessionId",
-  u.username AS "instructorName"
+  COALESCE(NULLIF(u."displayName", ''), u.username) AS "instructorName"
 `;
 
 class LlmCallLog {
@@ -92,7 +92,7 @@ class LlmCallLog {
   // 상세는 프롬프트 원문까지 함께 준다.
   static async getById(id) {
     const result = await pool.query(
-      `SELECT l.*, u.username AS "instructorName"
+      `SELECT l.*, COALESCE(NULLIF(u."displayName", ''), u.username) AS "instructorName"
        FROM llm_call_logs l
        LEFT JOIN users u ON u.id = l."userId"
        WHERE l.id = $1`,

@@ -36,6 +36,16 @@ describe('ImpersonationBanner — 다른 계정으로 로그인 배너 (FR-388)'
     expect(banner).toHaveTextContent('선생님');
   });
 
+  it('표시 이름이 있으면 관리자·대상 모두 그 이름으로 보여준다', () => {
+    mockAuth.user = { id: 12, username: '카카오_1788076610466', displayName: '최재웅', role: 'user' };
+    mockAuth.impersonator = { id: 8, username: 'admin', displayName: '박원장', token: 'admin-token', user: ADMIN };
+    render(<ImpersonationBanner />);
+    const banner = screen.getByRole('status');
+    expect(banner).toHaveTextContent('박원장');
+    expect(banner).toHaveTextContent('최재웅');
+    expect(banner).not.toHaveTextContent('카카오_1788076610466');
+  });
+
   it('돌아가기를 누르면 관리자 세션으로 복구하고 사용자 관리를 새로 연다', async () => {
     render(<ImpersonationBanner />);
     await act(async () => {

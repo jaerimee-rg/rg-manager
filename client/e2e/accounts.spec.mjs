@@ -177,6 +177,81 @@ test.describe('학부모 — 여러 선생님', () => {
   });
 });
 
+test.describe('학부모 — 연결된 선생님의 일정만 (docs/accounts-roles FR-357)', () => {
+  test('선생님 한 명과 연결된 학부모에게는 다른 선생님의 일정이 목록에 없다', async ({ request }) => {
+    const res = await api(request, sessions.parent, 'GET', '/api/parent/events');
+
+    expect(res.status).toBe(200);
+    expect(res.body.teachers.map((t) => t.id)).toEqual([sessions.teacher.user.id]);
+    // 두 번째 선생님의 공개 이벤트(e2eB러닝)는 이 학부모와 무관하다
+    expect(res.body.events.some((e) => e.id === sessions.teacher2.eventId)).toBe(false);
+    expect(res.body.events.every((e) => e.teacherId === sessions.teacher.user.id)).toBe(true);
+  });
+
+  test('연결되지 않은 선생님 id 로 필터해도 그 선생님 일정은 오지 않는다', async ({ request }) => {
+    const res = await api(request, sessions.parent, 'GET', `/api/parent/events?teacherId=${sessions.teacher2.id}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.events.some((e) => e.teacherId === sessions.teacher2.id)).toBe(false);
+  });
+
+  test('연결되지 않은 선생님의 이벤트 상세는 404', async ({ request }) => {
+    const res = await api(request, sessions.parent, 'GET', `/api/parent/events/${sessions.teacher2.eventId}`);
+    expect(res.status).toBe(404);
+  });
+});
+
+test.describe('학부모에게 보이는 선생님 이름 — 표시 이름 (users.displayName)', () => {
+  test('내 정보의 연결된 선생님은 카카오 식별자가 아니라 표시 이름으로 나온다', async ({ request }) => {
+    const res = await api(request, sessions.parentMulti, 'GET', '/api/parent/me');
+
+    expect(res.status).toBe(200);
+    const teacherB = res.body.teachers.find((t) => t.id === sessions.teacher2.id);
+    expect(teacherB.name).toBe(sessions.teacher2.displayName);
+    expect(JSON.stringify(res.body)).not.toContain(sessions.teacher2.username);
+
+    // 자녀에 붙는 선생님 이름도 같다
+    const childOfB = res.body.children.find((c) => c.teacherId === sessions.teacher2.id);
+    expect(childOfB.teacherName).toBe(sessions.teacher2.displayName);
+  });
+
+  test('일정 카드의 선생님 이름도 표시 이름이다', async ({ request }) => {
+    const res = await api(request, sessions.parentMulti, 'GET', '/api/parent/events');
+
+    const card = res.body.events.find((e) => e.id === sessions.teacher2.eventId);
+    expect(card.teacherName).toBe(sessions.teacher2.displayName);
+    expect(res.body.teachers.find((t) => t.id === sessions.teacher2.id).name).toBe(sessions.teacher2.displayName);
+  });
+
+  test('초대 링크 확인도 표시 이름을 준다', async ({ request }) => {
+    const response = await request.get(`/api/invite/${sessions.teacher2.invite}`);
+    const body = await response.json();
+    expect(body.teacherName).toBe(sessions.teacher2.displayName);
+  });
+
+  test('내 정보 화면에 표시 이름이 보인다', async ({ page }) => {
+    await loginAs(page, sessions.parentMulti);
+    await page.goto('/parent/settings');
+
+    await expect(page.getByText(`${sessions.teacher2.displayName} 선생님`).first()).toBeVisible();
+    await expect(page.getByText(sessions.teacher2.username)).toHaveCount(0);
+  });
+
+  test('선생님은 같은 사람의 다른 역할과 겹치는 이름도 표시 이름으로 쓸 수 있다', async ({ request }) => {
+    // 첫 선생님의 username 과 같은 이름을 두 번째 선생님이 표시 이름으로 쓴다 (UNIQUE 는 username 에만 걸린다)
+    const teacher2Session = { token: sessions.teacher2Token };
+    test.skip(!teacher2Session.token, '두 번째 선생님 세션이 없다');
+
+    const res = await api(request, teacher2Session, 'PUT', '/api/auth/username', { username: sessions.teacher.user.username });
+    expect(res.status).toBe(200);
+    expect(res.body.user.displayName).toBe(sessions.teacher.user.username);
+    expect(res.body.user.username).toBe(sessions.teacher2.username);
+
+    // 되돌려 두어 다른 테스트가 표시 이름을 그대로 본다
+    await api(request, teacher2Session, 'PUT', '/api/auth/username', { username: sessions.teacher2.displayName });
+  });
+});
+
 test.describe('관리자 > 사용자', () => {
   test('학부모는 관리자 계정 부여를 호출할 수 없다', async ({ request }) => {
     const res = await api(request, sessions.parentMulti, 'POST', `/api/auth/users/${sessions.teacher.user.id}/grant-admin`);
@@ -204,7 +279,7 @@ test.describe('다른 계정으로 로그인 (관리자, FR-388)', () => {
     expect(res.status).toBe(200);
     expect(res.body.role).toBe('user');
     expect(res.body.user.id).toBe(sessions.teacher.user.id);
-    expect(res.body.impersonator).toEqual({ id: sessions.admin.user.id, username: sessions.admin.user.username });
+    expect(res.body.impersonator).toMatchObject({ id: sessions.admin.user.id, username: sessions.admin.user.username });
 
     const asTeacher = { token: res.body.token };
     // 선생님 API 가 열린다

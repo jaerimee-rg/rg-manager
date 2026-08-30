@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import ParentAccount from '../models/ParentAccount.js';
 import ParentTeacher from '../models/ParentTeacher.js';
-import { uniqueUsername } from '../utils/usernames.js';
+import { uniqueUsername, placeholderUsername, displayNameOf } from '../utils/usernames.js';
 
 /**
  * 한 카카오 계정의 역할별 계정을 만들고 전환하는 공통 로직
@@ -32,7 +32,7 @@ export const issueImpersonationToken = (target, actor) =>
       id: target.id,
       username: target.username,
       role: target.role,
-      act: { id: actor.id, username: actor.username }
+      act: { id: actor.id, username: actor.username, displayName: actor.displayName || null }
     },
     JWT_SECRET,
     { expiresIn: IMPERSONATION_EXPIRES_IN }
@@ -52,7 +52,7 @@ export const describeRoles = async (currentUser) => {
   const kakaoId = currentUser.kakaoId || null;
   const accounts = kakaoId
     ? await User.listByKakaoId(kakaoId)
-    : [{ id: currentUser.id, username: currentUser.username, role: currentUser.role }];
+    : [{ id: currentUser.id, username: currentUser.username, displayName: currentUser.displayName || null, role: currentUser.role }];
 
   const has = (role) => accounts.some((a) => a.role === role);
 
@@ -88,8 +88,10 @@ export const createTeacherAccount = async (fromUser) => {
 
   const user = await User.createWithKakao({
     kakaoId: fromUser.kakaoId,
-    // 선생님은 가입 후 /register-name 에서 이름을 정한다 (기존 신규 선생님과 동일)
-    username: `카카오_${Date.now()}`,
+    // username 은 식별자(UNIQUE)라 자동 이름을 쓰고, 사람에게 보이는 이름은 현재 계정
+    // 이름을 물려받는다 (FR-312). /register-name 에서 바꿀 수 있다.
+    username: placeholderUsername(),
+    displayName: displayNameOf(fromUser),
     email: fromUser.email || null,
     role: 'user',
     accessToken: tokens.kakaoAccessToken || null,
@@ -148,6 +150,8 @@ export const createAdminAccount = async (targetUser) => {
   const user = await User.createWithKakao({
     kakaoId: targetUser.kakaoId,
     username,
+    // "이재림_2" 같은 접미사 이름 대신 원래 이름이 보이게 한다
+    displayName: displayNameOf(targetUser),
     email: targetUser.email || null,
     role: 'admin',
     accessToken: tokens.kakaoAccessToken || null,

@@ -131,7 +131,7 @@ class Event {
     if (!ids.length) return [];
 
     const result = await pool.query(
-      `SELECT e.*, u.username AS "teacherName"
+      `SELECT e.*, COALESCE(NULLIF(u."displayName", ''), u.username) AS "teacherName"
          FROM events e
          JOIN users u ON u.id = e."userId"
         WHERE e."userId" = ANY($1)
@@ -150,7 +150,7 @@ class Event {
     if (!ids.length) return null;
 
     const result = await pool.query(
-      `SELECT e.*, u.username AS "teacherName"
+      `SELECT e.*, COALESCE(NULLIF(u."displayName", ''), u.username) AS "teacherName"
          FROM events e
          JOIN users u ON u.id = e."userId"
         WHERE e.id = $1 AND e."userId" = ANY($2) AND e."isPublished" IS NOT FALSE`,
@@ -193,7 +193,7 @@ class Event {
     if (!ids.length) return [];
 
     const result = await pool.query(
-      `SELECT e.*, u.username AS "teacherName"
+      `SELECT e.*, COALESCE(NULLIF(u."displayName", ''), u.username) AS "teacherName"
          FROM events e
          JOIN users u ON u.id = e."userId"
         WHERE e."userId" = ANY($1)

@@ -135,10 +135,13 @@ await pool.query(
   [parent.id, teacher.id, inv.rows[0].id, now]
 );
 
-// 두 번째 선생님 + 그 선생님의 학생 + 같은 학부모의 두 번째 자녀
+/* 두 번째 선생님 + 그 선생님의 학생 + 같은 학부모의 두 번째 자녀.
+   username 은 초대로 만든 계정처럼 `카카오_<ts>` 자동 식별자이고, 사람에게 보이는 이름은
+   displayName 이다 — 학부모 화면에 식별자가 새지 않는지 검증하는 구성. */
+const teacher2DisplayName = `e2e박지우_${stamp}`;
 const t2 = await pool.query(
-  `INSERT INTO users (username, password, role, "createdAt") VALUES ($1,$2,'user',$3) RETURNING id, username, role`,
-  [`e2e선생님B_${stamp}`, pw, now]
+  `INSERT INTO users (username, password, role, "createdAt", "displayName") VALUES ($1,$2,'user',$3,$4) RETURNING id, username, role`,
+  [`카카오_${stamp}`, pw, now, teacher2DisplayName]
 );
 const teacher2 = t2.rows[0];
 
@@ -220,10 +223,11 @@ const tinv = await pool.query(
 const sessions = {
   album: { eventId: albumEventId, lockedEventId, mediaIds, taggedCount: 2, totalCount: 4 },
   teacher: { token: sign(teacher), user: { id: teacher.id, username: teacher.username, role: 'user' } },
+  teacher2Token: sign(teacher2),
   parent: { token: sign(parent), user: { id: parent.id, username: parent.username, role: 'parent' } },
   parentMulti: { token: sign(parentMulti), user: { id: parentMulti.id, username: parentMulti.username, role: 'parent' } },
   admin: { token: sign(adminUser), user: { id: adminUser.id, username: adminUser.username, role: 'admin' } },
-  teacher2: { id: teacher2.id, username: teacher2.username, invite: invB.rows[0].token, eventId: eventB.rows[0].id },
+  teacher2: { id: teacher2.id, username: teacher2.username, displayName: teacher2DisplayName, invite: invB.rows[0].token, eventId: eventB.rows[0].id },
   teacherInvite: { id: tinv.rows[0].id, token: tinv.rows[0].token },
   sharedKakao,
   invite: inv.rows[0].token,
