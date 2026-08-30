@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'fs';
-import { loginAs, api } from './helpers.mjs';
+import { loginAs, loginOnceAs, api } from './helpers.mjs';
 
 /**
  * 계정 · 역할 · 초대 체계 (docs/accounts-roles).
@@ -90,18 +90,30 @@ test.describe('역할 전환 (같은 카카오 계정)', () => {
     await loginAs(page, sessions.admin);
     await page.goto('/admin/users');
 
+    // 픽스처의 관리자는 선생님(e2e선생님_<stamp>, 긴 이름)과 카카오 계정을 공유하므로
+    // 첫 항목이 "선생님 화면으로 + 계정 이름" 이다.
     const item = page.locator('.admin-sidebar-footer .role-switch-item').first();
     await expect(item).toBeVisible();
+    await expect(item.locator('small')).toHaveText(sessions.teacher.user.username);
 
-    // 긴 계정 이름이 라벨을 밀어 여러 줄로 접히던 문제(사이드바 밖으로도 넘쳤다)
+    // 긴 계정 이름이 라벨을 밀어 네 줄로 접히던 문제: 수정 전 107px, 후 39px
     const box = await item.boundingBox();
     expect(box.height).toBeLessThan(48);
 
-    const overflow = await item.evaluate((el) => {
-      const parent = el.closest('.admin-sidebar-footer');
-      return el.getBoundingClientRect().right - parent.getBoundingClientRect().right;
+    // 라벨은 한 줄로 남고, 이름 쪽이 항목 안에서 말줄임된다(항목 밖으로 삐져나오지 않는다).
+    const metrics = await item.evaluate((el) => {
+      const me = el.getBoundingClientRect();
+      const name = el.querySelector('small');
+      return {
+        labelHeight: el.querySelector('span').getBoundingClientRect().height,
+        nameOverhang: name.getBoundingClientRect().right - me.right,
+        nameClipped: name.scrollWidth > name.clientWidth
+      };
     });
-    expect(overflow).toBeLessThanOrEqual(1);
+    expect(metrics.labelHeight).toBeLessThan(30);
+    expect(metrics.nameOverhang).toBeLessThanOrEqual(1);
+    // 양성 대조: 픽스처 이름이 항목 폭을 넘지 않으면 이 테스트는 접힘을 증명하지 못한다.
+    expect(metrics.nameClipped, '픽스처 이름이 항목 폭보다 길어야 한다').toBe(true);
   });
 
   test('관리자 계정은 이 경로로 만들 수 없다', async ({ request }) => {
@@ -180,5 +192,102 @@ test.describe('관리자 > 사용자', () => {
     // 선생님과 관리자가 같은 카카오 계정을 쓴다
     const res = await api(request, sessions.admin, 'POST', `/api/auth/users/${sessions.teacher.user.id}/grant-admin`);
     expect(res.status).toBe(409);
+  });
+});
+
+test.describe('다른 계정으로 로그인 (관리자, FR-388)', () => {
+  const impersonate = (request, session, targetId) =>
+    api(request, session, 'POST', `/api/auth/users/${targetId}/impersonate`);
+
+  test('관리자는 선생님 계정의 토큰을 받고, 그 토큰은 누가 들어왔는지 안다', async ({ request }) => {
+    const res = await impersonate(request, sessions.admin, sessions.teacher.user.id);
+    expect(res.status).toBe(200);
+    expect(res.body.role).toBe('user');
+    expect(res.body.user.id).toBe(sessions.teacher.user.id);
+    expect(res.body.impersonator).toEqual({ id: sessions.admin.user.id, username: sessions.admin.user.username });
+
+    const asTeacher = { token: res.body.token };
+    // 선생님 API 가 열린다
+    expect((await api(request, asTeacher, 'GET', '/api/students')).status).toBe(200);
+    // 토큰 확인 응답이 원래 관리자를 알려준다 (화면 배너가 이걸 쓴다)
+    const verify = await api(request, asTeacher, 'GET', '/api/auth/verify');
+    expect(verify.status).toBe(200);
+    expect(verify.body.user.id).toBe(sessions.teacher.user.id);
+    expect(verify.body.impersonatedBy.id).toBe(sessions.admin.user.id);
+    // 그 상태로는 역할 전환도, 또 다른 계정으로 들어가기도 막힌다
+    expect((await api(request, asTeacher, 'POST', '/api/auth/switch-role', { role: 'admin' })).status).toBe(403);
+    expect((await impersonate(request, asTeacher, sessions.parentMulti.user.id)).status).toBe(403);
+  });
+
+  test('학부모 계정으로 들어가면 학부모 API 만 열린다', async ({ request }) => {
+    const res = await impersonate(request, sessions.admin, sessions.parentMulti.user.id);
+    expect(res.status).toBe(200);
+    expect(res.body.role).toBe('parent');
+
+    const asParent = { token: res.body.token };
+    expect((await api(request, asParent, 'GET', '/api/parent/me')).status).toBe(200);
+    expect((await api(request, asParent, 'GET', '/api/students')).status).toBe(403);
+  });
+
+  test('선생님·학부모는 쓸 수 없고, 관리자도 자기 자신으로는 안 된다', async ({ request }) => {
+    expect((await impersonate(request, sessions.teacher, sessions.parentMulti.user.id)).status).toBe(403);
+    expect((await impersonate(request, sessions.parentMulti, sessions.teacher.user.id)).status).toBe(403);
+    expect((await impersonate(request, sessions.admin, sessions.admin.user.id)).status).toBe(400);
+    expect((await impersonate(request, sessions.admin, 999999999)).status).toBe(404);
+  });
+
+  test('사용자 관리에서 들어갔다가 배너로 관리자에게 돌아온다', async ({ page }) => {
+    // 전체 새로고침을 거치므로 세션은 한 번만 넣는다 (init script 면 매번 관리자로 되돌아간다)
+    await loginOnceAs(page, sessions.admin);
+    await page.goto('/admin/users');
+    await expect(page.getByRole('heading', { name: '사용자 관리' })).toBeVisible();
+
+    // 내 행에는 버튼이 없다
+    const myRow = page.locator('tr', { hasText: sessions.admin.user.username }).first();
+    await expect(myRow.getByRole('button', { name: '이 계정으로 로그인' })).toHaveCount(0);
+
+    page.once('dialog', (dialog) => dialog.accept()); // confirm
+    const teacherRow = page.locator('tr', { hasText: sessions.teacher.user.username }).first();
+    await teacherRow.getByRole('button', { name: '이 계정으로 로그인' }).click();
+
+    // 선생님 시작 화면 + 배너
+    await expect(page).toHaveURL(/\/$/);
+    const banner = page.getByTestId('impersonation-banner');
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText(sessions.admin.user.username);
+    await expect(banner).toContainText(sessions.teacher.user.username);
+    // 선생님 헤더의 역할 메뉴는 숨는다 (전환이 막혀 있으므로)
+    await expect(page.locator('.role-switch-trigger')).toHaveCount(0);
+    // 저장된 세션은 선생님, 돌아갈 관리자 세션은 따로
+    const stored = await page.evaluate(() => ({
+      user: JSON.parse(localStorage.getItem('user')),
+      impersonator: JSON.parse(localStorage.getItem('impersonator'))
+    }));
+    expect(stored.user.id).toBe(sessions.teacher.user.id);
+    expect(stored.impersonator.user.id).toBe(sessions.admin.user.id);
+
+    await banner.getByRole('button', { name: '관리자로 돌아가기' }).click();
+
+    await expect(page).toHaveURL(/\/admin\/users$/);
+    await expect(page.getByRole('heading', { name: '사용자 관리' })).toBeVisible();
+    await expect(page.getByTestId('impersonation-banner')).toHaveCount(0);
+    const after = await page.evaluate(() => ({
+      user: JSON.parse(localStorage.getItem('user')),
+      impersonator: localStorage.getItem('impersonator')
+    }));
+    expect(after.user.id).toBe(sessions.admin.user.id);
+    expect(after.impersonator).toBeNull();
+  });
+
+  test('학부모 계정으로 들어가면 학부모 화면 위에 배너가 붙는다', async ({ page }) => {
+    await loginOnceAs(page, sessions.admin);
+    await page.goto('/admin/users');
+
+    page.once('dialog', (dialog) => dialog.accept());
+    const row = page.locator('tr', { hasText: sessions.parentMulti.user.username }).first();
+    await row.getByRole('button', { name: '이 계정으로 로그인' }).click();
+
+    await expect(page).toHaveURL(/\/parent\/schedule$/);
+    await expect(page.getByTestId('impersonation-banner')).toContainText(sessions.parentMulti.user.username);
   });
 });

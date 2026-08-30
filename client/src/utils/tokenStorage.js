@@ -6,6 +6,7 @@
 const TOKEN_KEY = 'token';
 const USER_KEY = 'user';
 const LAST_ROLE_KEY = 'lastRole';
+const IMPERSONATOR_KEY = 'impersonator';
 const COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30일 (초)
 
 function setCookie(name, value, maxAge = COOKIE_MAX_AGE) {
@@ -110,6 +111,51 @@ export function clearAuth() {
   removeUser();
   // 마지막 역할은 일부러 남긴다 — 다음 카카오 로그인에서 어느 계정으로 들어갈지
   // 정하는 힌트로만 쓰이고, 로그인 상태와는 무관하다 (docs/accounts-roles FR-393).
+}
+
+/* ── 다른 계정으로 로그인 (docs/accounts-roles FR-388) ──
+   관리자가 다른 계정으로 들어가 있는 동안 돌아올 관리자 세션을 따로 둔다.
+   localStorage 에만 두고 cookie 에는 넣지 않는다 — 잃어버려도 관리자가 다시
+   로그인하면 그만이고, 관리자 토큰을 두 곳에 흩뿌리지 않는 편이 낫다. */
+
+/** @param {{ id:number, username:string, token:string, user:object }} actor 원래 관리자와 그 세션 */
+export function saveImpersonator(actor) {
+  try {
+    localStorage.setItem(IMPERSONATOR_KEY, JSON.stringify(actor));
+  } catch (e) {
+    // localStorage 를 못 쓰면 배너의 "돌아가기" 대신 로그아웃만 된다
+  }
+}
+
+export function getImpersonator() {
+  try {
+    const raw = localStorage.getItem(IMPERSONATOR_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export function clearImpersonator() {
+  try {
+    localStorage.removeItem(IMPERSONATOR_KEY);
+  } catch (e) {
+    // 무시
+  }
+}
+
+/**
+ * 저장해 둔 관리자 세션을 다시 현재 세션으로 올리고 대신 로그인 기록을 지운다.
+ * 돌아갈 세션이 없으면 null — 호출한 쪽이 로그아웃으로 처리한다.
+ */
+export function restoreImpersonatorSession() {
+  const actor = getImpersonator();
+  clearImpersonator();
+  if (!actor?.token || !actor?.user) return null;
+
+  saveToken(actor.token);
+  saveUser(actor.user);
+  return { token: actor.token, user: actor.user };
 }
 
 /**

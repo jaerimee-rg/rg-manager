@@ -1189,4 +1189,142 @@ describe('authController', () => {
     });
   });
 
+
+  describe('impersonate — 관리자가 다른 계정으로 로그인 (FR-388)', () => {
+    beforeEach(() => {
+      req.user = { id: 1, username: 'admin', role: 'admin' };
+      req.params = { id: '9' };
+      User.getById.mockImplementation(async (id) => ({
+        1: { id: 1, username: 'admin', role: 'admin', kakaoId: null },
+        9: { id: 9, username: '이재림', role: 'user', kakaoId: 'K1' },
+        20: { id: 20, username: '이재림_학부모', role: 'parent', kakaoId: 'K1' }
+      })[id] || null);
+    });
+
+    it('대상 계정의 토큰을 발급하고 act 에 원래 관리자를 남긴다', async () => {
+      await authController.impersonate(req, res);
+
+      expect(res.status).not.toHaveBeenCalled();
+      const payload = res.json.mock.calls[0][0];
+      expect(payload.role).toBe('user');
+      expect(payload.user).toEqual({ id: 9, username: '이재림', role: 'user', kakaoId: 'K1' });
+      expect(payload.impersonator).toEqual({ id: 1, username: 'admin' });
+
+      const decoded = jwt.verify(payload.token, JWT_SECRET);
+      expect(decoded).toMatchObject({ id: 9, username: '이재림', role: 'user', act: { id: 1, username: 'admin' } });
+      // 남의 계정 토큰은 30일이 아니라 1시간만 산다
+      expect(decoded.exp - decoded.iat).toBe(60 * 60);
+    });
+
+    it('카카오 계정이 아닌 대상(비밀번호 계정)도 된다 — 역할 전환과 다른 점', async () => {
+      User.getById.mockImplementation(async (id) =>
+        id === 1
+          ? { id: 1, username: 'admin', role: 'admin', kakaoId: null }
+          : { id: 7, username: '비번선생님', role: 'user', kakaoId: null }
+      );
+      req.params = { id: '7' };
+
+      await authController.impersonate(req, res);
+
+      expect(res.status).not.toHaveBeenCalled();
+      expect(jwt.verify(res.json.mock.calls[0][0].token, JWT_SECRET).id).toBe(7);
+    });
+
+    it('학부모 계정으로도 들어갈 수 있고 응답 역할이 parent 다', async () => {
+      req.params = { id: '20' };
+
+      await authController.impersonate(req, res);
+
+      expect(res.json.mock.calls[0][0].role).toBe('parent');
+      // 학부모 마지막 로그인 시각은 실제 학부모 로그인에만 남긴다
+      expect(ParentAccount.touchLogin).not.toHaveBeenCalled();
+    });
+
+    it('자기 자신은 400', async () => {
+      req.params = { id: '1' };
+
+      await authController.impersonate(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('없는 사용자는 404', async () => {
+      req.params = { id: '999' };
+
+      await authController.impersonate(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it('잘못된 id 는 400', async () => {
+      req.params = { id: 'abc' };
+
+      await authController.impersonate(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('토큰이 관리자여도 DB 행이 더 이상 관리자가 아니면 403', async () => {
+      User.getById.mockImplementation(async (id) =>
+        id === 1 ? { id: 1, username: 'admin', role: 'user', kakaoId: null } : { id: 9, username: '이재림', role: 'user' }
+      );
+
+      await authController.impersonate(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+    });
+
+    it('이미 다른 계정으로 로그인한 채로는 또 들어갈 수 없다 (403)', async () => {
+      req.user = { id: 50, username: '다른관리자', role: 'admin', act: { id: 1, username: 'admin' } };
+
+      await authController.impersonate(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(User.getById).not.toHaveBeenCalled();
+    });
+
+    it('DB 오류는 500', async () => {
+      User.getById.mockRejectedValue(new Error('boom'));
+
+      await authController.impersonate(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('다른 계정으로 로그인 중에는 역할을 바꿀 수 없다 (FR-388)', () => {
+    beforeEach(() => {
+      req.user = { id: 9, username: '이재림', role: 'user', act: { id: 1, username: 'admin' } };
+    });
+
+    it('switchRole 은 403 이고 계정을 찾지 않는다', async () => {
+      req.body = { role: 'admin' };
+
+      await authController.switchRole(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(User.getByKakaoId).not.toHaveBeenCalled();
+    });
+
+    it('addRole 도 403 이고 계정을 만들지 않는다', async () => {
+      req.body = { role: 'parent' };
+
+      await authController.addRole(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(User.createWithKakao).not.toHaveBeenCalled();
+    });
+
+    it('verify 응답에 누가 들어와 있는지 함께 준다', async () => {
+      User.getById.mockResolvedValue({ id: 9, username: '이재림', role: 'user' });
+
+      await authController.verifyTokenEndpoint(req, res);
+
+      expect(res.json).toHaveBeenCalledWith({
+        user: { id: 9, username: '이재림', role: 'user' },
+        impersonatedBy: { id: 1, username: 'admin' }
+      });
+    });
+  });
+
 });

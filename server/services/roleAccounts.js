@@ -18,6 +18,26 @@ export const issueToken = (user) =>
     expiresIn: JWT_EXPIRES_IN
   });
 
+/**
+ * 관리자가 다른 계정으로 로그인할 때 쓰는 토큰 (FR-388).
+ * 일반 토큰과 같은 모양이라 기존 미들웨어·화면이 그대로 동작하고, `act` 에 원래
+ * 관리자를 남겨 로그와 화면이 "누가 보고 있는지" 알 수 있다. 남의 계정 토큰이므로
+ * 30일이 아니라 짧게 살고, 화면에서 관리자로 돌아가면 그 자리에서 버려진다.
+ */
+export const IMPERSONATION_EXPIRES_IN = '1h';
+
+export const issueImpersonationToken = (target, actor) =>
+  jwt.sign(
+    {
+      id: target.id,
+      username: target.username,
+      role: target.role,
+      act: { id: actor.id, username: actor.username }
+    },
+    JWT_SECRET,
+    { expiresIn: IMPERSONATION_EXPIRES_IN }
+  );
+
 const nameTaken = async (name) => Boolean(await User.getByUsername(name));
 
 /** 오류를 예외 대신 값으로 돌려 컨트롤러가 상태 코드를 정하게 한다 */
@@ -140,6 +160,7 @@ export const createAdminAccount = async (targetUser) => {
 
 export default {
   issueToken,
+  issueImpersonationToken,
   describeRoles,
   createTeacherAccount,
   createParentAccount,

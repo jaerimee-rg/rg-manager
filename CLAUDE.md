@@ -286,6 +286,17 @@ accounts one person has**, and **which teacher(s) a parent belongs to**.
   only an admin deletes the account.
 - **Known limit**: one active role per browser. Switching replaces the token, so other tabs follow
   on their next request.
+- **Admin impersonation** (FR-388) — Admin → 사용자 → **[이 계정으로 로그인]** opens that user's
+  screens as they see them. `POST /api/auth/users/:id/impersonate` (admin only, re-checked against
+  the DB row) issues a **1-hour** token for the target with an `act` claim naming the admin
+  (`services/roleAccounts.js:issueImpersonationToken`). Everything downstream sees a normal token;
+  `logger.js` writes `관리자 → 대상` as the log username, and `/api/auth/verify` echoes
+  `impersonatedBy`. While impersonating, `switch-role`, `POST /roles` and a nested `impersonate`
+  return 403 so the `act` trail cannot be dropped. The client keeps the admin session under the
+  `impersonator` localStorage key (`utils/tokenStorage.js`), shows `ImpersonationBanner` on all
+  three role trees, hides `RoleSwitcher`, and — when the short token expires — `fetchWithAuth`
+  restores the admin session and goes to `/admin/users` instead of `/login`. Session swaps use
+  `hardNavigate` (full reload) so no state from the other account survives.
 - **Production was cleaned on 2026-08-30**: teacher rows other than 이재림 were removed (all three
   were empty — 0 students/classes/attendance/events).
 

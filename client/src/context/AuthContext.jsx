@@ -1,6 +1,9 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { fetchWithAuth } from '../utils/api';
-import { saveToken, getToken, saveUser, getUser, clearAuth, saveLastRole, getLastRole } from '../utils/tokenStorage';
+import {
+  saveToken, getToken, saveUser, getUser, clearAuth, saveLastRole, getLastRole,
+  saveImpersonator, getImpersonator, clearImpersonator, restoreImpersonatorSession
+} from '../utils/tokenStorage';
 
 const AuthContext = createContext();
 
@@ -16,17 +19,29 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
+  /* 관리자가 다른 계정으로 들어와 있으면 그 관리자 { id, username, token?, user? } (FR-388).
+     token 이 없으면(저장소 유실) 배너는 돌아가기 대신 로그아웃만 권한다. */
+  const [impersonator, setImpersonator] = useState(null);
 
   /**
    * 로그인·전환·역할 생성이 모두 같은 방식으로 세션을 갈아 끼운다.
    * 마지막 역할을 함께 남겨 다음 카카오 로그인이 같은 계정으로 들어오게 한다.
+   * 다른 계정으로 들어가는 것은 "내가 마지막에 쓴 역할" 이 아니므로 남기지 않는다.
    */
-  const applySession = (data) => {
+  const applySession = (data, { rememberRole = true } = {}) => {
     setUser(data.user);
     setToken(data.token);
     saveUser(data.user);
     saveToken(data.token);
-    saveLastRole(data.role || data.user?.role);
+    if (rememberRole) saveLastRole(data.role || data.user?.role);
+  };
+
+  const clearSession = () => {
+    setUser(null);
+    setToken(null);
+    setImpersonator(null);
+    clearAuth();
+    clearImpersonator();
   };
 
   useEffect(() => {
@@ -42,6 +57,8 @@ export const AuthProvider = ({ children }) => {
       // 저장된 사용자 정보로 먼저 로그인 상태 설정 (빠른 UX)
       setUser(storedUser);
       setToken(storedToken);
+      const storedImpersonator = getImpersonator();
+      if (storedImpersonator) setImpersonator(storedImpersonator);
 
       try {
         const response = await fetch('/api/auth/verify', {
@@ -54,11 +71,24 @@ export const AuthProvider = ({ children }) => {
           const data = await response.json();
           setUser(data.user);
           saveUser(data.user);
+
+          if (data.impersonatedBy) {
+            // 토큰은 대신 로그인인데 돌아갈 세션이 없어도(다른 기기·저장소 유실) 배너는 그린다
+            if (!storedImpersonator) setImpersonator({ ...data.impersonatedBy, token: null, user: null });
+          } else if (storedImpersonator) {
+            // 그 사이 다시 로그인해 보통 토큰이 된 경우 — 남은 기록은 버린다
+            clearImpersonator();
+            setImpersonator(null);
+          }
+        } else if (storedImpersonator?.token) {
+          // 다른 계정용 짧은 토큰이 끝났다 — 로그아웃 대신 관리자 세션으로 돌아간다
+          const restored = restoreImpersonatorSession();
+          setImpersonator(null);
+          setUser(restored.user);
+          setToken(restored.token);
         } else {
           // Token is invalid or expired - logout
-          setUser(null);
-          setToken(null);
-          clearAuth();
+          clearSession();
         }
       } catch (error) {
         // 네트워크 오류 시 저장된 정보로 로그인 유지
@@ -109,9 +139,9 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    setUser(null);
-    setToken(null);
-    clearAuth();
+    // 다른 계정으로 들어와 있었더라도 로그아웃은 전부 끝낸다 — 관리자 세션을 남겨 두면
+    // 공용 기기에서 다음 사람이 관리자로 돌아갈 수 있다
+    clearSession();
   };
 
   /**
@@ -223,6 +253,62 @@ export const AuthProvider = ({ children }) => {
     return data;
   };
 
+  /* ── 다른 계정으로 로그인 (docs/accounts-roles FR-388) ── */
+
+  /**
+   * 관리자가 사용자 목록에서 고른 계정으로 들어간다.
+   * 돌아올 관리자 세션을 먼저 챙긴 뒤 세션을 갈아 끼운다. 호출한 쪽이 화면을 새로 연다.
+   */
+  const impersonate = async (userId) => {
+    const response = await fetchWithAuth(`/api/auth/users/${userId}/impersonate`, { method: 'POST' });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || '해당 계정으로 로그인할 수 없습니다.');
+
+    const actor = {
+      ...data.impersonator,
+      token: token || getToken(),
+      user: user || getUser()
+    };
+    saveImpersonator(actor);
+    setImpersonator(actor);
+    applySession(data, { rememberRole: false });
+    return data;
+  };
+
+  /**
+   * 관리자 세션으로 돌아온다. 돌아갈 세션이 없거나 그 토큰마저 끝났으면 로그아웃한다.
+   * 돌아온 뒤 /verify 로 관리자 정보를 다시 읽어 그 사이 바뀐 이름 등을 맞춘다.
+   */
+  const stopImpersonating = async () => {
+    const restored = restoreImpersonatorSession();
+    setImpersonator(null);
+    if (!restored) {
+      clearSession();
+      return null;
+    }
+
+    setUser(restored.user);
+    setToken(restored.token);
+
+    try {
+      const response = await fetch('/api/auth/verify', {
+        headers: { Authorization: `Bearer ${restored.token}` }
+      });
+      if (!response.ok) {
+        clearSession();
+        return null;
+      }
+      const data = await response.json();
+      setUser(data.user);
+      saveUser(data.user);
+      return data.user;
+    } catch (error) {
+      // 네트워크 오류면 저장된 관리자 정보로 유지한다
+      console.error('관리자 세션 확인 실패:', error);
+      return restored.user;
+    }
+  };
+
   // 사용자 이름 설정
   const updateUserName = async (username) => {
     const response = await fetch('/api/auth/username', {
@@ -279,7 +365,10 @@ export const AuthProvider = ({ children }) => {
     refreshUser,
     listRoles,
     switchRole,
-    addRole
+    addRole,
+    impersonator,
+    impersonate,
+    stopImpersonating
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

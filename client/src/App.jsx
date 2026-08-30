@@ -27,6 +27,7 @@ import InviteLanding from './pages/parent/InviteLanding';
 import TeacherInviteLanding from './pages/TeacherInviteLanding';
 import ParentApp from './components/parent/ParentApp';
 import RoleSwitcher from './components/common/RoleSwitcher';
+import ImpersonationBanner from './components/common/ImpersonationBanner';
 
 // Admin components
 import AdminRoute from './components/admin/AdminRoute';
@@ -159,8 +160,14 @@ function App() {
 
   // 학부모는 선생님 화면을 쓰지 않는다. 레이아웃·라우팅이 아예 다르므로
   // 여기서 갈라 두면 아래 선생님 트리는 손대지 않아도 된다.
+  // 관리자가 다른 계정으로 들어와 있으면(FR-388) 어느 역할 화면이든 맨 위에 배너가 붙는다.
   if (user.role === 'parent') {
-    return <ParentApp />;
+    return (
+      <>
+        <ImpersonationBanner />
+        <ParentApp />
+      </>
+    );
   }
 
   const navLinks = [
@@ -179,39 +186,43 @@ function App() {
   // 관리자 페이지일 경우 별도 레이아웃 사용
   if (isAdminPage) {
     return (
-      <Routes>
-        <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
-          <Route index element={<Navigate to="/admin/students" replace />} />
-          <Route path="students" element={<AdminStudents />} />
-          <Route path="students/new" element={<StudentForm />} />
-          <Route path="students/edit" element={<StudentForm />} />
-          <Route path="classes" element={<AdminClasses />} />
-          <Route path="classes/new" element={<ClassForm />} />
-          <Route path="classes/edit" element={<ClassForm />} />
-          <Route path="classes/manage" element={<ClassStudentManagement />} />
-          <Route path="competitions" element={<AdminCompetitions />} />
-          <Route path="competitions/new" element={<CompetitionForm />} />
-          <Route path="competitions/edit" element={<CompetitionForm />} />
-          <Route path="competitions/manage" element={<CompetitionStudentManagement />} />
-          <Route path="events" element={<AdminEvents />} />
-          <Route path="events/new" element={<EventForm basePath="/admin/events" />} />
-          <Route path="events/edit" element={<EventForm basePath="/admin/events" />} />
-          <Route path="parents" element={<AdminParents />} />
-          <Route path="teachers" element={<AdminTeacherInvites />} />
-          <Route path="attendance" element={<AdminAttendance />} />
-          <Route path="users" element={<AdminUsers />} />
-          <Route path="logs" element={<AdminLogs />} />
-          <Route path="notifications" element={<AdminNotifications />} />
-          <Route path="faq" element={<AdminFaq />} />
-          <Route path="settings" element={<AdminSettings />} />
-        </Route>
-        <Route path="*" element={<Navigate to="/admin/students" />} />
-      </Routes>
+      <>
+        <ImpersonationBanner />
+        <Routes>
+          <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+            <Route index element={<Navigate to="/admin/students" replace />} />
+            <Route path="students" element={<AdminStudents />} />
+            <Route path="students/new" element={<StudentForm />} />
+            <Route path="students/edit" element={<StudentForm />} />
+            <Route path="classes" element={<AdminClasses />} />
+            <Route path="classes/new" element={<ClassForm />} />
+            <Route path="classes/edit" element={<ClassForm />} />
+            <Route path="classes/manage" element={<ClassStudentManagement />} />
+            <Route path="competitions" element={<AdminCompetitions />} />
+            <Route path="competitions/new" element={<CompetitionForm />} />
+            <Route path="competitions/edit" element={<CompetitionForm />} />
+            <Route path="competitions/manage" element={<CompetitionStudentManagement />} />
+            <Route path="events" element={<AdminEvents />} />
+            <Route path="events/new" element={<EventForm basePath="/admin/events" />} />
+            <Route path="events/edit" element={<EventForm basePath="/admin/events" />} />
+            <Route path="parents" element={<AdminParents />} />
+            <Route path="teachers" element={<AdminTeacherInvites />} />
+            <Route path="attendance" element={<AdminAttendance />} />
+            <Route path="users" element={<AdminUsers />} />
+            <Route path="logs" element={<AdminLogs />} />
+            <Route path="notifications" element={<AdminNotifications />} />
+            <Route path="faq" element={<AdminFaq />} />
+            <Route path="settings" element={<AdminSettings />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/admin/students" />} />
+        </Routes>
+      </>
     );
   }
 
   return (
     <div className="app">
+      <ImpersonationBanner />
       <header className="app-header">
         <div className="app-header-inner">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
