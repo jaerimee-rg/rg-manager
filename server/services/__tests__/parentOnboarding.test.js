@@ -1,4 +1,4 @@
-import { normalizeDate, normalizeName, matchChild } from '../parentOnboarding.js';
+import { normalizeDate, normalizeName, matchChild, defaultParentName } from '../parentOnboarding.js';
 
 const students = [
   { id: 1, name: '김민서', birthdate: '2018-03-05' },
@@ -65,5 +65,21 @@ describe('matchChild', () => {
   it('학생 목록이 비어도 터지지 않는다', () => {
     expect(matchChild([], { name: '김민서', birthdate: '2018-03-05' }).status).toBe('pending');
     expect(matchChild(null, { name: '김민서', birthdate: '2018-03-05' }).status).toBe('pending');
+  });
+});
+
+describe('defaultParentName (학부모명 기본값)', () => {
+  it('아이 이름에 "엄마" 를 붙인다', () => {
+    expect(defaultParentName('예림')).toBe('예림엄마');
+  });
+
+  it('띄어쓰기는 무시한다', () => {
+    expect(defaultParentName('김 민서')).toBe('김민서엄마');
+  });
+
+  it('아이 이름이 없으면 빈 값 — 화면이 직접 입력을 받는다', () => {
+    expect(defaultParentName('')).toBe('');
+    expect(defaultParentName(null)).toBe('');
+    expect(defaultParentName('   ')).toBe('');
   });
 });

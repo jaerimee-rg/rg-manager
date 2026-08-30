@@ -1,4 +1,4 @@
-import { suggestStudents, buildStudentView, filterParents, sortParents, hasPending } from '../parentLinking';
+import { suggestStudents, buildStudentView, filterParents, sortParents, hasPending, parentLabel } from '../parentLinking';
 
 const students = [
   { id: 1, name: '김민서', birthdate: '2018-03-05' },
@@ -91,5 +91,30 @@ describe('filterParents / sortParents', () => {
   it('hasPending 은 연결 안 된 자녀가 있으면 참', () => {
     expect(hasPending(parents[0])).toBe(true);
     expect(hasPending(parents[1])).toBe(false);
+  });
+});
+
+describe('parentLabel', () => {
+  it('학부모가 정한 이름을 쓴다', () => {
+    expect(parentLabel({ displayName: '칸쵸엄마', username: '카카오닉네임' })).toBe('칸쵸엄마');
+  });
+
+  it('이름을 정하지 않은 옛 계정은 카카오 닉네임으로 되돌린다', () => {
+    expect(parentLabel({ displayName: null, username: '민서엄마' })).toBe('민서엄마');
+  });
+
+  it('아무것도 없으면 빈 문자열 (화면이 터지지 않게)', () => {
+    expect(parentLabel(undefined)).toBe('');
+  });
+});
+
+describe('filterParents — 학부모명', () => {
+  it('가입 때 정한 이름으로도 찾는다', () => {
+    const list = [{ userId: 103, username: '카카오닉네임', displayName: '칸쵸엄마', children: [] }];
+    expect(filterParents(list, '칸쵸')).toHaveLength(1);
+  });
+
+  it('이름이 없는 옛 계정도 걸러내지 않는다', () => {
+    expect(filterParents(parents, '민서엄마')).toHaveLength(1);
   });
 });

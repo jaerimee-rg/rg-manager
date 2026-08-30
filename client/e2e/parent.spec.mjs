@@ -29,11 +29,15 @@ test.describe('학부모 — 가입부터 신청까지', () => {
     const schedule = page.getByText(/년 남은 일정/);
     await expect(onboarding.or(schedule).first()).toBeVisible();
 
+    let onboarded = false;
     if (await onboarding.isVisible()) {
       await page.getByLabel('이름').first().fill(childName);
       await page.getByLabel('생년월일').first().fill(sessions.students[0].birthdate);
+      // 학부모명은 아이 이름에서 자동으로 제안된다
+      await expect(page.getByRole('textbox', { name: /학부모명/ })).toHaveValue(`${childName}엄마`);
       await page.getByRole('button', { name: '시작하기' }).click();
       await expect(page).toHaveURL(/\/parent\/schedule$/);
+      onboarded = true;
     }
 
     await expect(page.getByText(/년 남은 일정/)).toBeVisible();
@@ -43,6 +47,30 @@ test.describe('학부모 — 가입부터 신청까지', () => {
     const child = me.body.children.find((c) => c.childName === childName);
     expect(child.status).toBe('linked');
     expect(child.studentName).toBe(childName);
+
+    // 가입 때 정한 학부모명이 저장돼 있다 (이미 가입한 상태로 다시 돌린 경우는 건너뛴다)
+    if (onboarded) expect(me.body.user.displayName).toBe(`${childName}엄마`);
+  });
+
+  test('내 정보에서 학부모명을 바꾼다', async ({ page, request }) => {
+    await loginAs(page, sessions.parent);
+    await page.goto('/parent/settings');
+
+    const before = await api(request, sessions.parent, 'GET', '/api/parent/me');
+
+    await page.getByRole('button', { name: '변경' }).first().click();
+    // 입력칸은 20자까지라 짧은 이름을 쓴다
+    await page.getByRole('textbox', { name: /학부모명/ }).fill('칸쵸엄마');
+    await page.getByRole('button', { name: '저장' }).click();
+
+    await expect(page.getByText('칸쵸엄마', { exact: true })).toBeVisible();
+
+    // 다른 테스트가 기대하는 이름으로 되돌린다
+    if (before.body?.user?.displayName) {
+      await api(request, sessions.parent, 'PUT', '/api/parent/name', {
+        parentName: before.body.user.displayName
+      });
+    }
   });
 
   test('대회를 신청하고 옵션을 바꾸고 취소한다', async ({ page, request }) => {

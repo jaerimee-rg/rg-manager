@@ -23,6 +23,10 @@ function ParentSettings() {
   const [invite, setInvite] = useState('');
   const [teacherError, setTeacherError] = useState('');
   const [teacherNotice, setTeacherNotice] = useState('');
+  // 학부모명("예림엄마") 수정
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [nameError, setNameError] = useState('');
 
   const load = async () => {
     const response = await fetchWithAuth('/api/parent/me');
@@ -32,6 +36,25 @@ function ParentSettings() {
   useEffect(() => {
     load();
   }, []);
+
+  const saveName = async (e) => {
+    e.preventDefault();
+    setNameError('');
+
+    const next = nameDraft.trim();
+    if (!next) return setNameError('학부모명을 입력해주세요.');
+
+    const response = await fetchWithAuth('/api/parent/name', {
+      method: 'PUT',
+      body: JSON.stringify({ parentName: next })
+    });
+    const data = await response.json();
+
+    if (!response.ok) return setNameError(data.error || '저장에 실패했습니다.');
+
+    setEditingName(false);
+    load();
+  };
 
   const addChild = async (e) => {
     e.preventDefault();
@@ -103,6 +126,45 @@ function ParentSettings() {
 
   return (
     <ParentLayout title="내 정보" subtitle={me ? `카카오 · ${me.user.username}` : ''}>
+      {/* 선생님에게 보이는 이름. 가입 때 정한 값을 여기서 바꾼다. */}
+      <div className="card" style={{ padding: '16px', marginBottom: '12px' }}>
+        <h3 style={{ fontSize: '0.8125rem', fontWeight: 800, color: 'var(--color-gray-500)', marginBottom: '10px' }}>학부모명</h3>
+
+        {editingName ? (
+          <form onSubmit={saveName}>
+            <input
+              type="text" value={nameDraft} maxLength={20} autoFocus
+              onChange={(e) => setNameDraft(e.target.value)}
+              aria-label="학부모명"
+              placeholder="예: 예림엄마"
+              style={{
+                width: '100%', padding: '12px', fontSize: '16px', marginBottom: '8px',
+                border: '1px solid var(--color-gray-300)', borderRadius: 'var(--radius-md)'
+              }}
+            />
+            {nameError && (
+              <div role="alert" style={{ color: 'var(--color-danger)', fontSize: '0.8125rem', marginBottom: '8px' }}>{nameError}</div>
+            )}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>저장</button>
+              <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { setEditingName(false); setNameError(''); }}>취소</button>
+            </div>
+          </form>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ flex: 1, minWidth: 0, fontWeight: 700, fontSize: '0.9375rem' }}>
+              {me?.user?.displayName || me?.user?.username || ''}
+            </div>
+            <button
+              type="button" className="btn btn-secondary btn-sm"
+              onClick={() => { setNameDraft(me?.user?.displayName || ''); setNameError(''); setEditingName(true); }}
+            >
+              변경
+            </button>
+          </div>
+        )}
+      </div>
+
       <div className="card" style={{ padding: '16px', marginBottom: '12px' }}>
         <h3 style={{ fontSize: '0.8125rem', fontWeight: 800, color: 'var(--color-gray-500)', marginBottom: '10px' }}>내 아이</h3>
 

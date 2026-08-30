@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { fetchWithAuth } from '../../utils/api';
 import InviteLinkBox from './InviteLinkBox';
-import { suggestStudents, buildStudentView, filterParents, sortParents } from './parentLinking';
+import { suggestStudents, buildStudentView, filterParents, sortParents, parentLabel } from './parentLinking';
 
 const STAT_STYLE = { background: '#fff', borderRadius: 'var(--radius-lg)', padding: '12px 14px' };
 
@@ -110,7 +110,7 @@ function ParentList({ filterUserId = null, embedded = false }) {
   const removeParent = async (parent) => {
     /* 학부모가 다른 선생님에게도 다닐 수 있어(docs/accounts-roles FR-350) 선생님은
        계정을 지우지 않고 **자기 연결만** 끊는다. 서버가 그렇게 처리한다. */
-    if (!confirm(`${parent.username} 학부모와의 연결을 해제할까요?\n내 일정·사진을 더 이상 볼 수 없게 됩니다. (다른 선생님과의 연결은 그대로예요)`)) return;
+    if (!confirm(`${parentLabel(parent)} 학부모와의 연결을 해제할까요?\n내 일정·사진을 더 이상 볼 수 없게 됩니다. (다른 선생님과의 연결은 그대로예요)`)) return;
 
     const response = await fetchWithAuth(`/api/parents/${parent.userId}`, { method: 'DELETE' });
     if (response.ok) {
@@ -127,7 +127,7 @@ function ParentList({ filterUserId = null, embedded = false }) {
     if (!q) return rows;
     return rows.filter(
       (r) => r.student.name.replace(/\s+/g, '').includes(q) ||
-        r.links.some(({ parent }) => parent.username.replace(/\s+/g, '').includes(q))
+        r.links.some(({ parent }) => parentLabel(parent).replace(/\s+/g, '').includes(q))
     );
   }, [students, parents, query]);
 
@@ -203,7 +203,7 @@ function ParentList({ filterUserId = null, embedded = false }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                 <div>
                   <div style={{ fontWeight: 700 }}>
-                    {parent.username} <span className="badge badge-gray">카카오</span>
+                    {parentLabel(parent)} <span className="badge badge-gray">카카오</span>
                     {/* 관리자가 전체를 볼 때는 연결된 선생님을 모두 보여준다 (학부모 ↔ 선생님 다대다) */}
                     {(parent.teachers || []).length > 0
                       ? parent.teachers.map((teacher) => (
@@ -280,11 +280,11 @@ function ParentList({ filterUserId = null, embedded = false }) {
 
               <div style={{ paddingTop: '9px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                 <select
-                  aria-label={`${parent.username} 에 학생 연결 추가`}
+                  aria-label={`${parentLabel(parent)} 에 학생 연결 추가`}
                   defaultValue=""
                   onChange={(e) => {
                     const student = students.find((s) => String(s.id) === e.target.value);
-                    addLink(parent.userId, e.target.value, parent.username, student?.name || '');
+                    addLink(parent.userId, e.target.value, parentLabel(parent), student?.name || '');
                     e.target.value = '';
                   }}
                   style={{ padding: '7px 8px', fontSize: '0.8125rem', border: '1px solid var(--color-gray-300)', borderRadius: 'var(--radius-sm)' }}
@@ -322,10 +322,10 @@ function ParentList({ filterUserId = null, embedded = false }) {
                 )}
                 {links.map(({ parent, child }) => (
                   <span key={child.id} className="badge badge-success" style={{ padding: '4px 6px 4px 10px', gap: '6px' }}>
-                    👤 {parent.username}
+                    👤 {parentLabel(parent)}
                     <button
                       onClick={() => unlinkChild(child.id, child.childName)}
-                      aria-label={`${parent.username} 연결 해제`}
+                      aria-label={`${parentLabel(parent)} 연결 해제`}
                       style={{
                         border: 'none', background: 'rgba(0,0,0,.06)', color: 'inherit', borderRadius: '50%',
                         width: '18px', height: '18px', fontSize: '0.7rem', cursor: 'pointer', lineHeight: 1
@@ -337,7 +337,7 @@ function ParentList({ filterUserId = null, embedded = false }) {
                 ))}
                 {suggestions.map(({ parent, child }) => (
                   <span key={`s-${child.id}`} className="badge badge-warning" style={{ padding: '4px 6px 4px 10px', gap: '6px' }}>
-                    💡 {parent.username}의 "{child.childName}" 확인 대기
+                    💡 {parentLabel(parent)}의 "{child.childName}" 확인 대기
                     <button
                       onClick={() => linkChild(child.id, student.id, child.childName, student.name)}
                       style={{
@@ -356,7 +356,7 @@ function ParentList({ filterUserId = null, embedded = false }) {
                 defaultValue=""
                 onChange={(e) => {
                   const parent = parents.find((p) => String(p.userId) === e.target.value);
-                  addLink(e.target.value, student.id, parent?.username || '', student.name);
+                  addLink(e.target.value, student.id, parentLabel(parent), student.name);
                   e.target.value = '';
                 }}
                 style={{ padding: '7px 8px', fontSize: '0.8125rem', border: '1px solid var(--color-gray-300)', borderRadius: 'var(--radius-sm)' }}
@@ -364,7 +364,7 @@ function ParentList({ filterUserId = null, embedded = false }) {
                 <option value="">+ 학부모 연결…</option>
                 {parents
                   .filter((p) => !p.children.some((c) => c.studentId === student.id))
-                  .map((p) => <option key={p.userId} value={p.userId}>{p.username}</option>)}
+                  .map((p) => <option key={p.userId} value={p.userId}>{parentLabel(p)}</option>)}
               </select>
             </div>
           ))}

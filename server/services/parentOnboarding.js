@@ -43,4 +43,13 @@ export const matchChild = (students, { name, birthdate }) => {
     : { status: 'pending', studentId: null, candidates: hits.length };
 };
 
-export default { normalizeName, normalizeDate, matchChild };
+/**
+ * 학부모 표시 이름의 기본값. 아이 이름에 "엄마" 를 붙인다 ("예림" → "예림엄마").
+ * 학부모가 직접 고쳐 쓰는 값이라 규칙은 제안일 뿐이고, 아이 이름이 비었으면 빈 값을 준다.
+ */
+export const defaultParentName = (childName) => {
+  const name = normalizeName(childName);
+  return name ? `${name}엄마` : '';
+};
+
+export default { normalizeName, normalizeDate, matchChild, defaultParentName };

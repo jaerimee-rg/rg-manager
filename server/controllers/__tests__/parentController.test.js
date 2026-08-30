@@ -1,7 +1,7 @@
 import { jest } from '@jest/globals';
 
 jest.unstable_mockModule('../../models/ParentAccount.js', () => ({
-  default: { getByUserId: jest.fn(), create: jest.fn() }
+  default: { getByUserId: jest.fn(), create: jest.fn(), updateDisplayName: jest.fn() }
 }));
 
 jest.unstable_mockModule('../../models/ParentInvite.js', () => ({
@@ -58,7 +58,7 @@ const Student = (await import('../../models/Student.js')).default;
 const Event = (await import('../../models/Event.js')).default;
 const EventRegistration = (await import('../../models/EventRegistration.js')).default;
 const { sendEventRegistrationKakaoMessage } = await import('../../utils/kakaoMessage.js');
-const { getMe, addChildren, getEvents, getEvent, registerChild, cancelChild, addTeacher } =
+const { getMe, addChildren, updateName, getEvents, getEvent, registerChild, cancelChild, addTeacher } =
   await import('../parentController.js');
 
 // 선생님 1명과 연결된 기본 상태 (기존 동작이 그대로인지 확인하는 기준)
@@ -95,6 +95,9 @@ describe('parentController', () => {
     ParentTeacher.teacherIds.mockResolvedValue([7]);
     ParentChild.listByParent.mockResolvedValue([linkedChild, pendingChild]);
     ParentChild.hasStudent.mockResolvedValue(false);
+    // 아직 학부모명을 정하지 않은 계정이 기본 상태
+    ParentAccount.getByUserId.mockResolvedValue({ userId: 20, displayName: null });
+    ParentAccount.updateDisplayName.mockImplementation(async (userId, displayName) => ({ userId, displayName }));
     EventRegistration.listForStudents.mockResolvedValue([]);
     EventRegistration.getByEventAndStudent.mockResolvedValue(null);
   });
@@ -120,6 +123,22 @@ describe('parentController', () => {
       expect(payload.teachers).toHaveLength(2);
       // 자녀마다 어느 선생님 아이인지 표시된다
       expect(payload.children.map((c) => c.teacherName)).toEqual(['이재림', '박지우']);
+    });
+
+    it('학부모가 정한 이름을 내려보낸다', async () => {
+      ParentAccount.getByUserId.mockResolvedValue({ userId: 20, displayName: '민서엄마' });
+
+      await getMe(req, res);
+
+      expect(res.json.mock.calls[0][0].user).toEqual({ id: 20, username: '민서엄마', displayName: '민서엄마' });
+    });
+
+    it('이름을 정하지 않은 옛 계정은 null 로 준다 (화면이 카카오 닉네임으로 되돌린다)', async () => {
+      ParentAccount.getByUserId.mockResolvedValue(null);
+
+      await getMe(req, res);
+
+      expect(res.json.mock.calls[0][0].user.displayName).toBeNull();
     });
 
     it('연결된 선생님이 없으면 빈 목록으로 답한다 (오류가 아니다)', async () => {
@@ -195,6 +214,71 @@ describe('parentController', () => {
       req.body = { children: [] };
       await addChildren(req, res);
       expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('보내온 학부모명을 저장한다', async () => {
+      req.body = { parentName: '칸쵸엄마', children: [{ name: '김민서', birthdate: '2018-03-05' }] };
+
+      await addChildren(req, res);
+
+      expect(ParentAccount.updateDisplayName).toHaveBeenCalledWith(20, '칸쵸엄마');
+      expect(res.json.mock.calls[0][0].displayName).toBe('칸쵸엄마');
+    });
+
+    it('학부모명이 비면 첫 아이 이름으로 기본값을 만든다', async () => {
+      req.body = { children: [{ name: '김민서', birthdate: '2018-03-05' }] };
+
+      await addChildren(req, res);
+
+      expect(ParentAccount.updateDisplayName).toHaveBeenCalledWith(20, '김민서엄마');
+    });
+
+    it('이미 이름을 정한 계정이면 빈 값이 와도 덮어쓰지 않는다', async () => {
+      ParentAccount.getByUserId.mockResolvedValue({ userId: 20, displayName: '칸쵸엄마' });
+      req.body = { children: [{ name: '이하은', birthdate: '2017-07-22' }] };
+
+      await addChildren(req, res);
+
+      expect(ParentAccount.updateDisplayName).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(201);
+    });
+
+    it('학부모명이 너무 길면 400 (아이는 저장하지 않는다)', async () => {
+      req.body = { parentName: '가'.repeat(21), children: [{ name: '김민서', birthdate: '2018-03-05' }] };
+
+      await addChildren(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(ParentChild.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateName (내 정보에서 이름 변경)', () => {
+    it('학부모명을 바꾼다', async () => {
+      req.body = { parentName: '  쵸파엄마  ' };
+
+      await updateName(req, res);
+
+      expect(ParentAccount.updateDisplayName).toHaveBeenCalledWith(20, '쵸파엄마');
+      expect(res.json.mock.calls[0][0]).toEqual({ displayName: '쵸파엄마' });
+    });
+
+    it('빈 값이면 400 — 이름을 지울 수는 없다', async () => {
+      req.body = { parentName: '   ' };
+
+      await updateName(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(ParentAccount.updateDisplayName).not.toHaveBeenCalled();
+    });
+
+    it('학부모 계정이 없으면 404', async () => {
+      ParentAccount.updateDisplayName.mockResolvedValue(null);
+      req.body = { parentName: '예림엄마' };
+
+      await updateName(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
     });
   });
 

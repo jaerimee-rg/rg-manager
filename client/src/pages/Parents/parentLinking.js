@@ -3,6 +3,12 @@
 const squash = (value) => String(value ?? '').replace(/\s+/g, '');
 
 /**
+ * 선생님 화면에 보여줄 학부모 이름.
+ * 가입 때 정한 이름("예림엄마")을 쓰고, 아직 정하지 않은 옛 계정은 카카오 닉네임으로 되돌린다.
+ */
+export const parentLabel = (parent) => parent?.displayName || parent?.username || '';
+
+/**
  * 확인 대기 자녀와 이름 또는 생년월일이 같은 학생을 추천한다.
  * (오타·띄어쓰기 때문에 자동 연결이 안 된 경우를 사람이 빨리 고르도록)
  */
@@ -39,12 +45,15 @@ export const buildStudentView = (students, parents) => {
   }));
 };
 
-/** 검색어로 학부모를 거른다 (학부모 이름 또는 아이 이름) */
+/** 검색어로 학부모를 거른다 (학부모 이름·카카오 닉네임 또는 아이 이름) */
 export const filterParents = (parents, query) => {
   const q = squash(query);
   if (!q) return parents || [];
   return (parents || []).filter(
-    (p) => squash(p.username).includes(q) || (p.children || []).some((c) => squash(c.childName).includes(q))
+    (p) =>
+      squash(p.displayName).includes(q) ||
+      squash(p.username).includes(q) ||
+      (p.children || []).some((c) => squash(c.childName).includes(q))
   );
 };
 

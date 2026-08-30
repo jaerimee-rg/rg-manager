@@ -320,6 +320,13 @@ Parents get their own accounts and a separate app under `/parent/*`. Design docs
   (format-normalised) must hit exactly one of that teacher's students to auto-link. Zero or
   several leaves the child `pending` — signup still completes, and the teacher links it by hand
   from either the by-parent or by-student view.
+- **Parent display name** (`parent_accounts.displayName`, e.g. "예림엄마"): what every screen
+  shows for a parent. `users.username` stays the Kakao nickname and is **identity only** — it is
+  UNIQUE, so two "지우엄마" would collide into `지우엄마_2`; `displayName` is not. Captured in
+  onboarding (`POST /api/parent/children` takes `parentName`), defaulted to **first child's name +
+  "엄마"** by `defaultParentName()` on both sides, changed later via `PUT /api/parent/name`.
+  Accounts created before this have `null` — every display site falls back to `username`
+  (`parentLabel()` in `client/src/pages/Parents/parentLinking.js`).
 - **Events** (`events`) are the single source for the schedule: `competition` / `special` /
   `closure`. A competition event owns a `competitions` row 1:1 (`events.competitionId`), so the
   existing 참가 학생 · 종목 · 참가비 screens keep working. Writes go through

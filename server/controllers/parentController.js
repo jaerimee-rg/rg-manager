@@ -10,13 +10,14 @@ import Competition from '../models/Competition.js';
 import EventMedia from '../models/EventMedia.js';
 import { isConfirmedParent } from '../utils/albumAccess.js';
 import { thumbnailUrl } from '../utils/mediaSerializer.js';
-import { matchChild } from '../services/parentOnboarding.js';
+import { matchChild, defaultParentName } from '../services/parentOnboarding.js';
 import { teacherIdsOf, teachersOf, childBelongsToEvent } from '../services/parentScope.js';
 import { extractInviteToken } from '../utils/oauthState.js';
 import { canRegister, todayKst } from '../services/eventService.js';
 import { sendEventRegistrationKakaoMessage } from '../utils/kakaoMessage.js';
 
 export const CHILD_NAME_MAX = 20;
+export const PARENT_NAME_MAX = 20;
 export const MAX_CHILDREN = 10;
 
 const notFound = (res) => res.status(404).json({ error: '찾을 수 없습니다.' });
@@ -67,6 +68,7 @@ export const getMe = async (req, res) => {
   try {
     const teachers = await teachersOf(req.user.id);
     const children = await ParentChild.listByParent(req.user.id);
+    const account = await ParentAccount.getByUserId(req.user.id);
 
     // 자녀별 얼굴 사진 등록 여부 — "우리 아이만" 안내를 띄울지 화면이 정한다.
     // 여기가 실패해도 내 정보 화면 자체는 떠야 하므로 0 으로 두고 넘어간다.
@@ -79,7 +81,13 @@ export const getMe = async (req, res) => {
     }
 
     res.json({
-      user: { id: req.user.id, username: req.user.username },
+      /* displayName 은 학부모가 정한 별명("예림엄마"), username 은 카카오 닉네임.
+         아직 정하지 않은 옛 계정은 null 이라 화면이 username 으로 되돌린다. */
+      user: {
+        id: req.user.id,
+        username: req.user.username,
+        displayName: account?.displayName || null
+      },
       // 연결된 선생님 전부 (FR-353)
       teachers,
       // 옛 클라이언트 호환 — 대표(첫) 선생님. 한 배포 주기 뒤 제거한다.
@@ -95,9 +103,21 @@ export const getMe = async (req, res) => {
   }
 };
 
+/** 학부모 표시 이름 검사. 통과하면 다듬은 값을, 아니면 오류 메시지를 준다. */
+const cleanParentName = (value) => {
+  const name = String(value ?? '').trim();
+  if (name.length > PARENT_NAME_MAX) {
+    return { error: `학부모명은 ${PARENT_NAME_MAX}자 이내로 입력해주세요.` };
+  }
+  return { name };
+};
+
 /**
  * 온보딩·자녀 추가. 이름·생년월일이 선생님의 학생과 정확히 하나 맞으면 바로 연결하고,
  * 아니면 확인 대기로 두어 가입 자체는 끝난다 (오타로 막히지 않도록).
+ *
+ * 온보딩에서는 학부모명("예림엄마")도 함께 받는다. 비워서 보내면 첫 아이 이름으로
+ * 기본값을 만들어 넣는다 — 화면이 자동으로 채우지만 서버도 같은 규칙을 갖는다.
  */
 export const addChildren = async (req, res) => {
   try {
@@ -138,6 +158,17 @@ export const addChildren = async (req, res) => {
       cleaned.push({ name, birthdate });
     }
 
+    const parentName = cleanParentName(req.body.parentName);
+    if (parentName.error) return res.status(400).json({ error: parentName.error });
+
+    /* 학부모명은 가입(첫 아이 등록) 때 한 번 정한다. 나중에 아이를 더 추가할 때
+       빈 값이 와도 이미 정해 둔 이름을 지우지 않는다. */
+    const account = await ParentAccount.getByUserId(req.user.id);
+    const nextName = parentName.name || (account?.displayName ? '' : defaultParentName(cleaned[0].name));
+    if (nextName) {
+      await ParentAccount.updateDisplayName(req.user.id, nextName);
+    }
+
     // 고른 선생님의 학생 명단과만 대조한다 (FR-356)
     const students = await Student.getAll(teacher.id, 'user');
     const created = [];
@@ -161,7 +192,31 @@ export const addChildren = async (req, res) => {
     }
 
     const children = await ParentChild.listByParent(req.user.id);
-    res.status(201).json({ children: children.map(presentChild), created: created.length });
+    res.status(201).json({
+      children: children.map(presentChild),
+      created: created.length,
+      displayName: nextName || account?.displayName || null
+    });
+  } catch (error) {
+    console.error('학부모 처리 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/**
+ * 내 정보에서 학부모명 바꾸기.
+ * users.username 은 카카오 닉네임(식별용)이라 건드리지 않고 별명만 바꾼다.
+ */
+export const updateName = async (req, res) => {
+  try {
+    const { name, error } = cleanParentName(req.body.parentName ?? req.body.name);
+    if (error) return res.status(400).json({ error });
+    if (!name) return res.status(400).json({ error: '학부모명을 입력해주세요.' });
+
+    const account = await ParentAccount.updateDisplayName(req.user.id, name);
+    if (!account) return res.status(404).json({ error: '학부모 정보를 찾을 수 없습니다.' });
+
+    res.json({ displayName: account.displayName });
   } catch (error) {
     console.error('학부모 처리 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
