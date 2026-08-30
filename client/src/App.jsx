@@ -17,6 +17,7 @@ import StudentCompetitions from './pages/StudentCompetitions';
 import KakaoCallback from './pages/KakaoCallback';
 import RegisterName from './pages/RegisterName';
 import Settings from './pages/Settings';
+import DesignSystem from './pages/DesignSystem';
 import FaqList from './pages/Faq/FaqList';
 import PublicChat from './pages/PublicChat';
 import EventList from './pages/Events/EventList';
@@ -149,6 +150,8 @@ function App() {
         <Route path="/signup" element={<Navigate to="/login" />} />
         <Route path="/oauth/kakao/callback" element={<KakaoCallback />} />
         <Route path="/register-name" element={<RegisterName />} />
+        {/* 디자인 시스템 목록은 로그인 없이도 열린다 — 데이터가 없는 참고 화면이다 */}
+        <Route path="/design-system" element={<DesignSystem />} />
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
     );
@@ -308,6 +311,8 @@ function App() {
       <main className="app-main">
         <Routes>
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          {/* 디자인 시스템 목록 — 새 화면을 만들기 전에 여기서 컴포넌트를 찾는다 */}
+          <Route path="/design-system" element={<DesignSystem />} />
           <Route path="/students" element={<ProtectedRoute><StudentList /></ProtectedRoute>} />
           <Route path="/students/new" element={<ProtectedRoute><StudentForm /></ProtectedRoute>} />
           <Route path="/students/edit" element={<ProtectedRoute><StudentForm /></ProtectedRoute>} />

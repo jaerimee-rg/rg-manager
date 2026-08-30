@@ -1,9 +1,11 @@
 // 이벤트 표시에 쓰는 순수 함수들. 화면 여러 곳에서 같은 규칙을 쓰도록 모아 둔다.
 
+// tone/icon 은 디자인 시스템(Badge, Icon)이 쓰는 값이다.
+// className/emoji 는 아직 옮기지 않은 화면을 위해 남겨 둔다.
 export const EVENT_TYPES = {
-  competition: { label: '대회', short: '대회', emoji: '🏆', className: 'badge-danger' },
-  special: { label: '스페셜 이벤트', short: '스페셜', emoji: '⭐', className: 'badge-purple' },
-  closure: { label: '휴관일', short: '휴관일', emoji: '🚫', className: 'badge-gray' }
+  competition: { label: '대회', short: '대회', emoji: '🏆', className: 'badge-danger', tone: 'danger', icon: 'award' },
+  special: { label: '스페셜 이벤트', short: '스페셜', emoji: '⭐', className: 'badge-purple', tone: 'brand', icon: 'star' },
+  closure: { label: '휴관일', short: '휴관일', emoji: '🚫', className: 'badge-gray', tone: 'neutral', icon: 'alert' }
 };
 
 export const APPARATUS_PRESET = ['맨손', '볼', '후프', '곤봉', '리본', '줄'];

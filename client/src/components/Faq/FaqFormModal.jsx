@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Button, Callout, Field, Input, Modal, Stack, Switch, Textarea } from '../ui';
 
 const QUESTION_MAX = 200;
 const ANSWER_MAX = 2000;
@@ -41,66 +42,72 @@ function FaqFormModal({ faq, onClose, onSaved }) {
   };
 
   return (
-    <div className="faq-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <form className="faq-modal" onSubmit={handleSubmit}>
-        <h3 className="faq-modal-title">{faq ? 'FAQ 수정' : 'FAQ 등록'}</h3>
+    <Modal
+      open
+      mode="modal"
+      size="lg"
+      onClose={onClose}
+      title={faq ? 'FAQ 수정' : 'FAQ 등록'}
+      footer={
+        <>
+          <Button onClick={onClose}>취소</Button>
+          <Button variant="primary" type="submit" form="faq-form" disabled={invalid || saving} loading={saving}>
+            {saving ? '저장 중...' : '저장'}
+          </Button>
+        </>
+      }
+    >
+      <form id="faq-form" onSubmit={handleSubmit}>
+        <Stack gap={5}>
+          <Callout tone="brand">
+            여기에 등록한 내용만 AI 답변의 근거가 됩니다. 등록되지 않은 질문에는 안내 문구가 나갑니다.
+          </Callout>
 
-        <div className="faq-modal-hint">
-          💡 여기에 등록한 내용만 AI 답변의 근거가 됩니다. 등록되지 않은 질문에는 안내 문구가 나갑니다.
-        </div>
+          <Field
+            label="질문"
+            required
+            counter={{ value: question.length, max: QUESTION_MAX }}
+          >
+            {(props) => (
+              <Input
+                type="text"
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                placeholder="예) 토요일 수업은 몇 시인가요?"
+                autoFocus
+                invalid={question.length > QUESTION_MAX}
+                {...props}
+              />
+            )}
+          </Field>
 
-        <div className="form-group">
-          <label className="form-label">
-            질문 <span style={{ color: 'var(--color-danger)' }}>*</span>
-          </label>
-          <input
-            type="text"
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="예) 토요일 수업은 몇 시인가요?"
-            autoFocus
-          />
-          <div className={`faq-counter ${question.length > QUESTION_MAX ? 'over' : ''}`}>
-            {question.length} / {QUESTION_MAX}
-          </div>
-        </div>
+          <Field
+            label="답변"
+            required
+            counter={{ value: answer.length, max: ANSWER_MAX }}
+          >
+            {(props) => (
+              <Textarea
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value)}
+                placeholder="예) 토요일 초등부 수업은 오전 10시부터 11시 30분까지입니다."
+                rows={6}
+                invalid={answer.length > ANSWER_MAX}
+                {...props}
+              />
+            )}
+          </Field>
 
-        <div className="form-group">
-          <label className="form-label">
-            답변 <span style={{ color: 'var(--color-danger)' }}>*</span>
-          </label>
-          <textarea
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            placeholder="예) 토요일 초등부 수업은 오전 10시부터 11시 30분까지입니다."
-            rows={6}
-          />
-          <div className={`faq-counter ${answer.length > ANSWER_MAX ? 'over' : ''}`}>
-            {answer.length} / {ANSWER_MAX}
-          </div>
-        </div>
-
-        <label className="faq-check">
-          <input
-            type="checkbox"
+          <Switch
+            label="학부모 채팅에 공개"
             checked={isPublished}
             onChange={(e) => setIsPublished(e.target.checked)}
           />
-          학부모 채팅에 공개
-        </label>
 
-        {error && <div className="faq-modal-error">{error}</div>}
-
-        <div className="faq-modal-actions">
-          <button type="button" className="btn btn-ghost" onClick={onClose}>
-            취소
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={invalid || saving}>
-            {saving ? '저장 중...' : '저장'}
-          </button>
-        </div>
+          {error && <Callout tone="danger">{error}</Callout>}
+        </Stack>
       </form>
-    </div>
+    </Modal>
   );
 }
 

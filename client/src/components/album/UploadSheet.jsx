@@ -4,6 +4,9 @@ import { partitionFiles, readTakenAt, makePreview, MAX_FILES } from '../../utils
 import { uploadToDrive } from '../../utils/driveUpload';
 import { detectFaces } from '../../utils/faceClient';
 import { formatSize } from '../../utils/mediaUrls';
+import {
+  Button, Callout, Icon, List, ListRow, Modal, Progress, Stack
+} from '../ui';
 
 /**
  * 사진·영상 올리기 시트. 선생님·학부모가 같이 쓴다.
@@ -130,191 +133,142 @@ function UploadSheet({ apiBase, eventTitle, onClose, onDone }) {
     }
   };
 
-  return (
+  const footer = (
     <>
-      <div
-        onClick={() => phase !== 'busy' && onClose?.()}
-        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 220 }}
-      />
-      <div
-        role="dialog"
-        aria-label="사진 영상 올리기"
-        style={{
-          position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 221, background: '#fff',
-          borderRadius: '22px 22px 0 0', maxHeight: '92vh', display: 'flex', flexDirection: 'column',
-          maxWidth: '640px', margin: '0 auto'
-        }}
-      >
-        <div style={{ width: '40px', height: '4px', borderRadius: '4px', background: 'var(--color-gray-300)', margin: '10px auto 2px' }} />
-
-        <div style={{ overflowY: 'auto', padding: '10px 18px 18px' }}>
-          <h3 style={{ fontSize: '1.0625rem', fontWeight: 800, letterSpacing: '-0.4px', margin: '6px 0 10px' }}>
-            {phase === 'done' ? '다 올렸어요 🎉' : phase === 'busy' ? '올리는 중…' : '사진 · 영상 올리기'}
-          </h3>
-
-          {phase === 'pick' && (
-            <>
-              <div style={{
-                border: '1px dashed var(--color-gray-300)', borderRadius: 'var(--radius-md)',
-                padding: '16px', textAlign: 'center', marginBottom: '12px'
-              }}>
-                <div style={{ fontSize: '1.6rem' }}>📷</div>
-                <div style={{ fontWeight: 700, fontSize: '0.875rem', marginTop: '6px' }}>
-                  {eventTitle ? `${eventTitle} 앨범에 올려요` : '앨범에 올려요'}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', marginTop: '3px', lineHeight: 1.5 }}>
-                  사진 25MB · 영상 500MB 까지, 한 번에 {MAX_FILES}개<br />
-                  선생님과 확정된 학부모가 함께 봐요
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  style={{ marginTop: '12px' }}
-                  onClick={() => inputRef.current?.click()}
-                >파일 고르기</button>
-                <input
-                  ref={inputRef}
-                  type="file"
-                  accept="image/*,video/*"
-                  multiple
-                  data-testid="album-file-input"
-                  onChange={(event) => pick(event.target.files)}
-                  style={{ display: 'none' }}
-                />
-              </div>
-
-              {accepted.length > 0 && (
-                <div style={{ fontSize: '0.8125rem', fontWeight: 700, margin: '4px 0 2px' }}>
-                  올릴 파일 {accepted.length}개
-                </div>
-              )}
-              {accepted.map((entry, i) => (
-                <FileRow key={`ok-${i}`} name={entry.file.name} size={entry.file.size} kind={entry.kind} status="대기" />
-              ))}
-              {rejected.map((entry, i) => (
-                <FileRow key={`no-${i}`} name={entry.file.name} size={entry.file.size} kind="file" status={entry.message} error />
-              ))}
-
-              {error && (
-                <div role="alert" style={{
-                  background: 'var(--color-danger-bg)', color: 'var(--color-danger)', padding: '11px 13px',
-                  borderRadius: 'var(--radius-md)', fontSize: '0.875rem', marginTop: '12px'
-                }}>{error}</div>
-              )}
-
-              <div style={{
-                background: 'var(--color-gray-100)', color: 'var(--color-gray-600)', fontSize: '0.8125rem',
-                padding: '11px 12px', borderRadius: 'var(--radius-md)', lineHeight: 1.55, marginTop: '12px'
-              }}>
-                올린 사진은 선생님의 Google Drive 앨범 폴더에 원본 그대로 저장돼요.
-              </div>
-            </>
-          )}
-
-          {phase === 'busy' && (
-            <>
-              <div style={{
-                background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)', fontSize: '0.8125rem',
-                padding: '11px 12px', borderRadius: 'var(--radius-md)', marginBottom: '10px', lineHeight: 1.55
-              }}>
-                앱을 닫지 말아 주세요. 사진은 Google Drive 로 바로 올라가요.
-              </div>
-              {accepted.map((entry, i) => (
-                <FileRow
-                  key={`up-${i}`}
-                  name={entry.file.name}
-                  size={entry.file.size}
-                  kind={entry.kind}
-                  status={failed[i] || (progress[i] === 100 ? '완료' : `${progress[i] || 0}%`)}
-                  error={Boolean(failed[i])}
-                  progress={progress[i] || 0}
-                />
-              ))}
-            </>
-          )}
-
-          {phase === 'done' && summary && (
-            <>
-              <div style={{
-                background: 'var(--color-success-bg)', color: '#047857', fontSize: '0.8125rem',
-                padding: '11px 12px', borderRadius: 'var(--radius-md)', marginBottom: '10px'
-              }}>
-                {summary.images ? `사진 ${summary.images}장` : ''}
-                {summary.images && summary.videos ? ' · ' : ''}
-                {summary.videos ? `영상 ${summary.videos}개` : ''}
-                {' '}올렸어요.
-              </div>
-              <div style={{ fontSize: '0.8125rem', color: 'var(--color-gray-600)', lineHeight: 1.7 }}>
-                {summary.analyzed > 0 && <div>🔍 얼굴 분석 {summary.analyzed}장 완료 — 우리 아이 사진에 자동으로 모아드려요</div>}
-                {summary.skipped > 0 && <div>⚠️ {summary.skipped}장은 분석하지 못했어요 (선생님이 다시 분석할 수 있어요)</div>}
-                {summary.videos > 0 && <div>🎬 영상은 얼굴을 찾지 않아요</div>}
-                {Object.keys(failed).length > 0 && (
-                  <div style={{ color: 'var(--color-danger)' }}>❌ {Object.keys(failed).length}개는 올리지 못했어요</div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-
-        <div style={{
-          padding: '12px 18px calc(16px + env(safe-area-inset-bottom))',
-          borderTop: '1px solid var(--color-gray-100)', display: 'flex', gap: '8px', flexShrink: 0
-        }}>
-          {phase === 'pick' && (
-            <>
-              <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={onClose}>닫기</button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                style={{ flex: 1 }}
-                disabled={!accepted.length}
-                onClick={start}
-              >{accepted.length ? `${accepted.length}개 올리기` : '올리기'}</button>
-            </>
-          )}
-          {phase === 'busy' && (
-            <button type="button" className="btn btn-outline" style={{ flex: 1 }} disabled>올리는 중…</button>
-          )}
-          {phase === 'done' && (
-            <button type="button" className="btn btn-primary" style={{ flex: 1 }} onClick={onClose}>앨범에서 보기</button>
-          )}
-        </div>
-      </div>
+      {phase === 'pick' && (
+        <>
+          <Button block onClick={onClose}>닫기</Button>
+          <Button variant="primary" block disabled={!accepted.length} onClick={start}>
+            {accepted.length ? `${accepted.length}개 올리기` : '올리기'}
+          </Button>
+        </>
+      )}
+      {phase === 'busy' && <Button block disabled loading>올리는 중…</Button>}
+      {phase === 'done' && <Button variant="primary" block onClick={onClose}>앨범에서 보기</Button>}
     </>
+  );
+
+  return (
+    <Modal
+      open
+      onClose={phase === 'busy' ? undefined : onClose}
+      closeOnScrim={phase !== 'busy'}
+      title={phase === 'done' ? '다 올렸어요' : phase === 'busy' ? '올리는 중…' : '사진 · 영상 올리기'}
+      aria-label="사진 영상 올리기"
+      footer={footer}
+    >
+      {phase === 'pick' && (
+        <Stack gap={4}>
+          <div className="ui-dropzone">
+            <Icon name="camera" size={28} />
+            <div className="ui-dropzone__title">
+              {eventTitle ? `${eventTitle} 앨범에 올려요` : '앨범에 올려요'}
+            </div>
+            <p className="ui-dropzone__hint">
+              사진 25MB · 영상 500MB 까지, 한 번에 {MAX_FILES}개<br />
+              선생님과 확정된 학부모가 함께 봐요
+            </p>
+            <Button size="sm" variant="primary" onClick={() => inputRef.current?.click()}>
+              파일 고르기
+            </Button>
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*,video/*"
+              multiple
+              data-testid="album-file-input"
+              onChange={(event) => pick(event.target.files)}
+              className="ui-visually-hidden"
+            />
+          </div>
+
+          {(accepted.length > 0 || rejected.length > 0) && (
+            <Stack gap={2}>
+              {accepted.length > 0 && (
+                <span className="ui-text-sm ui-text-muted">올릴 파일 {accepted.length}개</span>
+              )}
+              <List>
+                {accepted.map((entry, i) => (
+                  <FileRow key={`ok-${i}`} name={entry.file.name} size={entry.file.size} kind={entry.kind} status="대기" />
+                ))}
+                {rejected.map((entry, i) => (
+                  <FileRow key={`no-${i}`} name={entry.file.name} size={entry.file.size} kind="file" status={entry.message} error />
+                ))}
+              </List>
+            </Stack>
+          )}
+
+          {error && <Callout tone="danger">{error}</Callout>}
+
+          <Callout tone="neutral">
+            올린 사진은 선생님의 Google Drive 앨범 폴더에 원본 그대로 저장돼요.
+          </Callout>
+        </Stack>
+      )}
+
+      {phase === 'busy' && (
+        <Stack gap={4}>
+          <Callout tone="brand">앱을 닫지 말아 주세요. 사진은 Google Drive 로 바로 올라가요.</Callout>
+          <List>
+            {accepted.map((entry, i) => (
+              <FileRow
+                key={`up-${i}`}
+                name={entry.file.name}
+                size={entry.file.size}
+                kind={entry.kind}
+                status={failed[i] || (progress[i] === 100 ? '완료' : `${progress[i] || 0}%`)}
+                error={Boolean(failed[i])}
+                progress={progress[i] || 0}
+              />
+            ))}
+          </List>
+        </Stack>
+      )}
+
+      {phase === 'done' && summary && (
+        <Stack gap={4}>
+          <Callout tone="success">
+            {summary.images ? `사진 ${summary.images}장` : ''}
+            {summary.images && summary.videos ? ' · ' : ''}
+            {summary.videos ? `영상 ${summary.videos}개` : ''}
+            {' '}올렸어요.
+          </Callout>
+          <Stack gap={2} className="ui-text-sm ui-text-muted">
+            {summary.analyzed > 0 && <div>얼굴 분석 {summary.analyzed}장 완료 — 우리 아이 사진에 자동으로 모아드려요</div>}
+            {summary.skipped > 0 && <div>{summary.skipped}장은 분석하지 못했어요 (선생님이 다시 분석할 수 있어요)</div>}
+            {summary.videos > 0 && <div>영상은 얼굴을 찾지 않아요</div>}
+            {Object.keys(failed).length > 0 && (
+              <div className="ui-text-danger">{Object.keys(failed).length}개는 올리지 못했어요</div>
+            )}
+          </Stack>
+        </Stack>
+      )}
+    </Modal>
   );
 }
 
 function FileRow({ name, size, kind, status, error, progress }) {
-  const icon = kind === 'video' ? '🎬' : kind === 'image' ? '🖼️' : '📄';
   return (
-    <div style={{
-      display: 'flex', gap: '10px', alignItems: 'center', padding: '9px 0',
-      borderTop: '1px solid var(--color-gray-100)'
-    }}>
-      <span style={{
-        width: '34px', height: '34px', borderRadius: 'var(--radius-sm)', flexShrink: 0,
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem',
-        background: error ? 'var(--color-danger-bg)' : 'var(--color-primary-bg)'
-      }}>{icon}</span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <b style={{
-          display: 'block', fontSize: '0.8125rem', fontWeight: 600, overflow: 'hidden',
-          textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          color: error ? 'var(--color-gray-400)' : undefined,
-          textDecoration: error ? 'line-through' : 'none'
-        }}>{name}</b>
-        <span style={{ fontSize: '0.6875rem', color: 'var(--color-gray-500)' }}>{formatSize(size)}</span>
-        {progress !== undefined && !error && (
-          <div style={{ height: '4px', borderRadius: '4px', background: 'var(--color-gray-200)', overflow: 'hidden', marginTop: '5px' }}>
-            <i style={{ display: 'block', height: '100%', width: `${progress}%`, background: 'var(--color-primary)', transition: 'width .25s' }} />
-          </div>
-        )}
-      </div>
-      <div style={{
-        fontSize: '0.6875rem', fontWeight: 700, whiteSpace: 'nowrap',
-        color: error ? 'var(--color-danger)' : status === '완료' ? 'var(--color-success)' : 'var(--color-gray-500)'
-      }}>{status}</div>
-    </div>
+    <ListRow
+      leading={
+        <span className="ui-icon-tile" data-tone={error ? 'danger' : 'brand'}>
+          <Icon name={kind === 'video' ? 'camera' : kind === 'image' ? 'image' : 'file'} size={16} />
+        </span>
+      }
+      title={<span className={error ? 'ui-file-row--rejected' : undefined}>{name}</span>}
+      subtitle={formatSize(size)}
+      trailing={
+        <span className={error ? 'ui-text-danger' : status === '완료' ? 'ui-text-upload-done' : 'ui-text-subtle'}>
+          {status}
+        </span>
+      }
+    >
+      {progress !== undefined && !error && (
+        <div className="ui-mt-2">
+          <Progress value={progress} label={`${name} 업로드 진행률`} />
+        </div>
+      )}
+    </ListRow>
   );
 }
 

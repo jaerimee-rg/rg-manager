@@ -5,6 +5,9 @@ import { useAuth } from '../context/AuthContext';
 import DateRangePicker from '../components/common/DateRangePicker';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import {
+  Card, EmptyState, Field, Grid, List, ListRow, Modal, PageHeader, Section, Select, Stat, Stack
+} from '../components/ui';
+import {
   BarChart,
   Bar,
   XAxis,
@@ -348,35 +351,22 @@ function Dashboard() {
 
   return (
     <div className="animate-fadeIn">
-      {/* Page Header */}
-      <div className="page-header">
-        <h2 className="page-title">대시보드</h2>
-      </div>
+      <PageHeader title="대시보드" />
 
       {/* Admin User Filter */}
       {user?.role === 'admin' && (
-        <div className="card" style={{ marginBottom: 'var(--spacing-lg)' }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--spacing-md)',
-            flexWrap: 'wrap'
-          }}>
-            <label className="form-label" style={{ margin: 0, whiteSpace: 'nowrap' }}>
-              사용자 선택
-            </label>
-            <select
-              value={selectedUserId}
-              onChange={(e) => setSelectedUserId(e.target.value)}
-              style={{ flex: 1, minWidth: '200px', maxWidth: isMobile ? '100%' : '300px' }}
-            >
-              <option value="all">전체 사용자</option>
-              {users.map(u => (
-                <option key={u.id} value={u.id}>{u.username}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+        <Card className="ui-mb-5">
+          <Field label="사용자 선택">
+            {(props) => (
+              <Select value={selectedUserId} onChange={(e) => setSelectedUserId(e.target.value)} {...props}>
+                <option value="all">전체 사용자</option>
+                {users.map(u => (
+                  <option key={u.id} value={u.id}>{u.username}</option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        </Card>
       )}
 
       {/* Attendance by Class */}
@@ -396,11 +386,11 @@ function Dashboard() {
         </div>
 
         {classes.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">📚</div>
-            <div className="empty-state-title">등록된 수업이 없습니다</div>
-            <div className="empty-state-description">수업을 등록하면 출석 현황을 확인할 수 있습니다.</div>
-          </div>
+          <EmptyState
+            icon="calendar"
+            title="등록된 수업이 없습니다"
+            description="수업을 등록하면 출석 현황을 확인할 수 있습니다."
+          />
         ) : (
           <>
             <div className="table-container" style={{ marginTop: 'var(--spacing-lg)' }}>
@@ -500,16 +490,10 @@ function Dashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2" style={{ marginBottom: 'var(--spacing-lg)' }}>
-        <div className="stat-card">
-          <div className="stat-label">전체 학생</div>
-          <div className="stat-value primary">{stats.totalStudents}명</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">전체 수업</div>
-          <div className="stat-value success">{stats.totalClasses}개</div>
-        </div>
-      </div>
+      <Grid cols={4} className="ui-mb-5">
+        <Stat label="전체 학생" value={`${stats.totalStudents}명`} icon="users" tone="brand" />
+        <Stat label="전체 수업" value={`${stats.totalClasses}개`} icon="calendar" tone="success" />
+      </Grid>
 
       {/* Weekly & Monthly Attendance Charts */}
       <div
@@ -521,12 +505,7 @@ function Dashboard() {
       >
         {/* Weekly Attendance Chart */}
         <div className="card">
-          <h3 className="card-title" style={{ marginBottom: 'var(--spacing-lg)' }}>
-            주별 출석 수
-          </h3>
-          <div style={{ fontSize: '0.875rem', color: 'var(--color-gray-500)', marginBottom: 'var(--spacing-lg)' }}>
-            최근 8주간 주별 총 출석 횟수
-          </div>
+          <Section title="주별 출석 수" description="최근 8주간 주별 총 출석 횟수" className="ui-mb-5" />
           {weeklyAttendanceData.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={weeklyAttendanceData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
@@ -562,20 +541,13 @@ function Dashboard() {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="empty-state" style={{ padding: 'var(--spacing-xl)' }}>
-              <div className="empty-state-description">데이터를 불러오는 중...</div>
-            </div>
+            <EmptyState icon="chart" description="데이터를 불러오는 중..." />
           )}
         </div>
 
         {/* Monthly Attendance Chart */}
         <div className="card">
-          <h3 className="card-title" style={{ marginBottom: 'var(--spacing-lg)' }}>
-            월별 출석 수
-          </h3>
-          <div style={{ fontSize: '0.875rem', color: 'var(--color-gray-500)', marginBottom: 'var(--spacing-lg)' }}>
-            최근 6개월간 월별 총 출석 횟수
-          </div>
+          <Section title="월별 출석 수" description="최근 6개월간 월별 총 출석 횟수" className="ui-mb-5" />
           {monthlyAttendanceData.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={monthlyAttendanceData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
@@ -611,9 +583,7 @@ function Dashboard() {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="empty-state" style={{ padding: 'var(--spacing-xl)' }}>
-              <div className="empty-state-description">데이터를 불러오는 중...</div>
-            </div>
+            <EmptyState icon="chart" description="데이터를 불러오는 중..." />
           )}
         </div>
       </div>
@@ -628,12 +598,7 @@ function Dashboard() {
       >
         {/* Weekly Distinct Students Chart */}
         <div className="card">
-          <h3 className="card-title" style={{ marginBottom: 'var(--spacing-lg)' }}>
-            주별 참여 학생 수
-          </h3>
-          <div style={{ fontSize: '0.875rem', color: 'var(--color-gray-500)', marginBottom: 'var(--spacing-lg)' }}>
-            매주 1회 이상 출석한 고유 학생 수 (최근 8주)
-          </div>
+          <Section title="주별 참여 학생 수" description="매주 1회 이상 출석한 고유 학생 수 (최근 8주)" className="ui-mb-5" />
           {weeklyDistinctStudents.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={weeklyDistinctStudents} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
@@ -669,20 +634,13 @@ function Dashboard() {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="empty-state" style={{ padding: 'var(--spacing-xl)' }}>
-              <div className="empty-state-description">데이터를 불러오는 중...</div>
-            </div>
+            <EmptyState icon="chart" description="데이터를 불러오는 중..." />
           )}
         </div>
 
         {/* Monthly Distinct Students Chart */}
         <div className="card">
-          <h3 className="card-title" style={{ marginBottom: 'var(--spacing-lg)' }}>
-            월별 참여 학생 수
-          </h3>
-          <div style={{ fontSize: '0.875rem', color: 'var(--color-gray-500)', marginBottom: 'var(--spacing-lg)' }}>
-            매월 1회 이상 출석한 고유 학생 수 (최근 6개월)
-          </div>
+          <Section title="월별 참여 학생 수" description="매월 1회 이상 출석한 고유 학생 수 (최근 6개월)" className="ui-mb-5" />
           {monthlyDistinctStudents.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={monthlyDistinctStudents} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
@@ -718,9 +676,7 @@ function Dashboard() {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="empty-state" style={{ padding: 'var(--spacing-xl)' }}>
-              <div className="empty-state-description">데이터를 불러오는 중...</div>
-            </div>
+            <EmptyState icon="chart" description="데이터를 불러오는 중..." />
           )}
         </div>
       </div>
@@ -736,12 +692,7 @@ function Dashboard() {
         {/* Class Distinct Students Chart */}
         {classDistinctStudents.length > 0 && (
           <div className="card">
-            <h3 className="card-title" style={{ marginBottom: 'var(--spacing-lg)' }}>
-              수업별 참여 학생 수
-            </h3>
-            <div style={{ fontSize: '0.875rem', color: 'var(--color-gray-500)', marginBottom: 'var(--spacing-lg)' }}>
-              각 수업에 1회 이상 출석한 고유 학생 수 (지난달)
-            </div>
+            <Section title="수업별 참여 학생 수" description="각 수업에 1회 이상 출석한 고유 학생 수 (지난달)" className="ui-mb-5" />
             <ResponsiveContainer width="100%" height={Math.max(200, classDistinctStudents.length * 40)}>
               <BarChart
                 data={classDistinctStudents}
@@ -788,12 +739,7 @@ function Dashboard() {
         {/* Students by Age Chart */}
         {studentsByAge.length > 0 && (
           <div className="card">
-            <h3 className="card-title" style={{ marginBottom: 'var(--spacing-lg)' }}>
-              나이별 학생 수
-            </h3>
-            <div style={{ fontSize: '0.875rem', color: 'var(--color-gray-500)', marginBottom: 'var(--spacing-lg)' }}>
-              등록된 학생의 나이 분포
-            </div>
+            <Section title="나이별 학생 수" description="등록된 학생의 나이 분포" className="ui-mb-5" />
             <ResponsiveContainer width="100%" height={Math.max(200, studentsByAge.length * 40)}>
               <BarChart
                 data={studentsByAge}
@@ -838,99 +784,33 @@ function Dashboard() {
         )}
       </div>
 
-      {/* Attendance Students Modal */}
       {attendanceModal && (
-        <div
-          onClick={() => setAttendanceModal(null)}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: 'var(--spacing-md)'
-          }}
+        <Modal
+          open
+          mode="modal"
+          size="sm"
+          onClose={() => setAttendanceModal(null)}
+          title={attendanceModal.className}
+          description={`${formatDate(attendanceModal.date)} · ${attendanceModal.students.length}명 출석`}
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              backgroundColor: 'var(--bg-primary)',
-              borderRadius: 'var(--radius-lg)',
-              boxShadow: 'var(--shadow-lg)',
-              maxWidth: '400px',
-              width: '100%',
-              maxHeight: '80vh',
-              overflow: 'auto'
-            }}
-          >
-            {/* Modal Header */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: 'var(--spacing-lg)',
-              borderBottom: '1px solid var(--color-gray-200)'
-            }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--color-gray-900)' }}>
-                  {attendanceModal.className}
-                </h3>
-                <div style={{ fontSize: '0.85rem', color: 'var(--color-gray-500)', marginTop: '2px' }}>
-                  {formatDate(attendanceModal.date)} · {attendanceModal.students.length}명 출석
-                </div>
-              </div>
-              <button
-                onClick={() => setAttendanceModal(null)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '1.5rem',
-                  cursor: 'pointer',
-                  color: 'var(--color-gray-400)',
-                  padding: '4px',
-                  lineHeight: 1
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            {/* Modal Body - Student List */}
-            <div style={{ padding: 'var(--spacing-md)' }}>
-              {attendanceModal.students.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 'var(--spacing-lg)', color: 'var(--color-gray-500)' }}>
-                  출석한 학생이 없습니다.
-                </div>
-              ) : (
-                attendanceModal.students.map((student, idx) => (
-                  <div
-                    key={student.id}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: 'var(--spacing-sm) var(--spacing-md)',
-                      backgroundColor: idx % 2 === 0 ? 'var(--bg-primary)' : 'var(--color-gray-50)',
-                      borderRadius: 'var(--radius-sm)'
-                    }}
-                  >
-                    <span style={{ fontWeight: 500, color: 'var(--color-gray-900)' }}>
-                      {student.name}
-                    </span>
-                    <span style={{ fontSize: '0.85rem', color: 'var(--color-gray-500)' }}>
+          {attendanceModal.students.length === 0 ? (
+            <EmptyState icon="users" description="출석한 학생이 없습니다." />
+          ) : (
+            <List>
+              {attendanceModal.students.map((student) => (
+                <ListRow
+                  key={student.id}
+                  title={student.name}
+                  trailing={
+                    <span className="ui-text-sm">
                       {calculateAge(student.birthdate) !== null ? `${calculateAge(student.birthdate)}세` : '-'}
                     </span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+                  }
+                />
+              ))}
+            </List>
+          )}
+        </Modal>
       )}
 
     </div>
