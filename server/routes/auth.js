@@ -1,5 +1,5 @@
 import express from 'express';
-import { login, signup, getUsers, updateUser, deleteUser, verifyTokenEndpoint, getKakaoAuthUrl, kakaoCallback, transferUserData, updateKakaoMessageConsent, getKakaoMessageLogs, sendKakaoMessage, getKakaoUsers, testKakaoMessage, updateUsername, getRoles, switchRole, addRole, grantAdmin, impersonate } from '../controllers/authController.js';
+import { login, signup, getUsers, updateUser, deleteUser, verifyTokenEndpoint, getKakaoAuthUrl, kakaoCallback, transferUserData, updateKakaoMessageConsent, getKakaoMessageLogs, sendKakaoMessage, getKakaoUsers, testKakaoMessage, updateDisplayName, getRoles, switchRole, addRole, grantAdmin, impersonate } from '../controllers/authController.js';
 import { verifyToken } from '../middleware/auth.js';
 import { requireRole } from '../middleware/roles.js';
 import { logAction } from '../middleware/logger.js';
@@ -33,8 +33,8 @@ router.get('/kakao', getKakaoAuthUrl);
 router.post('/kakao/callback', logAction('KAKAO_LOGIN'), kakaoCallback);
 router.put('/kakao/consent', verifyToken, updateKakaoMessageConsent);
 
-// 사용자 이름 설정
-router.put('/username', verifyToken, logAction('UPDATE_USERNAME'), updateUsername);
+// 표시 이름 설정 (경로는 옛 이름 그대로 — username 이 아니라 displayName 을 바꾼다)
+router.put('/username', verifyToken, logAction('UPDATE_USERNAME'), updateDisplayName);
 
 // 카카오 메시지 (관리자 전용)
 router.get('/kakao/messages', verifyToken, getKakaoMessageLogs);

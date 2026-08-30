@@ -30,7 +30,7 @@ class ParentChild {
 
     const result = await pool.query(
       `SELECT c.*, s.name AS "studentName", s.birthdate AS "studentBirthdate",
-              t.username AS "teacherName"
+              COALESCE(NULLIF(t."displayName", ''), t.username) AS "teacherName"
        FROM parent_children c
        LEFT JOIN students s ON s.id = c."studentId"
        LEFT JOIN users t ON t.id = c."teacherId"
@@ -47,7 +47,7 @@ class ParentChild {
    */
   static async getWithOwner(childId) {
     const result = await pool.query(
-      `SELECT c.*, t.username AS "teacherName"
+      `SELECT c.*, COALESCE(NULLIF(t."displayName", ''), t.username) AS "teacherName"
        FROM parent_children c
        LEFT JOIN users t ON t.id = c."teacherId"
        WHERE c.id = $1`,

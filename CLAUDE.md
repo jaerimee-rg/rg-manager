@@ -284,6 +284,16 @@ accounts one person has**, and **which teacher(s) a parent belongs to**.
 - **Deleting a teacher** unlinks their parents and deletes only parent accounts left with no links
   (`ParentAccount.deleteByTeacher`). A teacher's own "delete parent" action now only **unlinks**;
   only an admin deletes the account.
+- **Teacher display name** (`users."displayName"`, nullable, **not** UNIQUE). `users.username` is a UNIQUE
+  identifier: teacher rows created by invite or role-add get a `카카오_<ts>` placeholder, and the same
+  person's admin row already owns their real name, so the teacher row could never be called that. Every
+  human-facing teacher name goes through `COALESCE(NULLIF(displayName,''), username)`
+  (`utils/usernames.js:displayNameSql`) — parent 내 정보 · 일정 · 사진 · invite landing · admin lists.
+  설정 → 이름 변경 and `/register-name` (`PUT /api/auth/username`, path kept) now write `displayName`
+  and never touch `username`. New teacher rows default it to the Kakao nickname (invite) or the current
+  account's name (role-add); boot-time backfill fills placeholder-named teacher/admin rows from a
+  sibling row of the same `kakaoId`. Client: `utils/userName.js:userLabel(user)`. The JWT and logs
+  still carry `username`.
 - **Known limit**: one active role per browser. Switching replaces the token, so other tabs follow
   on their next request.
 - **Admin impersonation** (FR-388) — Admin → 사용자 → **[이 계정으로 로그인]** opens that user's

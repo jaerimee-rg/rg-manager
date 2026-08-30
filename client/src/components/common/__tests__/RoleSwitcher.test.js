@@ -48,6 +48,26 @@ describe('RoleSwitcher', () => {
     mockAuth.listRoles.mockResolvedValue(roles());
   });
 
+  it('표시 이름이 있으면 식별자(username) 대신 그것을 보여준다', async () => {
+    mockAuth.user = { id: 12, username: '카카오_1788076610466', displayName: '최재웅', role: 'user' };
+    mockAuth.listRoles.mockResolvedValue(
+      roles({
+        current: { id: 12, role: 'user', username: '카카오_1788076610466', displayName: '최재웅' },
+        accounts: [
+          { id: 12, username: '카카오_1788076610466', displayName: '최재웅', role: 'user' },
+          { id: 13, username: '카카오_1788076610466_2', displayName: null, role: 'parent' }
+        ]
+      })
+    );
+    renderSwitcher({ variant: 'menu' });
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /최재웅/ })).toBeInTheDocument());
+    expect(screen.queryByText('카카오_1788076610466')).not.toBeInTheDocument();
+    // 표시 이름이 없는 학부모 행은 username 으로 되돌린다
+    await userEvent.click(screen.getByRole('button', { name: /최재웅/ }));
+    expect(screen.getByText('카카오_1788076610466_2')).toBeInTheDocument();
+  });
+
   it('가진 다른 역할을 전환 항목으로 보여준다', async () => {
     renderSwitcher({ variant: 'card' });
 

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { homePathFor, roleLabel, ROLE_ORDER } from '../../utils/roleRoutes';
+import { userLabel } from '../../utils/userName';
 import ParentAccountDialog from './ParentAccountDialog';
 import TeacherAccountDialog from './TeacherAccountDialog';
 
@@ -73,7 +74,7 @@ function RoleSwitcher({ variant = 'card', onNavigate }) {
 
   if (!others.length && !creatable.length) return null;
 
-  const nameOf = (role) => info.accounts.find((a) => a.role === role)?.username || '';
+  const nameOf = (role) => userLabel(info.accounts.find((a) => a.role === role));
 
   const items = (
     <>
@@ -137,7 +138,7 @@ function RoleSwitcher({ variant = 'card', onNavigate }) {
           <span className={`badge badge-${user?.role === 'admin' ? 'primary' : 'gray'}`}>
             {roleLabel(user?.role)}
           </span>
-          <span className="role-switch-name">{user?.username}</span>
+          <span className="role-switch-name">{userLabel(user)}</span>
           <span aria-hidden="true">▾</span>
         </button>
 
@@ -146,7 +147,7 @@ function RoleSwitcher({ variant = 'card', onNavigate }) {
             <div className="role-switch-backdrop" onClick={() => setOpen(false)} />
             <div className="role-switch-dropdown" role="menu">
               <div className="role-switch-current">
-                현재: <b>{roleLabel(user?.role)}</b> {user?.username}
+                현재: <b>{roleLabel(user?.role)}</b> {userLabel(user)}
               </div>
               {items}
               {error && <div role="alert" className="role-switch-error">{error}</div>}

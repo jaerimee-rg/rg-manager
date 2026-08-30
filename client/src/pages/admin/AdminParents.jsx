@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchWithAuth } from '../../utils/api';
 import ParentList from '../Parents/ParentList';
+import { userLabel } from '../../utils/userName';
 
 /**
  * 관리자 대시보드의 학부모 화면.
@@ -38,7 +39,7 @@ function AdminParents() {
         >
           <option value="all">전체 선생님</option>
           {teachers.map((t) => (
-            <option key={t.id} value={t.id}>{t.username}</option>
+            <option key={t.id} value={t.id}>{userLabel(t)}</option>
           ))}
         </select>
       </div>

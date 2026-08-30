@@ -24,7 +24,7 @@ class ParentInvite {
 
   static async getByToken(token) {
     const result = await pool.query(
-      `SELECT i.*, u.username AS "teacherName"
+      `SELECT i.*, COALESCE(NULLIF(u."displayName", ''), u.username) AS "teacherName"
        FROM parent_invites i
        JOIN users u ON u.id = i."userId"
        WHERE i.token = $1`,

@@ -153,7 +153,7 @@ class EventMedia {
     params.push(Math.min(Number(limit) || 60, 200));
 
     const result = await pool.query(
-      `SELECT m.*, u.username AS "uploaderName"
+      `SELECT m.*, COALESCE(NULLIF(u."displayName", ''), u.username) AS "uploaderName"
          FROM event_media m
          LEFT JOIN users u ON u.id = m."uploaderUserId"
         WHERE ${where.join(' AND ')}

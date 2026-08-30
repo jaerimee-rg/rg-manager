@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { userLabel } from '../utils/userName';
 import { fetchWithAuth } from '../utils/api';
 import { moveItem } from '../utils/reorder';
 import { useAuth } from '../context/AuthContext';
@@ -361,7 +362,7 @@ function Dashboard() {
               <Select value={selectedUserId} onChange={(e) => setSelectedUserId(e.target.value)} {...props}>
                 <option value="all">전체 사용자</option>
                 {users.map(u => (
-                  <option key={u.id} value={u.id}>{u.username}</option>
+                  <option key={u.id} value={u.id}>{userLabel(u)}</option>
                 ))}
               </Select>
             )}
