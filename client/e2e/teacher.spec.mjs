@@ -88,6 +88,32 @@ test.describe('선생님 — 이벤트 관리', () => {
     expect(Math.abs(filled - empty)).toBeLessThanOrEqual(2);
   });
 
+  // 폼이 좁은 한 줄로 고정돼 있어 데스크탑에서 오른쪽 절반이 통째로 비어 있었다.
+  // 열이 실제로 갈라지는지는 계산된 위치로만 확인할 수 있다 — 클래스만 붙여 두고
+  // CSS 를 지워도 통과하는 테스트가 되지 않도록 두 폭에서 좌표를 잰다.
+  test('데스크탑에서는 본문과 공개·접수가 나란히 서고, 좁아지면 아래로 쌓인다', async ({ page }) => {
+    await page.goto('/events/new');
+
+    const main = page.locator('.event-form__main');
+    const side = page.locator('.event-form__side');
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const wideMain = await main.boundingBox();
+    const wideSide = await side.boundingBox();
+    expect(wideSide.x).toBeGreaterThanOrEqual(wideMain.x + wideMain.width);
+    expect(wideSide.y).toBeLessThan(wideMain.y + wideMain.height);
+
+    await page.setViewportSize({ width: 480, height: 900 });
+    const narrowMain = await main.boundingBox();
+    const narrowSide = await side.boundingBox();
+    expect(narrowSide.y).toBeGreaterThanOrEqual(narrowMain.y + narrowMain.height);
+    expect(Math.abs(narrowSide.width - narrowMain.width)).toBeLessThanOrEqual(1);
+
+    // 가로로 삐져나가는 칸이 없어야 한다
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
   test('학부모 메뉴에서 초대 링크와 요약이 보인다', async ({ page }) => {
     await page.goto('/parents');
 
@@ -113,21 +139,14 @@ test.describe('선생님 — 앨범', () => {
     await expect(guide.or(connect).first()).toBeVisible();
   });
 
-  test('앨범이 있는 이벤트 상세에서 사진 목록과 통계가 보인다', async ({ page }) => {
+  // 이벤트 등록·수정 화면의 사진·영상 섹션은 걷어냈다. 앨범을 다루는 화면이 다시
+  // 생기면 그때 그 화면을 대상으로 테스트를 붙인다 — API 는 아래에서 계속 지킨다.
+  test('이벤트 수정 화면에는 사진·영상 섹션이 없다', async ({ page }) => {
     await page.goto('/events');
     await page.locator('tr', { hasText: 'e2e확정대회' }).first().getByRole('button', { name: '수정' }).click();
 
-    await expect(page.getByRole('heading', { name: /사진 · 영상/ })).toBeVisible();
-    // 씨앗 데이터로 사진 3 · 영상 1 이 들어 있다
-    await expect(page.getByText(/사진/).first()).toBeVisible();
-    await expect(page.getByRole('button', { name: /사진 열기|영상 열기/ }).first()).toBeVisible();
-  });
-
-  test('앨범이 없는 이벤트는 Drive 연결 안내를 보여준다', async ({ page }) => {
-    await page.goto('/events');
-    await page.locator('tr', { hasText: 'e2e미확정대회' }).first().getByRole('button', { name: '수정' }).click();
-
-    await expect(page.getByRole('heading', { name: /사진 · 영상/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '이벤트 수정' })).toBeVisible();
+    await expect(page.getByText(/사진 · 영상/)).toHaveCount(0);
   });
 
   test('앨범 API 는 남의 이벤트를 열어 주지 않는다', async ({ request }) => {

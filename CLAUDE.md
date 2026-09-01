@@ -375,10 +375,17 @@ model, implementation plan, mockups).
   screen reads to show a banner — **reads keep working, writes stop**.
   `/api/drive/callback` cannot use `verifyToken` (browser redirect, no header), so it trusts a
   **signed 10-minute `state`** carrying the user id.
-- **Album folder**: the teacher types a name in the event detail; the app creates the folder under
-  `RG Manager` and turns on **link sharing (anyone with the link, reader)** — the gallery uses
-  Drive thumbnail URLs directly, so without sharing nothing renders. `events.albumStatus` is
-  `none|ready|missing|unshared`. Deleting an event never deletes the Drive folder.
+- **Album folder**: the app creates the folder under `RG Manager` and turns on **link sharing
+  (anyone with the link, reader)** — the gallery uses Drive thumbnail URLs directly, so without
+  sharing nothing renders. `events.albumStatus` is `none|ready|missing|unshared`. Deleting an
+  event never deletes the Drive folder.
+- **There is no teacher-facing album screen right now.** The 사진·영상 section used to live at the
+  bottom of the event form; it was removed on 2026-09-01 at the owner's request, together with
+  `EventAlbumSection.jsx` and `MediaDetailModal.jsx`. Everything else — the API (`/api/events/:id/album`,
+  `/media/*`), access rules, the parent gallery and existing albums — is untouched and still tested,
+  but **nothing in the UI creates a new album folder**, so events created from now on have no album
+  until a teacher-facing entry point comes back. Restore the screen from git history (`git log
+  -- client/src/pages/Events/EventAlbumSection.jsx`) rather than rewriting it.
 - **Uploads never pass through the server.** `POST .../media/uploads` returns a Drive *resumable
   session URI* (created with an `Origin` header so the browser may PUT to it); the browser uploads
   in 8MB chunks with progress and resume (`utils/driveUpload.js`). `POST .../media/:id/complete`

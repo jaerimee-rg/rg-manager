@@ -530,10 +530,10 @@ textarea:focus {
    값 영역에 줄 높이(1.5em = 위 line-height)를 보장해 채워졌을 때와 같은 높이를
    유지하고, 가상 요소를 모르는 브라우저를 위해 min-height 로 한 번 더 받친다.
    채워진 칸의 실제 높이(≈48.5px)보다 낮은 값이라 평소 모습은 달라지지 않는다.
-   .ui-input 은 자체 컨트롤 높이를 가지므로 건드리지 않는다. */
-input[type="date"]:not(.ui-input),
-input[type="time"]:not(.ui-input),
-input[type="datetime-local"]:not(.ui-input) {
+   .ui-input 도 포함한다 — 데스크탑 기본 높이(40px)로는 같은 증상이 다시 난다. */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"] {
   min-height: var(--control-lg);
 }
 
@@ -3425,6 +3425,132 @@ body.pchat-lock {
 .teacher-filter-chip.active {
   background: var(--color-primary); border-color: var(--color-primary);
   color: #fff; font-weight: 700;
+}
+
+/* ===================================
+   이벤트 폼 (등록 · 수정)
+   =================================== */
+
+/* 데스크탑에서는 본문(왼쪽) 옆에 공개·접수 설정이 따라붙고, 좁아지면 그대로 쌓인다.
+   폭은 읽기 좋은 선에서 멈춘다 — 입력칸이 화면 끝까지 늘어나면 훑기 어렵다. */
+.event-form__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-5);
+  max-width: 1120px;
+}
+@media (min-width: 1024px) {
+  .event-form__grid {
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: var(--space-6);
+  }
+}
+
+.event-form__main,
+.event-form__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+/* 카드 안 항목 사이 간격 */
+.event-form__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.event-form__side-title {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-900);
+}
+
+/* Field 를 쓸 수 없는 묶음(버튼 그룹 · 옵션 편집기)의 라벨 줄 */
+.event-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.event-form__note {
+  margin-left: var(--space-2);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-regular);
+  color: var(--ink-500);
+}
+
+/* 두 칸짜리 입력 줄. 휴대폰에서는 한 칸씩 쌓아 라벨이 접히지 않게 한다. */
+.event-form__pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+}
+@media (min-width: 480px) {
+  .event-form__pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* 종류 3개는 어느 폭에서도 한 줄에 선다 — 나란히 놓고 비교하는 선택이라서다. */
+.event-form__types {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+.event-form__type {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 48px;
+  padding: var(--space-3) var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  color: var(--ink-700);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease),
+              background-color var(--duration-fast) var(--ease);
+}
+.event-form__type:hover:not(:disabled) { border-color: var(--border-strong); }
+.event-form__type:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+.event-form__type[aria-pressed="true"] {
+  border-color: var(--brand-500);
+  background: var(--brand-50);
+  color: var(--brand-700);
+}
+.event-form__type:disabled { cursor: not-allowed; }
+.event-form__type:disabled[aria-pressed="false"] { opacity: 0.5; }
+
+.event-form__type-emoji { font-size: var(--text-2xl); line-height: 1.2; }
+.event-form__type-name {
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-medium);
+}
+.event-form__type-hint {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--ink-500);
+}
+.event-form__type[aria-pressed="true"] .event-form__type-hint { color: var(--brand-600); }
+
+/* 에러와 액션은 두 열 아래 전체 폭을 쓴다 */
+.event-form__error,
+.event-form__actions { grid-column: 1 / -1; }
+
+.event-form__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+@media (max-width: 599px) {
+  .event-form__actions { flex-direction: column-reverse; }
+  .event-form__actions > * { width: 100%; }
 }
 
 /* ==================================================================
