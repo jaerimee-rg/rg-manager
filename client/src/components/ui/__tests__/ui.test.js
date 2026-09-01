@@ -129,6 +129,24 @@ describe('DataTable', () => {
     fireEvent.click(screen.getByRole('cell', { name: '김하늘' }).closest('tr'));
     expect(onRowClick).toHaveBeenCalledWith(rows[0]);
   });
+
+  it('column.hidden 인 행에서는 칸을 비우고 표시만 CSS 에 맡긴다', () => {
+    const withHidden = [{ ...columns[0] }, { ...columns[1], hidden: (row) => row.count == null }];
+    render(<DataTable columns={withHidden} rows={[{ id: 1, name: '김하늘', count: null }]} />);
+
+    const cells = screen.getAllByRole('cell');
+    expect(cells[1]).toHaveAttribute('data-blank', 'true');
+    expect(cells[1]).toBeEmptyDOMElement();
+  });
+
+  it('column.hidden 이 아닌 행은 그대로 그린다', () => {
+    const withHidden = [{ ...columns[0] }, { ...columns[1], hidden: (row) => row.count == null }];
+    render(<DataTable columns={withHidden} rows={rows} />);
+
+    const cells = screen.getAllByRole('cell');
+    expect(cells[1]).not.toHaveAttribute('data-blank');
+    expect(cells[1]).toHaveTextContent('12');
+  });
 });
 
 describe('Menu', () => {

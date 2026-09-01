@@ -97,18 +97,19 @@ function EventList({ basePath = '/events' }) {
     </Row>
   );
 
-  const registrationLink = (event) =>
-    event.type === 'closure' ? (
-      <span className="ui-text-subtle">—</span>
-    ) : (
-      <button
-        type="button"
-        className="ui-link"
-        onClick={() => setOpenRegistrations(openRegistrations === event.id ? null : event.id)}
-      >
-        {event.registrationCount || 0}건
-      </button>
-    );
+  const registrationLink = (event) => (
+    <button
+      type="button"
+      className="ui-link"
+      onClick={() => setOpenRegistrations(openRegistrations === event.id ? null : event.id)}
+    >
+      {event.registrationCount || 0}건
+    </button>
+  );
+
+  // 휴관일은 장소·참가 학생·신청·접수가 아예 없는 일정이라 그 칸을 "—" 로 채우지 않는다.
+  // 모바일 카드에서는 줄째로 사라지고, 데스크탑 표에서는 열을 맞추려고 빈 칸으로 남는다.
+  const notForClosure = (event) => event.type === 'closure';
 
   // 컬럼 정의 하나로 데스크탑 표와 모바일 카드가 동시에 나온다.
   // (예전에는 같은 목록을 표용·카드용으로 두 벌 만들어 두고 있었다)
@@ -143,6 +144,7 @@ function EventList({ basePath = '/events' }) {
     {
       key: 'location',
       header: '장소',
+      hidden: notForClosure,
       render: (event) => event.location || <span className="ui-text-subtle">—</span>
     },
     {
@@ -150,11 +152,12 @@ function EventList({ basePath = '/events' }) {
       header: '참가 학생',
       width: '96px',
       numeric: true,
+      hidden: notForClosure,
       render: (event) =>
         event.type === 'competition' ? `${event.participantCount || 0}명` : <span className="ui-text-subtle">—</span>
     },
-    { key: 'registrations', header: '신청', width: '80px', numeric: true, render: registrationLink },
-    { key: 'status', header: '공개 · 접수', width: '140px', render: (event) => <StatusBadges event={event} /> },
+    { key: 'registrations', header: '신청', width: '80px', numeric: true, hidden: notForClosure, render: registrationLink },
+    { key: 'status', header: '공개 · 접수', width: '140px', hidden: notForClosure, render: (event) => <StatusBadges event={event} /> },
     { key: 'actions', header: '관리', width: '1%', hideLabelOnMobile: true, render: actions }
   ];
 
@@ -205,7 +208,8 @@ function EventList({ basePath = '/events' }) {
         />
       </Toolbar>
 
-      <div className="ui-events-layout" data-split={openRegistrations && !isMobile ? 'true' : undefined}>
+      {/* 2열이 될지(넓은 화면) 신청 현황이 화면을 덮을지(좁은 화면)는 CSS 가 정한다 */}
+      <div className="ui-events-layout" data-split={openRegistrations ? 'true' : undefined}>
         <div>
           {loading ? (
             <SkeletonList rows={4} />

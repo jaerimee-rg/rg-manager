@@ -135,3 +135,83 @@ test.describe('선생님 — 앨범', () => {
     expect(other.status).toBe(404);
   });
 });
+
+/**
+ * 좁은 화면(휴대폰)에서는 신청 현황을 목록 아래에 끼워 넣지 않고 화면 전체로 띄운다.
+ * teacher 프로젝트는 데스크탑 뷰포트라 여기서만 폭을 바꾼다.
+ */
+test.describe('선생님 — 좁은 화면의 신청 현황', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('신청 건수를 누르면 신청한 학생 목록이 화면을 가득 채운다', async ({ page, request }) => {
+    const eventTitle = `e2e 모바일 신청 ${run}`;
+    const created = await api(request, sessions.teacher, 'POST', '/api/events', {
+      type: 'competition',
+      title: eventTitle,
+      date: '2026-12-05',
+      location: 'e2e 체육관',
+      options: [],
+      isPublished: true,
+      registrationOpen: true
+    });
+    expect(created.status).toBe(201);
+
+    const student = sessions.students[0];
+    const registered = await api(
+      request, sessions.teacher, 'PUT',
+      `/api/events/${created.body.id}/registrations/student/${student.id}`,
+      { optionIds: [] }
+    );
+    expect(registered.status).toBeLessThan(300);
+
+    await loginAs(page, sessions.teacher);
+    await page.goto('/events');
+
+    const row = page.locator('tr', { hasText: eventTitle }).first();
+    await row.getByRole('button', { name: /^\d+건$/ }).click();
+
+    const panel = page.locator('.ui-registrations');
+    await expect(panel).toHaveAttribute('role', 'dialog');
+    await expect(panel.getByText(student.name)).toBeVisible();
+
+    // 목록 아래가 아니라 화면 전체 — 스크롤을 내리지 않아도 명단이 보인다
+    await panel.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+    const box = await panel.boundingBox();
+    const viewport = page.viewportSize();
+    expect(Math.round(box.width)).toBe(viewport.width);
+    expect(Math.round(box.height)).toBe(viewport.height);
+    expect(Math.round(box.y)).toBe(0);
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe('hidden');
+
+    // 빠져나갈 길: 닫기 버튼과 Esc
+    await expect(page.getByRole('button', { name: '신청 현황 닫기' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
+  });
+
+  test('휴관일 카드에는 장소·참가 학생·신청·공개 접수 줄이 없다', async ({ page, request }) => {
+    const closureTitle = `e2e 모바일 휴관 ${run}`;
+    const created = await api(request, sessions.teacher, 'POST', '/api/events', {
+      type: 'closure',
+      title: closureTitle,
+      date: '2026-12-24',
+      endDate: '2026-12-26',
+      isPublished: true
+    });
+    expect(created.status).toBe(201);
+
+    await loginAs(page, sessions.teacher);
+    await page.goto('/events');
+
+    const card = page.locator('tr', { hasText: closureTitle }).first();
+    await expect(card).toBeVisible();
+
+    for (const label of ['장소', '참가 학생', '신청', '공개 · 접수']) {
+      await expect(card.locator(`td[data-label="${label}"]`)).toBeHidden();
+    }
+    // 남는 줄은 종류·이벤트·날짜와 관리 버튼뿐이다
+    await expect(card.locator('td[data-label="날짜"]')).toBeVisible();
+    await expect(card.getByRole('button', { name: '수정' })).toBeVisible();
+  });
+});
