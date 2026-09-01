@@ -46,6 +46,33 @@ Run these in separate terminals:
 1. `cd client && npm run dev` - Client on http://localhost:3000
 2. `cd server && npm start` - Server on http://localhost:5001
 
+### Unit tests (Jest)
+
+Client and server have **separate** Jest setups and are run from their own directory —
+there is no root `package.json`, so there is no one command that runs everything.
+
+```bash
+cd client && npm test          # jest — 512 tests / 42 suites
+cd server && npm test          # 872 tests / 44 suites
+```
+
+- **The server suite is ESM** (`"type": "module"` + `transform: {}`, i.e. no Babel) and only
+  works through its npm script, which supplies `--experimental-vm-modules`. Running plain
+  `npx jest` in `server/` makes **43 of 44 suites fail to parse** ("Jest encountered an
+  unexpected token") — it exits 1, but the summary line still reads `Tests: 3 passed`, so
+  skimming the tail of the output makes a broken run look like a green one. Always use
+  `npm test` here. In `client/` (Babel + CommonJS) `npx jest` is fine.
+- Run **one file or one test**:
+  ```bash
+  cd client && npx jest EventForm                    # by filename substring
+  cd client && npx jest -t "휴관일"                   # by test name
+  cd server && npm test -- eventController           # note the -- before args
+  ```
+- `npm run test:watch` / `npm run test:coverage` exist on both sides.
+- Tests live in `__tests__/` next to the code they cover. Both suites run **without a database
+  or a running server** (the whole server suite finishes in under a second), so a failure means
+  the code, not the environment. Only the e2e suite below needs real infrastructure.
+
 ## Architecture
 
 ### Tech Stack
@@ -88,7 +115,9 @@ PostgreSQL. All tables are defined in `server/database.js`; the core four are:
 
 4. **users**: Authentication
    - Default admin account: username `admin`, password `admin123`
-   - Roles: `admin` or `user`
+   - Roles: `admin` | `user` (teacher) | `parent` — see *Accounts, Roles & Invites*.
+     One Kakao account may hold **one row per role**, so `kakaoId` is unique per `(kakaoId, role)`,
+     not on its own.
 
 **Important**: Student ages are NEVER stored - only `birthdate`. Age is calculated on-the-fly in components using the `calculateAge()` function.
 
@@ -316,7 +345,9 @@ Parents get their own accounts and a separate app under `/parent/*`. Design docs
 `docs/parent-portal/` (requirements, data model, implementation plan, mockups).
 
 - **Roles**: `users.role` is now `admin` | `user`(teacher) | **`parent`**. Parents sign in with
-  Kakao only and belong to exactly one teacher (`parent_accounts.teacherId`).
+  Kakao only. A parent may be linked to **several teachers** (`parent_teachers`);
+  `parent_accounts.teacherId` is only the legacy 대표 선생님 and is not read by new code —
+  scope every parent query through `services/parentScope.js`.
 - **`middleware/roles.js`** — `rejectParents` reads the role off the JWT *without* deciding
   authentication (`verifyToken` still owns 401), so it is mounted at the router registration in
   `server.js` and every route file stays untouched. `requireRole('parent')` guards `/api/parent/*`.
@@ -429,6 +460,29 @@ the rest of the app is unaffected.
 - When a class is deleted, it's removed from all student `classIds` arrays
 - Class enrollment managed via PUT requests to `/api/students/:id`
 
+## PR review & merge — this repo only
+
+A PR-review or merge request made from this project ("새로운 PR 검색하고 리뷰하고 머지해줘",
+`/pr-review-merge`, or a recurring triage goal) applies to **`jaerimee-rg/rg-manager` only**.
+
+- Scan with `gh pr list -R jaerimee-rg/rg-manager`. Do **not** scan, review or merge any other
+  repository — in particular the `Supercoder-co/supercoder-ai-interviewer-be` / `-fe` repos that
+  the shared `pr-review-merge` skill hard-codes are **out of scope here** and must be skipped.
+- Base branch is **`main`**, not `dev`. `main` has **no branch protection**, so a plain
+  `gh pr merge <PR#> -R jaerimee-rg/rg-manager --squash` works — the skill's
+  `enforce_admins` off/merge/on dance belongs to the Supercoder repos and must not be run
+  against this repo.
+- **Merging is deploying.** `main` auto-deploys to Vercel production, so treat a merge as a
+  production release: CI green, `cd client && npm test` and `cd server && npm test` green, and
+  if the PR touches `server/database.js`, follow the fire-and-forget migration warning under
+  *Deployment* — verify the DDL actually landed in production right after the merge.
+- After merging, delete the branch **and** its worktree (this repo's owner wants them gone, which
+  overrides the usual "keep the worktree" habit): `git worktree remove`, then `git branch -D`,
+  then `git push origin --delete <branch>`. Back up the worktree's `.env` / `.env.local` first —
+  they have differed between worktrees. Because merges are squashed, `git branch --merged` and
+  `git cherry` will wrongly report a merged branch as unmerged; confirm with
+  `git merge-tree --write-tree origin/main <branch>` equalling `git rev-parse origin/main^{tree}`.
+
 ## Running the e2e suite (Playwright)
 
 `client/e2e/*.spec.mjs` runs against the **built** app served by Express on a local Postgres —
@@ -439,7 +493,7 @@ cd client && npm run build
 cd ../server && DATABASE_URL=postgresql://<user>@localhost:5432/rg_manager PORT=5055 \
   JWT_SECRET=local-dev-secret API_RATE_LIMIT_MAX=100000 AUTH_RATE_LIMIT_MAX=100000 node server.js &
 cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e:setup   # writes e2e/.sessions.json
-cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 54 tests
+cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 56 tests
 ```
 
 - **`JWT_SECRET` must be `local-dev-secret`** — that is what `e2e/setup.mjs` defaults to when signing
@@ -500,20 +554,16 @@ set explicitly. `KAKAO_REDIRECT_URI` must also be registered in the Kakao develo
 ## Key Patterns & Conventions
 
 ### Age Calculation
-Always use this pattern for displaying age:
+Ages are never stored — only `birthdate` — so age is derived at render time. **Import the shared
+helper; do not re-implement it inline:**
+
 ```javascript
-const calculateAge = (birthdate) => {
-  if (!birthdate) return '-';
-  const today = new Date();
-  const birth = new Date(birthdate);
-  let age = today.getFullYear() - birth.getFullYear();
-  const monthDiff = today.getMonth() - birth.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-    age--;
-  }
-  return age;
-};
+import { calculateAge } from '../utils/dateHelpers';
 ```
+
+`client/src/utils/dateHelpers.js` also exports `formatDate()`, and is the one covered by
+`utils/__tests__/dateHelpers.test.js`. `pages/Dashboard.jsx` still carries an old inline copy —
+fold it into the helper if you touch that file.
 
 ### JSON Array Handling
 Student `classIds` stored as JSON string:
@@ -525,16 +575,21 @@ JSON.stringify([1, 2, 3])
 JSON.parse(student.classIds)
 ```
 
-### Mobile-First Responsive Design
-```javascript
-const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+### Responsive behaviour
+Do **not** hand-roll a resize listener in a component — that pattern was removed from the
+codebase. Layout is CSS's job (see *Mobile Responsiveness Pattern* above); when genuine
+*behaviour* differs, use the shared hook:
 
-useEffect(() => {
-  const handleResize = () => setIsMobile(window.innerWidth <= 768);
-  window.addEventListener('resize', handleResize);
-  return () => window.removeEventListener('resize', handleResize);
-}, []);
+```javascript
+import { useIsMobile } from '../hooks/useMediaQuery';
+
+const fullScreen = useIsMobile(1023);   // true when innerWidth <= 1023; defaults to 768
 ```
+
+Pass the breakpoint explicitly when it must agree with a media query, and keep the two in
+sync — the hook is `<=` so it pairs with `max-width: <n>px`, not `max-width: <n+1>px`.
+`EventRegistrations.jsx` is the worked example: CSS decides side-panel vs full-screen, and the
+hook drives only the modal semantics (`role="dialog"`, Escape, body scroll lock).
 
 ## Common Modifications
 
