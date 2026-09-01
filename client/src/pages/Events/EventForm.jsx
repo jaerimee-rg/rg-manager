@@ -3,7 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import { EVENT_TYPES, splitDeadline, joinDeadline } from '../../utils/eventFormat';
 import OptionsEditor from './OptionsEditor';
-import EventAlbumSection from './EventAlbumSection';
+import {
+  Button, Callout, Card, Container, Field, Input, PageHeader, SwitchField, Textarea
+} from '../../components/ui';
 
 const TYPE_HINTS = {
   competition: '신청 → 확정 → 참가 학생',
@@ -26,26 +28,30 @@ const emptyForm = {
   deadlineTime: ''
 };
 
-function Toggle({ checked, onChange, label, description, id }) {
+/** 종류 3개는 어느 폭에서도 한 줄에 나란히 선다 — 개수가 고정이라 비교가 쉬운 편이 낫다. */
+function TypePicker({ value, onChange, locked }) {
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      gap: '12px', padding: '12px 0', borderTop: '1px solid var(--color-gray-100)'
-    }}>
-      <div>
-        <label htmlFor={id} style={{ fontSize: '0.9375rem', fontWeight: 600, cursor: 'pointer' }}>{label}</label>
-        {description && (
-          <div style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', marginTop: '2px' }}>{description}</div>
-        )}
+    <div className="event-form__field">
+      <span className="ui-field__label" id="ev-type-label">
+        종류<span className="ui-field__required" aria-hidden="true">*</span>
+        {locked && <span className="event-form__note">등록 후에는 바꿀 수 없어요</span>}
+      </span>
+      <div className="event-form__types" role="group" aria-labelledby="ev-type-label">
+        {Object.entries(EVENT_TYPES).map(([key, meta]) => (
+          <button
+            key={key}
+            type="button"
+            className="event-form__type"
+            disabled={locked}
+            aria-pressed={value === key}
+            onClick={() => onChange(key)}
+          >
+            <span className="event-form__type-emoji" aria-hidden="true">{meta.emoji}</span>
+            <span className="event-form__type-name">{meta.label}</span>
+            <span className="event-form__type-hint">{TYPE_HINTS[key]}</span>
+          </button>
+        ))}
       </div>
-      <input
-        id={id}
-        type="checkbox"
-        role="switch"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        style={{ width: '44px', height: '26px', flexShrink: 0, cursor: 'pointer' }}
-      />
     </div>
   );
 }
@@ -153,197 +159,172 @@ function EventForm({ basePath = '/events' }) {
   };
 
   return (
-    <div className="container">
-      <div className="page-header">
-        <h2>{editing ? '이벤트 수정' : '이벤트 등록'}</h2>
-      </div>
+    <Container>
+      <PageHeader
+        title={editing ? '이벤트 수정' : '이벤트 등록'}
+        onBack={() => navigate(basePath)}
+        backLabel="이벤트 관리"
+      />
 
-      <form onSubmit={submit} className="card" style={{ padding: '20px', maxWidth: '680px' }}>
-        <div className="form-group">
-          <label>
-            종류 <span style={{ color: 'var(--color-danger)' }}>*</span>{' '}
-            {editing && (
-              <span style={{ fontWeight: 400, color: 'var(--color-gray-400)', fontSize: '0.75rem' }}>
-                등록 후에는 바꿀 수 없어요
-              </span>
-            )}
-          </label>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-            {Object.entries(EVENT_TYPES).map(([key, meta]) => (
-              <button
-                key={key}
-                type="button"
-                disabled={!!editing}
-                onClick={() => set({ type: key })}
-                aria-pressed={form.type === key}
-                style={{
-                  border: `1px solid ${form.type === key ? 'var(--color-primary)' : 'var(--color-gray-200)'}`,
-                  background: form.type === key ? 'var(--color-primary-bg)' : '#fff',
-                  color: form.type === key ? 'var(--color-primary)' : 'var(--color-gray-700)',
-                  borderRadius: 'var(--radius-md)', padding: '12px 8px',
-                  cursor: editing ? 'not-allowed' : 'pointer', opacity: editing && form.type !== key ? 0.5 : 1,
-                  fontSize: '0.875rem', fontWeight: 700, fontFamily: 'inherit',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px'
-                }}
-              >
-                <span style={{ fontSize: '1.3rem' }}>{meta.emoji}</span>
-                {meta.label}
-                <span style={{ fontSize: '0.6875rem', fontWeight: 400, color: 'var(--color-gray-500)' }}>
-                  {TYPE_HINTS[key]}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* 데스크탑에서는 "무엇을 하는 일정인가"(본문)와 "누구에게 언제까지 보여줄
+          것인가"(공개·접수)가 나란히 서고, 좁아지면 그대로 한 줄로 쌓인다. */}
+      <form onSubmit={submit} className="event-form__grid">
+        <div className="event-form__main">
+          <Card padding="lg">
+            <div className="event-form__section">
+              <TypePicker value={form.type} onChange={(type) => set({ type })} locked={!!editing} />
 
-        <div className="form-group">
-          <label htmlFor="ev-title">이벤트 이름 <span style={{ color: 'var(--color-danger)' }}>*</span></label>
-          <input
-            id="ev-title" type="text" value={form.title} maxLength={100}
-            onChange={(e) => set({ title: e.target.value })}
-            placeholder="예: 2026 서울시 리듬체조 대회"
-          />
-        </div>
+              <Field label="이벤트 이름" required htmlFor="ev-title">
+                {(props) => (
+                  <Input
+                    {...props} type="text" value={form.title} maxLength={100}
+                    onChange={(e) => set({ title: e.target.value })}
+                    placeholder="예: 2026 서울시 리듬체조 대회"
+                  />
+                )}
+              </Field>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-          <div className="form-group">
-            <label htmlFor="ev-date">날짜 <span style={{ color: 'var(--color-danger)' }}>*</span></label>
-            <input id="ev-date" type="date" value={form.date} onChange={(e) => set({ date: e.target.value })} />
-          </div>
-          <div className="form-group">
-            <label htmlFor="ev-end">종료일 <span style={{ fontWeight: 400, color: 'var(--color-gray-400)' }}>(기간일 때)</span></label>
-            <input id="ev-end" type="date" value={form.endDate} onChange={(e) => set({ endDate: e.target.value })} />
-          </div>
-        </div>
-
-        {/* 휴관일은 하루(또는 며칠) 통째로 쉬는 날이라 시간·장소가 없다 — 날짜만 받는다. */}
-        {!isClosure && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div className="form-group">
-              <label htmlFor="ev-time">시간 <span style={{ fontWeight: 400, color: 'var(--color-gray-400)' }}>(비우면 종일)</span></label>
-              <input id="ev-time" type="time" value={form.startTime} onChange={(e) => set({ startTime: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label htmlFor="ev-loc">장소 <span style={{ color: 'var(--color-danger)' }}>*</span></label>
-              <input
-                id="ev-loc" type="text" value={form.location}
-                onChange={(e) => set({ location: e.target.value })}
-                placeholder="예: 올림픽공원 체조경기장"
-              />
-            </div>
-          </div>
-        )}
-
-        <div className="form-group">
-          <label htmlFor="ev-desc">학부모 안내</label>
-          <textarea
-            id="ev-desc" value={form.description} rows={4} maxLength={1000}
-            onChange={(e) => set({ description: e.target.value })}
-            placeholder="학부모 일정 상세에 그대로 보입니다."
-          />
-        </div>
-
-        {!isClosure && (
-          <>
-            <div className="form-group">
-              <label>
-                옵션{' '}
-                <span style={{ fontWeight: 400, color: 'var(--color-gray-400)', fontSize: '0.75rem' }}>
-                  학부모가 신청할 때 체크합니다 · 여러 개 선택 가능
-                </span>
-              </label>
-              <OptionsEditor
-                options={options}
-                onChange={setOptions}
-                usageById={usageById}
-                showApparatus={form.type === 'competition'}
-              />
-            </div>
-
-            <Toggle
-              id="ev-require"
-              checked={form.requireOption}
-              onChange={(v) => set({ requireOption: v })}
-              label="옵션 1개 이상 필수"
-              description="켜면 학부모가 옵션을 고르지 않고는 신청할 수 없어요"
-            />
-          </>
-        )}
-
-        <Toggle
-          id="ev-published"
-          checked={form.isPublished}
-          onChange={(v) => set({ isPublished: v })}
-          label="학부모에게 공개"
-          description="끄면 학부모 일정에 보이지 않아요 (준비 중인 이벤트)"
-        />
-
-        {!isClosure && (
-          <>
-            <Toggle
-              id="ev-open"
-              checked={form.registrationOpen}
-              onChange={(v) => set({ registrationOpen: v })}
-              label="접수 받기"
-              description='끄면 학부모 화면에 "접수 마감" 으로 보여요'
-            />
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
-              <div className="form-group">
-                <label htmlFor="ev-deadline-date">
-                  마감 날짜{' '}
-                  <span style={{ fontWeight: 400, color: 'var(--color-gray-400)' }}>(비우면 시작 전까지)</span>
-                </label>
-                <input
-                  id="ev-deadline-date" type="date" value={form.deadlineDate}
-                  onChange={(e) => set({ deadlineDate: e.target.value })}
-                />
+              <div className="event-form__pair">
+                <Field label="날짜" required htmlFor="ev-date">
+                  {(props) => (
+                    <Input {...props} type="date" value={form.date} onChange={(e) => set({ date: e.target.value })} />
+                  )}
+                </Field>
+                <Field label="종료일" hint="기간일 때만 채웁니다" htmlFor="ev-end">
+                  {(props) => (
+                    <Input {...props} type="date" value={form.endDate} onChange={(e) => set({ endDate: e.target.value })} />
+                  )}
+                </Field>
               </div>
-              <div className="form-group">
-                <label htmlFor="ev-deadline-time">
-                  마감 시간{' '}
-                  <span style={{ fontWeight: 400, color: 'var(--color-gray-400)' }}>(비우면 23:59)</span>
-                </label>
-                <input
-                  id="ev-deadline-time" type="time" value={form.deadlineTime}
-                  onChange={(e) => set({ deadlineTime: e.target.value })}
-                />
-              </div>
-            </div>
-          </>
-        )}
 
-        {form.type === 'competition' && (
-          <div style={{
-            background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)',
-            padding: '12px 14px', borderRadius: 'var(--radius-md)', fontSize: '0.8125rem', lineHeight: 1.6
-          }}>
-            🏆 대회형은 저장하면 <b>대회 데이터(참가 학생·종목·참가비)</b>가 함께 만들어져 기존 [참가 학생 관리] 화면에서 그대로 쓸 수 있어요.
-            학부모 신청은 <b>[확정]</b> 해야 참가 학생으로 올라갑니다.
-          </div>
-        )}
+              {/* 휴관일은 하루(또는 며칠) 통째로 쉬는 날이라 시간·장소가 없다 — 날짜만 받는다. */}
+              {!isClosure && (
+                <div className="event-form__pair">
+                  <Field label="시간" hint="비우면 종일" htmlFor="ev-time">
+                    {(props) => (
+                      <Input {...props} type="time" value={form.startTime} onChange={(e) => set({ startTime: e.target.value })} />
+                    )}
+                  </Field>
+                  <Field label="장소" required htmlFor="ev-loc">
+                    {(props) => (
+                      <Input
+                        {...props} type="text" value={form.location}
+                        onChange={(e) => set({ location: e.target.value })}
+                        placeholder="예: 올림픽공원 체조경기장"
+                      />
+                    )}
+                  </Field>
+                </div>
+              )}
+
+              <Field label="학부모 안내" hint="학부모 일정 상세에 그대로 보입니다" htmlFor="ev-desc">
+                {(props) => (
+                  <Textarea
+                    {...props} value={form.description} rows={4} maxLength={1000}
+                    onChange={(e) => set({ description: e.target.value })}
+                  />
+                )}
+              </Field>
+
+              {!isClosure && (
+                <>
+                  <div className="event-form__field">
+                    <span className="ui-field__label" id="ev-options-label">
+                      옵션
+                      <span className="event-form__note">학부모가 신청할 때 체크합니다 · 여러 개 선택 가능</span>
+                    </span>
+                    <div role="group" aria-labelledby="ev-options-label">
+                      <OptionsEditor
+                        options={options}
+                        onChange={setOptions}
+                        usageById={usageById}
+                        showApparatus={form.type === 'competition'}
+                      />
+                    </div>
+                  </div>
+
+                  <SwitchField
+                    id="ev-require"
+                    checked={form.requireOption}
+                    onChange={(e) => set({ requireOption: e.target.checked })}
+                    label="옵션 1개 이상 필수"
+                    description="켜면 학부모가 옵션을 고르지 않고는 신청할 수 없어요"
+                  />
+                </>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        <aside className="event-form__side">
+          <Card padding="lg">
+            <div className="event-form__section">
+              <h2 className="event-form__side-title">공개 · 접수</h2>
+
+              <SwitchField
+                id="ev-published"
+                checked={form.isPublished}
+                onChange={(e) => set({ isPublished: e.target.checked })}
+                label="학부모에게 공개"
+                description="끄면 학부모 일정에 보이지 않아요 (준비 중인 이벤트)"
+              />
+
+              {!isClosure && (
+                <>
+                  <SwitchField
+                    id="ev-open"
+                    checked={form.registrationOpen}
+                    onChange={(e) => set({ registrationOpen: e.target.checked })}
+                    label="접수 받기"
+                    description='끄면 학부모 화면에 "접수 마감" 으로 보여요'
+                  />
+
+                  <Field label="마감 날짜" hint="비우면 시작 전까지" htmlFor="ev-deadline-date">
+                    {(props) => (
+                      <Input
+                        {...props} type="date" value={form.deadlineDate}
+                        onChange={(e) => set({ deadlineDate: e.target.value })}
+                      />
+                    )}
+                  </Field>
+                  <Field label="마감 시간" hint="비우면 23:59" htmlFor="ev-deadline-time">
+                    {(props) => (
+                      <Input
+                        {...props} type="time" value={form.deadlineTime}
+                        onChange={(e) => set({ deadlineTime: e.target.value })}
+                      />
+                    )}
+                  </Field>
+                </>
+              )}
+            </div>
+          </Card>
+
+          {form.type === 'competition' && (
+            <Callout tone="brand" icon="award">
+              대회형은 저장하면 <b>대회 데이터(참가 학생·종목·참가비)</b>가 함께 만들어져 기존
+              [참가 학생 관리] 화면에서 그대로 쓸 수 있어요. 학부모 신청은 <b>[확정]</b> 해야
+              참가 학생으로 올라갑니다.
+            </Callout>
+          )}
+        </aside>
 
         {error && (
-          <div role="alert" style={{
-            marginTop: '14px', background: 'var(--color-danger-bg)', color: 'var(--color-danger)',
-            padding: '11px 13px', borderRadius: 'var(--radius-md)', fontSize: '0.875rem'
-          }}>
-            {error}
+          <div className="event-form__error">
+            <Callout tone="danger">{error}</Callout>
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
-          <button type="submit" className="btn btn-primary" disabled={saving}>
+        <div className="event-form__actions">
+          <Button type="submit" variant="primary" loading={saving} disabled={saving}>
             {saving ? '저장 중...' : '저장'}
-          </button>
-          <button type="button" className="btn btn-outline" onClick={() => navigate(basePath)}>
+          </Button>
+          <Button type="button" variant="outline" onClick={() => navigate(basePath)}>
             취소
-          </button>
+          </Button>
         </div>
       </form>
-
-      {editing && form.type !== 'closure' && <EventAlbumSection event={editing} />}
-    </div>
+    </Container>
   );
 }
 

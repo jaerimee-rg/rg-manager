@@ -12,9 +12,8 @@ jest.mock('react-router-dom', () => ({
   useLocation: () => mockLocation
 }));
 
-// 옵션 편집기와 앨범 섹션은 각자 테스트가 있다 — 여기서는 자리만 잡는다.
+// 옵션 편집기는 자체 테스트가 있다 — 여기서는 자리만 잡는다.
 jest.mock('../OptionsEditor', () => () => <div data-testid="options" />);
-jest.mock('../EventAlbumSection', () => () => <div data-testid="album" />);
 
 import { fetchWithAuth } from '../../../utils/api';
 import EventForm from '../EventForm';
@@ -34,8 +33,7 @@ const pickType = async (label) => {
   });
 };
 
-// 라벨은 "시간 (비우면 종일)" 처럼 힌트가 붙고, "마감 시간" 처럼 접두사가 겹치는 것도
-// 있어서 앞부분으로만 정확히 고른다.
+// "시간" 과 "마감 시간" 처럼 접두사가 겹치는 라벨이 있어서 앞부분으로만 정확히 고른다.
 const labelOf = (name) => new RegExp(`^${name}`);
 const field = (name) => screen.getByLabelText(labelOf(name));
 const noField = (name) => expect(screen.queryByLabelText(labelOf(name))).not.toBeInTheDocument();
@@ -135,5 +133,32 @@ describe('EventForm — 휴관일은 날짜만 입력한다', () => {
     await save();
 
     expect(savedPayload()).toMatchObject({ type: 'closure', startTime: null });
+  });
+});
+
+describe('EventForm — 화면 구성', () => {
+  it('사진·영상 공유 섹션은 더 이상 붙지 않는다', async () => {
+    await renderForm({
+      id: 9,
+      type: 'competition',
+      title: '가을 대회',
+      date: '2026-09-12',
+      location: '올림픽공원',
+      isPublished: true
+    });
+
+    expect(screen.queryByText(/사진 · 영상/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /사진·영상 올리기/ })).not.toBeInTheDocument();
+  });
+
+  it('공개·접수 설정은 본문과 나란히 놓을 수 있게 따로 묶여 있다', async () => {
+    await renderForm();
+
+    // 데스크탑 2열은 CSS 가 만든다 — JSX 는 두 덩어리로 나뉘어 있기만 하면 된다.
+    const side = screen.getByRole('heading', { name: '공개 · 접수' }).closest('.event-form__side');
+    expect(side).not.toBeNull();
+    expect(side).toContainElement(screen.getByLabelText('학부모에게 공개'));
+    expect(side).toContainElement(screen.getByLabelText(/^마감 날짜/));
+    expect(side).not.toContainElement(screen.getByLabelText(/^이벤트 이름/));
   });
 });
