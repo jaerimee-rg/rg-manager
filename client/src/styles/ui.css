@@ -776,6 +776,9 @@
   }
   .ui-table-wrap[data-stack-mobile="true"] .ui-table td[data-label=""]::before { content: none; }
   .ui-table-wrap[data-stack-mobile="true"] .ui-table [data-numeric="true"] { text-align: left; }
+  /* 그 행에 해당 없는 칸(column.hidden)은 카드에서 줄째로 뺀다 — 데스크탑 표에서는
+     열을 맞춰야 하므로 빈 칸으로 남는다 */
+  .ui-table-wrap[data-stack-mobile="true"] .ui-table td[data-blank="true"] { display: none; }
 }
 
 /* ---------------------------------------------------------------- *
@@ -1868,6 +1871,75 @@
 .ui-events-layout { display: grid; gap: var(--space-4); align-items: start; }
 @media (min-width: 1024px) {
   .ui-events-layout[data-split="true"] { grid-template-columns: minmax(0, 1fr) 380px; }
+}
+
+/* ---------------------------------------------------------------- *
+ * 신청 현황 — 1024px 이상은 목록 옆 패널, 그보다 좁으면 전체 화면
+ * ---------------------------------------------------------------- *
+ * 좁은 화면에서 목록 아래에 끼워 넣으면 스크롤을 한참 내려야 보였다.
+ * 옆에 둘 자리가 없으면 아예 화면을 덮고, 머리말과 액션은 붙박이로 둔다.
+ */
+
+.ui-registrations {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+}
+.ui-registrations__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  flex-shrink: 0;
+}
+.ui-registrations__heading { min-width: 0; }
+.ui-registrations__body {
+  min-height: 0;
+  padding: 0 var(--space-4);
+}
+.ui-registrations__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  flex-shrink: 0;
+}
+
+@media (max-width: 1023px) {
+  .ui-registrations {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-overlay);
+    border: 0;
+    border-radius: 0;
+    padding-top: env(safe-area-inset-top);
+    animation: ui-registrations-in var(--duration-normal) var(--ease);
+  }
+  .ui-registrations__header {
+    border-bottom: 1px solid var(--border);
+    padding: var(--space-4) var(--shell-gutter) var(--space-3);
+  }
+  .ui-registrations__body {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: var(--space-3) var(--shell-gutter) var(--space-5);
+  }
+  .ui-registrations__footer {
+    border-top: 1px solid var(--border);
+    padding: var(--space-3) var(--shell-gutter) calc(var(--space-3) + env(safe-area-inset-bottom));
+  }
+  /* 붙박이 액션은 한 손으로 누르기 쉽게 폭을 채운다 */
+  .ui-registrations__footer > * { flex: 1; }
+}
+
+@keyframes ui-registrations-in { from { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) {
+  .ui-registrations { animation: none; }
 }
 
 /* ---------------------------------------------------------------- *

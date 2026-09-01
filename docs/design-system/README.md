@@ -61,6 +61,13 @@ import { Button, Card, DataTable, Modal, PageHeader } from '../components/ui';
 같은 목록을 표용·카드용으로 두 벌 만들던 게 중복의 가장 큰 원인이었다.
 `DataTable` 은 컬럼 정의 하나로 데스크탑 표와 모바일 카드를 모두 만든다.
 
+행마다 해당 없는 칸은 `column.hidden(row)` 으로 비운다. 표에서는 열을 맞추려고
+빈 칸으로 남고, 모바일 카드에서는 줄째로 사라진다 — `"—"` 로 채우는 것보다 짧게 읽힌다.
+
+```jsx
+{ key: 'location', header: '장소', hidden: (event) => event.type === 'closure' }
+```
+
 ## 컴포넌트
 
 ### 레이아웃

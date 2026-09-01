@@ -89,7 +89,8 @@ describe('EventList', () => {
   });
 
   it('공개·접수 상태를 배지로 보여준다', async () => {
-    await renderList();
+    // 휴관일은 공개·접수 칸 자체가 없으므로 비공개 예시는 대회로 든다.
+    await renderList([EVENTS[0], { ...EVENTS[0], id: 3, title: '비공개 대회', isPublished: false }]);
 
     expect(screen.getByText('공개')).toBeInTheDocument();
     expect(screen.getByText('비공개')).toBeInTheDocument();
@@ -100,6 +101,29 @@ describe('EventList', () => {
 
     // 접수 배지는 대회 행에만 하나 있다.
     expect(screen.getAllByText(/접수 중|마감/)).toHaveLength(1);
+  });
+
+  it('휴관일 행에서는 장소·참가 학생·신청·공개 접수 칸을 비워 둔다', async () => {
+    await renderList();
+
+    const closureRow = screen.getByText('추석 휴관').closest('tr');
+    const blanks = within(closureRow)
+      .getAllByRole('cell')
+      .filter((cell) => cell.getAttribute('data-blank') === 'true')
+      .map((cell) => cell.getAttribute('data-label'));
+
+    expect(blanks).toEqual(['장소', '참가 학생', '신청', '공개 · 접수']);
+    // "—" 로 채우지 않고 실제로 비운다 (모바일 카드에서는 CSS 가 줄째로 감춘다).
+    expect(within(closureRow).queryByText('—')).not.toBeInTheDocument();
+  });
+
+  it('대회 행에서는 그 칸들을 그대로 보여준다', async () => {
+    await renderList();
+
+    const row = screen.getByText('2026 서울시 대회').closest('tr');
+    expect(within(row).queryAllByRole('cell').filter((c) => c.hasAttribute('data-blank'))).toHaveLength(0);
+    expect(within(row).getByText('올림픽공원')).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: '5건' })).toBeInTheDocument();
   });
 
   it('종류 칩으로 거르면 그 종류만 다시 불러온다', async () => {
