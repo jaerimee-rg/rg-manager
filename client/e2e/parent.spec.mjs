@@ -91,6 +91,8 @@ test.describe('학부모 — 가입부터 신청까지', () => {
     const card = page.getByRole('button', { name: new RegExp(`e2e 러닝 ${run}`) }).first();
     await expect(card).toBeVisible();
     await expect(card).toContainText('신청 가능');
+    // 아직 아무도 신청하지 않았다
+    await expect(card).toContainText('신청 0명');
 
     await card.click();
     // 시트가 아니라 전체 화면 상세 페이지다
@@ -99,6 +101,13 @@ test.describe('학부모 — 가입부터 신청까지', () => {
     await page.getByRole('button', { name: '5km' }).click();
     await page.getByRole('button', { name: /신청하기|참가 신청/ }).click();
 
+    await expect(page.getByText(/신청 완료/).first()).toBeVisible();
+
+    // 일정으로 돌아가면 카드의 신청 인원이 1명으로 바뀌어 있다
+    await page.getByRole('button', { name: '뒤로' }).click();
+    await expect(page).toHaveURL(/\/parent\/schedule$/);
+    await expect(page.getByRole('button', { name: new RegExp(`e2e 러닝 ${run}`) }).first()).toContainText('신청 1명');
+    await page.getByRole('button', { name: new RegExp(`e2e 러닝 ${run}`) }).first().click();
     await expect(page.getByText(/신청 완료/).first()).toBeVisible();
 
     // 아래 신청한 학생 명단에 우리 아이가 바로 보인다
