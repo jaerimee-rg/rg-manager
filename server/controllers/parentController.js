@@ -309,6 +309,24 @@ export const getEvent = async (req, res) => {
     const byStudent = new Map(registrations.map((r) => [r.studentId, r]));
     const now = Date.now();
 
+    /* 신청한 학생 명단 — 상세 화면 아래에 "누가 같이 가는지" 를 보여준다.
+       학부모에게는 **이름·상태·옵션**만 준다. 다른 집의 학부모명·학생 id·생년월일은 내려보내지 않고,
+       취소한 신청은 명단에서 뺀다. 휴관일은 신청 자체가 없다. */
+    let roster = [];
+    if (event.type !== 'closure') {
+      const labelById = new Map((event.options || []).map((o) => [o.id, o.label]));
+      const mine = new Set(studentIds);
+      const rows = await EventRegistration.listByEvent(event.id);
+      roster = rows
+        .filter((r) => r.status !== 'cancelled')
+        .map((r) => ({
+          studentName: r.studentName,
+          status: r.status,
+          options: (r.optionIds || []).map((id) => labelById.get(id)).filter(Boolean),
+          mine: mine.has(r.studentId)
+        }));
+    }
+
     // 앨범이 있고 자녀가 확정됐으면 상세에서 바로 사진으로 들어갈 수 있게 알려준다.
     // 여기가 실패해도 상세 화면은 떠야 하므로 앨범 정보만 비운다.
     let album = null;
@@ -337,6 +355,7 @@ export const getEvent = async (req, res) => {
 
     res.json({
       album,
+      today: todayKst(),
       id: event.id,
       type: event.type,
       title: event.title,
@@ -350,6 +369,7 @@ export const getEvent = async (req, res) => {
       options: event.options,
       requireOption: event.requireOption === true,
       registrationDeadline: event.registrationDeadline,
+      registrations: roster,
       children: children.map((child) => {
         const reg = child.studentId ? byStudent.get(child.studentId) : null;
         const allowed = canRegister(event, child, now);

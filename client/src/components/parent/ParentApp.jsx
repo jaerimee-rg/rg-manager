@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import ParentSchedule from '../../pages/parent/ParentSchedule';
+import ParentEventDetail from '../../pages/parent/ParentEventDetail';
 import ParentSettings from '../../pages/parent/ParentSettings';
 import ParentAlbumList from '../../pages/parent/ParentAlbumList';
 import ParentAlbum from '../../pages/parent/ParentAlbum';
@@ -65,8 +66,8 @@ function ParentApp() {
       ) : (
         <>
           <Route path="/parent/schedule" element={<ParentSchedule />} />
-          {/* 선생님이 공유한 이벤트 링크 — 일정 화면 위에 그 이벤트 상세가 바로 열린다 */}
-          <Route path="/parent/events/:eventId" element={<ParentSchedule />} />
+          {/* 이벤트 상세 — 일정 카드를 누르거나 선생님이 공유한 링크를 열면 이 전체 화면이 뜬다 */}
+          <Route path="/parent/events/:eventId" element={<ParentEventDetail />} />
           <Route path="/parent/photos" element={<ParentAlbumList />} />
           <Route path="/parent/photos/:eventId" element={<ParentAlbum />} />
           <Route path="/parent/settings" element={<ParentSettings />} />

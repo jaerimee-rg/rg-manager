@@ -39,6 +39,7 @@ jest.unstable_mockModule('../../models/ChildFaceProfile.js', () => ({
 jest.unstable_mockModule('../../models/EventRegistration.js', () => ({
   default: {
     listForStudents: jest.fn(),
+    listByEvent: jest.fn().mockResolvedValue([]),
     upsertRegistered: jest.fn(),
     cancel: jest.fn(),
     getByEventAndStudent: jest.fn()
@@ -359,6 +360,49 @@ describe('parentController', () => {
       const payload = res.json.mock.calls[0][0];
       expect(payload.options).toHaveLength(2);
       expect(payload.children).toHaveLength(2);
+      expect(payload.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    describe('신청한 학생 명단 (registrations)', () => {
+      const roster = [
+        { id: 1, studentId: 100, status: 'registered', optionIds: [openEvent.options[0].id], studentName: '김민서', parentName: '민서엄마', studentBirthdate: '2018-01-01' },
+        { id: 2, studentId: 200, status: 'confirmed', optionIds: [openEvent.options[1].id, 'opt_gone'], studentName: '박서연', parentName: '서연엄마', studentBirthdate: '2017-05-05' },
+        { id: 3, studentId: 300, status: 'cancelled', optionIds: [], studentName: '이하늘', parentName: '하늘엄마', studentBirthdate: '2019-09-09' }
+      ];
+
+      beforeEach(() => {
+        Event.getPublishedForParent.mockResolvedValue(openEvent);
+        EventRegistration.listByEvent.mockResolvedValue(roster);
+        req.params.id = '5';
+      });
+
+      it('취소는 빼고, 이름·상태·옵션 라벨·우리 아이 여부만 준다', async () => {
+        await getEvent(req, res);
+
+        const payload = res.json.mock.calls[0][0];
+        expect(EventRegistration.listByEvent).toHaveBeenCalledWith(5);
+        expect(payload.registrations).toEqual([
+          { studentName: '김민서', status: 'registered', options: [openEvent.options[0].label], mine: true },
+          { studentName: '박서연', status: 'confirmed', options: [openEvent.options[1].label], mine: false }
+        ]);
+      });
+
+      it('다른 집 학부모명·학생 id·생년월일은 내려보내지 않는다', async () => {
+        await getEvent(req, res);
+
+        for (const row of res.json.mock.calls[0][0].registrations) {
+          expect(Object.keys(row).sort()).toEqual(['mine', 'options', 'status', 'studentName']);
+        }
+      });
+
+      it('휴관일은 명단을 조회하지 않는다', async () => {
+        Event.getPublishedForParent.mockResolvedValue({ ...openEvent, type: 'closure', options: [] });
+
+        await getEvent(req, res);
+
+        expect(EventRegistration.listByEvent).not.toHaveBeenCalled();
+        expect(res.json.mock.calls[0][0].registrations).toEqual([]);
+      });
     });
   });
 
