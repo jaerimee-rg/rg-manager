@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import ParentLayout from '../../components/parent/ParentLayout';
-import EventDetailSheet from './EventDetailSheet';
-import { Callout } from '../../components/ui';
 import { typeOf } from '../../utils/eventFormat';
 import {
   filterRemainingThisYear, groupByMonth, dDay, formatCardDate, dayLabel, childBadge
@@ -23,48 +21,21 @@ const FILTERS = [
   { key: 'closure', label: '🚫 휴관일' }
 ];
 
-/** 주소의 :eventId — 숫자가 아니면 없는 것으로 본다 */
-const parseEventId = (value) => (value && /^\d+$/.test(value) ? Number(value) : null);
-
 /**
  * 학부모 일정 — 달력 없이 올해 남은 일정만 카드로 보여준다.
  * 한 번의 조회로 이벤트와 자녀별 신청 상태를 함께 받는다.
- *
- * `/parent/events/:eventId` (선생님이 공유한 링크)로 들어오면 같은 화면 위에 그 이벤트 상세를
- * 바로 연다. 상세는 목록과 따로 조회하므로 올해 밖의 일정이어도 열린다.
+ * 카드를 누르면 전체 화면 상세(`/parent/events/:eventId`, ParentEventDetail)로 간다 —
+ * 선생님이 공유한 링크가 여는 화면과 같은 곳이다.
  */
 function ParentSchedule() {
-  const { eventId } = useParams();
   const navigate = useNavigate();
-  const linkedEventId = parseEventId(eventId);
 
   const [data, setData] = useState(null);
   const [currentChild, setCurrentChild] = useState(null);
   const [filter, setFilter] = useState('all');
   // 선생님이 여럿일 때만 쓰는 필터 (docs/accounts-roles FR-357)
   const [teacherFilter, setTeacherFilter] = useState('all');
-  const [openEvent, setOpenEvent] = useState(linkedEventId);
-  // 공유 링크의 이벤트가 없을 때(비공개 · 연결 안 된 선생님 · 지워짐) 보여 주는 안내
-  const [missingEvent, setMissingEvent] = useState(eventId ? linkedEventId === null : false);
   const [loading, setLoading] = useState(true);
-
-  // 링크를 연 채로 다른 링크를 또 열면(카톡에서 두 번째 이벤트) 그 이벤트로 바꾼다
-  useEffect(() => {
-    if (!eventId) return;
-    setOpenEvent(linkedEventId);
-    setMissingEvent(linkedEventId === null);
-  }, [eventId, linkedEventId]);
-
-  const closeSheet = () => {
-    setOpenEvent(null);
-    // 공유 링크 주소를 남겨 두면 새로고침마다 같은 상세가 다시 열리므로 일정 주소로 돌린다
-    if (eventId) navigate('/parent/schedule', { replace: true });
-  };
-
-  const onEventMissing = () => {
-    setMissingEvent(true);
-    closeSheet();
-  };
 
   const load = async (teacherId = 'all') => {
     try {
@@ -180,15 +151,6 @@ function ParentSchedule() {
         ))}
       </div>
 
-      {missingEvent && (
-        <div style={{ marginBottom: '12px' }}>
-          <Callout tone="warning" onDismiss={() => setMissingEvent(false)}>
-            공유받은 이벤트를 찾을 수 없어요. 링크가 잘못됐거나 아직 공개 전이거나,
-            그 선생님과 연결되지 않은 계정일 수 있어요.
-          </Callout>
-        </div>
-      )}
-
       {children.length === 0 && (
         <div style={{
           background: 'var(--color-warning-bg)', color: '#7A5D00', padding: '11px 12px',
@@ -229,7 +191,7 @@ function ParentSchedule() {
               return (
                 <button
                   key={event.id}
-                  onClick={() => setOpenEvent(event.id)}
+                  onClick={() => navigate(`/parent/events/${event.id}`)}
                   style={{
                     width: '100%', textAlign: 'left', background: '#fff', border: '1px solid transparent',
                     borderRadius: 'var(--radius-lg)', padding: '14px', marginBottom: '10px',
@@ -284,15 +246,6 @@ function ParentSchedule() {
         ))
       )}
 
-      {openEvent && (
-        <EventDetailSheet
-          eventId={openEvent}
-          today={today}
-          onClose={closeSheet}
-          onNotFound={onEventMissing}
-          onChanged={load}
-        />
-      )}
     </ParentLayout>
   );
 }

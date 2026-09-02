@@ -1,5 +1,6 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { IconButton } from '../ui';
 
 // 향후 게시판·채팅을 여기에 한 줄씩 추가한다.
 // 내 정보는 관례대로 맨 오른쪽에 두므로 그 앞의 자리들을 SOON 이 채운다.
@@ -17,8 +18,13 @@ const parentNavTail = [
   { path: '/parent/settings', label: '내 정보', icon: '👤' }
 ];
 
-function ParentLayout({ title, subtitle, children }) {
+/**
+ * @param {string} [back] 있으면 제목 왼쪽에 뒤로 가기 버튼이 붙고, 누르면 그 주소로 간다.
+ *   (상세 화면처럼 한 단계 안으로 들어온 페이지가 쓴다)
+ */
+function ParentLayout({ title, subtitle, back, children }) {
   const location = useLocation();
+  const navigate = useNavigate();
 
   return (
     <div style={{
@@ -29,11 +35,17 @@ function ParentLayout({ title, subtitle, children }) {
         background: '#fff', padding: '14px 16px',
         borderBottom: '1px solid var(--color-gray-100)', flexShrink: 0
       }}>
-        <div style={{ maxWidth: '640px', margin: '0 auto' }}>
-          <div style={{ fontSize: '1.0625rem', fontWeight: 800, letterSpacing: '-0.4px' }}>{title}</div>
-          {subtitle && (
-            <div style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', marginTop: '2px' }}>{subtitle}</div>
+        <div style={{ maxWidth: '640px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {back && (
+            <IconButton icon="arrowLeft" label="뒤로" variant="ghost" size="sm" onClick={() => navigate(back)} />
           )}
+          <div style={{ minWidth: 0 }}>
+            {/* 페이지 제목은 h1 — 화면에 하나뿐이고 스크린리더·테스트가 heading 으로 찾는다 */}
+            <h1 style={{ margin: 0, fontSize: '1.0625rem', fontWeight: 800, letterSpacing: '-0.4px', wordBreak: 'keep-all', lineHeight: 1.3 }}>{title}</h1>
+            {subtitle && (
+              <div style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', marginTop: '2px' }}>{subtitle}</div>
+            )}
+          </div>
         </div>
       </header>
 

@@ -93,10 +93,24 @@ test.describe('학부모 — 가입부터 신청까지', () => {
     await expect(card).toContainText('신청 가능');
 
     await card.click();
+    // 시트가 아니라 전체 화면 상세 페이지다
+    await expect(page).toHaveURL(/\/parent\/events\/\d+$/);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await page.getByRole('button', { name: '5km' }).click();
     await page.getByRole('button', { name: /신청하기|참가 신청/ }).click();
 
     await expect(page.getByText(/신청 완료/).first()).toBeVisible();
+
+    // 아래 신청한 학생 명단에 우리 아이가 바로 보인다
+    const roster = page.getByTestId('roster-section');
+    await expect(roster.getByRole('heading', { name: /신청한 학생 1명/ })).toBeVisible();
+    await expect(roster.getByText(childName)).toBeVisible();
+    await expect(roster.getByText('우리 아이')).toBeVisible();
+
+    // 옵션(신청 영역)이 명단보다 위에 있다
+    const optionsY = (await page.getByTestId('registration-section').boundingBox()).y;
+    const rosterY = (await roster.boundingBox()).y;
+    expect(optionsY).toBeLessThan(rosterY);
 
     // 옵션 변경
     await page.getByRole('button', { name: '10km' }).click();
@@ -129,12 +143,14 @@ test.describe('학부모 — 가입부터 신청까지', () => {
 
     await page.getByRole('button', { name: new RegExp(`e2e 휴관안내 ${run}`) }).click();
 
-    const sheet = page.getByRole('dialog');
-    await expect(sheet.getByText('휴관일 안내예요. 신청은 필요 없어요.')).toBeVisible();
-    // 시트 안에는 닫기만 있고 신청 관련 버튼이 없다
-    await expect(sheet.getByRole('button', { name: /신청/ })).toHaveCount(0);
-    // 시트에는 '닫기' 가 둘이다 — 헤더의 X(aria-label)와 푸터 버튼. 행동 영역인 푸터를 본다.
-    await expect(sheet.locator('.ui-overlay__footer').getByRole('button', { name: '닫기' })).toBeVisible();
+    await expect(page).toHaveURL(/\/parent\/events\/\d+$/);
+    await expect(page.getByText('휴관일 안내예요. 신청은 필요 없어요.')).toBeVisible();
+    // 신청 관련 버튼도, 신청한 학생 명단도 없다
+    await expect(page.getByRole('button', { name: /신청/ })).toHaveCount(0);
+    await expect(page.getByTestId('roster-section')).toHaveCount(0);
+    // 뒤로 가기로 일정에 돌아온다
+    await page.getByRole('button', { name: '뒤로' }).click();
+    await expect(page).toHaveURL(/\/parent\/schedule$/);
   });
 
   test('학부모 토큰으로는 선생님 API 에 닿지 않는다', async ({ request }) => {
@@ -246,13 +262,13 @@ test.describe('학부모 — 선생님이 보낸 이벤트 공유 링크', () =>
     await loginAs(page, sessions.parentMulti);
     await page.goto(`/parent/events/${event.id}`);
 
-    const sheet = page.getByRole('dialog', { name: `${event.title} 상세` });
-    await expect(sheet).toBeVisible();
-    await expect(sheet.getByRole('button', { name: /신청하기|참가 신청/ })).toBeVisible();
+    // 전체 화면 상세 페이지가 바로 뜬다
+    await expect(page.getByRole('heading', { name: event.title })).toBeVisible();
+    await expect(page.getByRole('button', { name: /신청하기|참가 신청/ })).toBeVisible();
+    await expect(page.getByTestId('roster-section')).toBeVisible();
 
-    // 닫으면 주소가 일정으로 돌아간다 — 새로고침해도 다시 열리지 않게
-    await page.keyboard.press('Escape');
-    await expect(sheet).toHaveCount(0);
+    // 뒤로 가기로 일정에 돌아간다
+    await page.getByRole('button', { name: '뒤로' }).click();
     await expect(page).toHaveURL(/\/parent\/schedule$/);
   });
 
@@ -282,17 +298,17 @@ test.describe('학부모 — 선생님이 보낸 이벤트 공유 링크', () =>
     await page.goto('/oauth/kakao/callback?code=e2e-fake-code');
 
     await expect(page).toHaveURL(new RegExp(`/parent/events/${event.id}$`));
-    await expect(page.getByRole('dialog', { name: `${event.title} 상세` })).toBeVisible();
+    await expect(page.getByRole('heading', { name: event.title })).toBeVisible();
   });
 
-  test('열 수 없는 이벤트(비공개) 링크는 안내를 보여주고 일정으로 돌아간다', async ({ page, request }) => {
+  test('열 수 없는 이벤트(비공개) 링크는 안내를 보여주고 일정으로 갈 수 있다', async ({ page, request }) => {
     const event = await createEvent(request, { title: `e2e 비공개링크 ${run}`, isPublished: false });
 
     await loginAs(page, sessions.parentMulti);
     await page.goto(`/parent/events/${event.id}`);
 
-    await expect(page.getByText(/공유받은 이벤트를 찾을 수 없어요/)).toBeVisible();
+    await expect(page.getByText('이벤트를 찾을 수 없어요')).toBeVisible();
+    await page.getByRole('button', { name: '일정으로 가기' }).click();
     await expect(page).toHaveURL(/\/parent\/schedule$/);
-    await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 });

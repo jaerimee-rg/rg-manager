@@ -460,9 +460,15 @@ the rest of the app is unaffected.
 링크에 토큰은 없다 — 여는 쪽은 로그인한 학부모여야 하고, 서버(`GET /api/parent/events/:id`)가
 "연결된 선생님의 공개 이벤트" 인지 확인한다(아니면 404). 비공개 이벤트는 버튼이 잠긴다.
 
-- **학부모 쪽 라우트** `/parent/events/:eventId` 는 `ParentSchedule` 을 그대로 그리고 그 위에
-  `EventDetailSheet` 를 연다. 상세는 목록과 따로 조회하므로 올해 밖의 일정이어도 열린다. 닫으면
-  주소를 `/parent/schedule` 로 되돌리고(새로고침 시 재오픈 방지), 404 면 `onNotFound` 로 안내를 띄운다.
+- **학부모 쪽 라우트** `/parent/events/:eventId` 는 **전체 화면 페이지** `pages/parent/ParentEventDetail.jsx`
+  다 (2026-09-02, 바텀시트 `EventDetailSheet` 를 대체). 일정 카드를 눌러도 같은 페이지로 간다.
+  위에서 아래로 일시·장소 → (아이 선택) → **옵션 + 신청 버튼** → 안내 → 사진 → **신청한 학생 명단**.
+  상세는 목록과 따로 조회하므로 올해 밖의 일정이어도 열리고, 404 면 "이벤트를 찾을 수 없어요" 화면.
+  헤더의 뒤로 가기는 `ParentLayout` 의 `back` prop 이 그린다.
+- **신청한 학생 명단은 서버가 만든다.** `GET /api/parent/events/:id` 의 `registrations` 는
+  `EventRegistration.listByEvent` 에서 **이름·상태·옵션 라벨·우리 아이 여부**만 남긴 것이다 — 다른 집의
+  학부모명·학생 id·생년월일은 내려가지 않고, 취소는 빠지며, 휴관일은 조회 자체를 하지 않는다.
+  같은 응답에 `today` (KST) 가 실려 D-day 를 계산한다.
 - **로그인 전 딥링크는 `utils/returnTo.js` 가 잇는다.** 카카오 인가는 다른 도메인을 거치므로 라우터
   state 는 살아남지 못한다 — 로그인 안 된 `*` 라우트(`RememberReturnTo`)가 주소를 **localStorage 에
   1시간** 남기고 `/login` 으로 보내며, `KakaoCallback` 이 로그인 뒤 `returnPathFor(role, path)` 로
