@@ -267,3 +267,73 @@ test.describe('선생님 — 학생 명단 정렬', () => {
     expect(reversed).toEqual([...names].reverse());
   });
 });
+
+test.describe('선생님 — 이벤트 공유 링크와 신청 명단', () => {
+  test.beforeEach(async ({ page, context }) => {
+    await loginAs(page, sessions.teacher);
+    // 복사한 링크를 읽어 확인하려면 클립보드 권한이 필요하다 (Chromium)
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  });
+
+  const createEvent = async (request, overrides = {}) => {
+    const created = await api(request, sessions.teacher, 'POST', '/api/events', {
+      type: 'special',
+      title: `e2e 공유 ${run}`,
+      date: '2026-12-12',
+      location: 'e2e 공원',
+      options: [],
+      isPublished: true,
+      registrationOpen: true,
+      ...overrides
+    });
+    expect(created.status).toBe(201);
+    return created.body;
+  };
+
+  test('공유를 누르면 학부모용 이벤트 링크가 복사된다', async ({ page, request, baseURL }) => {
+    const event = await createEvent(request);
+
+    await page.goto('/events');
+    const row = page.locator('tr', { hasText: event.title }).first();
+    await row.getByRole('button', { name: '공유' }).click();
+
+    await expect(page.locator('.ui-toast')).toContainText('공유 링크를 복사했어요');
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied).toBe(`${baseURL}/parent/events/${event.id}`);
+
+    // 공유는 신청 현황을 같이 열지 않는다
+    await expect(page.locator('.ui-registrations')).toHaveCount(0);
+  });
+
+  test('비공개 이벤트의 공유 버튼은 잠겨 있다 — 학부모에게는 없는 이벤트라서', async ({ page, request }) => {
+    const event = await createEvent(request, { title: `e2e 비공개 공유 ${run}`, isPublished: false });
+
+    await page.goto('/events');
+    const row = page.locator('tr', { hasText: event.title }).first();
+    await expect(row.getByRole('button', { name: '공유' })).toBeDisabled();
+  });
+
+  test('이벤트를 누르면 누가 신청했는지 학생 이름이 나온다', async ({ page, request }) => {
+    const event = await createEvent(request, { title: `e2e 명단 ${run}` });
+    const student = sessions.students[0];
+    const registered = await api(
+      request, sessions.teacher, 'PUT',
+      `/api/events/${event.id}/registrations/student/${student.id}`,
+      { optionIds: [] }
+    );
+    expect(registered.status).toBeLessThan(300);
+
+    await page.goto('/events');
+    // 신청 건수가 아니라 이벤트(행) 자체를 누른다
+    await page.locator('tr', { hasText: event.title }).first().getByText(event.title).click();
+
+    const panel = page.locator('.ui-registrations');
+    await expect(panel).toBeVisible();
+    await expect(panel).toContainText(event.title);
+    await expect(panel.getByText(student.name)).toBeVisible();
+
+    // 패널 머리말에서도 링크를 복사할 수 있다
+    await panel.getByRole('button', { name: '공유 링크 복사' }).click();
+    await expect(page.locator('.ui-toast')).toContainText('공유 링크를 복사했어요');
+  });
+});

@@ -11,7 +11,9 @@ jest.mock('react-router-dom', () => ({
 }));
 
 // 신청 현황 패널은 자체적으로 API 를 부르므로 여기서는 자리만 잡는다.
-jest.mock('../EventRegistrations', () => () => <div data-testid="registrations" />);
+jest.mock('../EventRegistrations', () => ({ eventId }) => <div data-testid="registrations" data-event-id={eventId} />);
+
+jest.mock('../../../utils/copyToClipboard', () => ({ copyToClipboard: jest.fn() }));
 
 let mockMobile = false;
 jest.mock('../../../hooks/useMediaQuery', () => ({
@@ -19,6 +21,7 @@ jest.mock('../../../hooks/useMediaQuery', () => ({
 }));
 
 import { fetchWithAuth } from '../../../utils/api';
+import { copyToClipboard } from '../../../utils/copyToClipboard';
 import EventList from '../EventList';
 
 const TODAY = '2026-08-30';
@@ -56,6 +59,7 @@ const renderList = async (events = EVENTS) => {
 beforeEach(() => {
   jest.clearAllMocks();
   mockMobile = false;
+  copyToClipboard.mockResolvedValue(true);
   jest.useFakeTimers().setSystemTime(new Date(`${TODAY}T09:00:00`));
 });
 
@@ -182,5 +186,130 @@ describe('EventList', () => {
 
     const closureRow = screen.getByText('추석 휴관').closest('tr');
     expect(within(closureRow).queryByRole('button', { name: '참가 학생' })).not.toBeInTheDocument();
+  });
+
+  // --- 공유 링크 --------------------------------------------------------------
+
+  describe('공유 링크', () => {
+    it('공유를 누르면 학부모용 이벤트 주소를 복사하고 알려 준다', async () => {
+      await renderList();
+
+      const row = screen.getByText('2026 서울시 대회').closest('tr');
+      await act(async () => {
+        fireEvent.click(within(row).getByRole('button', { name: '공유' }));
+      });
+
+      expect(copyToClipboard).toHaveBeenCalledWith(`${window.location.origin}/parent/events/1`);
+      expect(screen.getByRole('status')).toHaveTextContent('공유 링크를 복사했어요');
+    });
+
+    it('복사가 막힌 환경이면 링크 자체를 보여준다', async () => {
+      copyToClipboard.mockResolvedValue(false);
+      await renderList();
+
+      const row = screen.getByText('2026 서울시 대회').closest('tr');
+      await act(async () => {
+        fireEvent.click(within(row).getByRole('button', { name: '공유' }));
+      });
+
+      expect(screen.getByRole('status')).toHaveTextContent('/parent/events/1');
+    });
+
+    it('알림은 잠시 뒤 사라진다', async () => {
+      await renderList();
+
+      const row = screen.getByText('2026 서울시 대회').closest('tr');
+      await act(async () => {
+        fireEvent.click(within(row).getByRole('button', { name: '공유' }));
+      });
+      expect(screen.getByRole('status')).toBeInTheDocument();
+
+      await act(async () => {
+        jest.advanceTimersByTime(3000);
+      });
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+
+    it('비공개 이벤트는 공유할 수 없다 — 학부모에게는 보이지 않는 이벤트라서', async () => {
+      await renderList();
+
+      // 추석 휴관은 isPublished: false
+      const closureRow = screen.getByText('추석 휴관').closest('tr');
+      const button = within(closureRow).getByRole('button', { name: '공유' });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('title', '공개한 이벤트만 공유할 수 있어요');
+      expect(copyToClipboard).not.toHaveBeenCalled();
+    });
+
+    it('공유를 눌러도 신청 현황이 같이 열리지는 않는다 (행 클릭과 겹치지 않는다)', async () => {
+      await renderList();
+
+      const row = screen.getByText('2026 서울시 대회').closest('tr');
+      await act(async () => {
+        fireEvent.click(within(row).getByRole('button', { name: '공유' }));
+      });
+
+      expect(screen.queryByTestId('registrations')).not.toBeInTheDocument();
+    });
+  });
+
+  // --- 이벤트를 누르면 누가 신청했는지 --------------------------------------------
+
+  describe('행 클릭', () => {
+    it('이벤트 행을 누르면 그 이벤트의 신청 현황(학생 명단)이 열린다', async () => {
+      await renderList();
+
+      await act(async () => {
+        fireEvent.click(screen.getByText('2026 서울시 대회').closest('tr'));
+      });
+
+      expect(screen.getByTestId('registrations')).toHaveAttribute('data-event-id', '1');
+    });
+
+    it('같은 행을 다시 누르면 닫힌다', async () => {
+      await renderList();
+      const row = screen.getByText('2026 서울시 대회').closest('tr');
+
+      await act(async () => {
+        fireEvent.click(row);
+      });
+      await act(async () => {
+        fireEvent.click(row);
+      });
+
+      expect(screen.queryByTestId('registrations')).not.toBeInTheDocument();
+    });
+
+    it('휴관일 행은 신청이 없으니 열지 않는다', async () => {
+      await renderList();
+
+      await act(async () => {
+        fireEvent.click(screen.getByText('추석 휴관').closest('tr'));
+      });
+
+      expect(screen.queryByTestId('registrations')).not.toBeInTheDocument();
+    });
+
+    it('행 안의 수정·삭제 버튼은 신청 현황을 열지 않는다', async () => {
+      await renderList();
+
+      const row = screen.getByText('2026 서울시 대회').closest('tr');
+      await act(async () => {
+        fireEvent.click(within(row).getByRole('button', { name: '수정' }));
+      });
+
+      expect(mockNavigate).toHaveBeenCalled();
+      expect(screen.queryByTestId('registrations')).not.toBeInTheDocument();
+    });
+
+    it('신청 건수 버튼은 예전처럼 열되, 행 클릭과 겹쳐 도로 닫히지 않는다', async () => {
+      await renderList();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: '5건' }));
+      });
+
+      expect(screen.getByTestId('registrations')).toHaveAttribute('data-event-id', '1');
+    });
   });
 });

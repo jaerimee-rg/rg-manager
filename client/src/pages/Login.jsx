@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { peekReturnTo, isEventSharePath } from '../utils/returnTo';
 
 function Login() {
   const [searchParams] = useSearchParams();
@@ -11,6 +12,9 @@ function Login() {
   /* 초대 없이 카카오로 들어와 계정이 만들어지지 않은 경우 (FR-306).
      예전에는 여기서 선생님 계정이 자동으로 생겼다. */
   const needsInvite = searchParams.get('outcome') === 'needsInvite';
+
+  /* 선생님이 보낸 이벤트 공유 링크를 눌러 여기로 온 학부모 — 로그인하면 그 이벤트로 돌아간다. */
+  const fromEventLink = isEventSharePath(peekReturnTo());
 
   const handleKakaoLogin = async () => {
     setError('');
@@ -81,6 +85,25 @@ function Login() {
           {error && (
             <div className="alert alert-error" style={{ marginBottom: 'var(--spacing-lg)' }}>
               {error}
+            </div>
+          )}
+
+          {fromEventLink && !needsInvite && (
+            <div
+              role="status"
+              style={{
+                marginBottom: 'var(--spacing-lg)',
+                background: 'var(--color-primary-bg, #EEF3FF)',
+                color: 'var(--color-gray-700)',
+                padding: '13px 15px',
+                borderRadius: 'var(--radius-md)',
+                fontSize: '0.875rem',
+                lineHeight: 1.6,
+                wordBreak: 'keep-all'
+              }}
+            >
+              <b>공유받은 이벤트가 있어요.</b><br />
+              카카오로 로그인하면 그 이벤트 신청 화면이 바로 열려요.
             </div>
           )}
 

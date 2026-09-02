@@ -221,3 +221,78 @@ test.describe('학부모 — 사진', () => {
     await expect(page.getByRole('button', { name: '사진 고르기' })).toBeDisabled();
   });
 });
+
+test.describe('학부모 — 선생님이 보낸 이벤트 공유 링크', () => {
+  const createEvent = async (request, overrides = {}) => {
+    const created = await api(request, sessions.teacher, 'POST', '/api/events', {
+      type: 'special',
+      title: `e2e 공유링크 ${run}`,
+      date: '2026-12-19',
+      startTime: '10:00',
+      location: 'e2e 잠실',
+      options: [],
+      isPublished: true,
+      registrationOpen: true,
+      ...overrides
+    });
+    expect(created.status).toBe(201);
+    return created.body;
+  };
+
+  test('로그인한 학부모가 링크를 열면 그 이벤트 신청 화면이 바로 뜬다', async ({ page, request }) => {
+    const event = await createEvent(request);
+
+    // 아이가 연결돼 있는 학부모 (parentMulti 는 setup 에서 아이까지 넣어 둔다)
+    await loginAs(page, sessions.parentMulti);
+    await page.goto(`/parent/events/${event.id}`);
+
+    const sheet = page.getByRole('dialog', { name: `${event.title} 상세` });
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole('button', { name: /신청하기|참가 신청/ })).toBeVisible();
+
+    // 닫으면 주소가 일정으로 돌아간다 — 새로고침해도 다시 열리지 않게
+    await page.keyboard.press('Escape');
+    await expect(sheet).toHaveCount(0);
+    await expect(page).toHaveURL(/\/parent\/schedule$/);
+  });
+
+  test('로그인 전에 링크를 열면 로그인을 거쳐 그 이벤트로 돌아온다', async ({ page, request }) => {
+    const event = await createEvent(request, { title: `e2e 로그인후 ${run}` });
+
+    // 세션을 넣지 않았으니 로그인 화면으로 간다 — 돌아갈 곳은 브라우저가 기억한다
+    await page.goto(`/parent/events/${event.id}`);
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByText('공유받은 이벤트가 있어요.')).toBeVisible();
+
+    // 카카오 인가 화면은 자동화할 수 없으므로 콜백 API 의 응답만 흉내 낸다
+    await page.route('**/api/auth/kakao/callback', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          token: sessions.parentMulti.token,
+          user: sessions.parentMulti.user,
+          role: 'parent',
+          isNewUser: false,
+          needsOnboarding: false,
+          accounts: []
+        })
+      })
+    );
+    await page.goto('/oauth/kakao/callback?code=e2e-fake-code');
+
+    await expect(page).toHaveURL(new RegExp(`/parent/events/${event.id}$`));
+    await expect(page.getByRole('dialog', { name: `${event.title} 상세` })).toBeVisible();
+  });
+
+  test('열 수 없는 이벤트(비공개) 링크는 안내를 보여주고 일정으로 돌아간다', async ({ page, request }) => {
+    const event = await createEvent(request, { title: `e2e 비공개링크 ${run}`, isPublished: false });
+
+    await loginAs(page, sessions.parentMulti);
+    await page.goto(`/parent/events/${event.id}`);
+
+    await expect(page.getByText(/공유받은 이벤트를 찾을 수 없어요/)).toBeVisible();
+    await expect(page).toHaveURL(/\/parent\/schedule$/);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+});

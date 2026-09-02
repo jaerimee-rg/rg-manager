@@ -19,6 +19,7 @@ jest.mock('../hooks/useMediaQuery', () => ({
 }));
 
 import App from '../App';
+import { peekReturnTo } from '../utils/returnTo';
 
 const ADMIN = { id: 1, username: 'admin', role: 'admin' };
 
@@ -41,6 +42,7 @@ const currentPath = () => screen.getByTestId('path').textContent;
 describe('App 라우팅 — 딥링크 유지', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    localStorage.clear();
     global.fetch = jest.fn(() =>
       Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) })
     );
@@ -88,6 +90,26 @@ describe('App 라우팅 — 딥링크 유지', () => {
     await waitFor(() => expect(currentPath()).toBe('/login'));
   });
 
+  it('비로그인 상태로 공유 링크를 열면 그 주소를 남기고 로그인으로 보낸다', async () => {
+    mockAuth.user = null;
+    mockAuth.loading = false;
+
+    renderAt('/parent/events/12?from=kakao');
+
+    await waitFor(() => expect(currentPath()).toBe('/login'));
+    expect(peekReturnTo()).toBe('/parent/events/12?from=kakao');
+  });
+
+  it('로그인 화면 자체는 돌아갈 곳으로 남기지 않는다', async () => {
+    mockAuth.user = null;
+    mockAuth.loading = false;
+
+    renderAt('/login');
+
+    expect(currentPath()).toBe('/login');
+    expect(peekReturnTo()).toBeNull();
+  });
+
   it('학부모 공개 채팅은 인증 확인을 기다리지 않는다', async () => {
     mockAuth.user = null;
     mockAuth.loading = true;
@@ -133,6 +155,7 @@ describe('App 라우팅 — 역할 분리', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    localStorage.clear();
     mockAuth.loading = false;
     // 학부모 앱은 진입 시 자기 정보를 먼저 읽는다 (아이가 있으면 온보딩을 건너뛴다)
     fetchWithAuth.mockResolvedValue({
@@ -186,5 +209,28 @@ describe('App 라우팅 — 역할 분리', () => {
     renderAt('/parent/schedule');
 
     await waitFor(() => expect(currentPath()).toBe('/'));
+  });
+
+  it('로그인한 학부모가 공유 링크를 열면 그 주소가 그대로 열린다', async () => {
+    mockAuth.user = PARENT;
+
+    renderAt('/parent/events/12');
+
+    await waitFor(() => expect(currentPath()).toBe('/parent/events/12'));
+    // 로그인돼 있으니 돌아갈 곳을 남길 일도 없다
+    expect(peekReturnTo()).toBeNull();
+  });
+
+  it('아이 등록 전 학부모가 공유 링크를 열면 주소를 남기고 온보딩으로 보낸다', async () => {
+    mockAuth.user = PARENT;
+    fetchWithAuth.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ user: PARENT, teacher: { name: '이재림' }, children: [] })
+    });
+
+    renderAt('/parent/events/12');
+
+    await waitFor(() => expect(currentPath()).toBe('/parent/onboarding'));
+    expect(peekReturnTo()).toBe('/parent/events/12');
   });
 });

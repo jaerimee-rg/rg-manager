@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { fetchWithAuth } from '../../utils/api';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { formatWhen, typeOf } from '../../utils/eventFormat';
-import { IconButton } from '../../components/ui';
+import { copyToClipboard } from '../../utils/copyToClipboard';
+import { eventShareUrl, canShareEvent, SHARE_DISABLED_HINT } from '../../utils/eventShare';
+import { IconButton, Toast } from '../../components/ui';
 
 const STATUS_BADGE = {
   registered: { label: '신청', className: 'badge-primary' },
@@ -25,6 +27,24 @@ function EventRegistrations({ eventId, onClose, onChanged }) {
   const [data, setData] = useState(null);
   const [hideCancelled, setHideCancelled] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState('');
+  const toastTimer = useRef(null);
+
+  const showToast = (message) => {
+    setToast(message);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(''), 2600);
+  };
+
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+
+  /** 학부모에게 보낼 링크. 열면 (로그인 뒤) 이 이벤트 신청 화면이 바로 뜬다. */
+  const shareLink = async () => {
+    if (!data) return;
+    const url = eventShareUrl(data.event.id);
+    const ok = await copyToClipboard(url);
+    showToast(ok ? '공유 링크를 복사했어요 · 학부모에게 보내면 로그인 뒤 바로 신청 화면이 열려요' : url);
+  };
 
   // onClose 는 부모가 매 렌더 새로 만들어 넘기므로, 효과가 그때마다 다시 붙지 않게 ref 로 받는다.
   const closeRef = useRef(onClose);
@@ -141,7 +161,20 @@ function EventRegistrations({ eventId, onClose, onChanged }) {
             </div>
           )}
         </div>
-        <IconButton icon="x" label="신청 현황 닫기" variant="ghost" size="sm" onClick={onClose} />
+        <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+          {data && (
+            <IconButton
+              icon="link"
+              label="공유 링크 복사"
+              variant="ghost"
+              size="sm"
+              disabled={!canShareEvent(data.event)}
+              title={canShareEvent(data.event) ? '학부모에게 보낼 링크 복사' : SHARE_DISABLED_HINT}
+              onClick={shareLink}
+            />
+          )}
+          <IconButton icon="x" label="신청 현황 닫기" variant="ghost" size="sm" onClick={onClose} />
+        </div>
       </div>
 
       <div className="ui-registrations__body">
@@ -235,6 +268,8 @@ function EventRegistrations({ eventId, onClose, onChanged }) {
           )}
         </div>
       )}
+
+      <Toast>{toast}</Toast>
     </section>
   );
 }

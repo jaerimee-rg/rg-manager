@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
+import { consumeReturnTo, returnPathFor } from '../../utils/returnTo';
 
 const emptyChild = () => ({ name: '', birthdate: '' });
 
@@ -72,7 +73,9 @@ function ParentOnboarding({ teachers = [], onDone }) {
 
       // 상위(ParentApp)의 "아이 있음" 판정을 먼저 새로 고친 뒤에 이동한다
       await onDone?.();
-      navigate('/parent/schedule', { state: { justOnboarded: true } });
+      // 공유 링크를 눌러 가입까지 온 학부모는 그 이벤트로 바로 간다
+      const returnTo = returnPathFor('parent', consumeReturnTo());
+      navigate(returnTo || '/parent/schedule', { state: { justOnboarded: true } });
     } catch {
       setError('저장 중 오류가 발생했습니다.');
     } finally {
