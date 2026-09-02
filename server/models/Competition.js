@@ -88,7 +88,7 @@ class Competition {
       params.push(userId);
     }
 
-    query += ' ORDER BY s.name';
+    query += ' ORDER BY s.name ASC, s.id ASC';
     const result = await pool.query(query, params);
     return result.rows;
   }
@@ -158,7 +158,7 @@ class Competition {
       params.push(userId);
     }
 
-    query += ' ORDER BY s.name';
+    query += ' ORDER BY s.name ASC, s.id ASC';
     const result = await pool.query(query, params);
     return result.rows.map(row => ({
       ...row,

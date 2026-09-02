@@ -234,3 +234,36 @@ test.describe('선생님 — 좁은 화면의 신청 현황', () => {
     await expect(card.getByRole('button', { name: '수정' })).toBeVisible();
   });
 });
+
+/**
+ * 학생 명단은 등록 순서(id)가 아니라 이름 가나다순으로 보여야 한다.
+ * 서버(ORDER BY name)와 화면(기본 정렬 = 이름 오름차순) 양쪽이 함께 걸려야 통과한다.
+ */
+test.describe('선생님 — 학생 명단 정렬', () => {
+  test.beforeEach(async ({ page }) => {
+    await loginAs(page, sessions.teacher);
+  });
+
+  test('나중에 등록한 학생이라도 이름 가나다순이면 맨 위에 온다', async ({ page, request }) => {
+    // 이름은 기존 학생(가은…, 나윤…)보다 앞서지만 id 는 가장 크다.
+    const firstName = `가가${run}`;
+    const created = await api(request, sessions.teacher, 'POST', '/api/students', {
+      name: firstName,
+      birthdate: '2018-01-01',
+      classIds: []
+    });
+    expect(created.status).toBeLessThan(300);
+
+    await page.goto('/students');
+    await expect(page.getByRole('heading', { name: '학생 관리' })).toBeVisible();
+    await expect(page.getByText(firstName)).toBeVisible();
+
+    const names = await page.locator('tbody tr td:first-child').allInnerTexts();
+    expect(names).toEqual([firstName, sessions.students[0].name, sessions.students[1].name]);
+
+    // 이름 열을 누르면 내림차순으로 뒤집힌다 (기본이 이미 오름차순이라는 증거이기도 하다)
+    await page.locator('th').filter({ hasText: '이름' }).getByText('이름').click();
+    const reversed = await page.locator('tbody tr td:first-child').allInnerTexts();
+    expect(reversed).toEqual([...names].reverse());
+  });
+});

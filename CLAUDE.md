@@ -52,13 +52,13 @@ Client and server have **separate** Jest setups and are run from their own direc
 there is no root `package.json`, so there is no one command that runs everything.
 
 ```bash
-cd client && npm test          # jest — 512 tests / 42 suites
-cd server && npm test          # 872 tests / 44 suites
+cd client && npm test          # jest — 517 tests / 43 suites
+cd server && npm test          # 883 tests / 45 suites
 ```
 
 - **The server suite is ESM** (`"type": "module"` + `transform: {}`, i.e. no Babel) and only
   works through its npm script, which supplies `--experimental-vm-modules`. Running plain
-  `npx jest` in `server/` makes **43 of 44 suites fail to parse** ("Jest encountered an
+  `npx jest` in `server/` makes **44 of 45 suites fail to parse** ("Jest encountered an
   unexpected token") — it exits 1, but the summary line still reads `Tests: 3 passed`, so
   skimming the tail of the output makes a broken run look like a green one. Always use
   `npm test` here. In `client/` (Babel + CommonJS) `npx jest` is fine.
@@ -493,7 +493,7 @@ cd client && npm run build
 cd ../server && DATABASE_URL=postgresql://<user>@localhost:5432/rg_manager PORT=5055 \
   JWT_SECRET=local-dev-secret API_RATE_LIMIT_MAX=100000 AUTH_RATE_LIMIT_MAX=100000 node server.js &
 cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e:setup   # writes e2e/.sessions.json
-cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 56 tests
+cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 57 tests
 ```
 
 - **`JWT_SECRET` must be `local-dev-secret`** — that is what `e2e/setup.mjs` defaults to when signing
@@ -564,6 +564,22 @@ import { calculateAge } from '../utils/dateHelpers';
 `client/src/utils/dateHelpers.js` also exports `formatDate()`, and is the one covered by
 `utils/__tests__/dateHelpers.test.js`. `pages/Dashboard.jsx` still carries an old inline copy —
 fold it into the helper if you touch that file.
+
+### Student list ordering
+Any list of students is **이름 가나다순 (ascending)** by default — never registration order.
+The rule is enforced in SQL so every screen inherits it without its own sort:
+
+- `Student.getAll` / `getByIds` / `getByClassId` end in `NAME_ORDER` (`ORDER BY name ASC, id ASC`),
+  so `/api/students` — and with it 학생 관리, 출석 체크, 수업별 학생, 학부모 연결 — comes back sorted.
+- `Competition.getStudents(WithEvents)`, `EventRegistration.listByEvent` (**not** `createdAt`),
+  `ParentChild.listByParent` and `ParentAccount.listByTeacher/listAll` sort the same way.
+  The parent-side ones use `COALESCE(s.name, c."childName")` because a child that is not linked
+  to a student row yet only has the name the parent typed.
+- **No `COLLATE` is needed.** Hangul syllables (U+AC00–U+D7A3) are laid out by
+  초성·중성·종성, so code-point order *is* 가나다 order — and `en_US.UTF-8` (local + Supabase)
+  and `C` both agree on it. `id` is only a tiebreak so 동명이인 do not shuffle between requests.
+- `StudentList.jsx` starts at `sortConfig = { key: 'name', direction: 'asc' }`; the column
+  headers still re-sort by 이름·생년월일·수강 수업. Client-side sorts use `localeCompare(_, 'ko')`.
 
 ### JSON Array Handling
 Student `classIds` stored as JSON string:

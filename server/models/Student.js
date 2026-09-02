@@ -1,6 +1,12 @@
 import pool from '../database.js';
 import { safeJsonParse } from '../utils/safeJsonParse.js';
 
+// 학생 명단은 어느 화면에서든 가나다순(오름차순)이 기본이다.
+// Postgres 의 en_US.UTF-8 / C 콜레이션 모두 한글 음절을 코드포인트 순으로 비교하는데,
+// 그 순서가 곧 가나다순이라 별도 COLLATE 없이 name 만으로 충분하다.
+// 동명이인이 순서를 흔들지 않도록 id 로 한 번 더 묶는다.
+const NAME_ORDER = ' ORDER BY name ASC, id ASC';
+
 class Student {
   static async getAll(userId, role) {
     let query = 'SELECT * FROM students';
@@ -12,7 +18,7 @@ class Student {
       params.push(userId);
     }
 
-    query += ' ORDER BY id';
+    query += NAME_ORDER;
     const result = await pool.query(query, params);
 
     // classIds를 JSON 파싱
@@ -56,6 +62,7 @@ class Student {
       params.push(userId);
     }
 
+    query += NAME_ORDER;
     const result = await pool.query(query, params);
     return result.rows.map((student) => ({ ...student, classIds: safeJsonParse(student.classIds, []) }));
   }
@@ -134,7 +141,7 @@ class Student {
       params.push(userId);
     }
 
-    query += ' ORDER BY id';
+    query += NAME_ORDER;
     const result = await pool.query(query, params);
 
     // classIds에 해당 classId가 포함된 학생만 필터링

@@ -36,7 +36,7 @@ class ParentChild {
        LEFT JOIN students s ON s.id = c."studentId"
        LEFT JOIN users t ON t.id = c."teacherId"
        WHERE c."parentUserId" = $1${scope}
-       ORDER BY c.id ASC`,
+       ORDER BY COALESCE(s.name, c."childName") ASC, c.id ASC`,
       params
     );
     return result.rows;

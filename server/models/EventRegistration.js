@@ -76,7 +76,7 @@ class EventRegistration {
        JOIN students s ON s.id = r."studentId"
        LEFT JOIN users u ON u.id = r."parentUserId"
        WHERE r."eventId" = $1
-       ORDER BY r."createdAt" ASC, r.id ASC`,
+       ORDER BY s.name ASC, r.id ASC`,
       [eventId]
     );
     return result.rows.map(hydrate);

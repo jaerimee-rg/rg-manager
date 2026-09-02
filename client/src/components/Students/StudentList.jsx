@@ -10,7 +10,8 @@ function StudentList({ basePath = '/students' }) {
   const [students, setStudents] = useState([]);
   const [classes, setClasses] = useState([]);
   const isMobile = useIsMobile();
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  // 학생 명단의 기본 정렬은 이름 가나다순(오름차순). 헤더를 눌러야 다른 기준으로 바뀐다.
+  const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
   const [classFilter, setClassFilter] = useState('');
   const [searchName, setSearchName] = useState('');
   const [swipedId, setSwipedId] = useState(null);
