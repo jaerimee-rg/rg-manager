@@ -344,6 +344,20 @@ describe('eventController', () => {
 
       expect(res.json.mock.calls[0][0].registrations[0].options[0].label).toBe('(삭제된 옵션)');
     });
+
+    it('공개 여부를 함께 내려 준다 — 화면이 공유 링크 버튼을 잠글 수 있게', async () => {
+      EventRegistration.listByEvent.mockResolvedValue([]);
+      req.params.id = '5';
+
+      Event.getById.mockResolvedValue({ ...event, isPublished: false });
+      await getRegistrations(req, res);
+      expect(res.json.mock.calls[0][0].event.isPublished).toBe(false);
+
+      // 옛 행처럼 값이 없으면 공개로 본다 (목록·학부모 조회와 같은 규칙)
+      Event.getById.mockResolvedValue({ ...event, isPublished: undefined });
+      await getRegistrations(req, res);
+      expect(res.json.mock.calls[1][0].event.isPublished).toBe(true);
+    });
   });
 
   describe('확정', () => {

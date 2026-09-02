@@ -28,6 +28,7 @@ import TeacherInviteLanding from './pages/TeacherInviteLanding';
 import ParentApp from './components/parent/ParentApp';
 import RoleSwitcher from './components/common/RoleSwitcher';
 import ImpersonationBanner from './components/common/ImpersonationBanner';
+import RememberReturnTo from './components/common/RememberReturnTo';
 
 // Admin components
 import AdminRoute from './components/admin/AdminRoute';
@@ -153,7 +154,9 @@ function App() {
         <Route path="/register-name" element={<RegisterName />} />
         {/* 디자인 시스템 목록은 로그인 없이도 열린다 — 데이터가 없는 참고 화면이다 */}
         <Route path="/design-system" element={<DesignSystem />} />
-        <Route path="*" element={<Navigate to="/login" />} />
+        {/* 공유 링크(/parent/events/12) 같은 딥링크는 주소를 남겨 두고 로그인으로 보낸다.
+            카카오 로그인이 끝나면 KakaoCallback 이 그 주소로 되돌려 준다. */}
+        <Route path="*" element={<RememberReturnTo to="/login" />} />
       </Routes>
     );
   }

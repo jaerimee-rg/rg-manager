@@ -52,8 +52,8 @@ Client and server have **separate** Jest setups and are run from their own direc
 there is no root `package.json`, so there is no one command that runs everything.
 
 ```bash
-cd client && npm test          # jest — 517 tests / 43 suites
-cd server && npm test          # 883 tests / 45 suites
+cd client && npm test          # jest — 581 tests / 47 suites
+cd server && npm test          # 884 tests / 45 suites
 ```
 
 - **The server suite is ESM** (`"type": "module"` + `transform: {}`, i.e. no Babel) and only
@@ -453,6 +453,27 @@ model, implementation plan, mockups).
 `/api/drive/account` returns `configured:false` and every album screen shows connect guidance —
 the rest of the app is unaffected.
 
+### Event Share Link (선생님 → 학부모)
+
+이벤트 관리(`/events`, `/admin/events`)의 **[공유]** 버튼과 신청 현황 패널의 링크 아이콘이
+`${origin}/parent/events/<id>` 를 클립보드에 복사한다 (`client/src/utils/eventShare.js`).
+링크에 토큰은 없다 — 여는 쪽은 로그인한 학부모여야 하고, 서버(`GET /api/parent/events/:id`)가
+"연결된 선생님의 공개 이벤트" 인지 확인한다(아니면 404). 비공개 이벤트는 버튼이 잠긴다.
+
+- **학부모 쪽 라우트** `/parent/events/:eventId` 는 `ParentSchedule` 을 그대로 그리고 그 위에
+  `EventDetailSheet` 를 연다. 상세는 목록과 따로 조회하므로 올해 밖의 일정이어도 열린다. 닫으면
+  주소를 `/parent/schedule` 로 되돌리고(새로고침 시 재오픈 방지), 404 면 `onNotFound` 로 안내를 띄운다.
+- **로그인 전 딥링크는 `utils/returnTo.js` 가 잇는다.** 카카오 인가는 다른 도메인을 거치므로 라우터
+  state 는 살아남지 못한다 — 로그인 안 된 `*` 라우트(`RememberReturnTo`)가 주소를 **localStorage 에
+  1시간** 남기고 `/login` 으로 보내며, `KakaoCallback` 이 로그인 뒤 `returnPathFor(role, path)` 로
+  **그 역할이 열 수 있는 트리일 때만** 되돌린다(선생님 계정으로 학부모 링크를 열면 그냥 홈).
+  아이 등록 전 학부모는 온보딩을 거친 뒤 `ParentOnboarding` 이 같은 값을 consume 한다.
+  상대 경로(`/…`)만 받고 `//`, 절대 URL, 로그인·콜백·초대 화면은 거른다(오픈 리다이렉트 방지).
+- **이벤트 행 클릭** = 신청 현황(학생 명단) 토글. 행 안의 버튼들은 `stopPropagation` 으로 행 클릭과
+  겹치지 않게 한다. 휴관일 행은 열지 않는다.
+- 초대(가입)는 이 링크에 실려 있지 않다. 계정이 없는 학부모는 `needsInvite` 안내를 보고, 초대 링크로
+  가입한 뒤 (1시간 안이면) 같은 이벤트로 돌아간다.
+
 ### Student-Class Relationship
 
 **Many-to-Many** relationship stored as JSON array in `students.classIds`:
@@ -493,7 +514,7 @@ cd client && npm run build
 cd ../server && DATABASE_URL=postgresql://<user>@localhost:5432/rg_manager PORT=5055 \
   JWT_SECRET=local-dev-secret API_RATE_LIMIT_MAX=100000 AUTH_RATE_LIMIT_MAX=100000 node server.js &
 cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e:setup   # writes e2e/.sessions.json
-cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 57 tests
+cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 63 tests
 ```
 
 - **`JWT_SECRET` must be `local-dev-secret`** — that is what `e2e/setup.mjs` defaults to when signing

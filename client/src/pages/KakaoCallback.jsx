@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { peekReturnTo, clearReturnTo, returnPathFor } from '../utils/returnTo';
 
 function KakaoCallback() {
   const [searchParams] = useSearchParams();
@@ -40,17 +41,30 @@ function KakaoCallback() {
           return;
         }
 
+        // 로그인 전에 눌렀던 공유 링크가 있으면 그리로 돌아간다 — 단, 그 역할이 열 수 있는 주소일 때만.
+        // (선생님 계정으로 학부모 링크를 열었으면 그냥 홈으로 간다)
+        const returnTo = returnPathFor(result.role, peekReturnTo());
+
         if (result.role === 'parent') {
           // 학부모는 이름을 따로 정하지 않는다 (카카오 닉네임을 쓴다).
-          // 아이를 아직 안 넣었으면 온보딩으로 보낸다.
-          navigate(result.needsOnboarding ? '/parent/onboarding' : '/parent/schedule');
+          // 아이를 아직 안 넣었으면 온보딩으로 보낸다 — 돌아갈 주소는 온보딩이 끝난 뒤 쓴다.
+          if (result.needsOnboarding) {
+            if (!returnTo) clearReturnTo();
+            navigate('/parent/onboarding');
+            return;
+          }
+          clearReturnTo();
+          navigate(returnTo || '/parent/schedule');
         } else if (result.role === 'admin') {
-          navigate('/admin');
+          clearReturnTo();
+          navigate(returnTo || '/admin');
         } else if (result.isNewUser) {
           // 신규 사용자는 이름 등록 페이지로 이동
+          clearReturnTo();
           navigate('/register-name');
         } else {
-          navigate('/');
+          clearReturnTo();
+          navigate(returnTo || '/');
         }
       } catch (err) {
         setError(err.message || '카카오 로그인에 실패했습니다.');

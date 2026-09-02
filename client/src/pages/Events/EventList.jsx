@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { typeOf, formatRange, formatWhen, isPast, isAcceptingRegistration, todayString } from '../../utils/eventFormat';
+import { copyToClipboard } from '../../utils/copyToClipboard';
+import { eventShareUrl, canShareEvent, SHARE_DISABLED_HINT } from '../../utils/eventShare';
 import EventRegistrations from './EventRegistrations';
 import {
   Badge, Button, Card, Checkbox, DataTable, EmptyState,
-  PageHeader, Row, SkeletonList, Toolbar, Chip
+  PageHeader, Row, SkeletonList, Toolbar, Chip, Toast
 } from '../../components/ui';
 
 const FILTERS = [
@@ -39,6 +41,35 @@ function EventList({ basePath = '/events' }) {
   const [includePast, setIncludePast] = useState(false);
   const [openRegistrations, setOpenRegistrations] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState('');
+  const toastTimer = useRef(null);
+
+  const showToast = (message) => {
+    setToast(message);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(''), 2600);
+  };
+
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+
+  const toggleRegistrations = (eventId) =>
+    setOpenRegistrations((current) => (current === eventId ? null : eventId));
+
+  // 이벤트(행)를 누르면 누가 신청했는지 바로 본다. 휴관일은 신청이 없으니 열지 않는다.
+  const openFromRow = (event) => {
+    if (event.type === 'closure') return;
+    toggleRegistrations(event.id);
+  };
+
+  /**
+   * 학부모에게 보낼 공유 링크 — 학부모 앱의 이벤트 주소 그대로다.
+   * 눌러서 열면 로그인돼 있으면 바로, 아니면 로그인을 거쳐 그 이벤트 신청 화면이 뜬다.
+   */
+  const share = async (event) => {
+    const url = eventShareUrl(event.id);
+    const ok = await copyToClipboard(url);
+    showToast(ok ? '공유 링크를 복사했어요 · 학부모에게 보내면 로그인 뒤 바로 신청 화면이 열려요' : url);
+  };
 
   const load = async () => {
     try {
@@ -80,8 +111,20 @@ function EventList({ basePath = '/events' }) {
     }
   };
 
+  // 행 자체가 신청 현황을 여는 버튼이라, 칸 안의 버튼들은 클릭을 행까지 올려보내지 않는다.
+  const stop = (e) => e.stopPropagation();
+
   const actions = (event) => (
-    <Row gap={2} justify="end" wrap>
+    <Row gap={2} justify="end" wrap onClick={stop}>
+      <Button
+        size="sm"
+        icon="link"
+        disabled={!canShareEvent(event)}
+        title={canShareEvent(event) ? '학부모에게 보낼 링크 복사' : SHARE_DISABLED_HINT}
+        onClick={() => share(event)}
+      >
+        공유
+      </Button>
       <Button size="sm" onClick={() => navigate(`${basePath}/edit`, { state: { event } })}>수정</Button>
       {event.type === 'competition' && (
         <Button
@@ -101,7 +144,10 @@ function EventList({ basePath = '/events' }) {
     <button
       type="button"
       className="ui-link"
-      onClick={() => setOpenRegistrations(openRegistrations === event.id ? null : event.id)}
+      onClick={(e) => {
+        stop(e);
+        toggleRegistrations(event.id);
+      }}
     >
       {event.registrationCount || 0}건
     </button>
@@ -158,7 +204,8 @@ function EventList({ basePath = '/events' }) {
     },
     { key: 'registrations', header: '신청', width: '80px', numeric: true, hidden: notForClosure, render: registrationLink },
     { key: 'status', header: '공개 · 접수', width: '140px', hidden: notForClosure, render: (event) => <StatusBadges event={event} /> },
-    { key: 'actions', header: '관리', width: '1%', hideLabelOnMobile: true, render: actions }
+    // 버튼이 한 줄에 둘씩 들어갈 폭 — 1% 로 두면 공유·수정·삭제가 한 줄에 하나씩 쌓여 행이 세 배로 높아진다
+    { key: 'actions', header: '관리', width: '160px', hideLabelOnMobile: true, render: actions }
   ];
 
   const emptyState =
@@ -218,6 +265,7 @@ function EventList({ basePath = '/events' }) {
               columns={columns}
               rows={events}
               caption={`전체 ${events.length}건`}
+              onRowClick={openFromRow}
               empty={<Card>{emptyState}</Card>}
             />
           )}
@@ -231,6 +279,8 @@ function EventList({ basePath = '/events' }) {
           />
         )}
       </div>
+
+      <Toast>{toast}</Toast>
     </>
   );
 }

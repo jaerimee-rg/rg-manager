@@ -4,8 +4,10 @@ import { render, screen, act, fireEvent } from '@testing-library/react';
 jest.mock('../../../utils/api', () => ({
   fetchWithAuth: jest.fn()
 }));
+jest.mock('../../../utils/copyToClipboard', () => ({ copyToClipboard: jest.fn() }));
 
 import { fetchWithAuth } from '../../../utils/api';
+import { copyToClipboard } from '../../../utils/copyToClipboard';
 import EventRegistrations from '../EventRegistrations';
 
 const DATA = {
@@ -33,11 +35,29 @@ const renderPanel = async (props = {}, body = DATA) => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  copyToClipboard.mockResolvedValue(true);
   setWidth(1280);
   document.body.style.overflow = '';
 });
 
 describe('EventRegistrations', () => {
+  it('머리말의 공유 버튼으로 학부모용 링크를 복사한다', async () => {
+    await renderPanel();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '공유 링크 복사' }));
+    });
+
+    expect(copyToClipboard).toHaveBeenCalledWith(`${window.location.origin}/parent/events/1`);
+    expect(screen.getByRole('status')).toHaveTextContent('공유 링크를 복사했어요');
+  });
+
+  it('비공개 이벤트면 공유 버튼이 잠긴다', async () => {
+    await renderPanel({}, { ...DATA, event: { ...DATA.event, isPublished: false } });
+
+    expect(screen.getByRole('button', { name: '공유 링크 복사' })).toBeDisabled();
+  });
+
   it('신청한 학생을 보여준다', async () => {
     await renderPanel();
 

@@ -248,7 +248,9 @@ export const getRegistrations = async (req, res) => {
         date: event.date,
         startTime: event.startTime,
         options: event.options,
-        competitionId: event.competitionId
+        competitionId: event.competitionId,
+        // 비공개 이벤트는 학부모에게 404 라 공유 링크가 소용없다 — 패널이 버튼을 잠근다
+        isPublished: event.isPublished !== false
       },
       summary: event.options.map((o) => ({ id: o.id, label: o.label, count: counts.get(o.id) || 0 })),
       activeCount: rows.filter((r) => r.status !== 'cancelled').length,

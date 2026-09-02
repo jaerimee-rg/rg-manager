@@ -2002,3 +2002,32 @@
 @media (min-width: 768px) {
   .ui-media-modal { width: min(880px, calc(100vw - var(--space-8))); }
 }
+
+/* ---------------------------------------------------------------- *
+ * 토스트 — 화면 아래 잠깐 뜨는 알림 (복사했어요 · 저장했어요 …)
+ * ---------------------------------------------------------------- *
+ * 떠 있는 것이라 그림자를 갖는 몇 안 되는 요소다. 좁은 화면에서는 양옆 여백만 남기고 늘어난다.
+ */
+.ui-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--space-6) + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: var(--z-toast);
+  max-width: calc(100vw - var(--space-8));
+  padding: var(--space-3) var(--space-4);
+  background: var(--ink-900);
+  color: var(--surface);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-medium);
+  box-shadow: var(--shadow-popover);
+  word-break: keep-all;
+  text-align: center;
+  animation: ui-toast-in var(--duration-normal) var(--ease);
+}
+@keyframes ui-toast-in {
+  from { opacity: 0; transform: translate(-50%, var(--space-2)); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}

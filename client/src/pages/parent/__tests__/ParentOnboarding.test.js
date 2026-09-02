@@ -11,6 +11,7 @@ jest.mock('react-router-dom', () => ({
 }));
 
 import { fetchWithAuth } from '../../../utils/api';
+import { saveReturnTo, peekReturnTo } from '../../../utils/returnTo';
 import ParentOnboarding, { defaultParentName } from '../ParentOnboarding';
 
 const teachers = [{ id: 7, name: '이재림' }];
@@ -37,6 +38,7 @@ const sentBody = () => JSON.parse(fetchWithAuth.mock.calls[0][1].body);
 
 beforeEach(() => {
   jest.clearAllMocks();
+  localStorage.clear();
   fetchWithAuth.mockResolvedValue({ ok: true, json: () => Promise.resolve({ children: [], created: 1 }) });
 });
 
@@ -102,6 +104,28 @@ describe('ParentOnboarding — 학부모명', () => {
   });
 
   it('저장에 성공하면 일정 화면으로 넘어간다', async () => {
+    renderForm();
+
+    fillChild('예림');
+    await submit();
+
+    expect(mockNavigate).toHaveBeenCalledWith('/parent/schedule', { state: { justOnboarded: true } });
+  });
+
+  it('공유 링크를 눌러 가입까지 온 학부모는 그 이벤트로 바로 간다', async () => {
+    saveReturnTo('/parent/events/12');
+    renderForm();
+
+    fillChild('예림');
+    await submit();
+
+    expect(mockNavigate).toHaveBeenCalledWith('/parent/events/12', { state: { justOnboarded: true } });
+    // 한 번 쓰고 지운다
+    expect(peekReturnTo()).toBeNull();
+  });
+
+  it('학부모 트리가 아닌 주소가 남아 있으면 무시하고 일정으로 간다', async () => {
+    saveReturnTo('/admin/users');
     renderForm();
 
     fillChild('예림');

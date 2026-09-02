@@ -9,7 +9,7 @@ import { Badge, Button, Callout, Choice, Icon, Modal, Row, Section, Stack } from
  * 이벤트 상세 + 신청. 모바일에서 올라오는 바텀시트로 보여준다.
  * 신청 가능 여부는 서버가 내려준 판정을 그대로 쓰고, 저장할 때 서버가 한 번 더 확인한다.
  */
-function EventDetailSheet({ eventId, today, onClose, onChanged }) {
+function EventDetailSheet({ eventId, today, onClose, onChanged, onNotFound }) {
   const navigate = useNavigate();
   const [event, setEvent] = useState(null);
   const [childId, setChildId] = useState(null);
@@ -20,7 +20,9 @@ function EventDetailSheet({ eventId, today, onClose, onChanged }) {
   const load = async (keepChild) => {
     const response = await fetchWithAuth(`/api/parent/events/${eventId}`);
     if (!response.ok) {
-      onClose();
+      // 공유 링크로 열었는데 없는(비공개·연결 안 된 선생님) 이벤트면 일정 화면이 안내한다
+      if (response.status === 404 && onNotFound) onNotFound();
+      else onClose();
       return;
     }
 

@@ -7,6 +7,7 @@ import ParentAlbumList from '../../pages/parent/ParentAlbumList';
 import ParentAlbum from '../../pages/parent/ParentAlbum';
 import ParentOnboarding from '../../pages/parent/ParentOnboarding';
 import InviteLanding from '../../pages/parent/InviteLanding';
+import RememberReturnTo from '../common/RememberReturnTo';
 
 /**
  * 학부모 전용 앱. 선생님 라우팅과 완전히 분리해 서로 영향이 없게 한다.
@@ -59,10 +60,13 @@ function ParentApp() {
         element={<ParentOnboarding teachers={teachers} onDone={loadMe} />}
       />
       {needsOnboarding ? (
-        <Route path="*" element={<Navigate to="/parent/onboarding" replace />} />
+        /* 공유 링크로 들어왔다면 아이를 등록한 뒤 그 이벤트로 돌아가야 한다 */
+        <Route path="*" element={<RememberReturnTo to="/parent/onboarding" />} />
       ) : (
         <>
           <Route path="/parent/schedule" element={<ParentSchedule />} />
+          {/* 선생님이 공유한 이벤트 링크 — 일정 화면 위에 그 이벤트 상세가 바로 열린다 */}
+          <Route path="/parent/events/:eventId" element={<ParentSchedule />} />
           <Route path="/parent/photos" element={<ParentAlbumList />} />
           <Route path="/parent/photos/:eventId" element={<ParentAlbum />} />
           <Route path="/parent/settings" element={<ParentSettings />} />

@@ -4,7 +4,8 @@ import { Link, useLocation } from 'react-router-dom';
 // 향후 게시판·채팅을 여기에 한 줄씩 추가한다.
 // 내 정보는 관례대로 맨 오른쪽에 두므로 그 앞의 자리들을 SOON 이 채운다.
 export const parentNavLinks = [
-  { path: '/parent/schedule', label: '일정', icon: '📅' },
+  // 공유 링크(/parent/events/12)로 열린 상세도 일정 화면 위에 뜨므로 같은 탭이다
+  { path: '/parent/schedule', label: '일정', icon: '📅', alsoActive: ['/parent/events'] },
   { path: '/parent/photos', label: '사진', icon: '📷' }
 ];
 
@@ -46,7 +47,7 @@ function ParentLayout({ title, subtitle, children }) {
       }}>
         <div style={{ maxWidth: '640px', margin: '0 auto', display: 'flex', width: '100%' }}>
           {parentNavLinks.map((link) => {
-            const active = location.pathname.startsWith(link.path);
+            const active = [link.path, ...(link.alsoActive || [])].some((p) => location.pathname.startsWith(p));
             return (
               <Link
                 key={link.path}
