@@ -149,7 +149,10 @@ function StudentCompetitions() {
       }
       summary[record.student.id].count++;
     });
-    return Object.values(summary).sort((a, b) => b.count - a.count);
+    // 참가 횟수가 많은 순, 같으면 이름 가나다순
+    return Object.values(summary).sort(
+      (a, b) => b.count - a.count || a.student.name.localeCompare(b.student.name, 'ko')
+    );
   };
 
   return (

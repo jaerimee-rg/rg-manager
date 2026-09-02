@@ -78,7 +78,7 @@ class ParentAccount {
                 ON c."parentUserId" = pt."parentUserId" AND c."teacherId" = pt."teacherId"
          LEFT JOIN students s ON s.id = c."studentId"
         WHERE pt."teacherId" = $1
-        ORDER BY a."createdAt" DESC, c.id ASC`,
+        ORDER BY a."createdAt" DESC, COALESCE(s.name, c."childName") ASC, c.id ASC`,
       [teacherId]
     );
     return this.groupRows(result.rows);
@@ -100,7 +100,7 @@ class ParentAccount {
          LEFT JOIN parent_children c ON c."parentUserId" = a."userId"
          LEFT JOIN users ct ON ct.id = c."teacherId"
          LEFT JOIN students s ON s.id = c."studentId"
-        ORDER BY a."createdAt" DESC, c.id ASC`
+        ORDER BY a."createdAt" DESC, COALESCE(s.name, c."childName") ASC, c.id ASC`
     );
 
     const parents = this.groupRows(result.rows);
