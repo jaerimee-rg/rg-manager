@@ -270,6 +270,8 @@ export const getEvents = async (req, res) => {
         teacherName: event.teacherName || null,
         hasOptions: (event.options || []).length > 0,
         optionCount: (event.options || []).length,
+        // 카드의 "신청 N명" — 취소는 뺀 전체 신청 수 (내 아이 포함)
+        registrationCount: event.registrationCount || 0,
         registrationDeadline: event.registrationDeadline,
         /* 자녀별 신청 상태와 신청 가능 여부를 함께 담아 화면이 다시 묻지 않게 한다.
            **그 선생님의 아이만** 후보다 — 김 선생님 아이로 박 선생님 대회에 신청할 수 없다. */

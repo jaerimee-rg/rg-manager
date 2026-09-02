@@ -227,7 +227,7 @@ function ParentSchedule() {
                       <span>📅 {formatCardDate(event)}</span>
                       {event.location && <span>📍 {event.location}</span>}
                     </div>
-                    {(badge || event.optionCount > 0) && (
+                    {event.type !== 'closure' && (
                       <div style={{ marginTop: '8px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                         {badge && (
                           <span className={`badge ${TONE_CLASS[badge.tone]}`}>
@@ -235,6 +235,8 @@ function ParentSchedule() {
                             {badge.tone === 'success' && childState ? ` · ${childState.childName}` : ''}
                           </span>
                         )}
+                        {/* 몇 명이 신청했는지 — 취소는 뺀 수. 상세를 열지 않아도 분위기를 알 수 있다 */}
+                        <span className="badge badge-gray">👥 신청 {event.registrationCount || 0}명</span>
                         {event.optionCount > 0 && <span className="badge badge-gray">옵션 {event.optionCount}</span>}
                       </div>
                     )}

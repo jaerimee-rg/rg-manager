@@ -131,8 +131,11 @@ class Event {
     const ids = toIdArray(teacherIds);
     if (!ids.length) return [];
 
+    // 신청 인원은 선생님 목록(getAll)과 같은 셈법 — 취소는 빼고 센다
     const result = await pool.query(
-      `SELECT e.*, ${displayNameSql('u')} AS "teacherName"
+      `SELECT e.*, ${displayNameSql('u')} AS "teacherName",
+              (SELECT COUNT(*)::int FROM event_registrations r
+                WHERE r."eventId" = e.id AND r.status <> 'cancelled') AS "registrationCount"
          FROM events e
          JOIN users u ON u.id = e."userId"
         WHERE e."userId" = ANY($1)

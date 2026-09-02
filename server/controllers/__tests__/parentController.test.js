@@ -338,6 +338,19 @@ describe('parentController', () => {
       expect(event.hasOptions).toBe(true);
       expect(event).not.toHaveProperty('options');
     });
+
+    it('카드용 신청 인원(registrationCount)을 함께 준다 — 없으면 0', async () => {
+      Event.listUpcomingForParent.mockResolvedValue([
+        { ...openEvent, registrationCount: 3 },
+        { ...openEvent, id: 6, registrationCount: undefined }
+      ]);
+
+      await getEvents(req, res);
+
+      const [withCount, without] = res.json.mock.calls[0][0].events;
+      expect(withCount.registrationCount).toBe(3);
+      expect(without.registrationCount).toBe(0);
+    });
   });
 
   describe('getEvent (상세)', () => {

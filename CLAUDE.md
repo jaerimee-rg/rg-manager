@@ -469,6 +469,8 @@ the rest of the app is unaffected.
   `EventRegistration.listByEvent` 에서 **이름·상태·옵션 라벨·우리 아이 여부**만 남긴 것이다 — 다른 집의
   학부모명·학생 id·생년월일은 내려가지 않고, 취소는 빠지며, 휴관일은 조회 자체를 하지 않는다.
   같은 응답에 `today` (KST) 가 실려 D-day 를 계산한다.
+- **일정 카드의 "신청 N명"** 은 `GET /api/parent/events` 의 `registrationCount` — `Event.listUpcomingForParent`
+  가 선생님 목록(`getAll`)과 같은 서브쿼리로 세며 **취소는 뺀다**. 휴관일 카드에는 붙지 않는다.
 - **로그인 전 딥링크는 `utils/returnTo.js` 가 잇는다.** 카카오 인가는 다른 도메인을 거치므로 라우터
   state 는 살아남지 못한다 — 로그인 안 된 `*` 라우트(`RememberReturnTo`)가 주소를 **localStorage 에
   1시간** 남기고 `/login` 으로 보내며, `KakaoCallback` 이 로그인 뒤 `returnPathFor(role, path)` 로
