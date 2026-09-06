@@ -35,9 +35,12 @@ describe('teacherInviteController', () => {
   describe('createInvite', () => {
     it('메모와 만료일로 초대를 만들고 링크를 돌려준다', async () => {
       req.body = { label: '김리듬 선생님에게', expiresInDays: 7 };
+      // 만료일은 "지금부터 7일 뒤" 로 잡는다 — 날짜를 박아 두면 그 날이 오는 순간
+      // status 가 pending → expired 로 뒤집혀 테스트가 영영 깨진다 (실제로 그랬다).
       TeacherInvite.create.mockResolvedValue({
         id: 5, token: 'TOK', label: '김리듬 선생님에게',
-        expiresAt: '2026-09-06T00:00:00.000Z', createdAt: '2026-08-30T00:00:00.000Z'
+        expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+        createdAt: new Date().toISOString()
       });
 
       await controller.createInvite(req, res);
