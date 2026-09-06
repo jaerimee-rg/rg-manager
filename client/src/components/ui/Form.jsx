@@ -62,6 +62,34 @@ export function Input({ invalid, className = '', ...rest }) {
   return <input className={cx('ui-input', className)} aria-invalid={invalid ? 'true' : undefined} {...rest} />;
 }
 
+/**
+ * 값을 다시 비울 수 있는 입력칸 — 값이 있을 때만 지우기(×) 버튼이 뜬다.
+ *
+ * 날짜·시간 칸 때문에 만들었다. 모바일 피커에는 "비우기" 가 없어서 한 번 고른
+ * 값을 되돌릴 수 없다 — 시간을 지워 "종일" 로, 마감을 지워 "마감 없음" 으로
+ * 되돌리는 길이 아예 막힌다.
+ *
+ * clearLabel 은 어느 칸을 지우는지 읽어 주는 이름이다 (예: "종료일 지우기").
+ */
+export function ClearableInput({ value, onClear, clearLabel = '지우기', disabled = false, className = '', ...rest }) {
+  return (
+    <div className={cx('ui-clearable', className)}>
+      <Input value={value} disabled={disabled} {...rest} />
+      {value && !disabled && (
+        <button
+          type="button"
+          className="ui-clearable__clear"
+          onClick={onClear}
+          aria-label={clearLabel}
+          title={clearLabel}
+        >
+          <Icon name="x" size={14} />
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function Textarea({ invalid, className = '', ...rest }) {
   return <textarea className={cx('ui-textarea', className)} aria-invalid={invalid ? 'true' : undefined} {...rest} />;
 }

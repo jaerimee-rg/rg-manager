@@ -520,6 +520,41 @@
   .ui-input, .ui-textarea, .ui-select { font-size: 16px; line-height: 22px; min-height: 44px; }
 }
 
+/* 지우기(×) 버튼이 붙은 입력칸 — 날짜·시간처럼 "비움" 이 뜻을 갖는 칸에 쓴다.
+   네이티브 날짜 피커의 달력 아이콘과 겹치지 않도록 입력칸 오른쪽을 비워 둔다. */
+.ui-clearable { position: relative; display: block; }
+.ui-clearable > .ui-input { padding-right: var(--space-9); }
+.ui-clearable__clear {
+  position: absolute;
+  top: 50%;
+  right: var(--space-2);
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: var(--surface);
+  border: 0;
+  border-radius: var(--radius-pill);
+  color: var(--ink-500);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease),
+              background-color var(--duration-fast) var(--ease);
+}
+.ui-clearable__clear:hover { color: var(--ink-900); background: var(--ink-100); }
+.ui-clearable__clear:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--brand-50);
+}
+
+/* 모바일은 손가락으로 눌러야 해서 타깃을 키운다 (44px 규칙). */
+@media (max-width: 767px) {
+  .ui-clearable > .ui-input { padding-right: var(--space-10); }
+  .ui-clearable__clear { width: 32px; height: 32px; right: var(--space-2); }
+}
+
 /* 인풋 앞뒤 붙는 아이콘/단위 */
 .ui-input-group { display: flex; align-items: stretch; }
 .ui-input-group > .ui-input { border-radius: var(--radius-md) 0 0 var(--radius-md); }

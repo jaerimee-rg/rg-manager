@@ -4,7 +4,7 @@ import { fetchWithAuth } from '../../utils/api';
 import { EVENT_TYPES, splitDeadline, joinDeadline } from '../../utils/eventFormat';
 import OptionsEditor from './OptionsEditor';
 import {
-  Button, Callout, Card, Container, Field, Input, PageHeader, SwitchField, Textarea
+  Button, Callout, Card, ClearableInput, Container, Field, Input, PageHeader, SwitchField, Textarea
 } from '../../components/ui';
 
 const TYPE_HINTS = {
@@ -192,7 +192,12 @@ function EventForm({ basePath = '/events' }) {
                 </Field>
                 <Field label="종료일" hint="기간일 때만 채웁니다" htmlFor="ev-end">
                   {(props) => (
-                    <Input {...props} type="date" value={form.endDate} onChange={(e) => set({ endDate: e.target.value })} />
+                    <ClearableInput
+                      {...props} type="date" value={form.endDate}
+                      onChange={(e) => set({ endDate: e.target.value })}
+                      onClear={() => set({ endDate: '' })}
+                      clearLabel="종료일 지우기"
+                    />
                   )}
                 </Field>
               </div>
@@ -202,7 +207,12 @@ function EventForm({ basePath = '/events' }) {
                 <div className="event-form__pair">
                   <Field label="시간" hint="비우면 종일" htmlFor="ev-time">
                     {(props) => (
-                      <Input {...props} type="time" value={form.startTime} onChange={(e) => set({ startTime: e.target.value })} />
+                      <ClearableInput
+                        {...props} type="time" value={form.startTime}
+                        onChange={(e) => set({ startTime: e.target.value })}
+                        onClear={() => set({ startTime: '' })}
+                        clearLabel="시간 지우기"
+                      />
                     )}
                   </Field>
                   <Field label="장소" required htmlFor="ev-loc">
@@ -281,17 +291,22 @@ function EventForm({ basePath = '/events' }) {
 
                   <Field label="마감 날짜" hint="비우면 시작 전까지" htmlFor="ev-deadline-date">
                     {(props) => (
-                      <Input
+                      // 날짜를 지우면 "마감 없음" 이다 — 시간만 남으면 저장이 막히니 함께 비운다.
+                      <ClearableInput
                         {...props} type="date" value={form.deadlineDate}
                         onChange={(e) => set({ deadlineDate: e.target.value })}
+                        onClear={() => set({ deadlineDate: '', deadlineTime: '' })}
+                        clearLabel="마감 날짜 지우기"
                       />
                     )}
                   </Field>
                   <Field label="마감 시간" hint="비우면 23:59" htmlFor="ev-deadline-time">
                     {(props) => (
-                      <Input
+                      <ClearableInput
                         {...props} type="time" value={form.deadlineTime}
                         onChange={(e) => set({ deadlineTime: e.target.value })}
+                        onClear={() => set({ deadlineTime: '' })}
+                        clearLabel="마감 시간 지우기"
                       />
                     )}
                   </Field>
