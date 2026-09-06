@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import {
-  Badge, Button, Callout, DataTable, EmptyState, Field, IconButton, Input,
+  Badge, Button, Callout, ClearableInput, DataTable, EmptyState, Field, IconButton, Input,
   Menu, MenuItem, Modal, Pagination, Progress, Switch, SwitchField, Tabs, Chip
 } from '../index';
 
@@ -70,6 +70,39 @@ describe('Field', () => {
       </Field>
     );
     expect(screen.getByText('12 / 200')).not.toHaveClass('over');
+  });
+});
+
+describe('ClearableInput', () => {
+  it('값이 없으면 지우기 버튼이 없다', () => {
+    render(<ClearableInput type="time" value="" onChange={() => {}} onClear={() => {}} clearLabel="시간 지우기" />);
+    expect(screen.queryByRole('button', { name: '시간 지우기' })).not.toBeInTheDocument();
+  });
+
+  it('값이 있으면 지우기 버튼이 뜨고 onClear 를 부른다', () => {
+    const onClear = jest.fn();
+    render(<ClearableInput type="time" value="14:30" onChange={() => {}} onClear={onClear} clearLabel="시간 지우기" />);
+    fireEvent.click(screen.getByRole('button', { name: '시간 지우기' }));
+    expect(onClear).toHaveBeenCalled();
+  });
+
+  it('폼 안에서 눌러도 제출되지 않도록 type 은 button 이다', () => {
+    render(<ClearableInput type="date" value="2026-09-12" onChange={() => {}} onClear={() => {}} />);
+    expect(screen.getByRole('button', { name: '지우기' })).toHaveAttribute('type', 'button');
+  });
+
+  it('disabled 면 지우기 버튼을 감춘다', () => {
+    render(<ClearableInput type="date" value="2026-09-12" disabled onChange={() => {}} onClear={() => {}} />);
+    expect(screen.queryByRole('button', { name: '지우기' })).not.toBeInTheDocument();
+  });
+
+  it('Field 가 넘긴 id·설명을 입력칸이 그대로 받는다', () => {
+    render(
+      <Field label="종료일" hint="기간일 때만 채웁니다">
+        {(props) => <ClearableInput {...props} type="date" value="" onChange={() => {}} onClear={() => {}} />}
+      </Field>
+    );
+    expect(screen.getByLabelText('종료일')).toHaveAttribute('type', 'date');
   });
 });
 

@@ -34,12 +34,22 @@ const pickType = async (label) => {
 };
 
 // "시간" 과 "마감 시간" 처럼 접두사가 겹치는 라벨이 있어서 앞부분으로만 정확히 고른다.
+// selector 로 입력칸만 본다 — 옆에 붙는 "○○ 지우기" 버튼과 헷갈리지 않게.
 const labelOf = (name) => new RegExp(`^${name}`);
-const field = (name) => screen.getByLabelText(labelOf(name));
-const noField = (name) => expect(screen.queryByLabelText(labelOf(name))).not.toBeInTheDocument();
+const field = (name) => screen.getByLabelText(labelOf(name), { selector: 'input' });
+const noField = (name) =>
+  expect(screen.queryByLabelText(labelOf(name), { selector: 'input' })).not.toBeInTheDocument();
 
 const fill = (name, value) => {
   fireEvent.change(field(name), { target: { value } });
+};
+
+/** "종료일 지우기" 같은 × 버튼 */
+const clearButton = (name) => screen.queryByRole('button', { name: `${name} 지우기` });
+const clear = async (name) => {
+  await act(async () => {
+    fireEvent.click(clearButton(name));
+  });
 };
 
 const save = async () => {
@@ -133,6 +143,96 @@ describe('EventForm — 휴관일은 날짜만 입력한다', () => {
     await save();
 
     expect(savedPayload()).toMatchObject({ type: 'closure', startTime: null });
+  });
+});
+
+// 모바일 날짜·시간 피커에는 "비우기" 가 없어서, 한 번 고른 값을 되돌릴 방법이 없었다.
+// 비울 수 있어야 "종일"·"마감 없음"·"하루짜리" 로 돌아갈 수 있다.
+describe('EventForm — 정해 둔 날짜·시간을 다시 비운다', () => {
+  it('값이 없는 동안에는 지우기 버튼이 뜨지 않는다', async () => {
+    await renderForm();
+
+    expect(clearButton('종료일')).not.toBeInTheDocument();
+    expect(clearButton('시간')).not.toBeInTheDocument();
+    expect(clearButton('마감 날짜')).not.toBeInTheDocument();
+    expect(clearButton('마감 시간')).not.toBeInTheDocument();
+  });
+
+  it('시간을 지우면 종일(null)로 저장된다', async () => {
+    await renderForm({
+      id: 9, type: 'special', title: '가을 발표회', date: '2026-09-12',
+      startTime: '14:30', location: '체육관', isPublished: true
+    });
+
+    expect(field('시간')).toHaveValue('14:30');
+    await clear('시간');
+
+    expect(field('시간')).toHaveValue('');
+    await save();
+    expect(savedPayload()).toMatchObject({ startTime: null });
+  });
+
+  it('종료일을 지우면 하루짜리(null)로 저장된다', async () => {
+    await renderForm({
+      id: 9, type: 'special', title: '여름 캠프', date: '2026-08-25',
+      endDate: '2026-08-27', location: '체육관', isPublished: true
+    });
+
+    await clear('종료일');
+
+    expect(field('종료일')).toHaveValue('');
+    await save();
+    expect(savedPayload()).toMatchObject({ endDate: null });
+  });
+
+  it('마감 날짜를 지우면 마감 시간도 함께 비워져 마감 없음(null)으로 저장된다', async () => {
+    await renderForm({
+      id: 9, type: 'competition', title: '가을 대회', date: '2026-09-12',
+      location: '올림픽공원', isPublished: true,
+      registrationDeadline: '2026-09-01T18:00:00+09:00'
+    });
+
+    expect(field('마감 날짜')).toHaveValue('2026-09-01');
+    expect(field('마감 시간')).toHaveValue('18:00');
+
+    await clear('마감 날짜');
+
+    // 시간만 남으면 "접수 마감 날짜를 선택해주세요" 로 저장이 막힌다 — 같이 비운다.
+    expect(field('마감 날짜')).toHaveValue('');
+    expect(field('마감 시간')).toHaveValue('');
+
+    await save();
+    expect(savedPayload()).toMatchObject({ registrationDeadline: null });
+  });
+
+  it('마감 시간만 지우면 날짜는 남고 그날 끝(23:59)이 된다', async () => {
+    await renderForm({
+      id: 9, type: 'competition', title: '가을 대회', date: '2026-09-12',
+      location: '올림픽공원', isPublished: true,
+      registrationDeadline: '2026-09-01T18:00:00+09:00'
+    });
+
+    await clear('마감 시간');
+
+    expect(field('마감 날짜')).toHaveValue('2026-09-01');
+    expect(field('마감 시간')).toHaveValue('');
+
+    await save();
+    expect(savedPayload()).toMatchObject({ registrationDeadline: '2026-09-01T23:59:00+09:00' });
+  });
+
+  it('새로 등록할 때 잘못 고른 시간도 지울 수 있다', async () => {
+    await renderForm();
+
+    fill('이벤트 이름', '가을 대회');
+    fill('날짜', '2026-09-12');
+    fill('장소', '올림픽공원');
+    fill('시간', '14:30');
+
+    await clear('시간');
+
+    await save();
+    expect(savedPayload()).toMatchObject({ startTime: null });
   });
 });
 

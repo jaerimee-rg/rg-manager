@@ -61,6 +61,50 @@ test.describe('선생님 — 이벤트 관리', () => {
     await expect(page.locator('tr', { hasText: `e2e 휴관 ${run}` }).first()).toBeVisible();
   });
 
+  // 모바일 날짜·시간 피커에는 "비우기" 가 없어서, 한 번 고른 값을 되돌릴 수 없었다.
+  // 값이 있을 때만 뜨는 지우기(×) 버튼으로 "종일"·"마감 없음" 으로 돌아갈 수 있어야 한다.
+  test('정해 둔 시간·마감을 지우기 버튼으로 다시 비운다', async ({ page }) => {
+    await page.goto('/events/new');
+
+    // 값이 차면 옆에 "○○ 지우기" 버튼이 생겨 getByLabel 이 둘을 잡는다 — 입력칸 id 로 지목한다.
+    const time = page.locator('#ev-time');
+    const deadlineDate = page.locator('#ev-deadline-date');
+    const deadlineTime = page.locator('#ev-deadline-time');
+
+    // 비어 있는 동안에는 버튼이 없다 (칸을 어지럽히지 않는다)
+    await expect(page.getByRole('button', { name: '시간 지우기', exact: true })).toHaveCount(0);
+
+    await time.fill('14:30');
+    await deadlineDate.fill('2026-11-20');
+    await deadlineTime.fill('18:00');
+
+    await page.getByRole('button', { name: '시간 지우기', exact: true }).click();
+    await expect(time).toHaveValue('');
+
+    // 마감 날짜를 지우면 "마감 없음" 이므로 시간도 함께 비워진다
+    await page.getByRole('button', { name: '마감 날짜 지우기' }).click();
+    await expect(deadlineDate).toHaveValue('');
+    await expect(deadlineTime).toHaveValue('');
+
+    // 지운 채로 저장되면 목록에 시간 없이 날짜만 남는다
+    const cleared = `e2e 비우기 ${run}`;
+    await page.getByLabel('이벤트 이름').fill(cleared);
+    await page.getByLabel(/^날짜/).fill('2026-11-22');
+    await page.getByLabel('장소').fill('e2e 체육관');
+    await page.getByRole('button', { name: '저장', exact: true }).click();
+
+    await expect(page).toHaveURL(/\/events$/);
+    const row = page.locator('tr', { hasText: cleared }).first();
+    await expect(row).toContainText('11/22');
+    await expect(row).not.toContainText('14:30');
+
+    // 다시 열어도 비어 있다 — 저장이 아니라 화면만 지운 게 아니라는 확인
+    await row.getByRole('button', { name: '수정' }).click();
+    await expect(page.getByRole('heading', { name: '이벤트 수정' })).toBeVisible();
+    await expect(page.locator('#ev-time')).toHaveValue('');
+    await expect(page.locator('#ev-deadline-date')).toHaveValue('');
+  });
+
   test('옛 대회 주소는 이벤트 관리로 이어진다', async ({ page }) => {
     await page.goto('/competitions');
     await expect(page).toHaveURL(/\/events$/);
