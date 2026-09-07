@@ -381,3 +381,56 @@ test.describe('선생님 — 이벤트 공유 링크와 신청 명단', () => {
     await expect(page.locator('.ui-toast')).toContainText('공유 링크를 복사했어요');
   });
 });
+
+/**
+ * 대시보드 "수업별 출석 현황"의 출석 수를 누르면 그날 온 학생 이름이 뜬다.
+ * 이 모달은 `mode="modal"`(항상 가운데)이라, 위치 규칙이 데스크탑 미디어 쿼리 안에만 있으면
+ * 모바일에서 화면 밖(body 맨 아래)에 그려져 스크림만 깔린다 — 실제로 그랬다.
+ */
+test.describe('선생님 — 좁은 화면의 출석 학생 목록', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('출석 수를 누르면 학생 이름이 화면 안에 보인다', async ({ page, request }) => {
+    const today = new Date().toISOString().split('T')[0];
+    const created = await api(request, sessions.teacher, 'POST', '/api/classes', {
+      name: `e2e 모바일 출석반 ${run}`,
+      schedule: '토 10:00',
+      duration: '60분',
+      instructor: 'e2e 선생님'
+    });
+    expect(created.status).toBe(201);
+
+    const student = sessions.students[0];
+    const checked = await api(request, sessions.teacher, 'POST', '/api/attendance', {
+      studentId: student.id,
+      classId: created.body.id,
+      date: today
+    });
+    expect(checked.status).toBe(201);
+
+    await loginAs(page, sessions.teacher);
+    await page.goto('/dashboard');
+
+    const row = page.locator('tr', { hasText: created.body.name }).first();
+    await row.getByTitle('클릭하여 출석 학생 보기').first().click();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText(student.name)).toBeVisible();
+
+    // 핵심: 패널이 뷰포트 안에 있어야 한다 (화면 밖으로 밀려나면 이름이 있어도 못 본다)
+    await dialog.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+    const box = await dialog.boundingBox();
+    const viewport = page.viewportSize();
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+
+    // 내용만큼 쪼그라들지 않고 화면 폭을 제대로 쓴다
+    expect(box.width).toBeGreaterThan(viewport.width * 0.8);
+
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+  });
+});
