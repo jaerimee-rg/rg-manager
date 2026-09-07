@@ -1001,18 +1001,34 @@
 }
 @keyframes ui-slide-up { from { transform: translateY(100%); } }
 
-/* 데스크탑: 가운데 모달 */
+/* mode="modal" 은 화면 크기와 상관없이 가운데다. 이 위치 규칙을 데스크탑 미디어 쿼리
+   안에만 두면, 모바일에서 fixed 패널이 inset 없이 static 위치(=body 맨 아래)로 떨어져
+   화면 밖에 그려진다 — 스크림만 덮이고 내용은 안 보인다. */
+.ui-overlay[data-mode="modal"] {
+  left: 50%;
+  top: 50%;
+  right: auto; bottom: auto;
+  transform: translate(-50%, -50%);
+  width: min(420px, calc(100vw - var(--space-6)));
+  max-height: min(86vh, 760px);
+  border-radius: var(--radius-xl);
+  animation: ui-pop var(--duration-normal) var(--ease);
+}
+
+/* 데스크탑: 시트도 가운데 모달로 */
 @media (min-width: 768px) {
-  .ui-overlay[data-mode="sheet"],
-  .ui-overlay[data-mode="modal"] {
+  .ui-overlay[data-mode="sheet"] {
     left: 50%;
     top: 50%;
     right: auto; bottom: auto;
     transform: translate(-50%, -50%);
-    width: min(560px, calc(100vw - var(--space-8)));
-    max-height: min(86vh, 760px);
     border-radius: var(--radius-xl);
     animation: ui-pop var(--duration-normal) var(--ease);
+  }
+  .ui-overlay[data-mode="sheet"],
+  .ui-overlay[data-mode="modal"] {
+    width: min(560px, calc(100vw - var(--space-8)));
+    max-height: min(86vh, 760px);
   }
   .ui-overlay[data-size="lg"] { width: min(760px, calc(100vw - var(--space-8))); }
   .ui-overlay[data-size="sm"] { width: min(420px, calc(100vw - var(--space-8))); }
@@ -1026,7 +1042,9 @@
   margin: var(--space-2) auto 0;
   flex-shrink: 0;
 }
+/* 그립은 "아래에서 끌어올린 시트"라는 표시다. 가운데 모달에는 의미가 없다. */
 @media (min-width: 768px) { .ui-overlay__grip { display: none; } }
+.ui-overlay[data-mode="modal"] .ui-overlay__grip { display: none; }
 
 .ui-overlay__header {
   display: flex;
