@@ -121,7 +121,7 @@ function AdminTeacherInvites() {
 
   return (
     <div>
-      <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '14px' }}>선생님 초대</h2>
+      <h2 className="ui-display" style={{ fontSize: '1.25rem', marginBottom: '14px' }}>선생님 초대</h2>
 
       <div className="card" style={{ padding: '16px', marginBottom: '16px' }}>
         <div style={{ fontSize: '0.8125rem', fontWeight: 800, marginBottom: '4px' }}>초대 링크 만들기</div>
@@ -142,7 +142,7 @@ function AdminTeacherInvites() {
                 maxLength={100}
                 onChange={(e) => setLabel(e.target.value)}
                 placeholder="예: 김리듬 선생님"
-                style={{ width: '100%', padding: '12px', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)', fontSize: '16px' }}
+                style={{ width: '100%', padding: '12px', border: 'var(--stroke-thin)', borderRadius: 'var(--shape-field)', fontSize: '16px', background: 'var(--field)' }}
               />
             </div>
             <div>
@@ -153,7 +153,7 @@ function AdminTeacherInvites() {
                 id="invite-expiry"
                 value={expiresInDays}
                 onChange={(e) => setExpiresInDays(Number(e.target.value))}
-                style={{ width: '100%', padding: '12px', border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)', fontSize: '16px', fontFamily: 'inherit', background: '#fff' }}
+                style={{ width: '100%', padding: '12px', border: 'var(--stroke-thin)', borderRadius: 'var(--shape-field)', fontSize: '16px', fontFamily: 'inherit', background: 'var(--field)' }}
               >
                 {EXPIRY_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>

@@ -1,59 +1,97 @@
 /* ===================================================================
    RG Manager Design System — Tokens
    -------------------------------------------------------------------
-   구조는 Deel 앱에서 관찰한 디자인 시스템 문법을 따랐다.
-   (평면 + 1px 보더 서피스, 중간 라운드, 40px 컨트롤, pill 배지,
-    14/24 본문, 400·500 위주의 가벼운 웨이트)
-   색·서체는 rg-manager 고유 브랜드(Pretendard / 블루)를 유지한다.
+   시각 언어: "종이 위의 잉크 손그림" (mockup/ 의 클릭 목업이 원본)
+   - 바탕은 종이, 선과 제목은 검정 잉크, 강조색은 별 노랑 하나
+   - 빨강은 오류·되돌릴 수 없는 동작에만, 카카오 노랑은 카카오 버튼에만
+   - 서피스는 그림자 대신 잉크 선(2px)으로 나누고, 테두리는 손으로 그린 듯 살짝 일렁인다
+   - 서체: 제목 Black Han Sans · 본문 Pretendard · 손글씨 안내 Gaegu
    =================================================================== */
 
 :root {
-  /* ---- Brand accent (rg-manager 고유) ---------------------------- */
-  --brand-50:  #EFF6FF;
-  --brand-100: #DBEAFE;
-  --brand-200: #BFDBFE;
-  --brand-300: #93C5FD;
-  --brand-500: #3182F6;
-  --brand-600: #1B64DA;
-  --brand-700: #1650B0;
+  /* ---- 팔레트 원본 (목업과 같은 값) -------------------------------- */
+  --paper:       #ECE9E2;  /* 페이지 바탕 — 종이 */
+  --sheet:       #F8F6F1;  /* 카드·패널 — 종이 위에 한 장 더 */
+  --field:       #FFFFFF;  /* 입력칸 */
+  --ink:         #000000;  /* 선·제목 */
+  --ink-soft:    #262522;  /* 본문 */
+  --pencil:      #6E6C67;  /* 보조 글 · 캡션 */
+  --rule:        #CFCAC0;  /* 연필 구분선 */
+  --rule-soft:   #E0DCD3;  /* 표 행 구분선 */
+  --star:        #F1DE6E;  /* 유일한 강조색 */
+  --star-hover:  #EAD45A;
+  --star-soft:   #F8EEB4;
+  --star-tint:   rgba(241, 222, 110, 0.22);  /* 표 행 호버 */
+  --alert:       #D2342B;  /* 오류 · 되돌릴 수 없는 동작 */
+  --alert-hover: #B42A22;
+  --alert-soft:  #F6DCD8;
+  --alert-ink:   #7A1D16;
+  --kakao:       #FEE500;  /* 카카오 버튼 전용 */
 
-  /* ---- Ink / neutral ramp ---------------------------------------- */
-  --ink-900: #1B1B1B;   /* 본문·제목 기본 잉크 */
-  --ink-700: #4B4B4B;
-  --ink-600: #6B6B6B;   /* 보조 텍스트 */
-  --ink-500: #8A8A8A;   /* 플레이스홀더·캡션 */
-  --ink-400: #A8A8A8;
-  --ink-300: #D4D4D4;
-  --ink-200: #E9E9E9;   /* 기본 보더 */
-  --ink-100: #F2F2F2;   /* 구분선·연한 채움 */
-  --ink-50:  #FAFAFA;   /* 선택/호버 채움 */
+  /* ---- Brand (별 노랑) --------------------------------------------
+     예전엔 파랑이었다. 이제 "강조 채움" 은 별 노랑이고, 그 위 글자는 잉크다.
+     노랑을 글자색으로 쓰지 않는다 — 종이 위에서 읽히지 않는다. */
+  --brand-50:  #FBF6DA;
+  --brand-100: var(--star-soft);
+  --brand-200: #F4E68F;
+  --brand-300: var(--star);
+  --brand-500: var(--star);
+  --brand-600: var(--star-hover);
+  --brand-700: var(--ink);   /* 별 노랑 위 글자 */
+
+  /* ---- Ink / neutral ramp (종이 쪽으로 따뜻하게) -------------------- */
+  --ink-900: #000000;   /* 제목 · 선 */
+  --ink-800: #262522;   /* 본문 */
+  --ink-700: #3D3B37;
+  --ink-600: #6E6C67;   /* 보조 텍스트 (연필) */
+  --ink-500: #858279;   /* 플레이스홀더 · 캡션 */
+  --ink-400: #A9A59C;
+  --ink-300: #CFCAC0;   /* 연필 구분선 */
+  --ink-200: #E0DCD3;   /* 옅은 구분선 */
+  --ink-100: #E8E4DB;   /* 연한 채움 · 행 구분선 */
+  --ink-50:  #F2EFE8;   /* 선택 · 호버 채움 */
 
   /* ---- Surfaces --------------------------------------------------- */
-  --surface:        #FFFFFF;
-  --surface-sunken: #F7F7F5;  /* 페이지 배경 */
-  --surface-muted:  #FAFAFA;  /* 카드 안쪽 보조 블록 */
-  --surface-inverse:#1B1B1B;
+  --surface:         var(--sheet);   /* 카드 · 패널 · 모달 */
+  --surface-sunken:  var(--paper);   /* 페이지 바탕 */
+  --surface-muted:   #F1EEE7;        /* 카드 안쪽 보조 블록 */
+  --surface-field:   var(--field);   /* 입력칸 */
+  --surface-inverse: var(--ink);
 
-  --border:         var(--ink-200);
-  --border-strong:  var(--ink-300);
-  --border-focus:   var(--brand-500);
-  --border-popover: #DEDEDE;
+  /* ---- Lines -------------------------------------------------------
+     기본 선은 잉크다. 연한 구분선이 필요하면 --rule / --rule-soft 를 쓴다. */
+  --border:         var(--ink);
+  --border-strong:  var(--ink);
+  --border-soft:    var(--rule);
+  --border-focus:   var(--ink);
+  --border-popover: var(--ink);
+  --stroke-width:      2px;    /* 카드 · 버튼 · 표 테두리 */
+  --stroke-width-thin: 1.5px;  /* 입력칸 · 배지 · 칩 */
+  --stroke:      var(--stroke-width) solid var(--ink);
+  --stroke-thin: var(--stroke-width-thin) solid var(--ink);
 
-  /* 링크는 본문 잉크와 구분되는 파랑 한 가지만 쓴다 */
-  --link: #1F74B3;
+  /* 링크는 잉크 + 밑줄 (파랑을 쓰지 않는다) */
+  --link: var(--ink);
 
-  /* ---- Semantic tones (배지·알림 공용) ---------------------------- */
-  --success-fg: #0F7A4A;  --success-bg: #EAF7F0;  --success-border: #A8DEC3;
-  --warning-fg: #8A5A00;  --warning-bg: #FFF7E5;  --warning-border: #FFE27C;
-  --danger-fg:  #B42318;  --danger-bg:  #FEF0EF;  --danger-border: #FCC9C4;
-  --info-fg:    var(--brand-700); --info-bg: var(--brand-50); --info-border: var(--brand-200);
-  --neutral-fg: var(--ink-700);   --neutral-bg: var(--ink-100); --neutral-border: var(--ink-200);
+  /* ---- Semantic tones (배지 · 알림 공용) ----------------------------
+     좋은 상태(활동 중 · 완료)는 별 노랑, 확인이 필요한 상태는 옅은 별 노랑,
+     오류만 빨강. 초록·파랑은 쓰지 않는다. */
+  --success-fg: var(--ink);    --success-bg: var(--star);      --success-border: var(--ink);
+  --warning-fg: var(--ink);    --warning-bg: var(--star-soft); --warning-border: var(--ink);
+  --danger-fg:  var(--alert);  --danger-bg:  var(--alert-soft); --danger-border: var(--alert);
+  --info-fg:    var(--ink);    --info-bg:    var(--star-soft); --info-border:   var(--ink);
+  --neutral-fg: var(--ink-800); --neutral-bg: var(--sheet);    --neutral-border: var(--ink);
+  --muted-fg:   var(--pencil); --muted-bg:   transparent;      --muted-border:  var(--pencil);
 
   /* ---- Typography -------------------------------------------------- */
-  /* Variable 서브셋을 쓰므로 'Pretendard Variable' 이 먼저다.
-     정적 버전이 깔린 기기를 위해 'Pretendard' 도 남겨 둔다. */
+  /* 제목: Black Han Sans (굵기가 하나뿐 — 가짜 볼드가 생기지 않게 weight 400 으로 쓴다) */
+  --font-display: 'Black Han Sans', 'Pretendard Variable', 'Pretendard', -apple-system,
+                  BlinkMacSystemFont, 'Apple SD Gothic Neo', sans-serif;
+  /* 본문·UI: Pretendard. Variable 서브셋을 쓰므로 'Pretendard Variable' 이 먼저다 */
   --font-sans: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont,
                'Apple SD Gothic Neo', 'Segoe UI', Roboto, sans-serif;
+  /* 손글씨 안내: Gaegu — 도움말·빈 화면 문구처럼 "말을 거는" 한두 줄에만 */
+  --font-hand: 'Gaegu', 'Pretendard Variable', 'Pretendard', cursive;
   --font-num: var(--font-sans);
 
   /* size / line-height 쌍 */
@@ -61,49 +99,88 @@
   --text-xs:  12px;  --leading-xs:  16px;
   --text-sm:  13px;  --leading-sm:  18px;
   --text-md:  14px;  --leading-md:  20px;
-  --text-base:14px;  --leading-base:24px;   /* 본문 기본 */
+  --text-base:15px;  --leading-base:24px;   /* 본문 기본 */
   --text-lg:  16px;  --leading-lg:  24px;
   --text-xl:  18px;  --leading-xl:  26px;
   --text-2xl: 20px;  --leading-2xl: 28px;
-  --text-3xl: 24px;  --leading-3xl: 32px;
-  --text-4xl: 32px;  --leading-4xl: 40px;   /* 데스크탑 페이지 타이틀 */
+  --text-3xl: 26px;  --leading-3xl: 32px;   /* 모바일 페이지 타이틀 */
+  --text-4xl: 34px;  --leading-4xl: 40px;   /* 데스크탑 페이지 타이틀 */
+
+  /* 제목 서체 크기 — 카드 제목 · 모달 제목 · 통계 숫자 */
+  --display-sm: 18px;
+  --display-md: 19px;
+  --display-lg: 22px;
+  --display-xl: 30px;
+
+  /* 손글씨는 같은 크기에서 작아 보여서 한 단계 키워 쓴다 */
+  --hand-sm: 16px;
+  --hand-md: 18px;
+  --hand-lg: 20px;
 
   --weight-regular: 400;
   --weight-medium:  500;
   --weight-semibold:600;
   --weight-bold:    700;
+  --weight-heavy:   800;
 
   --tracking-tight: -0.2px;
-  --tracking-title: -0.4px;
+  --tracking-title: -0.01em;
+  --tracking-hand:  -0.04em;
 
   /* ---- Spacing (4px 기반) ------------------------------------------ */
   --space-0: 0;     --space-1: 4px;   --space-2: 8px;   --space-3: 12px;
   --space-4: 16px;  --space-5: 20px;  --space-6: 24px;  --space-7: 32px;
   --space-8: 40px;  --space-9: 48px;  --space-10: 64px;
 
-  /* ---- Radius ------------------------------------------------------ */
+  /* ---- Radius (숫자) -----------------------------------------------
+     `border-radius: var(--radius-md) 0 0 var(--radius-md)` 처럼 조합해 쓰는 곳이 있어
+     숫자 토큰은 그대로 둔다. 손그림 모양은 아래 --shape-* 를 쓴다. */
   --radius-xs:   6px;
   --radius-sm:   8px;
-  --radius-md:  10px;   /* 버튼·인풋 */
+  --radius-md:  10px;
   --radius-lg:  12px;
-  --radius-xl:  16px;   /* 카드 */
-  --radius-2xl: 24px;   /* 시트·큰 패널 */
+  --radius-xl:  16px;
+  --radius-2xl: 26px;   /* 바텀시트 윗모서리 */
   --radius-pill: 999px;
+
+  /* ---- Shapes — 손으로 그린 테두리 -----------------------------------
+     작은 요소는 크게 일렁이고, 큰 패널은 살짝만. border-radius 에 통째로 넣는다. */
+  --shape-btn:   255px 15px 225px 15px / 15px 225px 15px 255px;  /* 버튼 · 칩 · 토스트 */
+  --shape-tag:   15px 255px 15px 225px / 225px 15px 255px 15px;  /* 배지 */
+  --shape-panel: 16px 5px 14px 6px / 6px 14px 5px 16px;          /* 카드 · 표 · 모달 */
+  --shape-box:   12px 4px 10px 5px / 5px 10px 4px 12px;          /* 알림 · 메뉴 · 세그먼트 */
+  --shape-field: 10px 4px 10px 4px / 4px 10px 4px 10px;          /* 입력칸 */
+  --shape-blob:  50% 45% 52% 48% / 48% 52% 45% 50%;              /* 아바타 · 원형 아이콘 */
 
   /* ---- Control heights --------------------------------------------- */
   --control-xs: 28px;
   --control-sm: 32px;
   --control-md: 40px;   /* 기본 */
-  --control-lg: 48px;   /* 모바일 주요 액션 (44px 터치 타깃 이상) */
+  --control-lg: 52px;   /* 화면의 주요 액션 하나 (제목 서체) */
+
+  /* ---- 장식 --------------------------------------------------------- */
+  /* 종이 결 — body 배경에 깐다 */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.33 0 0 0 0 0.3 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  /* 형광펜 — 강조할 단어 · 현재 메뉴 아래 별 노랑 */
+  --highlight: linear-gradient(transparent 50%, var(--star) 50%, var(--star) 92%, transparent 92%);
+  /* 지그재그 — 활성 탭 밑줄 · 구분선 */
+  --zigzag: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='10'%3E%3Cpath d='M0 7 L4 2 L8 7 L12 2 L16 7' fill='none' stroke='%23000' stroke-width='2.2' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E");
+  /* 별 세 개 — 페이지 제목 옆 */
+  --doodle-stars: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 48'%3E%3Cpolygon points='41.7,2.5 42.9,12.9 53.0,16.0 43.4,20.4 43.5,30.9 36.4,23.2 26.5,26.6 31.6,17.4 25.3,9.0 35.6,11.1' fill='%23F1DE6E' stroke='%23000' stroke-width='1.8' stroke-linejoin='round'/%3E%3Cpolygon points='10.2,13.9 14.3,19.2 20.8,17.5 17.0,23.1 20.6,28.7 14.2,26.8 9.9,32.0 9.7,25.3 3.5,22.9 9.8,20.6' fill='%23F1DE6E' stroke='%23000' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpolygon points='49.1,33.3 48.5,37.8 52.4,40.2 47.9,41.0 46.8,45.4 44.7,41.5 40.1,41.8 43.2,38.5 41.5,34.3 45.6,36.2' fill='%23F1DE6E' stroke='%23000' stroke-width='1.4' stroke-linejoin='round'/%3E%3C/svg%3E");
+
+  /* ---- Focus -------------------------------------------------------
+     잉크 2px 안쪽 + 별 노랑 3px 바깥. 종이 위에서도 노랑만으로 사라지지 않는다. */
+  --focus-ring: 0 0 0 2px var(--ink), 0 0 0 5px var(--star);
+  --focus-field: 0 0 0 3px var(--star);
 
   /* ---- Elevation ---------------------------------------------------
-     Deel 문법을 따라 기본 서피스는 그림자 없이 보더로 구분한다.
-     그림자는 실제로 떠 있는 것(팝오버·시트·모달)에만 쓴다. */
+     서피스는 잉크 선으로 나누고 그림자를 쓰지 않는다.
+     실제로 떠 있는 것(메뉴 · 팝오버)에만 옅은 그림자를 남긴다. */
   --shadow-none: none;
-  --shadow-popover: 0 4px 16px rgba(27, 27, 27, 0.10);
-  --shadow-overlay: 0 12px 40px rgba(27, 27, 27, 0.16);
+  --shadow-popover: 0 8px 24px rgba(20, 19, 17, 0.12);
+  --shadow-overlay: 0 18px 48px rgba(20, 19, 17, 0.18);
 
-  --overlay-scrim: rgba(27, 27, 27, 0.45);
+  --overlay-scrim: rgba(20, 19, 17, 0.45);
 
   /* ---- Motion ------------------------------------------------------- */
   --ease: cubic-bezier(0.2, 0, 0, 1);
@@ -136,13 +213,13 @@
 /* 데스크탑 — 전체 폭을 쓰고 여백만 넓힌다 */
 @media (min-width: 1280px) {
   :root {
-    --shell-gutter: var(--space-7);
+    --shell-gutter: var(--space-8);
     --header-height: 64px;
   }
 }
 
 @media (min-width: 1600px) {
-  :root { --shell-gutter: var(--space-8); }
+  :root { --shell-gutter: var(--space-9); }
 }
 
 @media (prefers-reduced-motion: reduce) {

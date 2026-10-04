@@ -392,7 +392,7 @@ function FaqList({ initialTab = 'chats', basePath = '/faq' }) {
                   <div className="swipeable-actions" style={{ gap: 'var(--spacing-xs)' }}>
                     <button
                       className="swipeable-action-btn"
-                      style={{ backgroundColor: 'var(--color-gray-600)', color: 'white' }}
+                      style={{ backgroundColor: 'var(--color-gray-600)', color: 'var(--paper)' }}
                       onClick={() => openEdit(faq)}
                       aria-label="수정"
                     >

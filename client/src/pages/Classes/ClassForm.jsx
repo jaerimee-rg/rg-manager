@@ -64,7 +64,7 @@ function ClassForm() {
     <div className="animate-fadeIn">
       {/* Page Header */}
       <div className="page-header">
-        <h2 className="page-title">{isEditing ? '수업 수정' : '새 수업 등록'}</h2>
+        <h2 className="page-title page-title--sub">{isEditing ? '수업 수정' : '새 수업 등록'}</h2>
         <button
           className="btn btn-secondary"
           onClick={() => navigate('/classes')}

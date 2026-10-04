@@ -160,8 +160,8 @@ function AdminSettings() {
 
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-            <div className="skeleton" style={{ height: 84, borderRadius: 'var(--radius-md)' }}></div>
-            <div className="skeleton" style={{ height: 84, borderRadius: 'var(--radius-md)' }}></div>
+            <div className="skeleton" style={{ height: 84, borderRadius: 'var(--shape-box)' }}></div>
+            <div className="skeleton" style={{ height: 84, borderRadius: 'var(--shape-box)' }}></div>
           </div>
         ) : (
           <>
@@ -187,7 +187,7 @@ function AdminSettings() {
                       gap: 'var(--spacing-md)',
                       padding: 'var(--spacing-lg)',
                       border: `2px solid ${isSelected ? accent : 'var(--color-gray-200)'}`,
-                      borderRadius: 'var(--radius-md)',
+                      borderRadius: 'var(--shape-box)',
                       backgroundColor: isSelected ? 'var(--color-gray-50)' : 'transparent',
                       cursor: p.configured ? 'pointer' : 'not-allowed',
                       opacity: p.configured ? 1 : 0.6

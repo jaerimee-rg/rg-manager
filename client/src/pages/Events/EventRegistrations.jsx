@@ -144,7 +144,7 @@ function EventRegistrations({ eventId, onClose, onChanged }) {
     >
       <div className="ui-registrations__header">
         <div className="ui-registrations__heading">
-          <h3 style={{ fontSize: '1rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <h3 className="ui-display" style={{ fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             {data ? (
               <>
                 <span className={`badge ${meta.className}`}>{meta.emoji} {meta.short}</span>
@@ -186,7 +186,7 @@ function EventRegistrations({ eventId, onClose, onChanged }) {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
                 {data.summary.map((s) => (
                   <span key={s.id} style={{
-                    background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-sm)', padding: '6px 10px',
+                    background: 'var(--bg-tertiary)', border: 'var(--stroke-thin)', borderRadius: 'var(--shape-btn)', padding: '6px 10px',
                     fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-gray-700)'
                   }}>
                     {s.label}<b style={{ color: 'var(--color-primary)', marginLeft: '4px' }}>{s.count}</b>
@@ -229,7 +229,7 @@ function EventRegistrations({ eventId, onClose, onChanged }) {
                         <div style={{ marginTop: '4px' }}>
                           {r.options.map((o) => (
                             <span key={o.id} style={{
-                              display: 'inline-block', background: 'var(--color-gray-100)', borderRadius: '4px',
+                              display: 'inline-block', background: 'var(--color-gray-100)', borderRadius: 'var(--shape-tag)',
                               padding: '2px 6px', margin: '2px 3px 0 0', fontSize: '0.75rem'
                             }}>
                               {o.label}
@@ -241,7 +241,7 @@ function EventRegistrations({ eventId, onClose, onChanged }) {
 
                     {data.event.type === 'competition' && r.status === 'registered' && (
                       <button type="button" className="btn btn-sm" disabled={busy} onClick={() => confirmOne(r.id)}
-                        style={{ background: 'var(--color-success-bg)', color: '#059669' }}>
+                        style={{ background: 'var(--color-success-bg)', color: 'var(--ink-900)' }}>
                         확정
                       </button>
                     )}
@@ -260,7 +260,7 @@ function EventRegistrations({ eventId, onClose, onChanged }) {
         <div className="ui-registrations__footer">
           {data.event.type === 'competition' ? (
             <button type="button" className="btn btn-sm" disabled={busy || pendingCount === 0} onClick={confirmAll}
-              style={{ background: 'var(--color-success-bg)', color: '#059669' }}>
+              style={{ background: 'var(--color-success-bg)', color: 'var(--ink-900)' }}>
               ✓ 일괄 확정 ({pendingCount})
             </button>
           ) : (

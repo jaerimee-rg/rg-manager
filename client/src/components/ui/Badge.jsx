@@ -3,8 +3,10 @@ import React from 'react';
 const cx = (...parts) => parts.filter(Boolean).join(' ');
 
 /**
- * 상태 배지. tone: neutral | brand | success | warning | danger | solid
- * dot 을 주면 앞에 점이 붙는다(Deel 의 상태 표기 방식).
+ * 상태 배지. tone:
+ *   neutral(종이) · brand(옅은 별) · success(별 노랑 — 활동 중·완료) · warning(옅은 별 + 점선 — 확인 필요)
+ *   danger(빨강 — 오류) · solid(잉크 — 확정) · muted(연필 점선 — 대기·비활성)
+ * dot 을 주면 앞에 점이 붙는다.
  */
 export function Badge({ children, tone = 'neutral', size, dot = false, className = '', ...rest }) {
   return (

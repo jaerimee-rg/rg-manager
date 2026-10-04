@@ -107,8 +107,8 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
             <span
               key={tag.studentId}
               style={{
-                background: 'rgba(49,130,246,.9)', color: '#fff', fontSize: '0.6875rem', fontWeight: 800,
-                padding: '3px 9px', borderRadius: 'var(--radius-full)'
+                background: 'var(--star)', color: 'var(--ink)', fontSize: '0.6875rem', fontWeight: 800,
+                padding: '3px 9px', borderRadius: 'var(--shape-tag)'
               }}
             >{tag.name || '우리 아이'}</span>
           ))}
@@ -121,7 +121,7 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
             target="_blank"
             rel="noopener noreferrer"
             style={{
-              flex: 1, background: 'var(--color-primary)', color: '#fff', minHeight: '42px',
+              flex: 1, background: 'var(--star)', color: 'var(--ink)', minHeight: '42px',
               fontSize: '0.875rem', textDecoration: 'none'
             }}
           >⬇ 저장</a>
@@ -141,7 +141,7 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
               className="btn"
               onClick={() => onDelete(item)}
               style={{
-                background: 'rgba(255,72,72,.22)', color: '#FFB4B4', minHeight: '42px',
+                background: 'rgba(255,72,72,.22)', color: 'var(--alert-soft)', minHeight: '42px',
                 fontSize: '0.875rem', padding: '0 14px', border: 'none', fontFamily: 'inherit'
               }}
             >삭제</button>

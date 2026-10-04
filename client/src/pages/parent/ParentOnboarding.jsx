@@ -86,10 +86,10 @@ function ParentOnboarding({ teachers = [], onDone }) {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', padding: '24px 16px' }}>
       <form onSubmit={submit} style={{
-        maxWidth: '480px', margin: '0 auto', background: '#fff',
-        borderRadius: 'var(--radius-lg)', padding: '24px 20px'
+        maxWidth: '480px', margin: '0 auto', background: 'var(--surface)',
+        border: 'var(--stroke)', borderRadius: 'var(--shape-panel)', padding: '24px 20px'
       }}>
-        <h1 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '6px' }}>아이 정보를 알려 주세요</h1>
+        <h1 className="ui-display" style={{ fontSize: '1.25rem', marginBottom: '6px' }}>아이 정보를 알려 주세요</h1>
         <p style={{ fontSize: '0.9rem', color: 'var(--color-gray-600)', lineHeight: 1.6, marginBottom: '20px' }}>
           {selectedName ? `${selectedName} 선생님이 ` : '선생님이 '}등록한 학생 정보와 대조해 자동으로 연결해요.
           아이가 여러 명이면 모두 추가해 주세요.
@@ -104,7 +104,7 @@ function ParentOnboarding({ teachers = [], onDone }) {
               id="onboarding-teacher"
               value={teacherId}
               onChange={(e) => setTeacherId(e.target.value)}
-              style={{ width: '100%', padding: '12px', border: '1px solid var(--color-gray-300)', borderRadius: 'var(--radius-md)', fontSize: '16px', fontFamily: 'inherit', background: '#fff' }}
+              style={{ width: '100%', padding: '12px', border: 'var(--stroke-thin)', borderRadius: 'var(--shape-field)', fontSize: '16px', fontFamily: 'inherit', background: 'var(--field)' }}
             >
               <option value="">선생님을 선택해 주세요</option>
               {teachers.map((teacher) => (
@@ -119,7 +119,7 @@ function ParentOnboarding({ teachers = [], onDone }) {
             key={index}
             style={{
               background: 'var(--bg-tertiary)', border: '1px solid var(--color-gray-200)',
-              borderRadius: 'var(--radius-md)', padding: '14px', marginBottom: '10px', position: 'relative'
+              borderRadius: 'var(--shape-box)', padding: '14px', marginBottom: '10px', position: 'relative'
             }}
           >
             <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '8px' }}>
@@ -147,7 +147,7 @@ function ParentOnboarding({ teachers = [], onDone }) {
                   id={`child-name-${index}`} type="text" value={child.name} maxLength={20}
                   onChange={(e) => update(index, { name: e.target.value })}
                   placeholder="예: 김민서"
-                  style={{ width: '100%', padding: '12px', border: '1px solid var(--color-gray-300)', borderRadius: 'var(--radius-md)', fontSize: '16px' }}
+                  style={{ width: '100%', padding: '12px', border: 'var(--stroke-thin)', borderRadius: 'var(--shape-field)', background: 'var(--field)', fontSize: '16px' }}
                 />
               </div>
               <div>
@@ -157,7 +157,7 @@ function ParentOnboarding({ teachers = [], onDone }) {
                 <input
                   id={`child-birth-${index}`} type="date" value={child.birthdate}
                   onChange={(e) => update(index, { birthdate: e.target.value })}
-                  style={{ width: '100%', padding: '12px', border: '1px solid var(--color-gray-300)', borderRadius: 'var(--radius-md)', fontSize: '16px' }}
+                  style={{ width: '100%', padding: '12px', border: 'var(--stroke-thin)', borderRadius: 'var(--shape-field)', background: 'var(--field)', fontSize: '16px' }}
                 />
               </div>
             </div>
@@ -168,9 +168,9 @@ function ParentOnboarding({ teachers = [], onDone }) {
           type="button"
           onClick={() => setChildren((prev) => [...prev, emptyChild()])}
           style={{
-            width: '100%', border: '1px dashed var(--color-gray-300)', background: '#fff',
+            width: '100%', border: 'var(--stroke-width-thin) dashed var(--ink)', background: 'var(--field)',
             color: 'var(--color-primary)', fontWeight: 700, padding: '12px',
-            borderRadius: 'var(--radius-md)', cursor: 'pointer', fontSize: '0.875rem', marginBottom: '14px'
+            borderRadius: 'var(--shape-btn)', cursor: 'pointer', fontSize: '0.875rem', marginBottom: '14px'
           }}
         >
           + 아이 추가
@@ -185,7 +185,7 @@ function ParentOnboarding({ teachers = [], onDone }) {
             id="parent-name" type="text" value={parentName} maxLength={PARENT_NAME_MAX}
             onChange={(e) => { setNameTouched(true); setParentName(e.target.value); }}
             placeholder="예: 예림엄마"
-            style={{ width: '100%', padding: '12px', border: '1px solid var(--color-gray-300)', borderRadius: 'var(--radius-md)', fontSize: '16px' }}
+            style={{ width: '100%', padding: '12px', border: 'var(--stroke-thin)', borderRadius: 'var(--shape-field)', background: 'var(--field)', fontSize: '16px' }}
           />
           <div style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', marginTop: '6px', lineHeight: 1.5 }}>
             선생님에게 이 이름으로 보여요. 원하시는 호칭으로 바꿔도 좋아요 (내 정보에서 언제든 변경).
@@ -200,7 +200,7 @@ function ParentOnboarding({ teachers = [], onDone }) {
         {error && (
           <div role="alert" style={{
             background: 'var(--color-danger-bg)', color: 'var(--color-danger)',
-            padding: '10px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.8125rem', marginBottom: '12px'
+            padding: '10px 12px', borderRadius: 'var(--shape-box)', fontSize: '0.8125rem', marginBottom: '12px'
           }}>
             {error}
           </div>

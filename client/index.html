@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <!-- viewport-fit=cover 라야 env(safe-area-inset-*) 이 값을 갖는다 (하단 시트·고정 액션 바) -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#F7F7F5">
+  <meta name="theme-color" content="#ECE9E2">
   <meta name="color-scheme" content="light">
   <title>JR 리듬체조</title>
   <meta name="description" content="JR 리듬체조 — 리듬체조 수업 출석, 이벤트 신청, 학부모 소통을 한곳에서 관리하는 앱이에요.">
@@ -31,20 +31,29 @@
   <meta name="twitter:image" content="https://rg-manager.vercel.app/og-image.png">
 
   <!--
-    Pretendard. 디자인 토큰이 이 서체를 전제로 하는데 그동안 실제로 불러오지 않아
-    시스템 서체로 대체돼 있었다. 본문에 쓰는 400·500·600 만 받는다.
+    서체 세 가지 (styles/tokens.css 의 --font-display / --font-sans / --font-hand)
+    - Black Han Sans: 페이지·카드·모달 제목, 통계 숫자 (굵기 하나뿐)
+    - Pretendard Variable: 본문·UI 전부
+    - Gaegu: 도움말·빈 화면처럼 말을 거는 한두 줄 (손글씨)
+    display=swap 이라 서체가 늦게 와도 글자가 먼저 보인다.
   -->
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
     rel="stylesheet"
     href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+  >
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gaegu:wght@400;700&display=swap"
   >
 
   <!-- 첫 로딩 (앱 코드를 받는 동안): 앱의 로딩 표시(components/ui/Spinner)와 같은 튀는 로고.
        React 가 뜨면 #root 안이 통째로 바뀐다. -->
   <style>
-    html { background: #F7F7F5; }
-    .boot { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; margin: 0; font-family: 'Pretendard Variable', Pretendard, -apple-system, 'Apple SD Gothic Neo', sans-serif; font-size: 14px; color: #8A8A8A; }
+    html { background: #ECE9E2; }  /* --paper */
+    .boot { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; margin: 0; font-family: 'Pretendard Variable', Pretendard, -apple-system, 'Apple SD Gothic Neo', sans-serif; font-size: 14px; color: #6E6C67; }  /* --pencil */
     .boot-hop { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: 84px; height: 122px; }
     .boot-hop img { display: block; width: 100%; height: auto; transform-origin: 50% 100%; animation: boot-hop .9s cubic-bezier(.33, 0, .45, 1) infinite; }
     .boot-hop::after { content: ""; width: 66%; height: 8px; margin-top: -3px; border-radius: 50%; background: rgba(0, 0, 0, .18); animation: boot-shadow .9s cubic-bezier(.33, 0, .45, 1) infinite; }

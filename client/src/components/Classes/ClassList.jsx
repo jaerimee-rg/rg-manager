@@ -258,7 +258,7 @@ function ClassList({ basePath = '/classes' }) {
                 <div className="swipeable-actions" style={{ gap: 'var(--spacing-xs)' }}>
                   <button
                     className="swipeable-action-btn"
-                    style={{ backgroundColor: 'var(--color-secondary, #6c757d)', color: 'white' }}
+                    style={{ backgroundColor: 'var(--ink-600)', color: 'var(--paper)' }}
                     onClick={() => handleEdit(classItem)}
                   >
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

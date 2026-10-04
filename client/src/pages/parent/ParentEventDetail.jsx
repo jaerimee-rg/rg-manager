@@ -300,7 +300,7 @@ function ParentEventDetail() {
                 whiteSpace: 'pre-wrap',
                 background: 'var(--surface-muted)',
                 border: '1px solid var(--border)',
-                borderRadius: 'var(--radius-lg)',
+                borderRadius: 'var(--shape-box)',
                 padding: 'var(--space-3)',
                 color: 'var(--ink-700)'
               }}

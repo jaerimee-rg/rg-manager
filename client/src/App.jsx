@@ -31,7 +31,7 @@ import ParentApp from './components/parent/ParentApp';
 import RoleSwitcher from './components/common/RoleSwitcher';
 import ImpersonationBanner from './components/common/ImpersonationBanner';
 import RememberReturnTo from './components/common/RememberReturnTo';
-import { Brand, Spinner } from './components/ui';
+import { Brand, Icon, Spinner } from './components/ui';
 
 // Admin components
 import AdminRoute from './components/admin/AdminRoute';
@@ -169,16 +169,17 @@ function App() {
   }
 
   const navLinks = [
-    { path: '/', label: '대시보드', icon: '📊' },
-    { path: '/students', label: '학생 관리', icon: '👥' },
-    { path: '/classes', label: '수업 관리', icon: '📚' },
-    { path: '/events', label: '이벤트 관리', icon: '📅' },
-    { path: '/attendance', label: '출석 체크', icon: '✓' },
-    { path: '/student-attendance', label: '학생별 출석', icon: '📋' },
-    { path: '/student-competitions', label: '학생별 대회', icon: '🎖️' },
-    { path: '/parents', label: '학부모', icon: '👨‍👩‍👧' },
-    { path: '/faq', label: 'FAQ', icon: '💬' },
-    { path: '/products', label: '추천 상품', icon: '🛍️' },
+    // icon 은 components/ui/Icon 의 이름 (이모지는 기기마다 모양이 달라 쓰지 않는다)
+    { path: '/', label: '대시보드', icon: 'home' },
+    { path: '/students', label: '학생 관리', icon: 'users' },
+    { path: '/classes', label: '수업 관리', icon: 'book' },
+    { path: '/events', label: '이벤트 관리', icon: 'calendar' },
+    { path: '/attendance', label: '출석 체크', icon: 'checkCircle' },
+    { path: '/student-attendance', label: '학생별 출석', icon: 'clipboard' },
+    { path: '/student-competitions', label: '학생별 대회', icon: 'award' },
+    { path: '/parents', label: '학부모', icon: 'heart' },
+    { path: '/faq', label: 'FAQ', icon: 'message' },
+    { path: '/products', label: '추천 상품', icon: 'bag' },
   ];
 
 
@@ -286,7 +287,7 @@ function App() {
                 onClick={closeMobileMenu}
                 className={`mobile-menu-item ${isActive(link.path) ? 'active' : ''}`}
               >
-                <span className="mobile-menu-icon">{link.icon}</span>
+                <span className="mobile-menu-icon"><Icon name={link.icon} size={20} /></span>
                 <span className="mobile-menu-label">{link.label}</span>
               </Link>
             ))}
@@ -303,14 +304,14 @@ function App() {
               onClick={closeMobileMenu}
               className={`mobile-menu-item ${isActive('/settings') ? 'active' : ''}`}
             >
-              <span className="mobile-menu-icon">⚙️</span>
+              <span className="mobile-menu-icon"><Icon name="settings" size={20} /></span>
               <span className="mobile-menu-label">설정</span>
             </Link>
             <button
               onClick={handleLogout}
               className="mobile-menu-item"
             >
-              <span className="mobile-menu-icon">🚪</span>
+              <span className="mobile-menu-icon"><Icon name="logout" size={20} /></span>
               <span className="mobile-menu-label">로그아웃</span>
             </button>
           </div>

@@ -33,8 +33,8 @@ function AdminParents() {
           onChange={(e) => setSelected(e.target.value)}
           aria-label="선생님 선택"
           style={{
-            padding: '10px 12px', border: '1px solid var(--color-gray-300)',
-            borderRadius: 'var(--radius-md)', fontSize: '0.9375rem', background: '#fff'
+            padding: '10px 12px', border: 'var(--stroke-thin)',
+            borderRadius: 'var(--shape-field)', fontSize: '0.9375rem', background: 'var(--field)'
           }}
         >
           <option value="all">전체 선생님</option>

@@ -91,7 +91,7 @@ function ChildFaceCard({ children = [], onChanged }) {
 
   return (
     <div className="card" style={{ padding: '16px', marginBottom: '12px' }}>
-      <h3 style={{ fontSize: '0.8125rem', fontWeight: 800, color: 'var(--color-gray-500)', marginBottom: '10px' }}>
+      <h3 className="ui-display" style={{ fontSize: 'var(--display-sm)', marginBottom: '10px' }}>
         우리 아이 사진 찾기
       </h3>
 
@@ -108,7 +108,7 @@ function ChildFaceCard({ children = [], onChanged }) {
           <div key={child.id} style={{ borderTop: '1px solid var(--color-gray-100)', paddingTop: '12px', marginTop: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
               <span style={{
-                width: '38px', height: '38px', borderRadius: '50%', background: 'var(--color-primary-bg)',
+                width: '38px', height: '38px', borderRadius: 'var(--shape-blob)', background: 'var(--color-primary-bg)',
                 color: 'var(--color-primary)', fontWeight: 800, display: 'inline-flex',
                 alignItems: 'center', justifyContent: 'center'
               }}>{(child.childName || '?').charAt(0)}</span>
@@ -126,7 +126,7 @@ function ChildFaceCard({ children = [], onChanged }) {
             {consentChildId === child.id ? (
               <div style={{
                 background: 'var(--bg-tertiary)', border: '1px solid var(--color-gray-200)',
-                borderRadius: 'var(--radius-md)', padding: '12px'
+                borderRadius: 'var(--shape-box)', padding: '12px'
               }}>
                 <label style={{
                   display: 'flex', gap: '8px', alignItems: 'flex-start', fontSize: '0.75rem',
@@ -190,13 +190,13 @@ function ChildFaceCard({ children = [], onChanged }) {
       {message && (
         <div role="status" style={{
           background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)', fontSize: '0.8125rem',
-          padding: '11px 12px', borderRadius: 'var(--radius-md)', lineHeight: 1.55, marginTop: '12px'
+          padding: '11px 12px', borderRadius: 'var(--shape-box)', lineHeight: 1.55, marginTop: '12px'
         }}>{message}</div>
       )}
 
       <div style={{
         background: 'var(--color-gray-100)', color: 'var(--color-gray-600)', fontSize: '0.75rem',
-        padding: '11px 12px', borderRadius: 'var(--radius-md)', lineHeight: 1.55, marginTop: '12px'
+        padding: '11px 12px', borderRadius: 'var(--shape-box)', lineHeight: 1.55, marginTop: '12px'
       }}>
         아이당 최대 3장까지 등록할 수 있어요. 등록하면 지난 앨범에서도 바로 찾아드려요.
       </div>

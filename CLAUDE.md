@@ -52,7 +52,7 @@ Client and server have **separate** Jest setups and are run from their own direc
 there is no root `package.json`, so there is no one command that runs everything.
 
 ```bash
-cd client && npm test          # jest — 895 tests / 66 suites
+cd client && npm test          # jest — 951 tests / 71 suites
 cd server && npm test          # 1094 tests / 52 suites
 ```
 
@@ -152,9 +152,25 @@ import { Button, Card, DataTable, Modal, PageHeader } from '../components/ui';
   so unmigrated screens follow the new look. `--radius-sm/md/lg/xl` are deliberately **not**
   aliased there — redefining them would override the new components. New code must not use
   these legacy classes.
-- The visual language follows Deel's design-system *structure* (flat 1px-bordered surfaces,
-  no shadows except on floating things, 10/16/24 radii, 40px controls, pill badges, 14/24
-  body, 400·500 weights). Color and typeface stay rg-manager's own.
+- The visual language is **ink on paper** (from the click mockup in the sibling `mockup/` folder,
+  outside the repo): paper background (`--paper` + `--grain`), black-ink strokes instead of shadows
+  (`--stroke` 2px on cards/tables/buttons, `--stroke-thin` 1.5px on inputs/badges/chips), hand-drawn
+  wobbly radii (`--shape-panel/box/field/btn/tag/blob`), and **one accent, star yellow** (`--star`).
+  Red (`--alert`) only for errors and irreversible actions; Kakao yellow only on the Kakao button.
+  No blue or green anywhere — `--brand-*` is now the star-yellow ramp and **yellow is never a text
+  color** (a unit test enforces both).
+- **Fonts**: titles (page/card/modal titles, stat numbers, `Button size="lg"`) use **Black Han Sans**
+  (`--font-display`, single weight — never set `font-weight`, `font-synthesis: none` stops faux bold);
+  body/UI uses **Pretendard Variable** (`--font-sans`); field hints and empty-state copy use the
+  **Gaegu** hand font (`--font-hand`). `client/index.html` loads Pretendard from jsDelivr and the other
+  two from Google Fonts.
+- Decorations: three stars beside list-page titles (`PageHeader` adds them unless `onBack`; `doodle`
+  prop overrides), a zigzag under the active tab (`--zigzag`, `<Divider variant="zig" />`), and a
+  highlighter under the current menu item (`--highlight`).
+- Legacy aliases in `App.css`: `--color-primary` is **ink** (old screens use it both as text color and
+  as the background of white-text buttons, so yellow would be unreadable); only `--color-primary-bg`
+  is light yellow. Raw `input[type=text]` etc. selectors out-rank `.ui-input`, so the bridge styles
+  every input there.
 
 **Mobile Responsiveness Pattern**:
 Responsiveness is **CSS's job**, not JSX's. Breakpoints: mobile `<768`, tablet `768–1279`,
@@ -626,9 +642,12 @@ cd ../server && DATABASE_URL=postgresql://<user>@localhost:5432/rg_manager PORT=
   JWT_SECRET=local-dev-secret API_RATE_LIMIT_MAX=100000 AUTH_RATE_LIMIT_MAX=100000 \
   SUPABASE_URL=http://localhost:5056 SUPABASE_SECRET_KEY=e2e-fake node server.js &
 cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e:setup   # writes e2e/.sessions.json
-cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 82 tests
+cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 92 tests
 ```
 
+- **`design` project** (`e2e/design.spec.mjs`) checks the redesign in a real browser — computed
+  colors/strokes/fonts and the three role shells. Its font-download test needs the jsDelivr/Google Fonts
+  CDNs and **skips** when they are unreachable.
 - **The fake storage is optional** — it lets the shop photo tests upload for real (`client/e2e/fake-storage.mjs`
   mimics the three Storage REST calls `server/utils/storage.js` makes and keeps files in memory; `GET /__files`
   lists them). Without `SUPABASE_URL`/`SUPABASE_SECRET_KEY` the server reports `storageReady:false` and the

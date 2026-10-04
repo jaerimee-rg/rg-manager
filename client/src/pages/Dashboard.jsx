@@ -462,7 +462,7 @@ function Dashboard() {
                               alignItems: 'center',
                               justifyContent: 'center',
                               padding: '4px 8px',
-                              borderRadius: 'var(--radius-sm)',
+                              borderRadius: 'var(--shape-tag)',
                               backgroundColor: day.count > 0 ? 'var(--color-primary-bg)' : 'var(--color-gray-100)',
                               color: day.count > 0 ? 'var(--color-primary)' : 'var(--color-gray-400)',
                               fontWeight: 600,
@@ -525,10 +525,10 @@ function Dashboard() {
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'var(--bg-secondary)',
-                    border: '1px solid var(--color-gray-200)',
-                    borderRadius: 'var(--radius-md)',
-                    boxShadow: 'var(--shadow-md)'
+                    backgroundColor: 'var(--surface)',
+                    border: 'var(--stroke-thin)',
+                    borderRadius: 'var(--shape-box)',
+                    boxShadow: 'var(--shadow-popover)'
                   }}
                   labelStyle={{ color: 'var(--color-gray-700)', fontWeight: 600 }}
                   formatter={(value) => [`${value}회`, '출석']}
@@ -567,10 +567,10 @@ function Dashboard() {
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'var(--bg-secondary)',
-                    border: '1px solid var(--color-gray-200)',
-                    borderRadius: 'var(--radius-md)',
-                    boxShadow: 'var(--shadow-md)'
+                    backgroundColor: 'var(--surface)',
+                    border: 'var(--stroke-thin)',
+                    borderRadius: 'var(--shape-box)',
+                    boxShadow: 'var(--shadow-popover)'
                   }}
                   labelStyle={{ color: 'var(--color-gray-700)', fontWeight: 600 }}
                   formatter={(value) => [`${value}회`, '출석']}
@@ -618,10 +618,10 @@ function Dashboard() {
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'var(--bg-secondary)',
-                    border: '1px solid var(--color-gray-200)',
-                    borderRadius: 'var(--radius-md)',
-                    boxShadow: 'var(--shadow-md)'
+                    backgroundColor: 'var(--surface)',
+                    border: 'var(--stroke-thin)',
+                    borderRadius: 'var(--shape-box)',
+                    boxShadow: 'var(--shadow-popover)'
                   }}
                   labelStyle={{ color: 'var(--color-gray-700)', fontWeight: 600 }}
                   formatter={(value) => [`${value}명`, '참여 학생']}
@@ -660,10 +660,10 @@ function Dashboard() {
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'var(--bg-secondary)',
-                    border: '1px solid var(--color-gray-200)',
-                    borderRadius: 'var(--radius-md)',
-                    boxShadow: 'var(--shadow-md)'
+                    backgroundColor: 'var(--surface)',
+                    border: 'var(--stroke-thin)',
+                    borderRadius: 'var(--shape-box)',
+                    boxShadow: 'var(--shadow-popover)'
                   }}
                   labelStyle={{ color: 'var(--color-gray-700)', fontWeight: 600 }}
                   formatter={(value) => [`${value}명`, '참여 학생']}
@@ -718,10 +718,10 @@ function Dashboard() {
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'var(--bg-secondary)',
-                    border: '1px solid var(--color-gray-200)',
-                    borderRadius: 'var(--radius-md)',
-                    boxShadow: 'var(--shadow-md)'
+                    backgroundColor: 'var(--surface)',
+                    border: 'var(--stroke-thin)',
+                    borderRadius: 'var(--shape-box)',
+                    boxShadow: 'var(--shadow-popover)'
                   }}
                   labelStyle={{ color: 'var(--color-gray-700)', fontWeight: 600 }}
                   formatter={(value) => [`${value}명`, '참여 학생']}
@@ -765,10 +765,10 @@ function Dashboard() {
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'var(--bg-secondary)',
-                    border: '1px solid var(--color-gray-200)',
-                    borderRadius: 'var(--radius-md)',
-                    boxShadow: 'var(--shadow-md)'
+                    backgroundColor: 'var(--surface)',
+                    border: 'var(--stroke-thin)',
+                    borderRadius: 'var(--shape-box)',
+                    boxShadow: 'var(--shadow-popover)'
                   }}
                   labelStyle={{ color: 'var(--color-gray-700)', fontWeight: 600 }}
                   formatter={(value) => [`${value}명`, '학생 수']}

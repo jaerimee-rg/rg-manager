@@ -68,7 +68,7 @@ function CompetitionForm() {
     <div className="animate-fadeIn">
       {/* Page Header */}
       <div className="page-header">
-        <h2 className="page-title">{isEditing ? '대회 수정' : '새 대회 등록'}</h2>
+        <h2 className="page-title page-title--sub">{isEditing ? '대회 수정' : '새 대회 등록'}</h2>
         <button
           className="btn btn-secondary"
           onClick={() => navigate('/events')}

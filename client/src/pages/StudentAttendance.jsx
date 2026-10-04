@@ -319,7 +319,7 @@ function StudentAttendance() {
                     transform: 'translateY(-50%)',
                     background: 'var(--color-gray-300)',
                     border: 'none',
-                    borderRadius: '50%',
+                    borderRadius: 'var(--shape-blob)',
                     width: '20px',
                     height: '20px',
                     display: 'flex',
@@ -327,7 +327,7 @@ function StudentAttendance() {
                     justifyContent: 'center',
                     cursor: 'pointer',
                     fontSize: '14px',
-                    color: 'white',
+                    color: 'var(--paper)',
                     lineHeight: 1
                   }}
                 >
@@ -344,10 +344,10 @@ function StudentAttendance() {
                   right: 0,
                   maxHeight: '200px',
                   overflowY: 'auto',
-                  backgroundColor: 'white',
-                  border: '1px solid var(--color-gray-200)',
-                  borderRadius: 'var(--radius-md)',
-                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+                  backgroundColor: 'var(--surface)',
+                  border: 'var(--stroke-thin)',
+                  borderRadius: 'var(--shape-box)',
+                  boxShadow: 'var(--shadow-popover)',
                   zIndex: 9999,
                   WebkitOverflowScrolling: 'touch'
                 }}

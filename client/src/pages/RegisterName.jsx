@@ -68,7 +68,7 @@ function RegisterName() {
             width: 80,
             height: 80,
             borderRadius: 'var(--radius-xl)',
-            backgroundColor: '#FEE500',
+            backgroundColor: 'var(--star)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -77,9 +77,8 @@ function RegisterName() {
           }}>
             👋
           </div>
-          <h1 style={{
+          <h1 className="ui-display" style={{
             fontSize: '1.75rem',
-            fontWeight: 700,
             color: 'var(--color-gray-900)',
             marginBottom: 'var(--spacing-sm)'
           }}>
@@ -97,8 +96,8 @@ function RegisterName() {
         {/* Form Card */}
         <div className="card" style={{
           padding: 'var(--spacing-2xl)',
-          border: 'none',
-          boxShadow: 'var(--shadow-md)'
+          border: 'var(--stroke)',
+          borderRadius: 'var(--shape-panel)'
         }}>
           {error && (
             <div className="alert alert-error" style={{ marginBottom: 'var(--spacing-lg)' }}>

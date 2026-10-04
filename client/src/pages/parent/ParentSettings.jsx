@@ -128,7 +128,7 @@ function ParentSettings() {
     <ParentLayout title="내 정보" subtitle={me ? `카카오 · ${me.user.username}` : ''}>
       {/* 선생님에게 보이는 이름. 가입 때 정한 값을 여기서 바꾼다. */}
       <div className="card" style={{ padding: '16px', marginBottom: '12px' }}>
-        <h3 style={{ fontSize: '0.8125rem', fontWeight: 800, color: 'var(--color-gray-500)', marginBottom: '10px' }}>학부모명</h3>
+        <h3 className="ui-display" style={{ fontSize: 'var(--display-sm)', marginBottom: '10px' }}>학부모명</h3>
 
         {editingName ? (
           <form onSubmit={saveName}>
@@ -139,7 +139,7 @@ function ParentSettings() {
               placeholder="예: 예림엄마"
               style={{
                 width: '100%', padding: '12px', fontSize: '16px', marginBottom: '8px',
-                border: '1px solid var(--color-gray-300)', borderRadius: 'var(--radius-md)'
+                border: 'var(--stroke-thin)', borderRadius: 'var(--shape-field)', background: 'var(--field)'
               }}
             />
             {nameError && (
@@ -166,7 +166,7 @@ function ParentSettings() {
       </div>
 
       <div className="card" style={{ padding: '16px', marginBottom: '12px' }}>
-        <h3 style={{ fontSize: '0.8125rem', fontWeight: 800, color: 'var(--color-gray-500)', marginBottom: '10px' }}>내 아이</h3>
+        <h3 className="ui-display" style={{ fontSize: 'var(--display-sm)', marginBottom: '10px' }}>내 아이</h3>
 
         {(me?.children || []).length === 0 && (
           <div style={{ fontSize: '0.875rem', color: 'var(--color-gray-500)', padding: '10px 0' }}>
@@ -182,7 +182,7 @@ function ParentSettings() {
               borderTop: '1px solid var(--color-gray-100)'
             }}>
               <div style={{
-                width: '38px', height: '38px', borderRadius: '50%', flexShrink: 0,
+                width: '38px', height: '38px', borderRadius: 'var(--shape-blob)', flexShrink: 0,
                 background: 'var(--color-primary-bg)', color: 'var(--color-primary)', fontWeight: 800,
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
               }}>
@@ -204,7 +204,7 @@ function ParentSettings() {
         {(me?.children || []).some((c) => c.status !== 'linked') && (
           <div style={{
             marginTop: '10px', background: 'var(--color-gray-100)', color: 'var(--color-gray-600)',
-            padding: '10px 12px', borderRadius: 'var(--radius-md)', fontSize: '0.8125rem', lineHeight: 1.55
+            padding: '10px 12px', borderRadius: 'var(--shape-box)', fontSize: '0.8125rem', lineHeight: 1.55
           }}>
             확인 대기 중인 아이는 선생님이 학생 명단과 연결하면 신청할 수 있어요.
             이름·생년월일이 다르면 선생님께 말씀해 주세요.
@@ -220,8 +220,8 @@ function ParentSettings() {
                 aria-label="선생님 선택"
                 style={{
                   width: '100%', padding: '12px', marginBottom: '8px', fontSize: '16px',
-                  fontFamily: 'inherit', background: '#fff',
-                  border: '1px solid var(--color-gray-300)', borderRadius: 'var(--radius-md)'
+                  fontFamily: 'inherit', background: 'var(--field)',
+                  border: 'var(--stroke-thin)', borderRadius: 'var(--shape-field)'
                 }}
               >
                 <option value="">어느 선생님의 아이인가요?</option>
@@ -234,12 +234,12 @@ function ParentSettings() {
               <input
                 type="text" value={child.name} maxLength={20} placeholder="아이 이름" aria-label="아이 이름"
                 onChange={(e) => setChild((p) => ({ ...p, name: e.target.value }))}
-                style={{ padding: '12px', border: '1px solid var(--color-gray-300)', borderRadius: 'var(--radius-md)', fontSize: '16px' }}
+                style={{ padding: '12px', border: 'var(--stroke-thin)', borderRadius: 'var(--shape-field)', background: 'var(--field)', fontSize: '16px' }}
               />
               <input
                 type="date" value={child.birthdate} aria-label="생년월일"
                 onChange={(e) => setChild((p) => ({ ...p, birthdate: e.target.value }))}
-                style={{ padding: '12px', border: '1px solid var(--color-gray-300)', borderRadius: 'var(--radius-md)', fontSize: '16px' }}
+                style={{ padding: '12px', border: 'var(--stroke-thin)', borderRadius: 'var(--shape-field)', background: 'var(--field)', fontSize: '16px' }}
               />
             </div>
             {error && (
@@ -261,7 +261,7 @@ function ParentSettings() {
 
       <div className="card" style={{ padding: '16px', marginBottom: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '10px' }}>
-          <h3 style={{ fontSize: '0.8125rem', fontWeight: 800, color: 'var(--color-gray-500)', margin: 0 }}>연결된 선생님</h3>
+          <h3 className="ui-display" style={{ fontSize: 'var(--display-sm)', margin: 0 }}>연결된 선생님</h3>
           {!addingTeacher && (
             <button className="btn btn-sm btn-outline" onClick={() => setAddingTeacher(true)}>＋ 선생님 추가</button>
           )}
@@ -269,8 +269,8 @@ function ParentSettings() {
 
         {(me?.teachers || []).length === 0 ? (
           <div style={{
-            background: 'var(--color-warning-bg)', color: '#7A5D00', padding: '10px 12px',
-            borderRadius: 'var(--radius-md)', fontSize: '0.8125rem', lineHeight: 1.55
+            background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '10px 12px',
+            borderRadius: 'var(--shape-box)', fontSize: '0.8125rem', lineHeight: 1.55
           }}>
             연결된 선생님이 없어 일정을 볼 수 없어요.
             선생님께 받은 초대 링크로 연결해 주세요.
@@ -297,7 +297,7 @@ function ParentSettings() {
               type="text" value={invite} aria-label="초대 링크"
               placeholder="선생님께 받은 초대 링크"
               onChange={(e) => setInvite(e.target.value)}
-              style={{ width: '100%', padding: '12px', border: '1px solid var(--color-gray-300)', borderRadius: 'var(--radius-md)', fontSize: '16px' }}
+              style={{ width: '100%', padding: '12px', border: 'var(--stroke-thin)', borderRadius: 'var(--shape-field)', background: 'var(--field)', fontSize: '16px' }}
             />
             {teacherError && (
               <div role="alert" style={{ color: 'var(--color-danger)', fontSize: '0.8125rem', marginTop: '8px' }}>{teacherError}</div>
