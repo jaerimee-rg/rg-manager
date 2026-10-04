@@ -41,6 +41,15 @@ describe('ShopStats (FR-450~455)', () => {
     expect(screen.getByText(/9월 4일부터/)).toBeInTheDocument();
   });
 
+  it('방문은 상점 페이지, 클릭은 구매 링크라고 구분해 적는다 — "링크를 연 횟수" 가 클릭 합계로 읽혔다', async () => {
+    await renderStats();
+    const tile = (label) => screen.getByText(label, { selector: '.ui-stat__label' }).closest('.ui-stat');
+
+    expect(tile('상점 방문')).toHaveTextContent('상점 페이지를 연 횟수');
+    expect(tile('상품 클릭')).toHaveTextContent('구매 링크를 누른 횟수');
+    expect(screen.queryByText('링크를 연 횟수')).not.toBeInTheDocument();
+  });
+
   it('기간을 바꾸면 다시 부른다', async () => {
     await renderStats();
     await act(async () => {
