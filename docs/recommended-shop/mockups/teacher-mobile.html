@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>추천 상품 목업 — 선생님 화면 · 모바일</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../../../client/src/styles/tokens.css">
+<link rel="stylesheet" href="gallery.css">
+</head>
+<body>
+<!-- 화면은 teacher-screens.html 를 iframe 으로 띄운다. 앱의 실제 CSS(client/src/styles)를 쓰므로 저장소 안에서 열어야 한다. -->
+<script>
+window.MOCK = {
+  "page": "teacher-mobile.html",
+  "device": "mobile",
+  "src": "teacher-screens.html",
+  "title": "선생님 화면 · 모바일",
+  "intro": [
+    "선생님 메뉴 <b>추천 상품</b> (<code>/products</code>) — 상품 · 통계 · 설정 탭.",
+    "390px 휴대폰 화면이에요. 모달·시트 화면은 기기 높이로, 나머지는 전체 길이로 보여 줘요. 화면은 앱의 실제 스타일(<code>client/src/styles/tokens.css · ui.css · App.css</code>)과 컴포넌트 DOM 을 그대로 써서 그렸어요. 이번 기능의 스타일도 구현과 함께 <code>ui.css</code> 에 들어갔어요."
+  ],
+  "host": "rg-manager.vercel.app",
+  "width": 390,
+  "height": 780,
+  "screens": [
+    {
+      "s": "list",
+      "title": "상품 목록",
+      "path": "/products",
+      "notes": [
+        "같은 DataTable 정의가 <b>라벨 붙은 카드</b>로 쌓인다 — 모바일용 화면을 따로 만들지 않는다.",
+        "검색은 한 줄을 다 쓰고, 카테고리 칩은 가로로 스크롤. [+ 상품] 은 폭을 채운다(PageHeader 규칙).",
+        "공개 링크 카드의 버튼은 주소 아래로 내려와 반씩 나눈다."
+      ]
+    },
+    {
+      "s": "menu",
+      "title": "모바일 메뉴",
+      "path": "/products",
+      "notes": [
+        "모바일 전체 메뉴에 🛍️ <b>추천 상품</b> 추가."
+      ],
+      "fixed": true
+    },
+    {
+      "s": "create",
+      "title": "상품 등록 — 타이틀 없이 저장을 누른 상태",
+      "path": "/products",
+      "notes": [
+        "바텀시트(위쪽 손잡이). 내용이 길면 시트 안에서 스크롤된다.",
+        "저장·취소는 폭을 채워 세로로 쌓인다 (Modal footer 규칙).",
+        "사진 선택은 휴대폰 갤러리·카메라가 열린다."
+      ],
+      "fixed": true
+    },
+    {
+      "s": "edit",
+      "title": "상품 수정",
+      "path": "/products",
+      "notes": [
+        "사진 미리보기와 [사진 바꾸기] / [사진 빼기]."
+      ],
+      "fixed": true
+    },
+    {
+      "s": "delete",
+      "title": "삭제 확인",
+      "path": "/products",
+      "notes": [
+        "확인 창은 모바일에서도 가운데 작은 모달 (ConfirmDialog = mode=\"modal\")."
+      ],
+      "fixed": true
+    },
+    {
+      "s": "stats",
+      "title": "통계",
+      "path": "/products/stats",
+      "notes": [
+        "Stat 은 2×2. 순위 표도 카드로 쌓인다.",
+        "카테고리별 클릭은 표 아래로."
+      ]
+    },
+    {
+      "s": "settings",
+      "title": "설정 — 상점 정보 · 카테고리",
+      "path": "/products/settings",
+      "notes": [
+        "상점 정보와 카테고리가 위아래로 쌓인다. 저장 버튼은 폭을 채운다."
+      ]
+    },
+    {
+      "s": "empty",
+      "title": "처음 들어왔을 때 (상품 없음)",
+      "path": "/products",
+      "notes": [
+        "첫 진입 안내 + 빈 상태."
+      ]
+    }
+  ]
+};
+</script>
+<script src="gallery.js"></script>
+</body>
+</html>

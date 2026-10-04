@@ -129,6 +129,19 @@ const saveLog = async (req, action, target, responseData) => {
       details = `파일: ${responseData.filename}`;
     } else if (action === 'DELETE_FAQ_FILE' && req.params) {
       details = `파일 ID: ${req.params.id}`;
+    } else if ((action === 'CREATE_SHOP_PRODUCT' || action === 'UPDATE_SHOP_PRODUCT') && responseData?.product) {
+      details = `상품: ${responseData.product.title}` +
+        (action === 'UPDATE_SHOP_PRODUCT' && responseData.product.isVisible === false ? ' (숨김)' : '');
+    } else if (action === 'DELETE_SHOP_PRODUCT' && req.params) {
+      details = `상품 ID: ${req.params.id}`;
+    } else if (action === 'UPLOAD_SHOP_IMAGE' && responseData?.product) {
+      details = `상품 이미지: ${responseData.product.title}`;
+    } else if (action === 'UPDATE_SHOP' && req.body) {
+      details = `상점: ${req.body.title}${req.body.isActive === false ? ' (비공개)' : ''}`;
+    } else if ((action === 'CREATE_SHOP_CATEGORY' || action === 'UPDATE_SHOP_CATEGORY') && responseData?.category) {
+      details = `카테고리: ${responseData.category.name}`;
+    } else if (action === 'DELETE_SHOP_CATEGORY' && req.params) {
+      details = `카테고리 ID: ${req.params.id}`;
     } else if (action === 'UPDATE_AI_PROVIDER' && req.body) {
       details = `AI 제공자: ${req.body.provider}` +
         (req.body.model ? ` / ${req.body.model}` : '') +

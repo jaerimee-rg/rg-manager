@@ -2,7 +2,7 @@ import './loadEnv.js';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import studentRoutes from './routes/students.js';
@@ -19,10 +19,14 @@ import { adminRouter as teacherInviteRoutes, publicRouter as teacherInvitePublic
 import parentRoutes from './routes/parent.js';
 import faqRoutes from './routes/faqs.js';
 import chatRoutes from './routes/chat.js';
+import shopRoutes from './routes/shop.js';
 import {
   RATE_LIMIT_WINDOW_MS,
   PUBLIC_CHAT_READ_MAX,
   PUBLIC_CHAT_WRITE_MAX,
+  PUBLIC_SHOP_READ_MAX,
+  PUBLIC_SHOP_TRACK_MAX,
+  PUBLIC_SHOP_TRACK_IP_MAX,
   visitorKeyGenerator
 } from './utils/rateLimits.js';
 import notificationRoutes from './routes/notifications.js';
@@ -91,9 +95,10 @@ const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: limitFromEnv(process.env.API_RATE_LIMIT_MAX, 200),
   message: { error: '너무 많은 요청입니다. 잠시 후 다시 시도해주세요.' },
-  // 공개 채팅은 아래 전용 한도를 쓴다. 여기서 또 세면 더 낮은 쪽(200, IP 기준)이
+  // 공개 채팅·공개 상점은 아래 전용 한도를 쓴다. 여기서 또 세면 더 낮은 쪽(200, IP 기준)이
   // 실제 상한이 되어 학부모 여러 명이 한 칸을 나눠 쓰게 된다.
-  skip: (req) => req.originalUrl.startsWith('/api/chat/public'),
+  skip: (req) =>
+    req.originalUrl.startsWith('/api/chat/public') || req.originalUrl.startsWith('/api/shop/public'),
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -115,6 +120,34 @@ const publicChatWriteLimiter = rateLimit({
   max: PUBLIC_CHAT_WRITE_MAX,
   message: { error: '질문을 너무 자주 보내셨어요. 잠시 후 다시 시도해주세요.' },
   keyGenerator: visitorKeyGenerator,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// 레이트 리미팅 - 공개 추천 상품(비로그인). 읽기와 방문·클릭 기록을 따로 센다.
+const publicShopReadLimiter = rateLimit({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: PUBLIC_SHOP_READ_MAX,
+  message: { error: '요청이 많습니다. 잠시 후 다시 시도해주세요.' },
+  keyGenerator: visitorKeyGenerator,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const publicShopTrackLimiter = rateLimit({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: PUBLIC_SHOP_TRACK_MAX,
+  message: { error: '요청이 많습니다. 잠시 후 다시 시도해주세요.' },
+  keyGenerator: visitorKeyGenerator,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const publicShopTrackIpLimiter = rateLimit({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: PUBLIC_SHOP_TRACK_IP_MAX,
+  message: { error: '요청이 많습니다. 잠시 후 다시 시도해주세요.' },
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -141,6 +174,11 @@ app.get('/api', (req, res) => {
 // 쓰기 경로를 먼저 걸고, 나머지 공개 채팅 요청은 읽기 한도로 처리한다.
 app.post('/api/chat/public/:publicId/messages', publicChatWriteLimiter);
 app.use('/api/chat/public', publicChatReadLimiter);
+app.use('/api/shop/public', (req, res, next) => {
+  if (req.method === 'GET') return publicShopReadLimiter(req, res, next);
+  // 방문·클릭 기록: 방문자 기준 + IP 기준 두 칸을 모두 통과해야 한다
+  return publicShopTrackIpLimiter(req, res, () => publicShopTrackLimiter(req, res, next));
+});
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/signup', authLimiter);
 app.use('/api/auth/kakao', authLimiter);
@@ -183,6 +221,11 @@ app.use('/api/chat', (req, res, next) => {
   if (req.path.startsWith('/public')) return next();
   return rejectParents(req, res, next);
 }, chatRoutes);
+app.use('/api/shop', (req, res, next) => {
+  // 공개 상점(/api/shop/public/*)은 로그인 없이 누구나 연다. 나머지는 선생님 화면이다.
+  if (req.path.startsWith('/public/')) return next();
+  return rejectParents(req, res, next);
+}, shopRoutes);
 app.use('/api/notifications', rejectParents, notificationRoutes);
 app.use('/api/settings', rejectParents, settingsRoutes);
 app.use('/api/faq-files', (req, res, next) => {

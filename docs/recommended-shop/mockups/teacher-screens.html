@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>추천 상품 — 선생님 화면</title>
+<!-- 앱과 같은 서체·스타일을 그대로 불러온다 (client/index.html, client/src/index.jsx 와 같은 순서) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../../../client/src/styles/tokens.css">
+<link rel="stylesheet" href="../../../client/src/styles/ui.css">
+<link rel="stylesheet" href="../../../client/src/styles/App.css">
+</head>
+<body>
+
+<!--
+  이 파일은 화면 하나를 ?s=<이름> 으로 골라 그린다. 직접 열기보다
+  teacher-desktop.html / teacher-mobile.html 에서 보는 것을 권한다.
+  s: list | create | edit | delete | stats | settings | empty | menu
+-->
+
+<div class="app">
+  <!-- ── 앱 헤더 (App.jsx 의 실제 DOM 그대로, navLinks 에 '추천 상품' 추가) ── -->
+  <header class="app-header">
+    <div class="app-header-inner">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <h1 style="margin-bottom: 0px;">리듬체조 출석</h1>
+        <button class="mobile-menu-button" aria-label="메뉴">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+      </div>
+      <nav class="desktop-nav">
+        <a href="#">대시보드</a>
+        <a href="#">학생 관리</a>
+        <a href="#">수업 관리</a>
+        <a href="#">이벤트 관리</a>
+        <a href="#">출석 체크</a>
+        <a href="#">학생별 출석</a>
+        <a href="#">학생별 대회</a>
+        <a href="#">학부모</a>
+        <a href="#">FAQ</a>
+        <a class="active" href="#">추천 상품</a>
+        <div class="role-switch-menu">
+          <button type="button" class="role-switch-trigger"><span class="badge badge-gray">선생님</span><span class="role-switch-name">이재림</span><span aria-hidden="true">▾</span></button>
+        </div>
+        <a href="#">설정</a>
+        <button class="btn btn-ghost" style="font-size: 0.875rem;">로그아웃</button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ── 모바일 전체 메뉴 (s=menu 일 때 open) ── -->
+  <div class="mobile-menu-overlay" id="mobile-menu">
+    <div class="mobile-menu-header">
+      <span class="mobile-menu-title">메뉴</span>
+      <button class="mobile-menu-close" aria-label="닫기">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="mobile-menu-content">
+      <div class="mobile-menu-section">
+        <div class="mobile-menu-section-title">메인</div>
+        <a class="mobile-menu-item" href="#"><span class="mobile-menu-icon">📊</span><span class="mobile-menu-label">대시보드</span></a>
+        <a class="mobile-menu-item" href="#"><span class="mobile-menu-icon">👥</span><span class="mobile-menu-label">학생 관리</span></a>
+        <a class="mobile-menu-item" href="#"><span class="mobile-menu-icon">📚</span><span class="mobile-menu-label">수업 관리</span></a>
+        <a class="mobile-menu-item" href="#"><span class="mobile-menu-icon">📅</span><span class="mobile-menu-label">이벤트 관리</span></a>
+        <a class="mobile-menu-item" href="#"><span class="mobile-menu-icon">✓</span><span class="mobile-menu-label">출석 체크</span></a>
+        <a class="mobile-menu-item" href="#"><span class="mobile-menu-icon">📋</span><span class="mobile-menu-label">학생별 출석</span></a>
+        <a class="mobile-menu-item" href="#"><span class="mobile-menu-icon">🎖️</span><span class="mobile-menu-label">학생별 대회</span></a>
+        <a class="mobile-menu-item" href="#"><span class="mobile-menu-icon">👨‍👩‍👧</span><span class="mobile-menu-label">학부모</span></a>
+        <a class="mobile-menu-item" href="#"><span class="mobile-menu-icon">💬</span><span class="mobile-menu-label">FAQ</span></a>
+        <a class="mobile-menu-item active" href="#"><span class="mobile-menu-icon">🛍️</span><span class="mobile-menu-label">추천 상품</span></a>
+      </div>
+      <div class="mobile-menu-section">
+        <div class="mobile-menu-section-title">역할</div>
+        <div class="role-switch-list">
+          <button type="button" class="role-switch-item"><span>🛠️ 관리자 화면으로</span><small>이재림</small></button>
+        </div>
+      </div>
+      <div class="mobile-menu-section">
+        <div class="mobile-menu-section-title">계정</div>
+        <a class="mobile-menu-item" href="#"><span class="mobile-menu-icon">⚙️</span><span class="mobile-menu-label">설정</span></a>
+        <button class="mobile-menu-item"><span class="mobile-menu-icon">🚪</span><span class="mobile-menu-label">로그아웃</span></button>
+      </div>
+    </div>
+  </div>
+
+  <main class="app-main" id="main"></main>
+</div>
+
+
+<!-- =============================================================== -->
+<!-- 페이지 머리 — PageHeader + 공개 링크 카드 + Tabs (탭마다 공통)      -->
+<!-- =============================================================== -->
+<template id="head">
+  <header class="ui-page-header">
+    <div class="ui-page-header__top">
+      <div>
+        <h1 class="ui-page-header__title">추천 상품</h1>
+        <p class="ui-page-header__description">학부모에게 권하는 상품을 등록하면, 로그인 없이 볼 수 있는 상점 페이지에 모여요.</p>
+      </div>
+      <div class="ui-page-header__actions" data-only="products">
+        <button type="button" class="ui-btn" data-variant="primary" data-size="md"><i data-icon="plus" data-size="18"></i>상품</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="ui-card" data-padding="md">
+    <div class="ui-row" data-gap="2">
+      <h3 class="ui-card__title">공개 링크</h3>
+      <span class="ui-badge" data-tone="success"><span class="ui-badge__dot"></span>공개 중</span>
+    </div>
+    <p class="ui-card__description">이 주소를 학부모 단톡방에 보내면 로그인 없이 상점을 볼 수 있어요.</p>
+    <div class="shop-link">
+      <input class="ui-input" readonly value="https://rg-manager.vercel.app/shop/xY3kP9qLmT2vB7nR4sWd1A" aria-label="공개 링크">
+      <button type="button" class="ui-btn" data-variant="outline" data-size="md"><i data-icon="link" data-size="18"></i>링크 복사</button>
+      <button type="button" class="ui-btn" data-variant="ghost" data-size="md">미리 보기<i data-icon="external" data-size="18"></i></button>
+    </div>
+  </div>
+
+  <div class="ui-tabs" role="tablist" style="margin-top: var(--space-5);">
+    <button type="button" role="tab" class="ui-tab" data-tab="products">상품<span class="ui-text-muted" data-count> (8)</span></button>
+    <button type="button" role="tab" class="ui-tab" data-tab="stats">통계</button>
+    <button type="button" role="tab" class="ui-tab" data-tab="settings">설정</button>
+  </div>
+</template>
+
+
+<!-- =============================================================== -->
+<!-- 상품 탭 — 검색 + 카테고리 칩 + DataTable                          -->
+<!-- =============================================================== -->
+<template id="page-list">
+  <div class="shop-tools">
+    <div class="ui-search">
+      <i data-icon="search" data-size="16"></i>
+      <input type="search" placeholder="상품 이름 검색 (초성 가능)">
+    </div>
+    <div class="ui-toolbar" data-scroll-mobile="true" role="toolbar">
+      <button type="button" class="ui-chip" aria-pressed="true">전체<span class="ui-chip__count">8</span></button>
+      <button type="button" class="ui-chip" aria-pressed="false">발레복<span class="ui-chip__count">1</span></button>
+      <button type="button" class="ui-chip" aria-pressed="false">레오타드<span class="ui-chip__count">1</span></button>
+      <button type="button" class="ui-chip" aria-pressed="false">기구<span class="ui-chip__count">4</span></button>
+      <button type="button" class="ui-chip" aria-pressed="false">슈즈<span class="ui-chip__count">1</span></button>
+      <button type="button" class="ui-chip" aria-pressed="false">카테고리 없음<span class="ui-chip__count">1</span></button>
+    </div>
+  </div>
+
+  <div class="ui-table-wrap" data-stack-mobile="true">
+    <div class="ui-table__caption">전체 8개 · 공개 7개 — 위에서부터 공개 상점에 보이는 순서예요</div>
+    <table class="ui-table">
+      <thead>
+        <tr>
+          <th scope="col" style="width: 84px;">순서</th>
+          <th scope="col">상품</th>
+          <th scope="col" style="width: 112px;">카테고리</th>
+          <th scope="col" data-numeric="true" style="width: 104px;">가격</th>
+          <th scope="col" style="width: 72px;">공개</th>
+          <th scope="col" data-numeric="true" style="width: 88px;">누적 클릭</th>
+          <th scope="col" style="width: 140px;">관리</th>
+        </tr>
+      </thead>
+      <tbody id="product-rows"></tbody>
+    </table>
+  </div>
+</template>
+
+
+<!-- =============================================================== -->
+<!-- 통계 탭                                                          -->
+<!-- =============================================================== -->
+<template id="page-stats">
+  <div class="ui-toolbar">
+    <div class="ui-segmented" role="group">
+      <button type="button" class="ui-segmented__item" aria-pressed="false">최근 7일</button>
+      <button type="button" class="ui-segmented__item" aria-pressed="true">30일</button>
+      <button type="button" class="ui-segmented__item" aria-pressed="false">90일</button>
+      <button type="button" class="ui-segmented__item" aria-pressed="false">전체</button>
+    </div>
+    <span style="flex: 1;"></span>
+    <span class="ui-text-sm ui-text-subtle">9월 4일 ~ 10월 4일 · 미리 보기로 누른 것도 포함돼요</span>
+  </div>
+
+  <div class="shop-stat-grid">
+    <div class="ui-stat">
+      <div class="ui-row" data-gap="2" data-justify="between"><span class="ui-stat__label">상점 방문</span><span class="ui-icon-tile"><i data-icon="eye" data-size="16"></i></span></div>
+      <span class="ui-stat__value">124</span>
+      <span class="ui-stat__hint">링크를 연 횟수</span>
+    </div>
+    <div class="ui-stat">
+      <div class="ui-row" data-gap="2" data-justify="between"><span class="ui-stat__label">방문자</span><span class="ui-icon-tile"><i data-icon="users" data-size="16"></i></span></div>
+      <span class="ui-stat__value">41</span>
+      <span class="ui-stat__hint">서로 다른 브라우저</span>
+    </div>
+    <div class="ui-stat">
+      <div class="ui-row" data-gap="2" data-justify="between"><span class="ui-stat__label">상품 클릭</span><span class="ui-icon-tile" data-tone="brand"><i data-icon="external" data-size="16"></i></span></div>
+      <span class="ui-stat__value">96</span>
+      <span class="ui-stat__hint">상품 링크로 이동한 횟수</span>
+    </div>
+    <div class="ui-stat">
+      <div class="ui-row" data-gap="2" data-justify="between"><span class="ui-stat__label">클릭한 방문자</span><span class="ui-icon-tile" data-tone="brand"><i data-icon="user" data-size="16"></i></span></div>
+      <span class="ui-stat__value">29</span>
+      <span class="ui-stat__hint">방문자의 71%</span>
+    </div>
+  </div>
+
+  <div class="shop-stats-layout">
+    <div class="ui-table-wrap" data-stack-mobile="true">
+      <div class="ui-table__caption">상품별 클릭 순위 — 클릭 0 인 상품도 보여요</div>
+      <table class="ui-table">
+        <thead>
+          <tr>
+            <th scope="col" style="width: 64px;">순위</th>
+            <th scope="col">상품</th>
+            <th scope="col" data-numeric="true" style="width: 132px;">클릭</th>
+            <th scope="col" data-numeric="true" style="width: 108px;">클릭한 방문자</th>
+            <th scope="col" style="width: 120px;">마지막 클릭</th>
+          </tr>
+        </thead>
+        <tbody id="rank-rows"></tbody>
+      </table>
+    </div>
+
+    <div class="ui-card" data-padding="md">
+      <div class="ui-card__header">
+        <div>
+          <h3 class="ui-card__title">카테고리별 클릭</h3>
+          <p class="ui-card__description">숨긴 상품의 클릭도 포함해요.</p>
+        </div>
+      </div>
+      <div class="shop-cat-bars" id="cat-bars"></div>
+    </div>
+  </div>
+</template>
+
+
+<!-- =============================================================== -->
+<!-- 설정 탭 — 상점 정보 + 카테고리                                     -->
+<!-- =============================================================== -->
+<template id="page-settings">
+  <div class="ui-grid" data-cols="2" style="margin-top: var(--space-5); align-items: start;">
+    <section class="ui-section">
+      <div class="ui-section__head">
+        <div>
+          <h2 class="ui-section__title">상점 정보</h2>
+          <p class="ui-section__description">공개 상점 맨 위·맨 아래에 보이는 내용이에요.</p>
+        </div>
+      </div>
+      <div class="ui-card" data-padding="md">
+        <div class="ui-stack" data-gap="5">
+          <div class="ui-field">
+            <label class="ui-field__label">상점 이름<span class="ui-field__required" aria-hidden="true">*</span></label>
+            <input class="ui-input" value="이재림 선생님 추천 상품">
+            <div class="ui-field__foot"><span></span><span class="ui-field__counter">13 / 40</span></div>
+          </div>
+          <div class="ui-field">
+            <label class="ui-field__label">소개</label>
+            <textarea class="ui-textarea" rows="3">수업에서 실제로 쓰는 용품이에요.
+사이즈가 고민되면 수업 때 물어봐 주세요.</textarea>
+            <div class="ui-field__foot"><span><span class="ui-field__hint">줄바꿈 그대로 보여요.</span></span><span class="ui-field__counter">40 / 300</span></div>
+          </div>
+          <div class="ui-field">
+            <label class="ui-field__label">하단 안내문</label>
+            <textarea class="ui-textarea" rows="3">이 페이지의 일부 링크는 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받을 수 있습니다.</textarea>
+            <div class="ui-field__foot"><span><span class="ui-field__hint">제휴 링크(쿠팡 파트너스 등)를 쓴다면 고지 문구를 넣어 주세요.</span></span><span class="ui-field__counter">62 / 300</span></div>
+          </div>
+          <div class="ui-switch-field">
+            <label class="ui-switch"><input type="checkbox" role="switch" checked><span class="ui-switch__track"><span class="ui-switch__thumb"></span></span><span>상점 공개</span></label>
+            <p class="ui-switch-field__description">끄면 링크를 열어도 "지금은 볼 수 없는 페이지예요" 가 보여요. 상품과 기록은 그대로예요.</p>
+          </div>
+        </div>
+        <div class="ui-card__footer" data-stack-mobile="true">
+          <button type="button" class="ui-btn" data-variant="primary" data-size="md">저장</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="ui-section">
+      <div class="ui-section__head">
+        <div>
+          <h2 class="ui-section__title">카테고리</h2>
+          <p class="ui-section__description">상품 등록 때 고르는 목록이에요. 지우면 그 상품은 "카테고리 없음" 이 돼요.</p>
+        </div>
+      </div>
+      <div class="ui-list" id="category-rows"></div>
+      <div class="shop-link" style="margin-top: var(--space-2);">
+        <input class="ui-input" placeholder="새 카테고리 이름 (예: 수구, 테이프·보호대)" aria-label="새 카테고리 이름">
+        <button type="button" class="ui-btn" data-variant="outline" data-size="md"><i data-icon="plus" data-size="18"></i>추가</button>
+      </div>
+    </section>
+  </div>
+</template>
+
+
+<!-- =============================================================== -->
+<!-- 처음 들어왔을 때 — 상품 없음                                      -->
+<!-- =============================================================== -->
+<template id="page-empty">
+  <div class="ui-callout" data-tone="brand" style="margin-top: var(--space-4);">
+    <span class="ui-callout__icon"><i data-icon="info" data-size="18"></i></span>
+    <div class="ui-callout__body">기본 카테고리 5개(발레복·레오타드·기구·슈즈·용품)를 만들어 두었어요. 설정 탭에서 바꿀 수 있어요.</div>
+  </div>
+  <div class="ui-card" data-padding="md" style="margin-top: var(--space-4);">
+    <div class="ui-empty">
+      <span class="ui-empty__icon"><i data-icon="inbox" data-size="24"></i></span>
+      <p class="ui-empty__title">아직 등록된 상품이 없어요</p>
+      <p class="ui-empty__description">타이틀만 입력해도 바로 등록돼요. 링크·사진·가격은 나중에 채워도 괜찮아요.</p>
+      <div class="ui-empty__actions">
+        <button type="button" class="ui-btn" data-variant="primary" data-size="md"><i data-icon="plus" data-size="18"></i>상품</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+
+<!-- =============================================================== -->
+<!-- 오버레이 — 상품 등록 (타이틀 빠뜨리고 저장을 누른 상태)             -->
+<!-- Modal mode="sheet": 모바일 바텀시트 / 768px 이상 가운데 모달       -->
+<!-- =============================================================== -->
+<template id="ov-create">
+  <div class="ui-scrim" aria-hidden="true"></div>
+  <div class="ui-overlay" data-mode="sheet" data-size="md" role="dialog" aria-modal="true" aria-label="상품 등록">
+    <div class="ui-overlay__grip" aria-hidden="true"></div>
+    <div class="ui-overlay__header">
+      <div><h2 class="ui-overlay__title">상품 등록</h2><p class="ui-overlay__description">타이틀만 꼭 입력하면 돼요.</p></div>
+      <button type="button" class="ui-callout__dismiss" aria-label="닫기"><i data-icon="x" data-size="20"></i></button>
+    </div>
+    <div class="ui-overlay__body">
+      <div class="ui-stack" data-gap="5">
+        <div class="ui-field">
+          <label class="ui-field__label">타이틀<span class="ui-field__required" aria-hidden="true">*</span></label>
+          <input class="ui-input" aria-invalid="true" placeholder="예: 사사키 리본 6m 핑크">
+          <div class="ui-field__foot"><span><span class="ui-field__error" role="alert">타이틀을 입력해 주세요</span></span><span class="ui-field__counter">0 / 80</span></div>
+        </div>
+        <div class="ui-field">
+          <label class="ui-field__label">연결할 주소 <span class="ui-text-subtle" style="font-weight: 400;">선택</span></label>
+          <input class="ui-input" placeholder="https://" inputmode="url">
+          <div class="ui-field__foot"><span><span class="ui-field__hint">쇼핑몰 상품 페이지 주소를 붙여 넣으세요. 비우면 누를 수 없는 카드로 보여요.</span></span></div>
+        </div>
+        <div class="ui-field">
+          <label class="ui-field__label">이미지 <span class="ui-text-subtle" style="font-weight: 400;">선택</span></label>
+          <div class="ui-dropzone">
+            <i data-icon="image" data-size="24"></i>
+            <div class="ui-dropzone__title">상품 사진을 골라 주세요</div>
+            <p class="ui-dropzone__hint">jpg · png · webp · gif, 4MB 이하 — 자동으로 줄여서 올려요</p>
+            <button type="button" class="ui-btn" data-variant="outline" data-size="sm"><i data-icon="upload" data-size="16"></i>사진 선택</button>
+          </div>
+        </div>
+        <div class="ui-field">
+          <label class="ui-field__label">카테고리 <span class="ui-text-subtle" style="font-weight: 400;">선택</span></label>
+          <select class="ui-select">
+            <option>선택 안 함</option><option>발레복</option><option>레오타드</option><option>기구</option><option>슈즈</option><option>용품</option>
+          </select>
+          <div class="ui-field__foot"><span><span class="ui-field__hint">목록은 <a class="ui-link" href="#">설정 › 카테고리</a>에서 바꿔요.</span></span></div>
+        </div>
+        <div class="ui-field">
+          <label class="ui-field__label">가격 <span class="ui-text-subtle" style="font-weight: 400;">선택</span></label>
+          <div class="ui-input-group"><input class="ui-input" inputmode="numeric" placeholder="0"><span class="ui-input-group__addon">원</span></div>
+          <div class="ui-field__foot"><span><span class="ui-field__hint">비우면 가격을 표시하지 않아요.</span></span></div>
+        </div>
+        <div class="ui-switch-field">
+          <label class="ui-switch"><input type="checkbox" role="switch" checked><span class="ui-switch__track"><span class="ui-switch__thumb"></span></span><span>학부모에게 보이기</span></label>
+          <p class="ui-switch-field__description">끄면 공개 상점에서 숨겨지고, 클릭 기록은 남아요.</p>
+        </div>
+      </div>
+    </div>
+    <div class="ui-overlay__footer">
+      <button type="button" class="ui-btn" data-variant="outline" data-size="md">취소</button>
+      <button type="button" class="ui-btn" data-variant="primary" data-size="md">저장</button>
+    </div>
+  </div>
+</template>
+
+
+<!-- =============================================================== -->
+<!-- 오버레이 — 상품 수정 (값이 다 채워진 상태)                          -->
+<!-- =============================================================== -->
+<template id="ov-edit">
+  <div class="ui-scrim" aria-hidden="true"></div>
+  <div class="ui-overlay" data-mode="sheet" data-size="md" role="dialog" aria-modal="true" aria-label="상품 수정">
+    <div class="ui-overlay__grip" aria-hidden="true"></div>
+    <div class="ui-overlay__header">
+      <div><h2 class="ui-overlay__title">상품 수정</h2><p class="ui-overlay__description">누적 클릭 58 · 마지막 클릭 10월 3일 20:20</p></div>
+      <button type="button" class="ui-callout__dismiss" aria-label="닫기"><i data-icon="x" data-size="20"></i></button>
+    </div>
+    <div class="ui-overlay__body">
+      <div class="ui-stack" data-gap="5">
+        <div class="ui-field">
+          <label class="ui-field__label">타이틀<span class="ui-field__required" aria-hidden="true">*</span></label>
+          <input class="ui-input" value="사사키 리본 6m 핑크 (막대 포함)">
+          <div class="ui-field__foot"><span></span><span class="ui-field__counter">20 / 80</span></div>
+        </div>
+        <div class="ui-field">
+          <label class="ui-field__label">연결할 주소 <span class="ui-text-subtle" style="font-weight: 400;">선택</span></label>
+          <input class="ui-input" value="https://www.coupang.com/vp/products/7381129402">
+          <div class="ui-field__foot"><span><span class="ui-field__hint">coupang.com 으로 연결돼요.</span></span></div>
+        </div>
+        <div class="ui-field">
+          <label class="ui-field__label">이미지 <span class="ui-text-subtle" style="font-weight: 400;">선택</span></label>
+          <div class="shop-image-field">
+            <span class="shop-image-field__preview"><img src="img/ribbon.svg" alt="상품 사진 미리보기"></span>
+            <div class="ui-stack" data-gap="2">
+              <button type="button" class="ui-btn" data-variant="outline" data-size="sm"><i data-icon="upload" data-size="16"></i>사진 바꾸기</button>
+              <button type="button" class="ui-btn" data-variant="ghost" data-size="sm"><i data-icon="trash" data-size="16"></i>사진 빼기</button>
+            </div>
+          </div>
+        </div>
+        <div class="ui-field">
+          <label class="ui-field__label">카테고리 <span class="ui-text-subtle" style="font-weight: 400;">선택</span></label>
+          <select class="ui-select">
+            <option>선택 안 함</option><option>발레복</option><option>레오타드</option><option selected>기구</option><option>슈즈</option><option>용품</option>
+          </select>
+        </div>
+        <div class="ui-field">
+          <label class="ui-field__label">가격 <span class="ui-text-subtle" style="font-weight: 400;">선택</span></label>
+          <div class="ui-input-group"><input class="ui-input" inputmode="numeric" value="32,000"><span class="ui-input-group__addon">원</span></div>
+        </div>
+        <div class="ui-switch-field">
+          <label class="ui-switch"><input type="checkbox" role="switch" checked><span class="ui-switch__track"><span class="ui-switch__thumb"></span></span><span>학부모에게 보이기</span></label>
+          <p class="ui-switch-field__description">공개 상점에 보이고 있어요.</p>
+        </div>
+      </div>
+    </div>
+    <div class="ui-overlay__footer">
+      <button type="button" class="ui-btn" data-variant="outline" data-size="md">취소</button>
+      <button type="button" class="ui-btn" data-variant="primary" data-size="md">저장</button>
+    </div>
+  </div>
+</template>
+
+
+<!-- =============================================================== -->
+<!-- 오버레이 — 삭제 확인 (ConfirmDialog, mode="modal" size="sm")       -->
+<!-- =============================================================== -->
+<template id="ov-delete">
+  <div class="ui-scrim" aria-hidden="true"></div>
+  <div class="ui-overlay" data-mode="modal" data-size="sm" role="dialog" aria-modal="true" aria-label="상품을 삭제할까요?">
+    <div class="ui-overlay__grip" aria-hidden="true"></div>
+    <div class="ui-overlay__header">
+      <div><h2 class="ui-overlay__title">상품을 삭제할까요?</h2></div>
+      <button type="button" class="ui-callout__dismiss" aria-label="닫기"><i data-icon="x" data-size="20"></i></button>
+    </div>
+    <div class="ui-overlay__body">
+      <p style="margin: 0;">'사사키 리본 6m 핑크 (막대 포함)' 과 이 상품의 <b>클릭 기록 58건</b>이 함께 지워져요.<br>기록을 남기려면 삭제 대신 <b>공개 스위치를 꺼서 숨기세요</b>.</p>
+    </div>
+    <div class="ui-overlay__footer">
+      <button type="button" class="ui-btn" data-variant="outline">취소</button>
+      <button type="button" class="ui-btn" data-variant="danger">삭제</button>
+    </div>
+  </div>
+</template>
+
+
+<script src="mock-icons.js"></script>
+<script>
+(function () {
+  // ── 목업 데이터 ───────────────────────────────────────────────
+  var PRODUCTS = [
+    { title: '사사키 리본 6m 핑크 (막대 포함)', img: 'ribbon', host: 'coupang.com', cat: '기구', price: '32,000원', total: 58 },
+    { title: '주니어 후프 75cm', img: 'hoop', host: 'smartstore.naver.com', cat: '기구', price: '45,000원', total: 34 },
+    { title: '연습용 발레복 (네이비, 긴팔)', img: 'practice-wear', host: 'musinsa.com', cat: '발레복', price: '29,900원', total: 25 },
+    { title: '시합용 레오타드 (스팽글)', img: 'leotard', host: 'smartstore.naver.com', cat: '레오타드', price: '128,000원', total: 12 },
+    { title: '반슈즈 (스트레치)', img: 'shoes', host: 'coupang.com', cat: '슈즈', price: '18,000원', total: 6 },
+    { title: '연습용 볼 17cm', img: 'ball', host: 'coupang.com', cat: '기구', price: null, total: 0 },
+    { title: '곤봉 (수업 때 보여 드릴게요)', img: null, host: null, cat: '기구', price: null, total: null },
+    { title: '2025 시즌 대회용 스타킹', img: 'stockings', host: 'coupang.com', cat: null, price: '12,000원', total: 41, hidden: true }
+  ];
+  var RANK = [
+    { title: '사사키 리본 6m 핑크 (막대 포함)', img: 'ribbon', cat: '기구', clicks: 31, visitors: 18, last: '10/3 20:20' },
+    { title: '주니어 후프 75cm', img: 'hoop', cat: '기구', clicks: 21, visitors: 12, last: '10/2 18:03' },
+    { title: '연습용 발레복 (네이비, 긴팔)', img: 'practice-wear', cat: '발레복', clicks: 17, visitors: 11, last: '10/3 09:41' },
+    { title: '시합용 레오타드 (스팽글)', img: 'leotard', cat: '레오타드', clicks: 12, visitors: 8, last: '9/28 14:10' },
+    { title: '2025 시즌 대회용 스타킹', img: 'stockings', cat: '카테고리 없음', clicks: 9, visitors: 6, last: '9/12 21:15', hidden: true },
+    { title: '반슈즈 (스트레치)', img: 'shoes', cat: '슈즈', clicks: 6, visitors: 5, last: '9/30 11:02' },
+    { title: '연습용 볼 17cm', img: 'ball', cat: '기구', clicks: 0, visitors: 0, last: null },
+    { title: '곤봉 (수업 때 보여 드릴게요)', img: null, cat: '기구', noLink: true }
+  ];
+  var CATEGORY_CLICKS = [['기구', 52], ['발레복', 17], ['레오타드', 12], ['슈즈', 6], ['용품', 0], ['카테고리 없음', 9]];
+  var CATEGORIES = [['발레복', 1], ['레오타드', 1], ['기구', 4], ['슈즈', 1], ['용품', 0]];
+
+  var dash = '<span class="ui-text-subtle">—</span>';
+  var thumb = function (img) {
+    return '<span class="shop-thumb">' + (img ? '<img src="img/' + img + '.svg" alt="">' : '<i data-icon="image" data-size="18"></i>') + '</span>';
+  };
+  var item = function (p, sub) {
+    return '<div class="shop-item"' + (p.hidden ? ' data-hidden="true"' : '') + '>' + thumb(p.img) +
+      '<div class="shop-item__text"><div class="ui-list-row__title" style="white-space: normal; word-break: keep-all;">' + p.title +
+      (p.hidden ? ' <span class="ui-badge" data-tone="neutral">숨김</span>' : '') + '</div>' +
+      '<div class="ui-list-row__subtitle">' + sub + '</div></div></div>';
+  };
+  var iconBtn = function (icon, label, disabled) {
+    return '<button type="button" class="ui-icon-btn" data-size="sm" data-variant="ghost" aria-label="' + label + '" title="' + label + '"' +
+      (disabled ? ' disabled' : '') + '><i data-icon="' + icon + '" data-size="16"></i></button>';
+  };
+  var sw = function (on) {
+    return '<label class="ui-switch"><input type="checkbox" role="switch"' + (on ? ' checked' : '') +
+      ' aria-label="학부모에게 보이기"><span class="ui-switch__track"><span class="ui-switch__thumb"></span></span></label>';
+  };
+
+  var productRows = function () {
+    return PRODUCTS.map(function (p, i) {
+      return '<tr>' +
+        '<td data-label="순서"><div class="shop-order">' + iconBtn('chevronUp', '위로', i === 0) + iconBtn('chevronDown', '아래로', i === PRODUCTS.length - 1) + '</div></td>' +
+        '<td data-label="상품">' + item(p, p.host || '<span class="ui-text-subtle">링크 없음 — 누를 수 없는 카드</span>') + '</td>' +
+        '<td data-label="카테고리">' + (p.cat ? '<span class="ui-badge" data-tone="neutral">' + p.cat + '</span>' : '<span class="ui-text-subtle">카테고리 없음</span>') + '</td>' +
+        '<td data-label="가격" data-numeric="true">' + (p.price || dash) + '</td>' +
+        '<td data-label="공개">' + sw(!p.hidden) + '</td>' +
+        '<td data-label="누적 클릭" data-numeric="true">' + (p.total == null ? dash : p.total) + '</td>' +
+        '<td data-label=""><div class="ui-row" data-gap="2">' +
+          '<button type="button" class="ui-btn" data-variant="outline" data-size="sm">수정</button>' +
+          '<button type="button" class="ui-btn" data-variant="danger-quiet" data-size="sm">삭제</button></div></td>' +
+        '</tr>';
+    }).join('');
+  };
+
+  var rankRows = function () {
+    var max = RANK[0].clicks;
+    var n = 0;
+    return RANK.map(function (r) {
+      if (r.noLink) {
+        return '<tr><td data-label="순위"><span class="shop-rank">—</span></td>' +
+          '<td data-label="상품">' + item(r, r.cat + ' · <span class="ui-text-subtle">링크 없음</span>') + '</td>' +
+          '<td data-label="클릭" data-numeric="true">' + dash + '</td><td data-label="클릭한 방문자" data-numeric="true">' + dash + '</td>' +
+          '<td data-label="마지막 클릭">' + dash + '</td></tr>';
+      }
+      n += 1;
+      return '<tr><td data-label="순위"><span class="shop-rank"' + (n === 1 ? ' data-top="true"' : '') + '>' + n + '</span></td>' +
+        '<td data-label="상품">' + item(r, r.cat) + '</td>' +
+        '<td data-label="클릭" data-numeric="true"><span class="shop-bar-cell"><span class="ui-progress" role="progressbar" aria-label="클릭 비율">' +
+          '<span class="ui-progress__bar" style="display:block; width:' + Math.round((r.clicks / max) * 100) + '%"></span></span><b class="ui-num">' + r.clicks + '</b></span></td>' +
+        '<td data-label="클릭한 방문자" data-numeric="true">' + r.visitors + '</td>' +
+        '<td data-label="마지막 클릭">' + (r.last || dash) + '</td></tr>';
+    }).join('');
+  };
+
+  var catBars = function () {
+    var max = 52;
+    return CATEGORY_CLICKS.map(function (c) {
+      return '<div class="shop-cat-bars__row"><div class="ui-row" data-gap="2" data-justify="between"><span class="ui-text-sm">' + c[0] +
+        '</span><span class="ui-num ui-text-sm" style="font-weight: 600;">' + c[1] + '</span></div>' +
+        '<div class="ui-progress"><div class="ui-progress__bar" style="width:' + Math.round((c[1] / max) * 100) + '%"></div></div></div>';
+    }).join('');
+  };
+
+  var categoryRows = function () {
+    return CATEGORIES.map(function (c, i) {
+      var editing = c[0] === '용품';
+      var order = '<div class="shop-order">' + iconBtn('chevronUp', '위로', i === 0) + iconBtn('chevronDown', '아래로', i === CATEGORIES.length - 1) + '</div>';
+      if (editing) {
+        return '<div class="ui-list-row">' + order + '<div class="ui-list-row__body"><input class="ui-input" value="용품·가방" aria-label="카테고리 이름"></div>' +
+          '<div class="ui-list-row__trailing"><button type="button" class="ui-btn" data-variant="primary" data-size="sm">저장</button>' +
+          '<button type="button" class="ui-btn" data-variant="ghost" data-size="sm">취소</button></div></div>';
+      }
+      return '<div class="ui-list-row">' + order + '<div class="ui-list-row__body"><div class="ui-list-row__title">' + c[0] +
+        '</div><div class="ui-list-row__subtitle">상품 ' + c[1] + '개</div></div>' +
+        '<div class="ui-list-row__trailing">' + iconBtn('edit', '이름 바꾸기') + iconBtn('trash', '삭제') + '</div></div>';
+    }).join('');
+  };
+
+  // ── 화면 조립 ───────────────────────────────────────────────
+  var SCREENS = {
+    list:     { tab: 'products', parts: ['page-list'] },
+    create:   { tab: 'products', parts: ['page-list', 'ov-create'] },
+    edit:     { tab: 'products', parts: ['page-list', 'ov-edit'] },
+    'delete': { tab: 'products', parts: ['page-list', 'ov-delete'] },
+    stats:    { tab: 'stats', parts: ['page-stats'] },
+    settings: { tab: 'settings', parts: ['page-settings'] },
+    empty:    { tab: 'products', parts: ['page-empty'], empty: true },
+    menu:     { tab: 'products', parts: ['page-list'], menu: true }
+  };
+  var name = new URLSearchParams(location.search).get('s') || 'list';
+  var screen = SCREENS[name] || SCREENS.list;
+  var main = document.getElementById('main');
+
+  var head = document.getElementById('head').content.cloneNode(true);
+  head.querySelectorAll('[data-tab]').forEach(function (t) {
+    t.setAttribute('aria-selected', String(t.getAttribute('data-tab') === screen.tab));
+  });
+  if (screen.tab !== 'products') head.querySelectorAll('[data-only="products"]').forEach(function (n) { n.remove(); });
+  if (screen.empty) head.querySelector('[data-count]').textContent = ' (0)';
+  main.appendChild(head);
+
+  screen.parts.forEach(function (id) {
+    var frag = document.getElementById(id).content.cloneNode(true);
+    // 오버레이는 앱에서 document.body 로 포털된다
+    (id.indexOf('ov-') === 0 ? document.body : main).appendChild(frag);
+  });
+
+  var fill = function (id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; };
+  fill('product-rows', productRows());
+  fill('rank-rows', rankRows());
+  fill('cat-bars', catBars());
+  fill('category-rows', categoryRows());
+  if (screen.menu) {
+    document.getElementById('mobile-menu').classList.add('open');
+    // 새로 생긴 항목이 보이도록 메뉴를 그 자리까지 내린다
+    document.querySelector('.mobile-menu-item.active').scrollIntoView({ block: 'center' });
+  }
+
+  window.renderMockIcons();
+
+  // 목업이므로 링크·폼은 움직이지 않는다
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('a, button')) e.preventDefault();
+  });
+
+  // 갤러리(iframe)에 높이를 알려 준다
+  var post = function () {
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: 'mock-height', h: Math.ceil(document.documentElement.scrollHeight) }, '*');
+    }
+  };
+  window.addEventListener('load', post);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(post);
+  if (window.ResizeObserver) new ResizeObserver(post).observe(document.body);
+})();
+</script>
+</body>
+</html>

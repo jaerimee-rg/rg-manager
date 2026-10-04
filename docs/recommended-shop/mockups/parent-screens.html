@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>이재림 선생님 추천 상품</title>
+<!-- 앱과 같은 서체·스타일을 그대로 불러온다 (client/index.html, client/src/index.jsx 와 같은 순서) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../../../client/src/styles/tokens.css">
+<link rel="stylesheet" href="../../../client/src/styles/ui.css">
+<link rel="stylesheet" href="../../../client/src/styles/App.css">
+</head>
+<body>
+
+<!--
+  공개 상점 /shop/:publicId — 로그인 없이 열리는 단독 화면(앱 헤더·학부모 하단 탭 없음).
+  ?s=<이름> 으로 상태를 고른다. parent-desktop.html / parent-mobile.html 에서 보는 것을 권한다.
+  s: shop | filter | loading | empty | closed | error
+-->
+<div id="root"></div>
+
+<template id="header">
+  <header class="shop-public__header">
+    <div class="shop-public__inner">
+      <div class="ui-page-header">
+        <div class="ui-page-header__top">
+          <div>
+            <h1 class="ui-page-header__title">이재림 선생님 추천 상품</h1>
+            <p class="ui-page-header__description shop-public__intro">수업에서 실제로 쓰는 용품이에요.
+사이즈가 고민되면 수업 때 물어봐 주세요.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+</template>
+
+<template id="header-loading">
+  <header class="shop-public__header">
+    <div class="shop-public__inner">
+      <div class="ui-page-header" aria-busy="true" aria-label="불러오는 중">
+        <span class="ui-skeleton" style="display:block; width: 58%; height: 32px; border-radius: var(--radius-sm);"></span>
+        <span class="ui-skeleton" style="display:block; width: 76%; height: 14px;"></span>
+        <span class="ui-skeleton" style="display:block; width: 44%; height: 14px;"></span>
+      </div>
+    </div>
+  </header>
+</template>
+
+<script src="mock-icons.js"></script>
+<script>
+(function () {
+  var CATS = { 1: '발레복', 2: '레오타드', 3: '기구', 4: '슈즈' };
+  // 공개 API 가 내려 주는 모양 그대로 (02 §4) — 숨긴 상품은 애초에 오지 않는다
+  var PRODUCTS = [
+    { id: 12, title: '사사키 리본 6m 핑크 (막대 포함)', img: 'ribbon', url: 'coupang.com', price: '32,000원', c: 3 },
+    { id: 11, title: '주니어 후프 75cm', img: 'hoop', url: 'smartstore.naver.com', price: '45,000원', c: 3 },
+    { id: 9, title: '연습용 발레복 (네이비, 긴팔)', img: 'practice-wear', url: 'musinsa.com', price: '29,900원', c: 1 },
+    { id: 8, title: '시합용 레오타드 (스팽글)', img: 'leotard', url: 'smartstore.naver.com', price: '128,000원', c: 2 },
+    { id: 7, title: '반슈즈 (스트레치)', img: 'shoes', url: 'coupang.com', price: '18,000원', c: 4 },
+    { id: 6, title: '연습용 볼 17cm', img: 'ball', url: 'coupang.com', price: null, c: 3 },
+    { id: 5, title: '곤봉 (수업 때 보여 드릴게요)', img: null, url: null, price: null, c: 3 }
+  ];
+  var NOTICE = '이 페이지의 일부 링크는 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받을 수 있습니다.';
+
+  var card = function (p) {
+    var img = '<div class="shop-product__img">' +
+      (p.img ? '<img src="img/' + p.img + '.svg" alt="" loading="lazy">' : '<i data-icon="image" data-size="32"></i>') + '</div>';
+    var body = '<div class="shop-product__body">' +
+      (p.c ? '<span class="shop-product__cat">' + CATS[p.c] + '</span>' : '') +
+      '<span class="shop-product__title">' + p.title + '</span>' +
+      (p.price ? '<span class="shop-product__price">' + p.price + '</span>' : '') +
+      (p.url ? '<span class="shop-product__host">' + p.url + '<i data-icon="external" data-size="12"></i></span>' : '') +
+      '</div>';
+    // 링크가 있으면 카드 전체가 새 창 링크(<a>), 없으면 누를 수 없는 카드(<div>)
+    return p.url
+      ? '<a class="ui-card shop-product" data-padding="none" data-interactive="true" href="#" target="_blank" rel="noopener noreferrer" aria-label="' +
+          p.title + ' (새 창에서 열림)">' + img + body + '</a>'
+      : '<div class="ui-card shop-product" data-padding="none">' + img + body + '</div>';
+  };
+
+  var chips = function (selected) {
+    var list = [['전체', null]].concat([1, 2, 3, 4].map(function (id) { return [CATS[id], id]; }));
+    return '<div class="ui-toolbar" data-scroll-mobile="true" role="toolbar" aria-label="카테고리">' +
+      list.map(function (c) {
+        return '<button type="button" class="ui-chip" aria-pressed="' + (c[1] === selected) + '">' + c[0] + '</button>';
+      }).join('') + '</div>';
+  };
+
+  var skeletonCard = function () {
+    return '<div class="ui-card shop-product" data-padding="none" aria-hidden="true">' +
+      '<span class="ui-skeleton" style="display:block; aspect-ratio: 1 / 1; height: auto; border-radius: 0;"></span>' +
+      '<div class="shop-product__body"><span class="ui-skeleton" style="display:block; width: 36%; height: 12px;"></span>' +
+      '<span class="ui-skeleton" style="display:block; width: 88%; height: 14px; margin-top: 6px;"></span>' +
+      '<span class="ui-skeleton" style="display:block; width: 52%; height: 18px; margin-top: 10px;"></span></div></div>';
+  };
+
+  var state = function (icon, title, desc, action) {
+    return '<div class="shop-state"><div class="ui-empty">' +
+      '<span class="ui-empty__icon"><i data-icon="' + icon + '" data-size="24"></i></span>' +
+      '<p class="ui-empty__title">' + title + '</p><p class="ui-empty__description">' + desc + '</p>' +
+      (action ? '<div class="ui-empty__actions">' + action + '</div>' : '') + '</div></div>';
+  };
+
+  var tpl = function (id) { var d = document.createElement('div'); d.appendChild(document.getElementById(id).content.cloneNode(true)); return d.innerHTML; };
+  var page = function (header, main) {
+    return '<div class="shop-public">' + header + main + '</div>';
+  };
+  var mainWrap = function (inner) {
+    return '<main class="shop-public__main"><div class="shop-public__inner">' + inner + '</div></main>';
+  };
+  var foot = '<p class="shop-public__foot">' + NOTICE + '</p>';
+
+  var SCREENS = {
+    shop: function () {
+      return page(tpl('header'), mainWrap(chips(null) + '<div class="shop-grid">' + PRODUCTS.map(card).join('') + '</div>' + foot));
+    },
+    filter: function () {
+      var only = PRODUCTS.filter(function (p) { return p.c === 3; });
+      return page(tpl('header'), mainWrap(chips(3) + '<div class="shop-grid">' + only.map(card).join('') + '</div>' + foot));
+    },
+    loading: function () {
+      var chipSkel = '<div class="ui-toolbar" aria-hidden="true">' + [52, 64, 72, 52, 52].map(function (w) {
+        return '<span class="ui-skeleton" style="display:block; width:' + w + 'px; height: 32px; border-radius: var(--radius-pill);"></span>';
+      }).join('') + '</div>';
+      return page(tpl('header-loading'), mainWrap(chipSkel + '<div class="shop-grid">' + [1, 2, 3, 4, 5, 6, 7, 8].map(skeletonCard).join('') + '</div>'));
+    },
+    empty: function () {
+      return page(tpl('header'), mainWrap('<div class="ui-card" data-padding="md" style="margin-top: var(--space-3);">' +
+        '<div class="ui-empty"><span class="ui-empty__icon"><i data-icon="inbox" data-size="24"></i></span>' +
+        '<p class="ui-empty__title">아직 등록된 상품이 없어요</p>' +
+        '<p class="ui-empty__description">선생님이 추천 상품을 올리면 여기에 모여요.</p></div></div>'));
+    },
+    closed: function () {
+      return page('', state('link', '지금은 볼 수 없는 페이지예요', '링크가 바뀌었거나 선생님이 상점을 잠시 닫았어요.<br>링크를 보낸 선생님께 확인해 주세요.'));
+    },
+    error: function () {
+      return page('', state('alert', '상품을 불러오지 못했어요', '인터넷 연결을 확인하고 다시 시도해 주세요.',
+        '<button type="button" class="ui-btn" data-variant="outline" data-size="md"><i data-icon="refresh" data-size="18"></i>다시 시도</button>'));
+    }
+  };
+
+  var name = new URLSearchParams(location.search).get('s') || 'shop';
+  document.getElementById('root').innerHTML = (SCREENS[name] || SCREENS.shop)();
+  window.renderMockIcons();
+
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('a, button')) e.preventDefault();
+  });
+
+  var post = function () {
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: 'mock-height', h: Math.ceil(document.documentElement.scrollHeight) }, '*');
+    }
+  };
+  window.addEventListener('load', post);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(post);
+  if (window.ResizeObserver) new ResizeObserver(post).observe(document.body);
+})();
+</script>
+</body>
+</html>

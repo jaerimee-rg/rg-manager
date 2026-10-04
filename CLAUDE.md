@@ -52,8 +52,8 @@ Client and server have **separate** Jest setups and are run from their own direc
 there is no root `package.json`, so there is no one command that runs everything.
 
 ```bash
-cd client && npm test          # jest — 581 tests / 47 suites
-cd server && npm test          # 884 tests / 45 suites
+cd client && npm test          # jest — 705 tests / 57 suites
+cd server && npm test          # 1022 tests / 51 suites
 ```
 
 - **The server suite is ESM** (`"type": "module"` + `transform: {}`, i.e. no Babel) and only
@@ -482,6 +482,49 @@ the rest of the app is unaffected.
 - 초대(가입)는 이 링크에 실려 있지 않다. 계정이 없는 학부모는 `needsInvite` 안내를 보고, 초대 링크로
   가입한 뒤 (1시간 안이면) 같은 이벤트로 돌아간다.
 
+### Recommended Shop (추천 상품)
+
+Design docs and mockups: `docs/recommended-shop/`. A teacher lists products they recommend; parents
+open **one public link `/shop/<publicId>` without logging in**; the teacher sees which links get clicked.
+
+- **Tables** (`shops` 1 per teacher, `shop_categories`, `shop_products`, `shop_events`). `shops.publicId`
+  is `generatePublicId()` (same as the FAQ chat link) and never changes. The shop and the 5 default
+  categories (발레복·레오타드·기구·슈즈·용품) are created on the teacher's first `GET /api/shop`
+  (`services/shopService.js`, one transaction, `ON CONFLICT ("userId")`). Category names are unique per
+  teacher via an expression index (`lower(btrim(name))`) → the API maps pg `23505` to **409**.
+- **Only the title is required.** URL, image, category, price are optional. URLs go through
+  `normalizeUrl()` — **http/https only**, a bare `coupang.com/…` gets `https://` — on the server
+  (`utils/shopValidation.js`) *and* again at render time on the client (`utils/shopFormat.js:safeHref`).
+  The two files hold the same rules and are tested with the same table; change both together.
+- **Routes**: teacher UI is `/products` (`/stats`, `/settings` tabs, `pages/Shop/`), the public page is
+  `/shop/:publicId` (`pages/PublicShop.jsx`) in `App.jsx`'s **public branch** next to `/chat/` — rendered
+  before the auth check, so logged-in teachers/parents see the same standalone page. The two prefixes
+  are deliberately different: `/shop/*` would otherwise swallow the teacher's sub-routes.
+- **API**: `/api/shop/*` is teacher-only (`rejectParents` in `server.js`, except `/api/shop/public/*`).
+  Every teacher query is scoped by the token's user id; another teacher's ids return **404**. Public
+  responses go through `utils/shopSerializer.js` (a whitelist — a test pins the exact keys), skip
+  hidden products, and list only categories that have visible products. A closed shop and an unknown
+  `publicId` return the **same 404**.
+- **Click/visit tracking**: the product card is a plain `<a target="_blank">` to the product URL; on click
+  `utils/shopTracking.js` fires `navigator.sendBeacon` (fallback `fetch keepalive`) — **values in the
+  query string only, no body** — so navigation never waits. The server counts a click only for a visible
+  product with a URL, ignores the same `visitorKey` on the same product within **10 s**, and counts a
+  visit once per `visitorKey` per **30 min** (`models/ShopEvent.js`). No IP/UA is stored. Public routes
+  have their own limiters and are skipped by `apiLimiter`; the view/click endpoints must pass **both** a
+  per-`visitorKey` limit and a per-IP limit (`PUBLIC_SHOP_TRACK_IP_MAX`), because `visitorKey` is
+  client-supplied and could otherwise be rotated to dodge the limit. Middle-click (`auxclick`) counts too.
+- **Hidden stays hidden**: `PUT /api/shop/products/:id` without `isVisible` keeps the current value
+  (create defaults to visible) — a client that omits the field must not silently re-publish a product.
+- **Stats** (`GET /api/shop/stats?days=7|30|90|all`) rank products by clicks (ties share a rank,
+  products without a URL have no rank), include zero-click and hidden products, and sum by category.
+  Deleting a product deletes its clicks (FK cascade); hiding keeps them — the UI says so.
+- **Images** reuse the FAQ upload path: raw bytes, extension decides the MIME (no SVG), 4 MB, stored in
+  the existing bucket under `shop/{userId}/{uuid}/…`. The browser shrinks photos to 1,200 px JPEG first
+  (`utils/imageResize.js`, GIF untouched). The product is saved **before** its image, so a failed upload
+  leaves the product in place with a toast. Without `SUPABASE_SECRET_KEY` the image field shows a notice.
+- **Schema rollout**: four new tables — apply the `server/database.js` DDL to production **before**
+  merging and `ALTER TABLE … OWNER TO rg_app` (see *Deployment*).
+
 ### Student-Class Relationship
 
 **Many-to-Many** relationship stored as JSON array in `students.classIds`:
@@ -522,7 +565,7 @@ cd client && npm run build
 cd ../server && DATABASE_URL=postgresql://<user>@localhost:5432/rg_manager PORT=5055 \
   JWT_SECRET=local-dev-secret API_RATE_LIMIT_MAX=100000 AUTH_RATE_LIMIT_MAX=100000 node server.js &
 cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e:setup   # writes e2e/.sessions.json
-cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 63 tests
+cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 70 tests
 ```
 
 - **`JWT_SECRET` must be `local-dev-secret`** — that is what `e2e/setup.mjs` defaults to when signing

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>추천 상품 목업 — 선생님 화면 · 데스크톱</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../../../client/src/styles/tokens.css">
+<link rel="stylesheet" href="gallery.css">
+</head>
+<body>
+<!-- 화면은 teacher-screens.html 를 iframe 으로 띄운다. 앱의 실제 CSS(client/src/styles)를 쓰므로 저장소 안에서 열어야 한다. -->
+<script>
+window.MOCK = {
+  "page": "teacher-desktop.html",
+  "device": "desktop",
+  "src": "teacher-screens.html",
+  "title": "선생님 화면 · 데스크톱",
+  "intro": [
+    "선생님 메뉴 <b>추천 상품</b> (<code>/products</code>) — 상품 · 통계 · 설정 탭.",
+    "1280px 화면을 칸 폭에 맞춰 줄여 보여 줘요. 화면은 앱의 실제 스타일(<code>client/src/styles/tokens.css · ui.css · App.css</code>)과 컴포넌트 DOM 을 그대로 써서 그렸어요. 이번 기능의 스타일도 구현과 함께 <code>ui.css</code> 에 들어갔어요."
+  ],
+  "host": "rg-manager.vercel.app",
+  "width": 1280,
+  "height": 860,
+  "screens": [
+    {
+      "s": "list",
+      "title": "상품 목록",
+      "path": "/products",
+      "notes": [
+        "상단 메뉴에 <b>추천 상품</b>을 FAQ 다음에 추가. 화면 짜임은 이벤트 관리와 같다 — PageHeader + 칩 + DataTable.",
+        "<b>공개 링크 카드</b>는 탭과 상관없이 맨 위. [링크 복사] 로 단톡방에 붙여 넣는다 (FR-401).",
+        "표 순서 = 공개 상점에 보이는 순서. ▲▼ 로 옮기면 바로 저장 (FR-427). 공개 스위치를 끄면 즉시 숨김, 기록은 남음 (FR-426).",
+        "링크 없는 상품은 \"링크 없음 — 누를 수 없는 카드\", 숨긴 상품은 흐리게 + <b>숨김</b> 배지."
+      ]
+    },
+    {
+      "s": "create",
+      "title": "상품 등록 — 타이틀 없이 저장을 누른 상태",
+      "path": "/products",
+      "notes": [
+        "필수는 <b>타이틀</b>뿐 (FR-411). 오류는 필드 바로 아래에 보인다.",
+        "입력 순서는 요청 그대로 타이틀 → 연결할 주소 → 이미지 → 카테고리 → 가격, 마지막에 공개 스위치.",
+        "이미지 칸은 FAQ 파일 업로드와 같은 드롭존. 브라우저에서 긴 변 1,200px 로 줄여 올린다 (FR-413).",
+        "같은 Modal(mode=\"sheet\") 이라 데스크톱은 가운데 모달, 모바일은 바텀시트가 된다."
+      ],
+      "fixed": true
+    },
+    {
+      "s": "edit",
+      "title": "상품 수정",
+      "path": "/products",
+      "notes": [
+        "사진 미리보기 + [사진 바꾸기] / [사진 빼기]. 바꾸면 이전 파일은 저장소에서 지운다 (FR-414).",
+        "가격은 콤마를 붙여 보이고, \"원\" 은 InputGroup 단위 (FR-416).",
+        "제목 아래에 누적 클릭을 보여 줘서 지우기 전에 기록 규모를 알 수 있다."
+      ],
+      "fixed": true
+    },
+    {
+      "s": "delete",
+      "title": "삭제 확인",
+      "path": "/products",
+      "notes": [
+        "ConfirmDialog. 클릭 기록도 함께 지워진다는 것과 <b>숨기기</b>라는 대안을 같이 알려 준다 (FR-417)."
+      ],
+      "fixed": true
+    },
+    {
+      "s": "stats",
+      "title": "통계",
+      "path": "/products/stats",
+      "notes": [
+        "기간은 Segmented — 최근 7일 · <b>30일(기본)</b> · 90일 · 전체 (FR-450).",
+        "Stat 4개: 상점 방문 · 방문자 · 상품 클릭 · 클릭한 방문자 (FR-451).",
+        "순위 표에는 <b>클릭 0 상품도</b> 나와 안 눌리는 상품이 보인다. 숨긴 상품은 배지와 함께 남고, 링크 없는 상품은 순위 없이 맨 아래 (FR-452).",
+        "카테고리별 클릭은 기존 Progress 막대 (FR-453)."
+      ]
+    },
+    {
+      "s": "settings",
+      "title": "설정 — 상점 정보 · 카테고리",
+      "path": "/products/settings",
+      "notes": [
+        "상점 이름 · 소개 · 하단 안내문(제휴 고지) · 공개 스위치 (FR-402~403).",
+        "카테고리: ▲▼ 순서, 연필로 이름 바꾸기(행 안에서 바로 편집 — \"용품\" 행이 편집 중), 휴지통으로 삭제, 아래 칸에서 추가 (FR-421~422)."
+      ]
+    },
+    {
+      "s": "empty",
+      "title": "처음 들어왔을 때 (상품 없음)",
+      "path": "/products",
+      "notes": [
+        "처음 들어오면 상점과 기본 카테고리 5개를 자동으로 만든다 (FR-400 · 420).",
+        "빈 상태는 이벤트 관리와 같은 EmptyState."
+      ]
+    }
+  ]
+};
+</script>
+<script src="gallery.js"></script>
+</body>
+</html>

@@ -64,3 +64,31 @@ describe('logAction — 누가 한 일인지 남긴다', () => {
     expect(pool.query).not.toHaveBeenCalled();
   });
 });
+
+describe('logAction — 추천 상품 (docs/recommended-shop)', () => {
+  beforeEach(() => jest.clearAllMocks());
+  const user = { id: 9, username: '이재림', role: 'user' };
+
+  it('상품 등록·수정은 상품 이름을, 숨기면 (숨김) 을 남긴다', async () => {
+    let [, params] = await run('CREATE_SHOP_PRODUCT', { user, body: {} }, { product: { title: '리본', isVisible: true } });
+    expect(params[3]).toBe('상품: 리본');
+
+    jest.clearAllMocks();
+    [, params] = await run('UPDATE_SHOP_PRODUCT', { user, body: {} }, { product: { title: '리본', isVisible: false } });
+    expect(params[3]).toBe('상품: 리본 (숨김)');
+  });
+
+  it('상품 삭제는 id, 상점 저장은 이름·비공개 여부', async () => {
+    let [, params] = await run('DELETE_SHOP_PRODUCT', { user, params: { id: '12' }, body: {} }, {});
+    expect(params[3]).toBe('상품 ID: 12');
+
+    jest.clearAllMocks();
+    [, params] = await run('UPDATE_SHOP', { user, body: { title: '추천', isActive: false } }, {});
+    expect(params[3]).toBe('상점: 추천 (비공개)');
+  });
+
+  it('카테고리 추가는 이름을 남긴다', async () => {
+    const [, params] = await run('CREATE_SHOP_CATEGORY', { user, body: {} }, { category: { name: '수구' } });
+    expect(params[3]).toBe('카테고리: 수구');
+  });
+});

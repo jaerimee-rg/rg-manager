@@ -6,6 +6,9 @@ import {
   PUBLIC_CHAT_READ_MAX,
   PUBLIC_CHAT_WRITE_MAX,
   PUBLIC_CHAT_POLL_INTERVAL_MS,
+  PUBLIC_SHOP_READ_MAX,
+  PUBLIC_SHOP_TRACK_MAX,
+  PUBLIC_SHOP_TRACK_IP_MAX,
   visitorKeyGenerator
 } from '../rateLimits.js';
 
@@ -166,5 +169,18 @@ describe('리미터 동작 (실제 요청)', () => {
     expect(res.status).toBe(429);
     expect(res.headers.get('ratelimit-remaining')).toBe('0');
     expect(Number(res.headers.get('ratelimit-reset'))).toBeGreaterThan(0);
+  });
+});
+
+describe('공개 추천 상품 한도', () => {
+  it('방문·클릭 기록은 읽기보다 엄격하되, 한 사람이 상점을 둘러보는 데는 충분하다', () => {
+    expect(PUBLIC_SHOP_TRACK_MAX).toBeLessThan(PUBLIC_SHOP_READ_MAX);
+    // 15분 동안 상품 100개를 눌러 봐도 막히지 않는다
+    expect(PUBLIC_SHOP_TRACK_MAX).toBeGreaterThanOrEqual(100);
+  });
+
+  it('visitorKey 를 바꿔 가며 보내도 IP 상한에서 막힌다 — 같은 와이파이 여럿이 쓸 만큼은 넉넉히', () => {
+    expect(PUBLIC_SHOP_TRACK_IP_MAX).toBeGreaterThan(PUBLIC_SHOP_TRACK_MAX);
+    expect(PUBLIC_SHOP_TRACK_IP_MAX).toBeLessThanOrEqual(1000);
   });
 });

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>추천 상품 목업 — 학부모 화면 · 모바일</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../../../client/src/styles/tokens.css">
+<link rel="stylesheet" href="gallery.css">
+</head>
+<body>
+<!-- 화면은 parent-screens.html 를 iframe 으로 띄운다. 앱의 실제 CSS(client/src/styles)를 쓰므로 저장소 안에서 열어야 한다. -->
+<script>
+window.MOCK = {
+  "page": "parent-mobile.html",
+  "device": "mobile",
+  "src": "parent-screens.html",
+  "title": "학부모 화면 · 모바일",
+  "intro": [
+    "공개 상점 <code>/shop/&lt;publicId&gt;</code> — 선생님이 보낸 링크로 <b>로그인 없이</b> 연다.",
+    "390px 휴대폰(카카오톡 인앱 브라우저)이에요. 화면은 앱의 실제 스타일(<code>client/src/styles/tokens.css · ui.css · App.css</code>)과 컴포넌트 DOM 을 그대로 써서 그렸어요. 이번 기능의 스타일도 구현과 함께 <code>ui.css</code> 에 들어갔어요."
+  ],
+  "host": "rg-manager.vercel.app",
+  "width": 390,
+  "height": 740,
+  "screens": [
+    {
+      "s": "shop",
+      "title": "공개 상점 — 전체",
+      "path": "/shop/xY3kP9qLmT2vB7nR4sWd1A",
+      "notes": [
+        "카카오톡 단톡방 링크를 눌러 <b>인앱 브라우저</b>로 연 모습. 로그인 화면으로 가지 않는다.",
+        "2열 카드, 칩은 가로 스크롤. 카드를 누르면 쇼핑몰이 새 창으로 열리고, 닫으면 상점이 그대로 있다.",
+        "360px 폭에서도 가로 스크롤이 없다 (NFR-2)."
+      ]
+    },
+    {
+      "s": "filter",
+      "title": "카테고리 고른 상태 (기구)",
+      "path": "/shop/xY3kP9qLmT2vB7nR4sWd1A?c=3",
+      "notes": [
+        "\"기구\" 만 — 주소에 <code>?c=3</code>."
+      ]
+    },
+    {
+      "s": "loading",
+      "title": "불러오는 중",
+      "path": "/shop/xY3kP9qLmT2vB7nR4sWd1A",
+      "notes": [
+        "스켈레톤."
+      ],
+      "fixed": true
+    },
+    {
+      "s": "empty",
+      "title": "상품이 없을 때",
+      "path": "/shop/xY3kP9qLmT2vB7nR4sWd1A",
+      "notes": [
+        "공개 상품 0개."
+      ],
+      "fixed": true
+    },
+    {
+      "s": "closed",
+      "title": "비공개 · 없는 링크",
+      "path": "/shop/xY3kP9qLmT2vB7nR4sWd1A",
+      "notes": [
+        "공개 OFF · 없는 링크 공통 화면."
+      ],
+      "fixed": true
+    },
+    {
+      "s": "error",
+      "title": "네트워크 오류",
+      "path": "/shop/xY3kP9qLmT2vB7nR4sWd1A",
+      "notes": [
+        "[다시 시도]."
+      ],
+      "fixed": true
+    }
+  ],
+  "browserBar": "rg-manager.vercel.app"
+};
+</script>
+<script src="gallery.js"></script>
+</body>
+</html>

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>추천 상품 목업 — 학부모 화면 · 데스크톱</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../../../client/src/styles/tokens.css">
+<link rel="stylesheet" href="gallery.css">
+</head>
+<body>
+<!-- 화면은 parent-screens.html 를 iframe 으로 띄운다. 앱의 실제 CSS(client/src/styles)를 쓰므로 저장소 안에서 열어야 한다. -->
+<script>
+window.MOCK = {
+  "page": "parent-desktop.html",
+  "device": "desktop",
+  "src": "parent-screens.html",
+  "title": "학부모 화면 · 데스크톱",
+  "intro": [
+    "공개 상점 <code>/shop/&lt;publicId&gt;</code> — 선생님이 보낸 링크로 <b>로그인 없이</b> 연다.",
+    "1280px 화면을 칸 폭에 맞춰 줄여 보여 줘요. 화면은 앱의 실제 스타일(<code>client/src/styles/tokens.css · ui.css · App.css</code>)과 컴포넌트 DOM 을 그대로 써서 그렸어요. 이번 기능의 스타일도 구현과 함께 <code>ui.css</code> 에 들어갔어요."
+  ],
+  "host": "rg-manager.vercel.app",
+  "width": 1280,
+  "height": 860,
+  "screens": [
+    {
+      "s": "shop",
+      "title": "공개 상점 — 전체",
+      "path": "/shop/xY3kP9qLmT2vB7nR4sWd1A",
+      "notes": [
+        "<b>로그인 없이</b> 열리는 단독 화면 — 앱 헤더·학부모 하단 탭이 없다. 로그인한 선생님·학부모가 열어도 같은 화면 (FR-404).",
+        "데스크톱 4열 · 태블릿 3열 · 모바일 2열 그리드. 카드 전체가 상품 주소로 새 창 (FR-432~433).",
+        "가격·도메인은 있을 때만. 링크 없는 \"곤봉\" 카드는 누를 수 없고 클릭도 세지 않는다.",
+        "카드를 누르는 순간 클릭을 비콘으로 기록 — 이동을 기다리게 하지 않는다 (FR-440).",
+        "칩은 공개 상품이 있는 카테고리만 (상품 없는 \"용품\" 은 안 보임). 맨 아래는 설정의 하단 안내문."
+      ]
+    },
+    {
+      "s": "filter",
+      "title": "카테고리 고른 상태 (기구)",
+      "path": "/shop/xY3kP9qLmT2vB7nR4sWd1A?c=3",
+      "notes": [
+        "칩을 고르면 주소에 <code>?c=3</code> 이 붙어 새로고침·공유해도 유지된다 (FR-431)."
+      ]
+    },
+    {
+      "s": "loading",
+      "title": "불러오는 중",
+      "path": "/shop/xY3kP9qLmT2vB7nR4sWd1A",
+      "notes": [
+        "스켈레톤 — 카드 비율 그대로라 다 불러와도 화면이 흔들리지 않는다 (FR-434 · 436)."
+      ],
+      "fixed": false
+    },
+    {
+      "s": "empty",
+      "title": "상품이 없을 때",
+      "path": "/shop/xY3kP9qLmT2vB7nR4sWd1A",
+      "notes": [
+        "상점은 공개인데 공개 상품이 하나도 없을 때."
+      ],
+      "fixed": false
+    },
+    {
+      "s": "closed",
+      "title": "비공개 · 없는 링크",
+      "path": "/shop/xY3kP9qLmT2vB7nR4sWd1A",
+      "notes": [
+        "공개 OFF 와 존재하지 않는 링크는 <b>같은 화면</b> — 어느 쪽인지 알려 주지 않는다 (FR-403)."
+      ],
+      "fixed": false
+    },
+    {
+      "s": "error",
+      "title": "네트워크 오류",
+      "path": "/shop/xY3kP9qLmT2vB7nR4sWd1A",
+      "notes": [
+        "불러오기 실패 시 [다시 시도] (FR-434)."
+      ],
+      "fixed": false
+    }
+  ]
+};
+</script>
+<script src="gallery.js"></script>
+</body>
+</html>

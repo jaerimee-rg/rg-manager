@@ -49,6 +49,12 @@ export default defineConfig({
       name: 'accounts',
       use: { ...devices['Desktop Chrome'] },
       testMatch: /accounts\.spec\.mjs/
+    },
+    {
+      // 추천 상품 (docs/recommended-shop). 공개 상점은 스펙 안에서 휴대폰 폭·비로그인 컨텍스트를 따로 연다.
+      name: 'shop',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: /shop\.spec\.mjs/
     }
   ]
 });
