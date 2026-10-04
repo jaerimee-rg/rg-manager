@@ -52,7 +52,7 @@ function OptionsEditor({ options, onChange, usageById = {}, showApparatus = fals
 
   return (
     <div>
-      <div style={{ border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+      <div style={{ border: 'var(--stroke-thin)', borderRadius: 'var(--shape-box)', overflow: 'hidden' }}>
         {options.length === 0 && (
           <div style={{ padding: '14px', fontSize: '0.8125rem', color: 'var(--color-gray-500)', textAlign: 'center' }}>
             옵션이 없으면 학부모는 참가 신청만 하게 됩니다.
@@ -76,7 +76,7 @@ function OptionsEditor({ options, onChange, usageById = {}, showApparatus = fals
                 maxLength={LABEL_MAX}
                 aria-label={`옵션 ${index + 1}`}
                 style={{
-                  flex: 1, minWidth: 0, border: '1px solid transparent', borderRadius: 'var(--radius-sm)',
+                  flex: 1, minWidth: 0, border: '1px solid transparent', borderRadius: 'var(--shape-field)',
                   padding: '8px 9px', fontSize: '1rem', background: 'var(--bg-tertiary)', fontFamily: 'inherit'
                 }}
               />
@@ -92,7 +92,7 @@ function OptionsEditor({ options, onChange, usageById = {}, showApparatus = fals
                 aria-label={`${option.label} 옵션 삭제`}
                 style={{
                   border: 'none', background: 'none', color: 'var(--color-gray-400)',
-                  cursor: 'pointer', fontSize: '1rem', width: '32px', height: '32px', borderRadius: '6px'
+                  cursor: 'pointer', fontSize: '1rem', width: '32px', height: '32px', borderRadius: 'var(--shape-btn)'
                 }}
               >
                 ✕
@@ -116,8 +116,8 @@ function OptionsEditor({ options, onChange, usageById = {}, showApparatus = fals
             maxLength={LABEL_MAX}
             aria-label="새 옵션"
             style={{
-              flex: 1, minWidth: 0, padding: '9px 11px', border: '1px solid var(--color-gray-300)',
-              borderRadius: 'var(--radius-sm)', fontSize: '1rem', fontFamily: 'inherit'
+              flex: 1, minWidth: 0, padding: '9px 11px', border: 'var(--stroke-thin)',
+              borderRadius: 'var(--shape-field)', background: 'var(--field)', fontSize: '1rem', fontFamily: 'inherit'
             }}
           />
           <button type="button" className="btn btn-outline btn-sm" onClick={addFromDraft}>

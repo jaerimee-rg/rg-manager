@@ -14,10 +14,10 @@ const page = {
 const column = { width: '100%', maxWidth: '400px' };
 
 const card = {
-  background: 'var(--bg-secondary)',
-  borderRadius: 'var(--radius-lg)',
-  padding: 'var(--spacing-2xl)',
-  boxShadow: 'var(--shadow-md)'
+  background: 'var(--surface)',
+  border: 'var(--stroke)',
+  borderRadius: 'var(--shape-panel)',
+  padding: 'var(--spacing-2xl)'
 };
 
 /**
@@ -79,7 +79,7 @@ function TeacherInviteLanding() {
         <div style={column}>
           <div style={{ ...card, textAlign: 'center' }}>
             <div style={{ fontSize: '2.5rem', marginBottom: 'var(--spacing-md)' }}>🔗</div>
-            <h1 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: 'var(--spacing-sm)' }}>
+            <h1 className="ui-display" style={{ fontSize: '1.25rem', marginBottom: 'var(--spacing-sm)' }}>
               유효하지 않은 초대 링크예요
             </h1>
             <p style={{ fontSize: '0.9375rem', color: 'var(--color-gray-500)', lineHeight: 1.6, wordBreak: 'keep-all' }}>
@@ -108,9 +108,8 @@ function TeacherInviteLanding() {
           }}>
             🎀
           </div>
-          <h1 style={{
+          <h1 className="ui-display" style={{
             fontSize: '1.5rem',
-            fontWeight: 700,
             color: 'var(--color-gray-900)',
             marginBottom: 'var(--spacing-sm)',
             wordBreak: 'keep-all'
@@ -135,7 +134,7 @@ function TeacherInviteLanding() {
               background: 'var(--color-danger-bg)',
               color: 'var(--color-danger)',
               padding: '11px 13px',
-              borderRadius: 'var(--radius-md)',
+              borderRadius: 'var(--shape-box)',
               fontSize: '0.875rem'
             }}>
               {error}
@@ -150,10 +149,10 @@ function TeacherInviteLanding() {
             style={{
               width: '100%',
               padding: '16px 20px',
-              backgroundColor: '#FEE500',
+              backgroundColor: 'var(--kakao)',
               color: '#000000',
-              border: 'none',
-              borderRadius: 'var(--radius-lg)',
+              border: 'var(--stroke)',
+              borderRadius: 'var(--shape-btn)',
               fontSize: '1.0625rem',
               fontWeight: 600,
               fontFamily: 'inherit',

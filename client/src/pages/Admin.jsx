@@ -310,7 +310,7 @@ function Admin() {
                                 justifyContent: 'center',
                                 width: 20,
                                 height: 20,
-                                backgroundColor: '#FEE500',
+                                backgroundColor: 'var(--kakao)',
                                 borderRadius: '4px',
                                 fontSize: '0.75rem'
                               }} title="카카오 계정">
@@ -405,7 +405,7 @@ function Admin() {
                             justifyContent: 'center',
                             width: 18,
                             height: 18,
-                            backgroundColor: '#FEE500',
+                            backgroundColor: 'var(--kakao)',
                             borderRadius: '4px',
                             fontSize: '0.625rem'
                           }}>
@@ -477,7 +477,7 @@ function Admin() {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            backgroundColor: 'var(--overlay-scrim)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',

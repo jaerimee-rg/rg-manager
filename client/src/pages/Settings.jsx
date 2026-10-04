@@ -198,8 +198,8 @@ function Settings() {
                     justifyContent: 'center',
                     width: 24,
                     height: 24,
-                    backgroundColor: '#FEE500',
-                    borderRadius: '6px',
+                    backgroundColor: 'var(--kakao)',
+                    borderRadius: 'var(--shape-box)',
                     fontSize: '0.875rem'
                   }}>
                     💬
@@ -228,7 +228,7 @@ function Settings() {
               gap: 'var(--spacing-lg)',
               padding: 'var(--spacing-lg)',
               backgroundColor: 'var(--color-gray-50)',
-              borderRadius: 'var(--radius-md)'
+              borderRadius: 'var(--shape-box)'
             }}>
               <div style={{
                 display: 'flex',
@@ -241,8 +241,8 @@ function Settings() {
                   justifyContent: 'center',
                   width: 32,
                   height: 32,
-                  backgroundColor: '#FEE500',
-                  borderRadius: '8px',
+                  backgroundColor: 'var(--kakao)',
+                  borderRadius: 'var(--shape-box)',
                   fontSize: '1rem'
                 }}>
                   💬
@@ -256,7 +256,8 @@ function Settings() {
                 style={{
                   width: 52,
                   height: 28,
-                  backgroundColor: kakaoMessageConsent ? 'var(--color-success)' : 'var(--color-gray-300)',
+                  backgroundColor: kakaoMessageConsent ? 'var(--star)' : 'var(--field)',
+                  boxShadow: 'inset 0 0 0 var(--stroke-width-thin) var(--ink)',
                   borderRadius: 14,
                   position: 'relative',
                   transition: 'background-color 0.2s',
@@ -267,13 +268,12 @@ function Settings() {
                 <div style={{
                   width: 24,
                   height: 24,
-                  backgroundColor: 'white',
+                  backgroundColor: 'var(--ink)',
                   borderRadius: '50%',
                   position: 'absolute',
                   top: 2,
                   left: kakaoMessageConsent ? 26 : 2,
-                  transition: 'left 0.2s',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                  transition: 'left 0.2s'
                 }} />
               </div>
             </div>
@@ -299,10 +299,10 @@ function Settings() {
                 gap: 'var(--spacing-md)',
                 padding: 'var(--spacing-lg)',
                 backgroundColor: 'var(--color-primary-bg)',
-                borderRadius: 'var(--radius-md)',
+                borderRadius: 'var(--shape-box)',
                 cursor: 'pointer',
                 transition: 'background-color 0.2s',
-                border: '1px solid var(--color-primary)'
+                border: 'var(--stroke-thin)'
               }}
               onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--color-primary-hover-bg)'}
               onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'var(--color-primary-bg)'}
@@ -314,7 +314,7 @@ function Settings() {
                 width: 40,
                 height: 40,
                 backgroundColor: 'var(--color-primary)',
-                borderRadius: 'var(--radius-md)',
+                borderRadius: 'var(--shape-box)',
                 fontSize: '1.25rem'
               }}>
                 🛠️
@@ -344,7 +344,7 @@ function Settings() {
               alignItems: 'center',
               gap: 'var(--spacing-md)',
               padding: 'var(--spacing-md)',
-              borderRadius: 'var(--radius-md)',
+              borderRadius: 'var(--shape-box)',
               cursor: 'pointer',
               transition: 'background-color 0.2s'
             }}

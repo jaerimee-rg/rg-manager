@@ -4,7 +4,7 @@ import InviteLinkBox from './InviteLinkBox';
 import { Spinner } from '../../components/ui';
 import { suggestStudents, buildStudentView, filterParents, sortParents, parentLabel } from './parentLinking';
 
-const STAT_STYLE = { background: '#fff', borderRadius: 'var(--radius-lg)', padding: '12px 14px' };
+const STAT_STYLE = { background: 'var(--surface)', border: 'var(--stroke)', borderRadius: 'var(--shape-panel)', padding: '12px 14px' };
 
 function Stat({ label, value, sub, warn }) {
   return (
@@ -12,7 +12,7 @@ function Stat({ label, value, sub, warn }) {
       <div style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', fontWeight: 600 }}>{label}</div>
       <div style={{
         fontSize: '1.375rem', fontWeight: 800, letterSpacing: '-0.5px', marginTop: '2px',
-        color: warn && value > 0 ? '#B26A00' : 'inherit'
+        color: warn && value > 0 ? 'var(--color-warning)' : 'inherit'
       }}>
         {value}
         {sub && <span style={{ fontSize: '0.8125rem', color: 'var(--color-gray-400)', fontWeight: 600 }}> {sub}</span>}
@@ -138,7 +138,7 @@ function ParentList({ filterUserId = null, embedded = false }) {
     <div className={embedded ? '' : 'container'}>
       {!embedded && (
         <div className="page-header">
-          <h2>학부모</h2>
+          <h2 className="page-title">학부모</h2>
           <p style={{ fontSize: '0.875rem', color: 'var(--color-gray-500)', marginTop: '4px' }}>
             초대 링크로 가입한 학부모를 학생과 연결합니다. 연결된 아이만 일정에 신청할 수 있어요.
           </p>
@@ -158,17 +158,17 @@ function ParentList({ filterUserId = null, embedded = false }) {
       </div>
 
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '14px' }}>
-        <div style={{ display: 'inline-flex', background: 'var(--color-gray-100)', padding: '3px', borderRadius: 'var(--radius-md)' }}>
+        <div style={{ display: 'inline-flex', background: 'var(--field)', border: 'var(--stroke-thin)', padding: '3px', borderRadius: 'var(--shape-box)' }}>
           {[['parents', '학부모별'], ['students', '학생별']].map(([key, label]) => (
             <button
               key={key}
               onClick={() => setView(key)}
               aria-pressed={view === key}
               style={{
-                border: 'none', background: view === key ? '#fff' : 'none',
-                color: view === key ? 'var(--color-gray-900)' : 'var(--color-gray-600)',
+                border: 'none', background: view === key ? 'var(--ink)' : 'none',
+                color: view === key ? 'var(--paper)' : 'var(--color-gray-600)',
                 fontWeight: 700, fontSize: '0.875rem', padding: '8px 14px',
-                borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontFamily: 'inherit'
+                borderRadius: 'var(--shape-btn)', cursor: 'pointer', fontFamily: 'inherit'
               }}
             >
               {label}
@@ -183,7 +183,7 @@ function ParentList({ filterUserId = null, embedded = false }) {
           aria-label="학부모·아이 이름 검색"
           style={{
             flex: 1, minWidth: '180px', height: '42px', padding: '0 12px',
-            border: '1px solid var(--color-gray-200)', borderRadius: 'var(--radius-md)',
+            border: 'var(--stroke-thin)', borderRadius: 'var(--shape-field)', background: 'var(--field)',
             fontSize: '1rem', fontFamily: 'inherit'
           }}
         />
@@ -251,7 +251,7 @@ function ParentList({ filterUserId = null, embedded = false }) {
                           linkChild(child.id, e.target.value, child.childName, student?.name || '');
                           e.target.value = '';
                         }}
-                        style={{ padding: '7px 8px', fontSize: '0.8125rem', border: '1px solid var(--color-gray-300)', borderRadius: 'var(--radius-sm)' }}
+                        style={{ padding: '7px 8px', fontSize: '0.8125rem', border: 'var(--stroke-thin)', borderRadius: 'var(--shape-field)', background: 'var(--field)' }}
                       >
                         <option value="">학생 연결…</option>
                         {suggestStudents(child, students).length > 0 && (
@@ -286,7 +286,7 @@ function ParentList({ filterUserId = null, embedded = false }) {
                     addLink(parent.userId, e.target.value, parentLabel(parent), student?.name || '');
                     e.target.value = '';
                   }}
-                  style={{ padding: '7px 8px', fontSize: '0.8125rem', border: '1px solid var(--color-gray-300)', borderRadius: 'var(--radius-sm)' }}
+                  style={{ padding: '7px 8px', fontSize: '0.8125rem', border: 'var(--stroke-thin)', borderRadius: 'var(--shape-field)', background: 'var(--field)' }}
                 >
                   <option value="">+ 이 학부모에 학생 연결 추가…</option>
                   {students
@@ -326,7 +326,7 @@ function ParentList({ filterUserId = null, embedded = false }) {
                       onClick={() => unlinkChild(child.id, child.childName)}
                       aria-label={`${parentLabel(parent)} 연결 해제`}
                       style={{
-                        border: 'none', background: 'rgba(0,0,0,.06)', color: 'inherit', borderRadius: '50%',
+                        border: 'none', background: 'rgba(0,0,0,.06)', color: 'inherit', borderRadius: 'var(--shape-blob)',
                         width: '18px', height: '18px', fontSize: '0.7rem', cursor: 'pointer', lineHeight: 1
                       }}
                     >
@@ -340,7 +340,7 @@ function ParentList({ filterUserId = null, embedded = false }) {
                     <button
                       onClick={() => linkChild(child.id, student.id, child.childName, student.name)}
                       style={{
-                        border: 'none', background: '#B26A00', color: '#fff', borderRadius: '9px',
+                        border: 'var(--stroke-thin)', background: 'var(--star)', color: 'var(--ink)', borderRadius: 'var(--shape-btn)',
                         padding: '1px 7px', fontSize: '0.6875rem', cursor: 'pointer', fontWeight: 700
                       }}
                     >
@@ -358,7 +358,7 @@ function ParentList({ filterUserId = null, embedded = false }) {
                   addLink(e.target.value, student.id, parentLabel(parent), student.name);
                   e.target.value = '';
                 }}
-                style={{ padding: '7px 8px', fontSize: '0.8125rem', border: '1px solid var(--color-gray-300)', borderRadius: 'var(--radius-sm)' }}
+                style={{ padding: '7px 8px', fontSize: '0.8125rem', border: 'var(--stroke-thin)', borderRadius: 'var(--shape-field)', background: 'var(--field)' }}
               >
                 <option value="">+ 학부모 연결…</option>
                 {parents
@@ -373,8 +373,8 @@ function ParentList({ filterUserId = null, embedded = false }) {
       {toast && (
         <div role="status" style={{
           position: 'fixed', left: '50%', bottom: '30px', transform: 'translateX(-50%)',
-          background: 'rgba(25,31,40,.92)', color: '#fff', padding: '10px 16px',
-          borderRadius: 'var(--radius-full)', fontSize: '0.8125rem', fontWeight: 600, zIndex: 400
+          background: 'var(--ink)', color: 'var(--paper)', padding: '10px 16px',
+          borderRadius: 'var(--shape-btn)', fontSize: '0.8125rem', fontWeight: 600, zIndex: 400
         }}>
           {toast}
         </div>

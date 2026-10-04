@@ -112,10 +112,10 @@ function ParentSchedule() {
               aria-pressed={child.id === currentChild}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '7px 12px',
-                borderRadius: 'var(--radius-full)', minHeight: '40px',
-                border: `1px solid ${child.id === currentChild ? 'var(--color-gray-900)' : 'var(--color-gray-200)'}`,
-                background: child.id === currentChild ? 'var(--color-gray-900)' : '#fff',
-                color: child.id === currentChild ? '#fff' : 'var(--color-gray-700)',
+                borderRadius: 'var(--shape-btn)', minHeight: '40px',
+                border: 'var(--stroke-thin)',
+                background: child.id === currentChild ? 'var(--ink)' : 'var(--field)',
+                color: child.id === currentChild ? 'var(--paper)' : 'var(--ink-900)',
                 fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit'
               }}
             >
@@ -123,7 +123,7 @@ function ParentSchedule() {
               {child.status !== 'linked' && (
                 <span style={{
                   fontSize: '0.625rem', fontWeight: 700, padding: '1px 6px',
-                  borderRadius: 'var(--radius-full)', background: 'var(--color-warning-bg)', color: '#B26A00'
+                  borderRadius: 'var(--shape-tag)', background: 'var(--color-warning-bg)', color: 'var(--color-warning)'
                 }}>
                   확인 대기
                 </span>
@@ -140,10 +140,10 @@ function ParentSchedule() {
             onClick={() => setFilter(f.key)}
             aria-pressed={filter === f.key}
             style={{
-              padding: '6px 11px', borderRadius: 'var(--radius-full)', whiteSpace: 'nowrap',
-              border: `1px solid ${filter === f.key ? 'var(--color-primary)' : 'var(--color-gray-200)'}`,
-              background: filter === f.key ? 'var(--color-primary)' : '#fff',
-              color: filter === f.key ? '#fff' : 'var(--color-gray-700)',
+              padding: '6px 11px', borderRadius: 'var(--shape-btn)', whiteSpace: 'nowrap',
+              border: 'var(--stroke-thin)',
+              background: filter === f.key ? 'var(--ink)' : 'var(--field)',
+              color: filter === f.key ? 'var(--paper)' : 'var(--ink-900)',
               fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit'
             }}
           >
@@ -154,8 +154,8 @@ function ParentSchedule() {
 
       {children.length === 0 && (
         <div style={{
-          background: 'var(--color-warning-bg)', color: '#7A5D00', padding: '11px 12px',
-          borderRadius: 'var(--radius-md)', fontSize: '0.8125rem', marginBottom: '12px', lineHeight: 1.55
+          background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '11px 12px',
+          borderRadius: 'var(--shape-box)', fontSize: '0.8125rem', marginBottom: '12px', lineHeight: 1.55
         }}>
           아직 등록한 아이가 없어요. 내 정보에서 아이를 추가하면 신청할 수 있어요.
         </div>
@@ -194,13 +194,13 @@ function ParentSchedule() {
                   key={event.id}
                   onClick={() => navigate(`/parent/events/${event.id}`)}
                   style={{
-                    width: '100%', textAlign: 'left', background: '#fff', border: '1px solid transparent',
-                    borderRadius: 'var(--radius-lg)', padding: '14px', marginBottom: '10px',
+                    width: '100%', textAlign: 'left', background: 'var(--surface)', border: 'var(--stroke)',
+                    borderRadius: 'var(--shape-panel)', padding: '14px', marginBottom: '10px',
                     display: 'flex', gap: '12px', cursor: 'pointer', fontFamily: 'inherit'
                   }}
                 >
                   <div style={{
-                    width: '46px', flexShrink: 0, textAlign: 'center', borderRadius: 'var(--radius-md)',
+                    width: '46px', flexShrink: 0, textAlign: 'center', borderRadius: 'var(--shape-box)',
                     padding: '8px 0', background: 'var(--bg-tertiary)'
                   }}>
                     <div style={{ fontSize: '1.25rem', fontWeight: 800, lineHeight: 1.1, color: dowColor }}>{day}</div>

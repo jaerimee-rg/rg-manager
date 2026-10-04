@@ -60,8 +60,8 @@ function ParentAlbumList() {
           onClick={() => navigate(`/parent/photos/${album.eventId}`)}
           style={{
             display: 'block', width: '100%', textAlign: 'left', padding: 0, marginBottom: '12px',
-            background: '#fff', borderRadius: 'var(--radius-lg)', overflow: 'hidden',
-            border: '1px solid transparent', boxShadow: '0 1px 2px rgba(0,0,0,.04)',
+            background: 'var(--surface)', borderRadius: 'var(--shape-panel)', overflow: 'hidden',
+            border: 'var(--stroke)',
             cursor: 'pointer', fontFamily: 'inherit'
           }}
         >
@@ -115,7 +115,7 @@ function ParentAlbumList() {
 
       <div style={{
         background: 'var(--color-gray-100)', color: 'var(--color-gray-600)', fontSize: '0.8125rem',
-        padding: '11px 12px', borderRadius: 'var(--radius-md)', lineHeight: 1.55
+        padding: '11px 12px', borderRadius: 'var(--shape-box)', lineHeight: 1.55
       }}>
         확정된 이벤트의 앨범만 보여요. 일정에서 대회를 눌러 들어올 수도 있어요.
       </div>

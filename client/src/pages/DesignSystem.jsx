@@ -20,9 +20,9 @@ function Swatch({ token, name }) {
       <div
         style={{
           height: 48,
-          borderRadius: 'var(--radius-md)',
+          borderRadius: 'var(--shape-box)',
           background: `var(${token})`,
-          border: '1px solid var(--border)'
+          border: 'var(--stroke-thin)'
         }}
       />
       <span className="ui-text-xs ui-text-muted">{name}</span>
@@ -64,7 +64,7 @@ function DesignSystem() {
       key: 'status',
       header: '상태',
       render: (row) => (
-        <Badge dot tone={row.status === 'active' ? 'success' : row.status === 'pending' ? 'warning' : 'neutral'}>
+        <Badge dot tone={row.status === 'active' ? 'success' : row.status === 'pending' ? 'warning' : 'muted'}>
           {row.status === 'active' ? '수강 중' : row.status === 'pending' ? '대기' : '휴원'}
         </Badge>
       )
@@ -96,31 +96,75 @@ function DesignSystem() {
       {tab === 'foundation' && (
         <Stack gap={6}>
           <Card>
-            <CardHeader title="색" description="본문 잉크는 #1B1B1B 계열, 서피스는 흰색 + 1px 보더로 구분한다." />
+            <CardHeader
+              title="색"
+              description="바탕은 종이, 선과 제목은 검정 잉크, 강조색은 별 노랑 하나. 빨강은 오류·되돌릴 수 없는 동작에만, 카카오 노랑은 카카오 버튼에만."
+            />
             <Grid cols={4} auto>
-              <Swatch token="--ink-900" name="본문 잉크" />
-              <Swatch token="--ink-600" name="보조 텍스트" />
-              <Swatch token="--ink-200" name="보더" />
-              <Swatch token="--surface-sunken" name="페이지 배경" />
-              <Swatch token="--brand-500" name="브랜드" />
-              <Swatch token="--success-bg" name="성공" />
-              <Swatch token="--warning-bg" name="주의" />
-              <Swatch token="--danger-bg" name="위험" />
+              <Swatch token="--paper" name="종이 (페이지 바탕)" />
+              <Swatch token="--sheet" name="한 장 (카드·패널)" />
+              <Swatch token="--field" name="입력칸" />
+              <Swatch token="--ink" name="잉크 (선·제목)" />
+              <Swatch token="--pencil" name="연필 (보조 글)" />
+              <Swatch token="--rule" name="연필 선 (구분선)" />
+              <Swatch token="--star" name="별 노랑 (강조)" />
+              <Swatch token="--star-soft" name="옅은 별 (확인 필요)" />
+              <Swatch token="--alert" name="빨강 (오류)" />
+              <Swatch token="--alert-soft" name="옅은 빨강" />
+              <Swatch token="--kakao" name="카카오 (버튼 전용)" />
             </Grid>
           </Card>
 
           <Card>
-            <CardHeader title="타이포그래피" description="본문 14/24. 굵기는 400·500·600 만 쓴다." />
+            <CardHeader
+              title="타이포그래피"
+              description="제목은 Black Han Sans, 본문은 Pretendard, 말을 거는 한 줄은 Gaegu 손글씨. 본문 15/24."
+            />
             <Stack gap={3}>
-              <div style={{ fontSize: 'var(--text-4xl)', lineHeight: 'var(--leading-4xl)', fontWeight: 600, letterSpacing: 'var(--tracking-title)' }}>
-                페이지 제목 32/40
+              <div className="ui-display" style={{ fontSize: 'var(--text-4xl)', lineHeight: 'var(--leading-4xl)' }}>
+                페이지 제목 34/40 · Black Han Sans
               </div>
-              <div style={{ fontSize: 'var(--text-3xl)', lineHeight: 'var(--leading-3xl)', fontWeight: 600 }}>섹션 제목 24/32</div>
-              <div style={{ fontSize: 'var(--text-lg)', lineHeight: 'var(--leading-lg)', fontWeight: 600 }}>카드 제목 16/24</div>
-              <div>본문 14/24 — 리듬체조 수업 출석과 이벤트 신청을 한곳에서 관리합니다.</div>
+              <div className="ui-display" style={{ fontSize: 'var(--display-lg)' }}>모달 제목 22 · Black Han Sans</div>
+              <div className="ui-display" style={{ fontSize: 'var(--display-md)' }}>카드 제목 19 · Black Han Sans</div>
+              <div>본문 15/24 · Pretendard — 리듬체조 수업 출석과 이벤트 신청을 한곳에서 관리합니다.</div>
               <div className="ui-text-sm ui-text-muted">보조 13/18 — 부가 설명에 쓴다.</div>
               <div className="ui-text-xs ui-text-subtle">캡션 12/16 — 라벨과 메타 정보.</div>
+              <div className="ui-hand">손글씨 18 · Gaegu — 도움말과 빈 화면 문구처럼 한두 줄만.</div>
+              <div>강조할 단어는 <span className="ui-highlight">형광펜</span>으로 칠한다.</div>
             </Stack>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="선과 모양"
+              description="서피스는 그림자 대신 잉크 선으로 나눈다. 테두리는 손으로 그린 듯 살짝 일렁인다 — 작은 것은 크게, 큰 패널은 살짝."
+            />
+            <Grid cols={4} auto>
+              {[
+                ['--shape-panel', '카드 · 표 · 모달', 'var(--stroke)'],
+                ['--shape-box', '알림 · 메뉴 · 세그먼트', 'var(--stroke)'],
+                ['--shape-field', '입력칸', 'var(--stroke-thin)'],
+                ['--shape-btn', '버튼 · 칩 · 토스트', 'var(--stroke)'],
+                ['--shape-tag', '배지', 'var(--stroke-thin)'],
+                ['--shape-blob', '아바타 · 아이콘 원', 'var(--stroke-thin)']
+              ].map(([token, name, stroke]) => (
+                <Stack gap={1} key={token}>
+                  <div
+                    style={{
+                      height: 48,
+                      width: token === '--shape-blob' ? 48 : 'auto',
+                      background: 'var(--surface)',
+                      border: stroke,
+                      borderRadius: `var(${token})`
+                    }}
+                  />
+                  <span className="ui-text-xs ui-text-muted">{name}</span>
+                  <span className="ui-text-xs ui-text-subtle">{token}</span>
+                </Stack>
+              ))}
+            </Grid>
+            <Divider variant="zig" spacing="lg" />
+            <span className="ui-text-xs ui-text-subtle">지그재그 구분선 — &lt;Divider variant="zig" /&gt;</span>
           </Card>
 
           <Card>
@@ -233,10 +277,10 @@ function DesignSystem() {
       {tab === 'data' && (
         <Stack gap={6}>
           <Grid cols={4}>
-            <Stat label="전체 학생" value="48명" icon="users" tone="brand" />
+            <Stat label="지금 수업 중" value="2반" variant="star" hint="화·목 초등부 · 토 선수반" />
+            <Stat label="미확정 신청" value="7건" variant="alert" hint="가장 오래된 신청 9/28" />
             <Stat label="이번 주 출석" value="132회" icon="checkCircle" tone="success" hint="지난주보다 8회 많아요" />
-            <Stat label="열린 이벤트" value="3개" icon="calendar" tone="warning" />
-            <Stat label="미확정 신청" value="7건" icon="inbox" tone="danger" />
+            <Stat label="9월 출석 합계" value="512회" variant="ink" hint="8월 488회" />
           </Grid>
 
           <Card padding="none">
@@ -273,6 +317,7 @@ function DesignSystem() {
                   <Badge tone="warning" dot>대기</Badge>
                   <Badge tone="danger">마감</Badge>
                   <Badge tone="solid">확정</Badge>
+                  <Badge tone="muted">휴원</Badge>
                 </Row>
                 <Row gap={3}>
                   <Avatar name="김하늘" size="sm" />

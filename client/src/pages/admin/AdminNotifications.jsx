@@ -156,7 +156,7 @@ function AdminNotifications() {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            backgroundColor: 'var(--overlay-scrim)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -214,8 +214,9 @@ function AdminNotifications() {
                   style={{
                     width: '100%',
                     padding: 'var(--spacing-md)',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-gray-300)',
+                    borderRadius: 'var(--shape-field)',
+                    border: 'var(--stroke-thin)',
+                    background: 'var(--field)',
                     resize: 'vertical'
                   }}
                 />

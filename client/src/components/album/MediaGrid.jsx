@@ -105,10 +105,10 @@ function Tile({ item, selectable, isSelected, onOpen, onToggleSelect, renderBadg
 
       {selectable && (
         <span style={{
-          position: 'absolute', left: '6px', top: '6px', width: '22px', height: '22px', borderRadius: '50%',
-          border: '2px solid rgba(255,255,255,.9)',
-          background: isSelected ? 'var(--color-primary)' : 'rgba(0,0,0,.25)',
-          color: '#fff', fontSize: '0.7rem', fontWeight: 900,
+          position: 'absolute', left: '6px', top: '6px', width: '22px', height: '22px', borderRadius: 'var(--shape-blob)',
+          border: isSelected ? 'var(--stroke)' : '2px solid rgba(255,255,255,.9)',
+          background: isSelected ? 'var(--star)' : 'rgba(0,0,0,.25)',
+          color: 'var(--ink)', fontSize: '0.7rem', fontWeight: 900,
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
         }}>{isSelected ? '✓' : ''}</span>
       )}
@@ -116,8 +116,8 @@ function Tile({ item, selectable, isSelected, onOpen, onToggleSelect, renderBadg
       {renderBadge ? renderBadge(item) : (
         item.myTags?.length ? (
           <span style={{
-            position: 'absolute', right: '4px', top: '4px', background: 'rgba(49,130,246,.95)', color: '#fff',
-            fontSize: '0.625rem', fontWeight: 800, padding: '2px 6px', borderRadius: 'var(--radius-full)'
+            position: 'absolute', right: '4px', top: '4px', background: 'var(--star)', color: 'var(--ink)',
+            fontSize: '0.625rem', fontWeight: 800, padding: '2px 6px', borderRadius: 'var(--shape-tag)'
           }}>{item.myTags.map((tag) => tag.name).filter(Boolean).join('·') || '우리 아이'}</span>
         ) : null
       )}

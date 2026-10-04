@@ -103,9 +103,8 @@ function KakaoCallback() {
             }}>
               ⚠️
             </div>
-            <h2 style={{
+            <h2 className="ui-display" style={{
               fontSize: '1.25rem',
-              fontWeight: 600,
               color: 'var(--color-gray-900)',
               marginBottom: 'var(--spacing-sm)'
             }}>
@@ -122,7 +121,7 @@ function KakaoCallback() {
               width: 64,
               height: 64,
               borderRadius: 'var(--radius-xl)',
-              backgroundColor: '#FEE500',
+              backgroundColor: 'var(--kakao)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -131,9 +130,8 @@ function KakaoCallback() {
             }}>
               💬
             </div>
-            <h2 style={{
+            <h2 className="ui-display" style={{
               fontSize: '1.25rem',
-              fontWeight: 600,
               color: 'var(--color-gray-900)',
               marginBottom: 'var(--spacing-sm)'
             }}>
@@ -149,7 +147,7 @@ function KakaoCallback() {
                 width: 32,
                 height: 32,
                 border: '3px solid var(--color-gray-200)',
-                borderTopColor: '#FEE500',
+                borderTopColor: 'var(--kakao)',
                 borderRadius: '50%',
                 animation: 'spin 1s linear infinite'
               }} />

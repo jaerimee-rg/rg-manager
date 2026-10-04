@@ -94,7 +94,7 @@ function StudentForm() {
     <div className="animate-fadeIn">
       {/* Page Header */}
       <div className="page-header">
-        <h2 className="page-title">{isEditing ? "학생 수정" : "새 학생 등록"}</h2>
+        <h2 className="page-title page-title--sub">{isEditing ? "학생 수정" : "새 학생 등록"}</h2>
         <button
           className="btn btn-secondary"
           onClick={() => navigate("/students")}
@@ -155,9 +155,8 @@ function StudentForm() {
                         display: 'flex',
                         alignItems: 'center',
                         padding: 'var(--spacing-lg)',
-                        border: '2px solid',
-                        borderColor: isSelected ? 'var(--color-primary)' : 'var(--color-gray-200)',
-                        borderRadius: 'var(--radius-md)',
+                        border: isSelected ? 'var(--stroke)' : 'var(--stroke-thin)',
+                        borderRadius: 'var(--shape-box)',
                         cursor: 'pointer',
                         backgroundColor: isSelected ? 'var(--color-primary-bg)' : 'var(--bg-secondary)',
                         transition: 'all var(--transition-fast)'

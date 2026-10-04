@@ -51,7 +51,10 @@ export function Grid({ children, cols = 2, auto = false, className = '', ...rest
   );
 }
 
-export function Divider({ spacing, label, className = '', ...rest }) {
+/**
+ * 구분선. variant="zig" 이면 손그림 지그재그(로고 눈썹 모양) — 화면 큰 덩어리 사이에만 쓴다.
+ */
+export function Divider({ spacing, label, variant, className = '', ...rest }) {
   if (label) {
     return (
       <div className={cx('ui-divider', className)} data-label={label} data-spacing={spacing} {...rest}>
@@ -59,7 +62,7 @@ export function Divider({ spacing, label, className = '', ...rest }) {
       </div>
     );
   }
-  return <hr className={cx('ui-divider', className)} data-spacing={spacing} {...rest} />;
+  return <hr className={cx('ui-divider', className)} data-spacing={spacing} data-variant={variant} {...rest} />;
 }
 
 /** 카드 안팎에서 쓰는 소제목 블록. */

@@ -127,7 +127,7 @@ function ClassStudentManagement() {
     <div className="animate-fadeIn">
       {/* Page Header */}
       <div className="page-header">
-        <h2 className="page-title">{classItem.name} - 학생 관리</h2>
+        <h2 className="page-title page-title--sub">{classItem.name} - 학생 관리</h2>
         <button
           className="btn btn-secondary"
           onClick={() => navigate('/classes')}
@@ -204,7 +204,7 @@ function ClassStudentManagement() {
                   transform: 'translateY(-50%)',
                   background: 'var(--color-gray-300)',
                   border: 'none',
-                  borderRadius: '50%',
+                  borderRadius: 'var(--shape-blob)',
                   width: '20px',
                   height: '20px',
                   display: 'flex',
@@ -212,7 +212,7 @@ function ClassStudentManagement() {
                   justifyContent: 'center',
                   cursor: 'pointer',
                   fontSize: '14px',
-                  color: 'white',
+                  color: 'var(--paper)',
                   lineHeight: 1
                 }}
               >
@@ -306,7 +306,7 @@ function ClassStudentManagement() {
                   transform: 'translateY(-50%)',
                   background: 'var(--color-gray-300)',
                   border: 'none',
-                  borderRadius: '50%',
+                  borderRadius: 'var(--shape-blob)',
                   width: '20px',
                   height: '20px',
                   display: 'flex',
@@ -314,7 +314,7 @@ function ClassStudentManagement() {
                   justifyContent: 'center',
                   cursor: 'pointer',
                   fontSize: '14px',
-                  color: 'white',
+                  color: 'var(--paper)',
                   lineHeight: 1
                 }}
               >

@@ -61,6 +61,12 @@ export default defineConfig({
       name: 'brand',
       use: { ...devices['Desktop Chrome'] },
       testMatch: /brand\.spec\.mjs/
+    },
+    {
+      // 디자인 시스템 (mockup/ 의 종이 · 잉크 · 별). 계산된 색 · 선 · 서체와 세 역할의 셸을 본다.
+      name: 'design',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: /design\.spec\.mjs/
     }
   ]
 });

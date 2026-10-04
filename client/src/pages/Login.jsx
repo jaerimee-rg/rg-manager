@@ -60,8 +60,8 @@ function Login() {
         {/* Login Card */}
         <div className="card" style={{
           padding: 'var(--spacing-2xl)',
-          border: 'none',
-          boxShadow: 'var(--shadow-md)'
+          border: 'var(--stroke)',
+          borderRadius: 'var(--shape-panel)'
         }}>
           {error && (
             <div className="alert alert-error" style={{ marginBottom: 'var(--spacing-lg)' }}>
@@ -74,10 +74,10 @@ function Login() {
               role="status"
               style={{
                 marginBottom: 'var(--spacing-lg)',
-                background: 'var(--color-primary-bg, #EEF3FF)',
+                background: 'var(--color-primary-bg)',
                 color: 'var(--color-gray-700)',
                 padding: '13px 15px',
-                borderRadius: 'var(--radius-md)',
+                borderRadius: 'var(--shape-box)',
                 fontSize: '0.875rem',
                 lineHeight: 1.6,
                 wordBreak: 'keep-all'
@@ -93,10 +93,10 @@ function Login() {
               role="alert"
               style={{
                 marginBottom: 'var(--spacing-lg)',
-                background: 'var(--color-warning-bg, #FFF7DC)',
-                color: 'var(--color-warning, #B8860B)',
+                background: 'var(--color-warning-bg)',
+                color: 'var(--color-warning)',
                 padding: '13px 15px',
-                borderRadius: 'var(--radius-md)',
+                borderRadius: 'var(--shape-box)',
                 fontSize: '0.875rem',
                 lineHeight: 1.6,
                 wordBreak: 'keep-all'
@@ -116,10 +116,10 @@ function Login() {
             style={{
               width: '100%',
               padding: '16px 20px',
-              backgroundColor: '#FEE500',
+              backgroundColor: 'var(--kakao)',
               color: '#000000',
-              border: 'none',
-              borderRadius: 'var(--radius-lg)',
+              border: 'var(--stroke)',
+              borderRadius: 'var(--shape-btn)',
               fontSize: '1.0625rem',
               fontWeight: 600,
               cursor: loading ? 'not-allowed' : 'pointer',

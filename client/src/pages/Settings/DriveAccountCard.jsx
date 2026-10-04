@@ -20,9 +20,9 @@ const CALLBACK_MESSAGES = {
 };
 
 const TONES = {
-  ok: { background: 'var(--color-success-bg)', color: '#047857' },
-  warn: { background: 'var(--color-warning-bg)', color: '#7A5D00' },
-  danger: { background: 'var(--color-danger-bg)', color: '#C62828' },
+  ok: { background: 'var(--color-success-bg)', color: 'var(--ink-900)' },
+  warn: { background: 'var(--color-warning-bg)', color: 'var(--color-warning)' },
+  danger: { background: 'var(--color-danger-bg)', color: 'var(--alert)' },
   info: { background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)' },
   gray: { background: 'var(--color-gray-100)', color: 'var(--color-gray-600)' }
 };
@@ -31,7 +31,7 @@ const noticeStyle = (tone) => ({
   ...TONES[tone] || TONES.gray,
   fontSize: '0.8125rem',
   padding: '11px 13px',
-  borderRadius: 'var(--radius-md)',
+  borderRadius: 'var(--shape-box)',
   lineHeight: 1.6
 });
 

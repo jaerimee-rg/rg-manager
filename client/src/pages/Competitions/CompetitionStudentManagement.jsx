@@ -357,7 +357,7 @@ function CompetitionStudentManagement() {
     <div className="animate-fadeIn">
       {/* Page Header */}
       <div className="page-header">
-        <h2 className="page-title">{competition.name} - 참가 학생</h2>
+        <h2 className="page-title page-title--sub">{competition.name} - 참가 학생</h2>
         <button
           className="btn btn-secondary"
           onClick={() => navigate('/events')}
@@ -432,7 +432,7 @@ function CompetitionStudentManagement() {
                   transform: 'translateY(-50%)',
                   background: 'var(--color-gray-300)',
                   border: 'none',
-                  borderRadius: '50%',
+                  borderRadius: 'var(--shape-blob)',
                   width: '20px',
                   height: '20px',
                   display: 'flex',
@@ -440,7 +440,7 @@ function CompetitionStudentManagement() {
                   justifyContent: 'center',
                   cursor: 'pointer',
                   fontSize: '14px',
-                  color: 'white',
+                  color: 'var(--paper)',
                   lineHeight: 1
                 }}
               >
@@ -495,10 +495,10 @@ function CompetitionStudentManagement() {
                               alignItems: 'center',
                               gap: '4px',
                               padding: '4px 8px',
-                              borderRadius: 'var(--radius-full)',
+                              borderRadius: 'var(--shape-btn)',
                               backgroundColor: student.paid ? 'var(--color-success-bg)' : 'var(--color-gray-100)',
                               cursor: 'pointer',
-                              border: student.paid ? '1px solid var(--color-success)' : '1px solid var(--color-gray-300)'
+                              border: 'var(--stroke-thin)'
                             }}
                           >
                             <span style={{
@@ -506,11 +506,11 @@ function CompetitionStudentManagement() {
                               height: '14px',
                               borderRadius: '3px',
                               border: student.paid ? '2px solid var(--color-success)' : '2px solid var(--color-gray-400)',
-                              backgroundColor: student.paid ? 'var(--color-success)' : 'white',
+                              backgroundColor: student.paid ? 'var(--color-success)' : 'var(--field)',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              color: 'white',
+                              color: 'var(--paper)',
                               fontSize: '9px',
                               fontWeight: 'bold'
                             }}>
@@ -531,10 +531,10 @@ function CompetitionStudentManagement() {
                               alignItems: 'center',
                               gap: '4px',
                               padding: '4px 8px',
-                              borderRadius: 'var(--radius-full)',
+                              borderRadius: 'var(--shape-btn)',
                               backgroundColor: student.coachFeePaid ? 'var(--color-primary-bg)' : 'var(--color-gray-100)',
                               cursor: 'pointer',
-                              border: student.coachFeePaid ? '1px solid var(--color-primary)' : '1px solid var(--color-gray-300)'
+                              border: 'var(--stroke-thin)'
                             }}
                           >
                             <span style={{
@@ -542,11 +542,11 @@ function CompetitionStudentManagement() {
                               height: '14px',
                               borderRadius: '3px',
                               border: student.coachFeePaid ? '2px solid var(--color-primary)' : '2px solid var(--color-gray-400)',
-                              backgroundColor: student.coachFeePaid ? 'var(--color-primary)' : 'white',
+                              backgroundColor: student.coachFeePaid ? 'var(--color-primary)' : 'var(--field)',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              color: 'white',
+                              color: 'var(--paper)',
                               fontSize: '9px',
                               fontWeight: 'bold'
                             }}>
@@ -664,7 +664,7 @@ function CompetitionStudentManagement() {
                   transform: 'translateY(-50%)',
                   background: 'var(--color-gray-300)',
                   border: 'none',
-                  borderRadius: '50%',
+                  borderRadius: 'var(--shape-blob)',
                   width: '20px',
                   height: '20px',
                   display: 'flex',
@@ -672,7 +672,7 @@ function CompetitionStudentManagement() {
                   justifyContent: 'center',
                   cursor: 'pointer',
                   fontSize: '14px',
-                  color: 'white',
+                  color: 'var(--paper)',
                   lineHeight: 1
                 }}
               >
@@ -741,7 +741,7 @@ function CompetitionStudentManagement() {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            backgroundColor: 'var(--overlay-scrim)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -785,8 +785,8 @@ function CompetitionStudentManagement() {
               <div className="form-group">
                 <label className="form-label">참가 종목 * (복수 선택 가능)</label>
                 <div style={{
-                  border: '1px solid var(--color-gray-200)',
-                  borderRadius: 'var(--radius-md)',
+                  border: 'var(--stroke-thin)',
+                  borderRadius: 'var(--shape-box)',
                   overflow: 'hidden'
                 }}>
                   {APPARATUS_LIST.map((apparatus, index) => {
@@ -840,10 +840,10 @@ function CompetitionStudentManagement() {
                                 onClick={() => setRoutineType(apparatus.id, '규정')}
                                 style={{
                                   padding: '4px 12px',
-                                  borderRadius: 'var(--radius-full)',
-                                  border: routine === '규정' ? '2px solid var(--color-primary)' : '1px solid var(--color-gray-300)',
-                                  backgroundColor: routine === '규정' ? 'var(--color-primary)' : 'white',
-                                  color: routine === '규정' ? 'white' : 'var(--color-gray-700)',
+                                  borderRadius: 'var(--shape-btn)',
+                                  border: routine === '규정' ? 'var(--stroke)' : 'var(--stroke-thin)',
+                                  backgroundColor: routine === '규정' ? 'var(--color-primary)' : 'var(--surface)',
+                                  color: routine === '규정' ? 'var(--paper)' : 'var(--color-gray-700)',
                                   fontWeight: 500,
                                   fontSize: '0.8125rem',
                                   cursor: 'pointer'
@@ -856,10 +856,10 @@ function CompetitionStudentManagement() {
                                 onClick={() => setRoutineType(apparatus.id, '자유')}
                                 style={{
                                   padding: '4px 12px',
-                                  borderRadius: 'var(--radius-full)',
-                                  border: routine === '자유' ? '2px solid var(--color-primary)' : '1px solid var(--color-gray-300)',
-                                  backgroundColor: routine === '자유' ? 'var(--color-primary)' : 'white',
-                                  color: routine === '자유' ? 'white' : 'var(--color-gray-700)',
+                                  borderRadius: 'var(--shape-btn)',
+                                  border: routine === '자유' ? 'var(--stroke)' : 'var(--stroke-thin)',
+                                  backgroundColor: routine === '자유' ? 'var(--color-primary)' : 'var(--surface)',
+                                  color: routine === '자유' ? 'var(--paper)' : 'var(--color-gray-700)',
                                   fontWeight: 500,
                                   fontSize: '0.8125rem',
                                   cursor: 'pointer'
@@ -887,10 +887,10 @@ function CompetitionStudentManagement() {
                                 onClick={() => setLevel(apparatus.id, level === lvl ? '' : lvl)}
                                 style={{
                                   padding: '4px 10px',
-                                  borderRadius: 'var(--radius-md)',
-                                  border: level === lvl ? '2px solid var(--color-success)' : '1px solid var(--color-gray-300)',
-                                  backgroundColor: level === lvl ? 'var(--color-success)' : 'white',
-                                  color: level === lvl ? 'white' : 'var(--color-gray-700)',
+                                  borderRadius: 'var(--shape-btn)',
+                                  border: level === lvl ? 'var(--stroke)' : 'var(--stroke-thin)',
+                                  backgroundColor: level === lvl ? 'var(--color-success)' : 'var(--surface)',
+                                  color: level === lvl ? 'var(--paper)' : 'var(--color-gray-700)',
                                   fontWeight: 500,
                                   fontSize: '0.75rem',
                                   cursor: 'pointer'
@@ -921,8 +921,9 @@ function CompetitionStudentManagement() {
                                 width: '100%',
                                 padding: '8px 12px',
                                 fontSize: '16px',
-                                border: '1px solid var(--color-gray-200)',
-                                borderRadius: 'var(--radius-md)'
+                                border: 'var(--stroke-thin)',
+                                borderRadius: 'var(--shape-field)',
+                                background: 'var(--field)'
                               }}
                               autoComplete="off"
                               autoCorrect="off"
@@ -942,7 +943,7 @@ function CompetitionStudentManagement() {
                 marginTop: 'var(--spacing-md)',
                 padding: 'var(--spacing-md)',
                 backgroundColor: 'var(--color-gray-50)',
-                borderRadius: 'var(--radius-md)',
+                borderRadius: 'var(--shape-box)',
                 fontSize: '0.875rem',
                 color: 'var(--color-gray-600)'
               }}>

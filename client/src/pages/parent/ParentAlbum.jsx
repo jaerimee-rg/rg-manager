@@ -140,8 +140,8 @@ function ParentAlbum() {
         style={{
           display: 'flex', alignItems: 'center', gap: '10px', width: '100%', textAlign: 'left',
           background: mineOnly ? 'var(--color-primary-bg)' : 'var(--bg-tertiary)',
-          border: `1px solid ${mineOnly ? 'var(--color-primary)' : 'var(--color-gray-200)'}`,
-          borderRadius: 'var(--radius-md)', padding: '10px 12px', cursor: 'pointer',
+          border: 'var(--stroke-thin)',
+          borderRadius: 'var(--shape-box)', padding: '10px 12px', cursor: 'pointer',
           fontFamily: 'inherit', marginBottom: '10px'
         }}
       >
@@ -157,13 +157,14 @@ function ParentAlbum() {
         <span
           aria-hidden="true"
           style={{
-            width: '44px', height: '26px', borderRadius: 'var(--radius-full)', flexShrink: 0, position: 'relative',
-            background: mineOnly ? 'var(--color-primary)' : 'var(--color-gray-300)', transition: 'background .18s'
+            width: '44px', height: '26px', borderRadius: 'var(--shape-btn)', flexShrink: 0, position: 'relative',
+            border: 'var(--stroke-thin)',
+            background: mineOnly ? 'var(--star)' : 'var(--field)', transition: 'background .18s'
           }}
         >
           <span style={{
-            position: 'absolute', top: '3px', left: mineOnly ? '21px' : '3px', width: '20px', height: '20px',
-            borderRadius: '50%', background: '#fff', transition: 'left .18s', boxShadow: '0 1px 3px rgba(0,0,0,.2)'
+            position: 'absolute', top: '1.5px', left: mineOnly ? '19.5px' : '1.5px', width: '20px', height: '20px',
+            borderRadius: 'var(--shape-blob)', background: 'var(--ink)', transition: 'left .18s'
           }} />
         </span>
       </button>
@@ -198,7 +199,7 @@ function ParentAlbum() {
 
       {mineOnly && candidates.length > 0 && (
         <div style={{
-          background: '#fff', border: '1px solid var(--color-primary)', borderRadius: 'var(--radius-md)',
+          background: 'var(--surface)', border: 'var(--stroke)', borderRadius: 'var(--shape-panel)',
           padding: '12px', margin: '10px 0'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8125rem', fontWeight: 800, marginBottom: '4px' }}>
@@ -242,7 +243,7 @@ function ParentAlbum() {
       {mineOnly && selectedChild && !visible.length && !candidates.length && (
         <div style={{
           background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)', fontSize: '0.8125rem',
-          padding: '12px', borderRadius: 'var(--radius-md)', lineHeight: 1.6, marginTop: '10px'
+          padding: '12px', borderRadius: 'var(--shape-box)', lineHeight: 1.6, marginTop: '10px'
         }}>
           <b>{selectedChild.name}</b> 사진을 아직 찾지 못했어요.
           얼굴 사진을 등록하면 우리 아이가 나온 사진만 모아 볼 수 있어요.
@@ -281,10 +282,10 @@ function ParentAlbum() {
         disabled={!uploadOpen}
         style={{
           position: 'fixed', right: '16px', bottom: 'calc(74px + env(safe-area-inset-bottom))',
-          height: '50px', padding: '0 18px', borderRadius: 'var(--radius-full)',
-          background: uploadOpen ? 'var(--color-primary)' : 'var(--color-gray-400)', color: '#fff',
+          height: '50px', padding: '0 18px', borderRadius: 'var(--shape-btn)',
+          background: uploadOpen ? 'var(--color-primary)' : 'var(--color-gray-400)', color: 'var(--paper)',
           border: 'none', fontWeight: 800, fontSize: '0.9375rem', fontFamily: 'inherit',
-          boxShadow: uploadOpen ? '0 6px 18px rgba(49,130,246,.4)' : 'none',
+          boxShadow: uploadOpen ? 'var(--shadow-popover)' : 'none',
           cursor: uploadOpen ? 'pointer' : 'not-allowed', zIndex: 15
         }}
       >{uploadOpen ? '＋ 올리기' : '업로드 마감'}</button>
@@ -311,8 +312,8 @@ function ParentAlbum() {
         <div style={{
           position: 'fixed', left: '50%', transform: 'translateX(-50%)',
           bottom: 'calc(130px + env(safe-area-inset-bottom))',
-          background: 'rgba(25,31,40,.94)', color: '#fff', padding: '10px 16px',
-          borderRadius: 'var(--radius-md)', fontSize: '0.8125rem', fontWeight: 600,
+          background: 'var(--ink)', color: 'var(--paper)', padding: '10px 16px',
+          borderRadius: 'var(--shape-btn)', fontSize: '0.8125rem', fontWeight: 600,
           zIndex: 250, maxWidth: '88%', textAlign: 'center'
         }}>{message}</div>
       )}
@@ -322,11 +323,11 @@ function ParentAlbum() {
 
 const chipStyle = (active, primary = false) => ({
   display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '6px 11px',
-  borderRadius: 'var(--radius-full)', whiteSpace: 'nowrap', cursor: 'pointer',
+  borderRadius: 'var(--shape-btn)', whiteSpace: 'nowrap', cursor: 'pointer',
   fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 600, minHeight: '34px',
-  border: `1px solid ${active ? (primary ? 'var(--color-primary)' : 'var(--color-gray-900)') : 'var(--color-gray-200)'}`,
-  background: active ? (primary ? 'var(--color-primary)' : 'var(--color-gray-900)') : '#fff',
-  color: active ? '#fff' : 'var(--color-gray-700)'
+  border: 'var(--stroke-thin)',
+  background: active ? 'var(--ink)' : 'var(--field)',
+  color: active ? 'var(--paper)' : 'var(--ink-900)'
 });
 
 export default ParentAlbum;

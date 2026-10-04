@@ -204,7 +204,7 @@ function StudentCompetitions() {
                   transform: 'translateY(-50%)',
                   background: 'var(--color-gray-300)',
                   border: 'none',
-                  borderRadius: '50%',
+                  borderRadius: 'var(--shape-blob)',
                   width: '20px',
                   height: '20px',
                   display: 'flex',
@@ -212,7 +212,7 @@ function StudentCompetitions() {
                   justifyContent: 'center',
                   cursor: 'pointer',
                   fontSize: '14px',
-                  color: 'white',
+                  color: 'var(--paper)',
                   lineHeight: 1
                 }}
               >

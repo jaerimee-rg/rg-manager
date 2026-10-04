@@ -5,10 +5,13 @@ const cx = (...parts) => parts.filter(Boolean).join(' ');
 
 /**
  * 모든 페이지의 제목 줄. 좁은 화면에서는 액션이 제목 아래로 내려가 폭을 채운다.
+ * 제목은 제목 서체(Black Han Sans)이고, 목록 화면(뒤로 가기 없음)에는 제목 옆에 별 세 개가 붙는다.
+ * doodle={false} 로 끄고, doodle 로 하위 화면에도 켤 수 있다.
  */
-export function PageHeader({ title, description, actions, onBack, backLabel = '뒤로', children, className = '', ...rest }) {
+export function PageHeader({ title, description, actions, onBack, backLabel = '뒤로', doodle, children, className = '', ...rest }) {
+  const showDoodle = doodle ?? !onBack;
   return (
-    <header className={cx('ui-page-header', className)} {...rest}>
+    <header className={cx('ui-page-header', className)} data-doodle={showDoodle || undefined} {...rest}>
       {onBack && (
         <button type="button" className="ui-page-header__back" onClick={onBack}>
           <Icon name="arrowLeft" size={16} />

@@ -112,7 +112,7 @@ function DateRangePicker({ startDate, endDate, onDateChange, isMobile = false, l
                 left: 0,
                 right: 0,
                 bottom: 0,
-                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                backgroundColor: 'var(--overlay-scrim)',
                 zIndex: 999
               }}
               onClick={() => setShowDatePicker(false)}
@@ -125,9 +125,10 @@ function DateRangePicker({ startDate, endDate, onDateChange, isMobile = false, l
             right: isMobile ? 'auto' : pickerPosition.right,
             transform: isMobile ? 'translate(-50%, -50%)' : 'none',
             zIndex: 1000,
-            backgroundColor: 'var(--bg-secondary)',
-            boxShadow: 'var(--shadow-lg)',
-            borderRadius: 'var(--radius-lg)',
+            backgroundColor: 'var(--surface)',
+            border: 'var(--stroke)',
+            boxShadow: 'var(--shadow-popover)',
+            borderRadius: 'var(--shape-panel)',
             marginTop: isMobile ? 0 : 'var(--spacing-sm)',
             maxWidth: isMobile ? '95vw' : 'none',
             maxHeight: isMobile ? '90vh' : 'none',
@@ -139,7 +140,7 @@ function DateRangePicker({ startDate, endDate, onDateChange, isMobile = false, l
               months={isMobile ? 1 : 2}
               direction={isMobile ? 'vertical' : 'horizontal'}
               locale={ko}
-              rangeColors={['#3182F6']}
+              rangeColors={['#000000']}
             />
             <div style={{
               padding: 'var(--spacing-lg)',

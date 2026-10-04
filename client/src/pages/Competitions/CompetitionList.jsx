@@ -228,7 +228,7 @@ function CompetitionList({ basePath = '/competitions' }) {
                 <div className="swipeable-actions" style={{ gap: 'var(--spacing-xs)' }}>
                   <button
                     className="swipeable-action-btn"
-                    style={{ backgroundColor: 'var(--color-gray-500)', color: 'white' }}
+                    style={{ backgroundColor: 'var(--color-gray-500)', color: 'var(--paper)' }}
                     onClick={() => handleEdit(competition)}
                   >
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

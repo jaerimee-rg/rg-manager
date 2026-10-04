@@ -172,7 +172,7 @@ function RoleSwitcher({ variant = 'card', onNavigate }) {
 
   return (
     <div className="card" style={{ padding: '16px', marginBottom: '12px' }}>
-      <h3 style={{ fontSize: '0.8125rem', fontWeight: 800, color: 'var(--color-gray-500)', marginBottom: '4px' }}>
+      <h3 className="ui-display" style={{ fontSize: '0.8125rem', color: 'var(--color-gray-500)', marginBottom: '4px' }}>
         역할 전환
       </h3>
       <p style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', lineHeight: 1.5, marginBottom: '6px' }}>

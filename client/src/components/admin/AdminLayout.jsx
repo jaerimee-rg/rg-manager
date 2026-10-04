@@ -2,21 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import RoleSwitcher from '../common/RoleSwitcher';
-import { Brand } from '../ui';
+import { Brand, Icon } from '../ui';
 
+// icon 은 components/ui/Icon 의 이름
 const adminMenuItems = [
-  { path: '/admin/students', label: '학생', icon: '👥' },
-  { path: '/admin/classes', label: '수업', icon: '📚' },
-  { path: '/admin/competitions', label: '대회', icon: '🏆' },
-  { path: '/admin/events', label: '이벤트', icon: '📅' },
-  { path: '/admin/teachers', label: '선생님', icon: '🎀' },
-  { path: '/admin/parents', label: '학부모', icon: '👨‍👩‍👧' },
-  { path: '/admin/attendance', label: '출석', icon: '✓' },
-  { path: '/admin/users', label: '사용자', icon: '👤' },
-  { path: '/admin/logs', label: '로그', icon: '📝' },
-  { path: '/admin/notifications', label: '알림', icon: '🔔' },
-  { path: '/admin/faq', label: 'FAQ', icon: '💬' },
-  { path: '/admin/settings', label: '설정', icon: '⚙️' },
+  { path: '/admin/students', label: '학생', icon: 'users' },
+  { path: '/admin/classes', label: '수업', icon: 'book' },
+  { path: '/admin/competitions', label: '대회', icon: 'award' },
+  { path: '/admin/events', label: '이벤트', icon: 'calendar' },
+  { path: '/admin/teachers', label: '선생님', icon: 'user' },
+  { path: '/admin/parents', label: '학부모', icon: 'heart' },
+  { path: '/admin/attendance', label: '출석', icon: 'checkCircle' },
+  { path: '/admin/users', label: '사용자', icon: 'shield' },
+  { path: '/admin/logs', label: '로그', icon: 'file' },
+  { path: '/admin/notifications', label: '알림', icon: 'bell' },
+  { path: '/admin/faq', label: 'FAQ', icon: 'message' },
+  { path: '/admin/settings', label: '설정', icon: 'settings' },
 ];
 
 function AdminLayout() {
@@ -72,7 +73,7 @@ function AdminLayout() {
               to={item.path}
               className={`admin-sidebar-item ${isActive(item.path) ? 'active' : ''}`}
             >
-              <span className="admin-sidebar-icon">{item.icon}</span>
+              <span className="admin-sidebar-icon"><Icon name={item.icon} size={20} /></span>
               <span className="admin-sidebar-label">{item.label}</span>
             </Link>
           ))}
@@ -81,7 +82,7 @@ function AdminLayout() {
           {/* 같은 카카오 계정의 다른 역할로 (관리자 → 선생님 → 학부모) */}
           <RoleSwitcher variant="list" />
           <Link to="/" className="admin-sidebar-back">
-            <span>←</span>
+            <Icon name="arrowLeft" size={16} />
             <span>메인으로 돌아가기</span>
           </Link>
         </div>
@@ -131,7 +132,7 @@ function AdminLayout() {
                 onClick={() => handleMenuItemClick(item.path)}
                 className={`admin-mobile-menu-item ${isActive(item.path) ? 'active' : ''}`}
               >
-                <span className="admin-mobile-menu-icon">{item.icon}</span>
+                <span className="admin-mobile-menu-icon"><Icon name={item.icon} size={18} /></span>
                 <span className="admin-mobile-menu-label">{item.label}</span>
               </button>
             ))}
@@ -147,7 +148,7 @@ function AdminLayout() {
               className="admin-mobile-menu-item"
               onClick={() => setMobileMenuOpen(false)}
             >
-              <span className="admin-mobile-menu-icon">🏠</span>
+              <span className="admin-mobile-menu-icon"><Icon name="home" size={18} /></span>
               <span className="admin-mobile-menu-label">메인으로 돌아가기</span>
             </Link>
           </div>
