@@ -31,6 +31,7 @@ import ParentApp from './components/parent/ParentApp';
 import RoleSwitcher from './components/common/RoleSwitcher';
 import ImpersonationBanner from './components/common/ImpersonationBanner';
 import RememberReturnTo from './components/common/RememberReturnTo';
+import { Brand, Spinner } from './components/ui';
 
 // Admin components
 import AdminRoute from './components/admin/AdminRoute';
@@ -48,21 +49,9 @@ import AdminEvents from './pages/admin/AdminEvents';
 import AdminParents from './pages/admin/AdminParents';
 import AdminTeacherInvites from './pages/admin/AdminTeacherInvites';
 
+// 저장된 토큰을 확인하는 동안 — 로고가 튀는 로딩 표시 (index.html 의 첫 로딩 표시와 같은 모양)
 function AuthLoading() {
-  return (
-    <div style={{
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      minHeight: '100vh',
-      backgroundColor: 'var(--bg-primary)'
-    }}>
-      <div style={{ textAlign: 'center' }}>
-        <div className="skeleton" style={{ width: 48, height: 48, borderRadius: '50%', margin: '0 auto 16px' }}></div>
-        <div style={{ color: 'var(--color-gray-500)', fontSize: '0.9375rem' }}>로딩 중...</div>
-      </div>
-    </div>
-  );
+  return <Spinner fullscreen />;
 }
 
 function ProtectedRoute({ children }) {
@@ -236,7 +225,7 @@ function App() {
       <header className="app-header">
         <div className="app-header-inner">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <h1 style={{ marginBottom: 0 }}>리듬체조 출석</h1>
+            <Brand as="h1" />
             <button className="mobile-menu-button" onClick={toggleMobileMenu}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="3" y1="12" x2="21" y2="12"></line>

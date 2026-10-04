@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { peekReturnTo, isEventSharePath } from '../utils/returnTo';
+import { Brand } from '../components/ui';
 
 function Login() {
   const [searchParams] = useSearchParams();
@@ -46,27 +47,7 @@ function Login() {
           textAlign: 'center',
           marginBottom: 'var(--spacing-3xl)'
         }}>
-          <div style={{
-            width: 80,
-            height: 80,
-            borderRadius: 'var(--radius-xl)',
-            backgroundColor: 'var(--color-primary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto var(--spacing-xl)',
-            fontSize: '2.5rem'
-          }}>
-            🎀
-          </div>
-          <h1 style={{
-            fontSize: '1.75rem',
-            fontWeight: 700,
-            color: 'var(--color-gray-900)',
-            marginBottom: 'var(--spacing-sm)'
-          }}>
-            리듬체조 출석 관리
-          </h1>
+          <Brand as="h1" size="lg" style={{ marginBottom: 'var(--spacing-sm)' }} />
           <p style={{
             color: 'var(--color-gray-500)',
             fontSize: '0.9375rem',

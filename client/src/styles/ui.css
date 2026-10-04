@@ -290,6 +290,123 @@
   .ui-btn[data-size="md"] { height: 44px; }
 }
 
+/* ===================================================================
+   Brand — 로고 아래에 서비스 이름 (헤더·로그인·관리자 사이드바)
+   =================================================================== */
+.ui-brand {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--ink-900);
+  text-decoration: none;
+}
+.ui-brand__logo {
+  display: block;
+  width: auto;
+  height: var(--brand-logo, 36px);
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.ui-brand__name {
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-title);
+  white-space: nowrap;
+}
+.ui-brand__caption {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--ink-500);
+}
+.ui-brand[data-size="sm"] { --brand-logo: 30px; }
+.ui-brand[data-size="lg"] {
+  --brand-logo: 84px;
+  align-items: center;
+  gap: var(--space-3);
+}
+.ui-brand[data-size="lg"] .ui-brand__name {
+  font-size: var(--text-3xl);
+  line-height: var(--leading-3xl);
+  font-weight: var(--weight-bold);
+}
+
+/* ===================================================================
+   Loader — 로고가 위아래로 통통 튀는 로딩 표시
+   (index.html 의 첫 로딩 표시도 같은 움직임을 인라인으로 갖고 있다)
+   =================================================================== */
+.ui-logo-hop {
+  --hop-size: 56px;
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  width: var(--hop-size);
+  height: calc(var(--hop-size) * 1.45);
+}
+.ui-logo-hop img {
+  display: block;
+  width: 100%;
+  height: auto;
+  transform-origin: 50% 100%;
+  animation: ui-logo-hop 900ms cubic-bezier(.33, 0, .45, 1) infinite;
+}
+/* 바닥 그림자: 로고가 높이 뜰수록 작고 옅어진다 */
+.ui-logo-hop::after {
+  content: "";
+  flex: none;
+  width: 66%;
+  height: calc(var(--hop-size) * .1);
+  margin-top: calc(var(--hop-size) * -.04);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, .18);
+  animation: ui-logo-hop-shadow 900ms cubic-bezier(.33, 0, .45, 1) infinite;
+}
+@keyframes ui-logo-hop {
+  0%, 100% { transform: translateY(0) scale(1.1, .86) rotate(0deg); }   /* 착지: 납작 */
+  14%      { transform: translateY(0) scale(.94, 1.08) rotate(-4deg); } /* 박차고 오름: 길쭉 */
+  50%      { transform: translateY(-32%) scale(1, 1) rotate(5deg); }    /* 꼭대기 */
+  84%      { transform: translateY(-2%) scale(.97, 1.04) rotate(0deg); }
+}
+@keyframes ui-logo-hop-shadow {
+  0%, 100% { transform: scale(1.15); opacity: 1; }
+  50%      { transform: scale(.55); opacity: .45; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-logo-hop img, .ui-logo-hop::after { animation: none; }
+}
+
+.ui-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-8) 0;
+  color: var(--ink-500);
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+  text-align: center;
+}
+.ui-loader[data-fullscreen] {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 0;
+  background: var(--surface-sunken);
+}
+.ui-loader[data-inline] {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
 /* 버튼 묶음 */
 .ui-button-group { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 @media (max-width: 599px) {

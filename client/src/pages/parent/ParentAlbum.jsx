@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import ParentLayout from '../../components/parent/ParentLayout';
+import { Spinner } from '../../components/ui';
 import MediaGrid from '../../components/album/MediaGrid';
 import MediaViewer from '../../components/album/MediaViewer';
 import UploadSheet from '../../components/album/UploadSheet';
@@ -118,7 +119,7 @@ function ParentAlbum() {
   if (!data) {
     return (
       <ParentLayout title="사진">
-        <div style={{ textAlign: 'center', color: 'var(--color-gray-500)', padding: '40px 0' }}>불러오는 중...</div>
+        <Spinner />
       </ParentLayout>
     );
   }

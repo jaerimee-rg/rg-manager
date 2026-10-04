@@ -4,7 +4,7 @@ import { fetchWithAuth } from '../../utils/api';
 import ParentLayout from '../../components/parent/ParentLayout';
 import { formatCardDate, dDay, reasonText } from '../../utils/parentSchedule';
 import { typeOf } from '../../utils/eventFormat';
-import { Badge, Button, Callout, Choice, Icon, List, ListRow, Row, Section, Stack } from '../../components/ui';
+import { Badge, Button, Callout, Choice, Icon, List, ListRow, Row, Section, Spinner, Stack } from '../../components/ui';
 
 const SCHEDULE_PATH = '/parent/schedule';
 
@@ -63,7 +63,7 @@ function ParentEventDetail() {
   if (state === 'loading') {
     return (
       <ParentLayout title="일정" back={SCHEDULE_PATH}>
-        <div style={{ textAlign: 'center', color: 'var(--color-gray-500)', padding: '40px 0' }}>불러오는 중...</div>
+        <Spinner />
       </ParentLayout>
     );
   }

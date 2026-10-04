@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import ParentLayout from '../../components/parent/ParentLayout';
+import { Spinner } from '../../components/ui';
 import { typeOf } from '../../utils/eventFormat';
 import {
   filterRemainingThisYear, groupByMonth, dDay, formatCardDate, dayLabel, childBadge
@@ -61,7 +62,7 @@ function ParentSchedule() {
   if (loading) {
     return (
       <ParentLayout title="일정">
-        <div style={{ textAlign: 'center', color: 'var(--color-gray-500)', padding: '40px 0' }}>불러오는 중...</div>
+        <Spinner />
       </ParentLayout>
     );
   }

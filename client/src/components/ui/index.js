@@ -27,6 +27,8 @@ export { default as Stat, IconTile } from './Stat';
 export { default as Tabs, Segmented } from './Tabs';
 export { default as Toolbar, Chip } from './Toolbar';
 export { Skeleton, SkeletonList, Progress, Pagination } from './Feedback';
+export { default as Spinner, LogoHop } from './Spinner';
+export { default as Brand } from './Brand';
 export { default as Toast } from './Toast';
 export { default as Calendar } from './Calendar';
 export { default as AppShell, Topbar, Main, NavItem, NavSection, SubNav, DetailLayout, StickyActions } from './Shell';

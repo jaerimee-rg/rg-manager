@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchWithAuth } from '../../utils/api';
 import { useIsMobile } from '../../hooks/useMediaQuery';
+import { Spinner } from '../../components/ui';
 
 const MESSAGE_TYPES = {
   ATTENDANCE: { label: '출석 알림', badge: 'badge-primary' },
@@ -346,9 +347,7 @@ function AdminNotifications() {
         </div>
 
         {loading ? (
-          <div style={{ padding: 'var(--spacing-xl)', textAlign: 'center' }}>
-            로딩 중...
-          </div>
+          <Spinner />
         ) : logs.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">🔔</div>

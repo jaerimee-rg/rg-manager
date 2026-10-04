@@ -178,7 +178,7 @@ app.use(express.json({ limit: '10mb' }));
 
 // API routes
 app.get('/api', (req, res) => {
-  res.json({ message: '리듬체조 출석 관리 API' });
+  res.json({ message: 'JR 리듬체조 API' });
 });
 
 // 쓰기 경로를 먼저 걸고, 나머지 공개 채팅 요청은 읽기 한도로 처리한다.

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { fetchWithAuth } from '../../utils/api';
 import { copyToClipboard } from '../../utils/copyToClipboard';
 import { useIsMobile } from '../../hooks/useMediaQuery';
+import { Spinner } from '../../components/ui';
 
 /**
  * 관리자 > 선생님 — 초대 발급·회수 (docs/accounts-roles FR-341~343).
@@ -171,7 +172,7 @@ function AdminTeacherInvites() {
       {notice && <div role="status" className="alert alert-success" style={{ marginBottom: '12px' }}>{notice}</div>}
 
       {loading ? (
-        <div style={{ color: 'var(--color-gray-500)', fontSize: '0.875rem' }}>불러오는 중...</div>
+        <Spinner inline />
       ) : invites.length === 0 ? (
         <div className="card" style={{ padding: '20px', textAlign: 'center', color: 'var(--color-gray-500)', fontSize: '0.875rem' }}>
           아직 만든 초대 링크가 없어요.

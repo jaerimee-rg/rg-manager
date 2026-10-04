@@ -645,6 +645,22 @@ cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 82
   (teacher invite tokens get consumed), so a second run without fresh setup fails.
 - **Never `NODE_ENV=production` locally** — it turns on SSL for Postgres and an HTTPS redirect.
 
+## Branding (서비스명 · 로고 · 링크 미리보기)
+
+- Service name is **JR 리듬체조** — read it from `client/src/utils/brand.js` (`SERVICE_NAME`, `LOGO_SRC`),
+  never hard-code it. The logo mark is `client/public/logo-mark.png` (520×494, transparent).
+- `components/ui/Brand` renders the logo with the name **below** it (`as="h1"` in the teacher header and
+  on 로그인, `size="sm" caption="관리자"` in the admin sidebar).
+- `components/ui/Spinner` is **the** loading indicator: the logo bouncing up and down plus a label
+  (`fullscreen` while the saved token is checked, `inline` inside cards). The only exception is the small
+  circle inside buttons (`.ui-btn__spinner`). `index.html` carries an inline copy of the same animation so
+  it shows while the JS bundle downloads.
+- Link previews (KakaoTalk invite / event share links): the `og:*` tags live in `client/index.html`, the image
+  is `client/public/og-image.png` rendered from `client/og/og-image.html` with `cd client && npm run og`
+  (Playwright Chromium). Re-run it whenever the copy or logo changes and commit the PNG.
+- `vercel.json` has an explicit route for `logo-mark|og-image|icon-192|icon-512.png` — without it the SPA
+  catch-all would serve `index.html` for those files and the preview image would break in production.
+
 ## Deployment (Vercel)
 
 Production runs on Vercel at **https://rg-manager.vercel.app**, deployed automatically

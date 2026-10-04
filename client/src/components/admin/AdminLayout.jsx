@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import RoleSwitcher from '../common/RoleSwitcher';
+import { Brand } from '../ui';
 
 const adminMenuItems = [
   { path: '/admin/students', label: '학생', icon: '👥' },
@@ -62,7 +63,7 @@ function AdminLayout() {
       {/* Desktop Sidebar */}
       <aside className="admin-sidebar">
         <div className="admin-sidebar-header">
-          <h2>관리자</h2>
+          <Brand size="sm" caption="관리자" />
         </div>
         <nav className="admin-sidebar-nav">
           {adminMenuItems.map(item => (

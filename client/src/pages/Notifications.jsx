@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { fetchWithAuth } from '../utils/api';
 import { useIsMobile } from '../hooks/useMediaQuery';
+import { Spinner } from '../components/ui';
 
 function Notifications() {
   const [logs, setLogs] = useState([]);
@@ -249,9 +250,7 @@ function Notifications() {
         </div>
 
         {loading ? (
-          <div style={{ padding: 'var(--spacing-xl)', textAlign: 'center' }}>
-            로딩 중...
-          </div>
+          <Spinner />
         ) : logs.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">🔔</div>

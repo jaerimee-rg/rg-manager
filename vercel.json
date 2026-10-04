@@ -15,6 +15,7 @@
     { "src": "/api(/.*)?", "dest": "server/server.js" },
     { "src": "/assets/(.*)", "dest": "/client/assets/$1" },
     { "src": "/models/(.*)", "dest": "/client/models/$1" },
+    { "src": "/(logo-mark|og-image|icon-192|icon-512)\\.png", "dest": "/client/$1.png" },
     { "src": "/(.*)", "dest": "/client/index.html" }
   ]
 }

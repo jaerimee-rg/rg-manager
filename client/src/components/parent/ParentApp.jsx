@@ -9,6 +9,7 @@ import ParentAlbum from '../../pages/parent/ParentAlbum';
 import ParentOnboarding from '../../pages/parent/ParentOnboarding';
 import InviteLanding from '../../pages/parent/InviteLanding';
 import RememberReturnTo from '../common/RememberReturnTo';
+import { Spinner } from '../ui';
 
 /**
  * 학부모 전용 앱. 선생님 라우팅과 완전히 분리해 서로 영향이 없게 한다.
@@ -37,14 +38,7 @@ function ParentApp() {
   }, [loadMe]);
 
   if (loading) {
-    return (
-      <div style={{
-        display: 'flex', justifyContent: 'center', alignItems: 'center',
-        minHeight: '100vh', color: 'var(--color-gray-500)'
-      }}>
-        불러오는 중...
-      </div>
-    );
+    return <Spinner fullscreen />;
   }
 
   const needsOnboarding = me && (me.children || []).length === 0;

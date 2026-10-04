@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import RichText from '../components/common/RichText';
+import { Spinner } from '../components/ui';
 // 로그인하지 않은 학부모 화면이므로 fetchWithAuth(401 시 /login 이동)를 사용하지 않는다.
 import { getVisitorKey } from '../utils/visitorStorage';
 
@@ -283,7 +284,7 @@ function PublicChat() {
   if (status === 'loading') {
     return (
       <div className="pchat-state">
-        <div className="pchat-state-title">불러오는 중...</div>
+        <Spinner />
       </div>
     );
   }
