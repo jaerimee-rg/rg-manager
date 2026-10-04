@@ -18,6 +18,8 @@ const DONE_MESSAGE = {
 /**
  * 예약 탭 (docs/recommended-shop/05-reservations.md) — 공개 상점에서 들어온 예약 요청.
  * 상태는 요청 → 확정 / 취소 이고, 잘못 누른 것을 되돌릴 수 있게 어느 쪽으로든 바꿀 수 있다.
+ * 한 상품의 한 날짜에는 예약이 하나만 선다 — 취소하면 그 날이 학부모 달력에 다시 열리고,
+ * 그 사이 다른 예약이 그 날을 잡았으면 취소를 되돌릴 수 없다(서버 409 문구를 토스트로).
  * 학부모에게 자동으로 알리지 않는다 — 선생님이 남긴 번호로 직접 연락한다.
  *
  * onRequestedChange(n) — 처리 전(요청) 개수가 바뀌면 탭 옆 숫자를 맞춘다.
@@ -63,14 +65,20 @@ function ShopReservations({ onRequestedChange, showToast }) {
         method: 'PATCH',
         body: JSON.stringify({ status })
       });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) {
+        // 409 — 취소를 되돌리려는데 그 날을 다른 예약이 잡았다. 서버 문구를 그대로 보여 준다
+        const reason = response.status === 409
+          ? await response.json().then((data) => data.error).catch(() => null)
+          : null;
+        throw Object.assign(new Error(`HTTP ${response.status}`), { reason });
+      }
       const { reservation: saved } = await response.json();
       setList((current) => current.map((r) => (r.id === saved.id ? saved : r)));
       showToast?.(DONE_MESSAGE[status]);
     } catch (err) {
       console.error('예약 상태 변경 실패:', err);
       setStatusOf(reservation.id, reservation.status);
-      showToast?.('상태를 바꾸지 못했어요');
+      showToast?.(err.reason || '상태를 바꾸지 못했어요');
     }
   };
 

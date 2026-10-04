@@ -385,7 +385,10 @@ export const listReservations = async (req, res) => {
   }
 };
 
-/** 요청 · 확정 · 취소 사이를 자유롭게 오간다(잘못 누른 것을 되돌릴 수 있게) */
+/**
+ * 요청 · 확정 · 취소 사이를 자유롭게 오간다(잘못 누른 것을 되돌릴 수 있게).
+ * 취소하면 그 날이 다시 열리므로, 취소를 되돌릴 때 그 사이 다른 예약이 그 날을 잡았으면 409.
+ */
 export const setReservationStatus = async (req, res) => {
   try {
     const id = parseId(req.params.id);
@@ -394,9 +397,13 @@ export const setReservationStatus = async (req, res) => {
       return res.status(400).json({ error: '예약 상태가 올바르지 않아요.' });
     }
 
-    const reservation = await ShopReservation.setStatus(id, req.user.id, req.body.status);
-    if (!reservation) return reservationNotFound(res);
-    res.json({ reservation: toTeacherReservation(reservation) });
+    const result = await ShopReservation.setStatus(id, req.user.id, req.body.status);
+    if (result.error === 'notFound') return reservationNotFound(res);
+    if (result.error === 'conflict') {
+      // 취소했던 예약을 되살리려는데 그 날을 다른 예약이 이미 차지했다
+      return res.status(409).json({ error: '같은 날짜에 이 상품의 다른 예약이 있어요. 그 예약을 먼저 취소해 주세요.' });
+    }
+    res.json({ reservation: toTeacherReservation(result.reservation) });
   } catch (error) {
     return serverError(res, '예약 상태 변경', error);
   }

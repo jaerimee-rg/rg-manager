@@ -427,6 +427,19 @@ test.describe('추천 상품', () => {
   // ── 3차: 상품 예약 (docs/recommended-shop/05-reservations.md) ──
 
   const reserver = `e2e ${run.slice(-5)}`;
+  const otherParent = `다른 ${run.slice(-5)}`;
+  // 첫 학부모가 예약하는 날 — 다음 달 15일(오늘이 언제든 180일 안)
+  const nextMonth15 = () => {
+    const next = new Date();
+    next.setDate(1);
+    next.setMonth(next.getMonth() + 1);
+    const month = next.getMonth() + 1;
+    return { month, iso: `${next.getFullYear()}-${String(month).padStart(2, '0')}-15` };
+  };
+  const simpleProductId = async (request) => {
+    const { body } = await api(request, sessions.teacher, 'GET', '/api/shop/products');
+    return body.products.find((p) => p.title === simple).id;
+  };
 
   test('선생님: 상품 수정에서 "예약 받기"를 켜면 상품 표에 예약 배지가 붙는다', async ({ page }) => {
     await loginAs(page, sessions.teacher);
@@ -482,6 +495,40 @@ test.describe('추천 상품', () => {
     await context.close();
   });
 
+  test('다른 학부모: 이미 요청된 날짜는 달력에 줄이 그어져 고를 수 없고, API 로 보내도 409', async ({ browser, request }) => {
+    const { month, iso } = nextMonth15();
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
+    await page.goto(publicPath);
+    await page.getByRole('link', { name: `${simple} 자세히 보기` }).click();
+    await page.getByRole('dialog', { name: simple }).getByRole('button', { name: '예약하기' }).click();
+
+    const form = page.getByRole('dialog', { name: '예약하기' });
+    await form.getByRole('button', { name: '다음 달' }).click();
+    const taken = form.getByRole('button', { name: new RegExp(`^${month}월 15일 .*, 예약 불가$`) });
+    await expect(taken).toHaveAttribute('aria-disabled', 'true');
+    await expect(taken).toHaveCSS('text-decoration-line', 'line-through');
+    // aria-disabled 라 Playwright 는 기다린다 — 사람이 그냥 누른 것처럼 force 로 누른다
+    await taken.click({ force: true });
+    await expect(taken).toHaveAttribute('aria-pressed', 'false');
+    await expect(form.getByText(/에 예약해요/)).toHaveCount(0);
+    // 옆 날짜는 고를 수 있다
+    await form.getByRole('button', { name: new RegExp(`^${month}월 16일 `) }).click();
+    await expect(form.getByText(new RegExp(`${month}월 16일 \\(.\\)에 예약해요`))).toBeVisible();
+    await context.close();
+
+    const publicId = publicPath.split('/').pop();
+    const productId = await simpleProductId(request);
+    const dates = await (await request.get(`/api/shop/public/${publicId}/products/${productId}/unavailable-dates`)).json();
+    expect(dates).toEqual({ dates: [iso] });
+
+    const res = await request.post(`/api/shop/public/${publicId}/products/${productId}/reservations`, {
+      data: { name: otherParent, phone: '01099998888', date: iso }
+    });
+    expect(res.status()).toBe(409);
+    expect(await res.json()).toMatchObject({ code: 'dateUnavailable' });
+  });
+
   test('선생님: 예약 탭에 들어온 요청을 확정하면 저장되고, 다시 취소로 바꿀 수 있다', async ({ page }) => {
     await loginAs(page, sessions.teacher);
     await page.goto('/products');
@@ -502,6 +549,28 @@ test.describe('추천 상품', () => {
     await page.locator('tr', { hasText: reserver }).getByRole('button', { name: '취소' }).click();
     await expect(page.getByRole('status')).toContainText('예약을 취소했어요');
     await expect(page.locator('tr', { hasText: reserver })).toHaveAttribute('data-status', 'cancelled');
+  });
+
+  test('취소하면 그 날이 다시 열린다 — 그 사이 다른 학부모가 잡으면 선생님은 취소를 되돌릴 수 없다', async ({ page, request }) => {
+    const { iso } = nextMonth15();
+    const publicId = publicPath.split('/').pop();
+    const productId = await simpleProductId(request);
+
+    const dates = await (await request.get(`/api/shop/public/${publicId}/products/${productId}/unavailable-dates`)).json();
+    expect(dates.dates).not.toContain(iso);
+    const res = await request.post(`/api/shop/public/${publicId}/products/${productId}/reservations`, {
+      data: { name: otherParent, phone: '01099998888', date: iso }
+    });
+    expect(res.status()).toBe(201);
+
+    await loginAs(page, sessions.teacher);
+    await page.goto('/products/reservations');
+    const row = page.locator('tr', { hasText: reserver });
+    await expect(row).toHaveAttribute('data-status', 'cancelled');
+    await row.getByRole('button', { name: '요청' }).click();
+    await expect(page.getByRole('status')).toContainText('같은 날짜에 이 상품의 다른 예약이 있어요');
+    await expect(row).toHaveAttribute('data-status', 'cancelled');
+    await expect(page.locator('tr', { hasText: otherParent })).toHaveAttribute('data-status', 'requested');
   });
 
   test('예약 API — 예약을 받지 않는 상품은 409, 학부모 토큰으로는 예약 목록·상태 변경을 쓸 수 없다', async ({ request }) => {

@@ -8,6 +8,7 @@ import ShopEvent from '../models/ShopEvent.js';
 import ShopReservation from '../models/ShopReservation.js';
 import { parseId, normalizeVisitorKey } from '../utils/shopValidation.js';
 import { validateReservationInput } from '../utils/shopReservation.js';
+import { todayKst } from '../services/eventService.js';
 import { toPublicShop, toPublicCategory, toPublicProduct, toPublicReservation } from '../utils/shopSerializer.js';
 
 const notFound = (res) => res.status(404).json({ error: '페이지를 찾을 수 없습니다.' });
@@ -77,31 +78,72 @@ export const recordClick = async (req, res) => {
   }
 };
 
+const notReservable = (res) => res.status(409).json({ error: '이 상품은 지금 예약을 받지 않아요.' });
+
+// 다른 사람이 잡은 날 — 누가 잡았는지는 알려 주지 않는다
+export const DATE_UNAVAILABLE = '이 날짜는 예약할 수 없어요. 다른 날짜를 골라 주세요.';
+
+/**
+ * 예약을 받는 공개 상품과 그 상점. 아니면 응답을 보내고 null —
+ * 상점이 닫혔거나 숨김·남의 상품이면 404, 예약을 끈 상품이면 409.
+ */
+const reservableProduct = async (req, res) => {
+  const shop = await activeShop(req.params.publicId);
+  const productId = parseId(req.params.productId);
+  const product = shop && productId ? await ShopProduct.getPublic(productId, shop.userId) : null;
+  if (!product) {
+    notFound(res);
+    return null;
+  }
+  if (!product.isReservable) {
+    notReservable(res);
+    return null;
+  }
+  return { shop, product };
+};
+
+/**
+ * 예약할 수 없는 날짜 — 그 상품에서 이미 요청·확정된 날(오늘부터). 학부모 달력이 그 날을 막는다.
+ * 날짜만 나간다(누가 예약했는지는 나가지 않는다). 다른 사람이 막 잡았을 수 있어 캐시하지 않는다.
+ */
+export const getUnavailableDates = async (req, res) => {
+  try {
+    const found = await reservableProduct(req, res);
+    if (!found) return undefined;
+
+    const dates = await ShopReservation.listTakenDates(found.product.id, found.shop.userId, todayKst());
+    res.set('Cache-Control', 'no-store');
+    res.json({ dates });
+  } catch (error) {
+    console.error('공개 상점 예약 날짜 조회 오류:', error?.message || error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
 /**
  * 예약 요청 — 로그인 없이 이름(학부모 또는 아이)·전화번호·날짜를 남긴다 (05-reservations.md).
  * 그 상점의 공개 상품이어야 하고, 선생님이 "예약 받기"를 켜 둔 상품이어야 한다.
- * 같은 상품·번호·날짜로 아직 처리 전인 요청이 있으면 새로 만들지 않고 200 으로 알려 준다.
+ * 한 상품의 한 날짜에는 예약이 하나만 선다 — 다른 사람이 잡은 날이면 409(dateUnavailable),
+ * 같은 번호로 이미 잡은 날이면 새로 만들지 않고 200 으로 알려 준다.
  */
 export const createReservation = async (req, res) => {
   try {
-    const shop = await activeShop(req.params.publicId);
-    if (!shop) return notFound(res);
-
-    const productId = parseId(req.params.productId);
-    const product = productId ? await ShopProduct.getPublic(productId, shop.userId) : null;
-    if (!product) return notFound(res);
-    if (!product.isReservable) {
-      return res.status(409).json({ error: '이 상품은 지금 예약을 받지 않아요.' });
-    }
+    const found = await reservableProduct(req, res);
+    if (!found) return undefined;
+    const { shop, product } = found;
 
     const { value, errors } = validateReservationInput(req.body);
     if (errors) return res.status(400).json({ error: Object.values(errors)[0], fields: errors });
 
-    const { reservation, duplicate } = await ShopReservation.create(shop.userId, {
+    const { reservation, outcome } = await ShopReservation.create(shop.userId, {
       productId: product.id,
       productTitle: product.title,
       ...value
     });
+    if (outcome === 'taken') {
+      return res.status(409).json({ error: DATE_UNAVAILABLE, code: 'dateUnavailable', fields: { date: DATE_UNAVAILABLE } });
+    }
+    const duplicate = outcome === 'duplicate';
     res.status(duplicate ? 200 : 201).json({ reservation: toPublicReservation(reservation), duplicate });
   } catch (error) {
     console.error('공개 상점 예약 오류:', error?.message || error);

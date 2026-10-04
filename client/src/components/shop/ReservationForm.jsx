@@ -1,17 +1,17 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Calendar, Callout, Field, Icon, IconButton, Input, Stack } from '../ui';
 import { formatPrice } from '../../utils/shopFormat';
 import { formatIsoDate, todayIso } from '../../utils/calendar';
 import {
-  formatPhoneInput, reservationRange, validateReservationForm
+  DATE_UNAVAILABLE, formatPhoneInput, reservationRange, validateReservationForm
 } from '../../utils/shopReservation';
 
 const readError = async (response, fallback) => {
   try {
     const data = await response.json();
-    return { message: data.error || fallback, fields: data.fields || null };
+    return { message: data.error || fallback, fields: data.fields || null, code: data.code || null };
   } catch {
-    return { message: fallback, fields: null };
+    return { message: fallback, fields: null, code: null };
   }
 };
 
@@ -21,6 +21,9 @@ const readError = async (response, fallback) => {
  * 이름(학부모 또는 아이) · 전화번호 · 예약 날짜(달력)를 받아 로그인 없이 보낸다.
  *
  * draft · onDraftChange — 값은 상세(부모)가 들고 있다. 상품으로 돌아갔다 와도 입력이 남는다.
+ *
+ * 한 상품의 한 날짜에는 예약이 하나만 선다 — 폼을 열면 이미 잡힌 날을 받아 달력에서 줄을 긋고 고를 수 없게 한다.
+ * 그 사이 다른 사람이 먼저 잡으면 서버가 409(dateUnavailable)로 막고, 그 날을 비운 뒤 달력을 새로 받는다.
  */
 function ReservationForm({ publicId, product, draft, onDraftChange, onBack, onDone }) {
   const [errors, setErrors] = useState({});
@@ -31,6 +34,35 @@ function ReservationForm({ publicId, product, draft, onDraftChange, onBack, onDo
   const { min, max } = reservationRange(today);
   const price = formatPrice(product.price);
   const image = product.images?.[0];
+  const [unavailable, setUnavailable] = useState([]);
+
+  // 못 읽어도 폼은 그대로 쓴다 — 보낼 때 서버가 다시 확인한다
+  const loadUnavailable = useCallback(async () => {
+    try {
+      const response = await fetch(
+        `/api/shop/public/${encodeURIComponent(publicId)}/products/${product.id}/unavailable-dates`
+      );
+      if (!response.ok) return [];
+      const data = await response.json();
+      const dates = Array.isArray(data.dates) ? data.dates : [];
+      setUnavailable(dates);
+      return dates;
+    } catch (error) {
+      console.error('예약할 수 없는 날짜 불러오기 실패:', error);
+      return [];
+    }
+  }, [publicId, product.id]);
+
+  // 상품으로 돌아갔다 오는 사이 고른 날이 잡혔으면 비우고 알린다
+  const dropDateIfTaken = (dates, current) => {
+    if (!current.date || !dates.includes(current.date)) return;
+    onDraftChange({ ...current, date: '' });
+    setErrors((e) => ({ ...e, date: DATE_UNAVAILABLE }));
+  };
+
+  useEffect(() => {
+    loadUnavailable().then((dates) => dropDateIfTaken(dates, draft));
+  }, [loadUnavailable]);
 
   const set = (field, value) => {
     onDraftChange({ ...draft, [field]: value });
@@ -44,6 +76,10 @@ function ReservationForm({ publicId, product, draft, onDraftChange, onBack, onDo
     const { value, errors: found } = validateReservationForm(draft, today);
     if (found) {
       setErrors(found);
+      return;
+    }
+    if (unavailable.includes(value.date)) {
+      setErrors({ date: DATE_UNAVAILABLE });
       return;
     }
 
@@ -63,8 +99,13 @@ function ReservationForm({ publicId, product, draft, onDraftChange, onBack, onDo
         const fallback = response.status === 404
           ? '이 상품을 지금은 예약할 수 없어요. 페이지를 새로고침해 주세요.'
           : '예약을 보내지 못했어요. 잠시 후 다시 시도해 주세요.';
-        const { message, fields } = await readError(response, fallback);
-        if (fields) setErrors(fields);
+        const { message, fields, code } = await readError(response, fallback);
+        if (code === 'dateUnavailable') {
+          // 그 사이 다른 사람이 그 날을 잡았다 — 고른 날을 비우고 달력을 새로 받는다
+          onDraftChange({ ...draft, date: '' });
+          setErrors({ date: DATE_UNAVAILABLE });
+          loadUnavailable();
+        } else if (fields) setErrors(fields);
         else setFormError(response.status === 404 ? fallback : message);
         return;
       }
@@ -136,13 +177,17 @@ function ReservationForm({ publicId, product, draft, onDraftChange, onBack, onDo
             label="예약 날짜"
             required
             error={errors.date}
-            hint={draft.date ? `${formatIsoDate(draft.date, { withYear: true })}에 예약해요.` : '달력에서 날짜를 골라 주세요.'}
+            hint={draft.date
+              ? `${formatIsoDate(draft.date, { withYear: true })}에 예약해요.`
+              : `달력에서 날짜를 골라 주세요.${unavailable.length ? ' 줄 그은 날은 예약할 수 없어요.' : ''}`}
           >
             <Calendar
               label="예약 날짜"
               value={draft.date}
               min={min}
               max={max}
+              unavailable={unavailable}
+              unavailableLabel="예약 불가"
               invalid={Boolean(errors.date)}
               onChange={(date) => set('date', date)}
             />

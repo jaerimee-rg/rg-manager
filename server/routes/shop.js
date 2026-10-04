@@ -20,7 +20,9 @@ import {
   setReservationStatus,
   getStats
 } from '../controllers/shopController.js';
-import { getPublicShop, recordView, recordClick, createReservation } from '../controllers/publicShopController.js';
+import {
+  getPublicShop, recordView, recordClick, createReservation, getUnavailableDates
+} from '../controllers/publicShopController.js';
 import { verifyToken } from '../middleware/auth.js';
 import { logAction } from '../middleware/logger.js';
 import { MAX_FILE_BYTES } from '../utils/faqFileTypes.js';
@@ -34,6 +36,7 @@ const rawBody = express.raw({ type: () => true, limit: MAX_FILE_BYTES + 1024 });
 router.get('/public/:publicId', getPublicShop);
 router.post('/public/:publicId/view', recordView);
 router.post('/public/:publicId/products/:productId/click', recordClick);
+router.get('/public/:publicId/products/:productId/unavailable-dates', getUnavailableDates);
 router.post('/public/:publicId/products/:productId/reservations', createReservation);
 
 // 선생님

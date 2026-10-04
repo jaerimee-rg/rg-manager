@@ -4,6 +4,8 @@ import { addDays, todayIso } from './calendar';
 // 이름·전화번호·날짜 규칙은 서버 utils/shopReservation.js 와 같고, 두 쪽 테스트가 같은 표로 확인한다.
 
 export const RESERVATION_NAME_MAX = 30;
+// 다른 사람이 잡은 날 — 서버(publicShopController DATE_UNAVAILABLE)와 같은 문구
+export const DATE_UNAVAILABLE = '이 날짜는 예약할 수 없어요. 다른 날짜를 골라 주세요.';
 export const RESERVATION_MAX_DAYS_AHEAD = 180;
 
 export const RESERVATION_STATUSES = [

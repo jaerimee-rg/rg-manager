@@ -540,7 +540,7 @@ describe('예약 (05-reservations.md) — 선생님 화면', () => {
 
   it('상태 변경: 요청 · 확정 · 취소 어느 쪽으로든 바꾼다', async () => {
     for (const status of ['confirmed', 'cancelled', 'requested']) {
-      ShopReservation.setStatus.mockResolvedValueOnce({ ...ROW, status });
+      ShopReservation.setStatus.mockResolvedValueOnce({ reservation: { ...ROW, status } });
       const res = await call(ctrl.setReservationStatus, { params: { id: '3' }, body: { status } });
       expect(ShopReservation.setStatus).toHaveBeenLastCalledWith(3, 9, status);
       expect(res.json.mock.calls[0][0].reservation.status).toBe(status);
@@ -553,8 +553,15 @@ describe('예약 (05-reservations.md) — 선생님 화면', () => {
     expect(ShopReservation.setStatus).not.toHaveBeenCalled();
   });
 
+  it('상태 변경: 취소를 되돌리려는데 그 날을 다른 예약이 잡았으면 409', async () => {
+    ShopReservation.setStatus.mockResolvedValue({ error: 'conflict' });
+    const res = await call(ctrl.setReservationStatus, { params: { id: '3' }, body: { status: 'requested' } });
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json.mock.calls[0][0].error).toMatch(/같은 날짜에 이 상품의 다른 예약이 있어요/);
+  });
+
   it('상태 변경: 남의 예약·이상한 id 는 404', async () => {
-    ShopReservation.setStatus.mockResolvedValue(null);
+    ShopReservation.setStatus.mockResolvedValue({ error: 'notFound' });
     let res = await call(ctrl.setReservationStatus, { params: { id: '3' }, body: { status: 'confirmed' } });
     expect(res.status).toHaveBeenCalledWith(404);
 

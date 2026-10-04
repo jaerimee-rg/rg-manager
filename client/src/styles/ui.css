@@ -2156,6 +2156,14 @@
   font-weight: var(--weight-semibold);
 }
 .ui-calendar__day:disabled { color: var(--ink-300); cursor: not-allowed; }
+/* 범위 안이지만 고를 수 없는 날(예: 이미 예약이 있는 날) — 줄을 그어 "안 된다"만 보인다 */
+.ui-calendar__day[data-unavailable="true"],
+.ui-calendar__day[data-unavailable="true"]:hover {
+  background: transparent;
+  color: var(--ink-300);
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
 .ui-calendar__day:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
 
 /* ================================================================== *

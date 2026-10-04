@@ -9,7 +9,11 @@ export const RESERVATION_MAX_DAYS_AHEAD = 180;
 // 선생님 예약 목록은 최근 것부터 이만큼만 (학원 규모에서는 넉넉하다)
 export const RESERVATION_LIST_LIMIT = 500;
 
+// 이 상태의 예약이 그 상품의 그 날을 차지한다 — 취소하면 그 날이 다시 열린다
+export const ACTIVE_RESERVATION_STATUSES = ['requested', 'confirmed'];
+
 export const isReservationStatus = (status) => RESERVATION_STATUSES.includes(status);
+export const isActiveReservationStatus = (status) => ACTIVE_RESERVATION_STATUSES.includes(status);
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
