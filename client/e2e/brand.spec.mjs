@@ -61,7 +61,7 @@ test.describe('브랜드 — 로고와 서비스명', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('JR 리듬체조');
   });
 
-  test('선생님 헤더: 로고 아래 서비스명이 h1 이다', async ({ page }) => {
+  test('선생님 헤더: 로고 아래 서비스명이 h1 이고, 맨 왼쪽 로고와 같은 줄에 메뉴가 있다', async ({ page }) => {
     test.skip(!sessions, 'e2e/.sessions.json 이 없다 — npm run test:e2e:setup 먼저');
     await loginAs(page, sessions.teacher);
     await page.goto('/');
@@ -72,5 +72,13 @@ test.describe('브랜드 — 로고와 서비스명', () => {
     const logoBox = await brand.locator('img').boundingBox();
     const nameBox = await brand.locator('.ui-brand__name').boundingBox();
     expect(logoBox.y + logoBox.height).toBeLessThanOrEqual(nameBox.y + 1);
+
+    // 메뉴 첫 항목이 브랜드 오른쪽, 브랜드와 같은 줄(세로 범위 안)에 있다
+    const brandBox = await brand.boundingBox();
+    const firstLink = await page.locator('.app-header .desktop-nav a').first().boundingBox();
+    expect(firstLink.x).toBeGreaterThan(brandBox.x + brandBox.width);
+    const linkMidY = firstLink.y + firstLink.height / 2;
+    expect(linkMidY).toBeGreaterThan(brandBox.y);
+    expect(linkMidY).toBeLessThan(brandBox.y + brandBox.height);
   });
 });

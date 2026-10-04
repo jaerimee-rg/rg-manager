@@ -1,7 +1,7 @@
 # JR 리듬체조 (rg-manager)
 
 리듬체조 학원의 수업 출석을 관리하는 웹 애플리케이션입니다. 서비스 이름은 **JR 리듬체조**,
-로고는 `client/public/logo-mark.png` 입니다.
+로고는 `client/public/logo-mark.png` (핑크 JR 마크) 입니다.
 
 ## 주요 기능
 
