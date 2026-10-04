@@ -103,3 +103,16 @@ describe('ui.css — .ui-overlay 위치 규칙', () => {
     expect(CSS).toMatch(/\.ui-overlay\[data-mode="modal"\]\s+\.ui-overlay__grip\s*\{[^}]*display:\s*none/);
   });
 });
+
+describe('추천 상품 상세 시트 — 사진이 시트 맨 위까지 찬다', () => {
+  it('손잡이는 흐름 밖(절대 위치)이라 사진 위에 흰 띠를 만들지 않는다', () => {
+    const rule = CSS.match(/\.shop-detail-overlay \.ui-overlay__grip \{([^}]*)\}/);
+    expect(rule).not.toBeNull();
+    expect(rule[1]).toMatch(/position:\s*absolute/);
+    expect(rule[1]).toMatch(/margin:\s*0/);
+  });
+
+  it('본문 여백도 없다 — 사진이 시트 가장자리까지', () => {
+    expect(CSS).toMatch(/\.shop-detail-overlay \.ui-overlay__body \{\s*padding:\s*0;\s*\}/);
+  });
+});

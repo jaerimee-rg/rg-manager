@@ -2585,9 +2585,22 @@ a.ui-btn { text-decoration: none; }
 .shop-detail-overlay { overflow: hidden; }
 .shop-detail-overlay .ui-overlay__body { padding: 0; }
 /* 닫기 버튼은 본문 스크롤과 상관없이 패널 오른쪽 위 (패널이 기준) */
+/* 휴대폰 시트의 손잡이는 사진 위에 띄운다 — 흐름 안에 두면 시트 맨 위에 흰 띠(손잡이 자리)가 남아
+   사진이 시트 끝까지 차지 않는다. 사진이 밝아도 어두워도 보이게 반투명 흰색 + 옅은 테두리.
+   (데스크톱은 .ui-overlay__grip 이 숨는다) */
+.shop-detail-overlay .ui-overlay__grip {
+  position: absolute;
+  top: var(--space-2);
+  left: 50%;
+  margin: 0;
+  transform: translateX(-50%);
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 1px rgba(27, 27, 27, 0.12);
+}
 .shop-detail__close {
   position: absolute;
-  top: var(--space-5);
+  top: var(--space-4);
   right: var(--space-3);
   z-index: 2;
 }
