@@ -3786,6 +3786,12 @@ input:focus, textarea:focus, select:focus {
 .app-header-inner > div:first-child { gap: var(--space-4); }
 /* 헤더 왼쪽은 로고 아래 서비스명 (Brand). h1 로 쓰이므로 제목 기본 여백을 지운다 */
 .app-header h1.ui-brand { margin-bottom: 0; }
+/* 데스크탑: 브랜드(로고)가 맨 왼쪽, 메뉴는 같은 줄에. 좁으면 메뉴만 다음 줄로 접힌다 */
+@media (min-width: 769px) {
+  .app-header-inner { display: flex; align-items: center; gap: var(--space-6); }
+  .app-header-inner > div:first-child { flex: none; }
+  .app-header .desktop-nav { flex: 1; min-width: 0; margin-top: 0; }
+}
 
 .app-header .desktop-nav { gap: var(--space-1); align-items: center; }
 .app-header .desktop-nav a {

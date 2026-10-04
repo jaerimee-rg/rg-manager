@@ -648,7 +648,8 @@ cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 82
 ## Branding (서비스명 · 로고 · 링크 미리보기)
 
 - Service name is **JR 리듬체조** — read it from `client/src/utils/brand.js` (`SERVICE_NAME`, `LOGO_SRC`),
-  never hard-code it. The logo mark is `client/public/logo-mark.png` (520×494, transparent).
+  never hard-code it. The logo mark is `client/public/logo-mark.png` (pink JR mark, 512×416, transparent —
+  cut out from the white-background original with `scripts/cut-logo.py`; the favicons come from the same script).
 - `components/ui/Brand` renders the logo with the name **below** it (`as="h1"` in the teacher header and
   on 로그인, `size="sm" caption="관리자"` in the admin sidebar).
 - `components/ui/Spinner` is **the** loading indicator: the logo bouncing up and down plus a label
