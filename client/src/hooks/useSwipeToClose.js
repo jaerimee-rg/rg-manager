@@ -10,6 +10,9 @@ const SHEET_QUERY = '(max-width: 767px)';
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 const mediaMatches = (query) => Boolean(window.matchMedia?.(query)?.matches);
 const MAX_SAMPLES = 8;
+// onClose 를 불렀는데도 시트가 남아 있으면(창을 닫지 않고 한 단계 뒤로만 가는 화면 등) 이만큼 뒤에 되돌린다 —
+// 화면 밖으로 내려 둔 시트와 투명해진 스크림이 페이지를 막고 있지 않게. 정말 닫혔으면 그 전에 정리가 타이머를 지운다.
+const RESTORE_MS = 600;
 
 /**
  * 바텀시트를 손가락으로 끌어내려 닫는다.
@@ -47,16 +50,23 @@ export function useSwipeToClose({ enabled, panelRef, scrimRef, onClose }) {
       panel.style.transform = '';
       setScrim('', animate);
     };
+    const finishClose = () => {
+      onCloseRef.current?.();
+      timer = setTimeout(() => {
+        closing = false;
+        settle();
+      }, RESTORE_MS);
+    };
     const dismiss = () => {
       closing = true;
       if (mediaMatches(REDUCED_MOTION)) {
-        onCloseRef.current?.();
+        finishClose();
         return;
       }
       panel.style.transition = `transform ${SETTLE_MS}ms var(--ease)`;
       panel.style.transform = 'translateY(100%)';
       setScrim('0', true);
-      timer = setTimeout(() => onCloseRef.current?.(), SETTLE_MS);
+      timer = setTimeout(finishClose, SETTLE_MS);
     };
 
     const onStart = (event) => {
@@ -114,6 +124,14 @@ export function useSwipeToClose({ enabled, panelRef, scrimRef, onClose }) {
     panel.addEventListener('touchcancel', onCancel);
     return () => {
       clearTimeout(timer);
+      // 시트는 그대로인데 끌어내리기만 꺼졌다(예: 예약 폼으로 바뀜) — 끌던·내려 둔 자리를 남기지 않는다.
+      // 닫혀서 사라진 경우(isConnected=false)에는 손댈 것이 없다.
+      if (panel.isConnected) {
+        panel.style.transition = '';
+        panel.style.transform = '';
+        setScrim('', false);
+        if (scrimRef.current) scrimRef.current.style.transition = '';
+      }
       panel.removeEventListener('touchstart', onStart);
       panel.removeEventListener('touchmove', onMove);
       panel.removeEventListener('touchend', onEnd);

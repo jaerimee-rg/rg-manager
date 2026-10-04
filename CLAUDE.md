@@ -52,7 +52,7 @@ Client and server have **separate** Jest setups and are run from their own direc
 there is no root `package.json`, so there is no one command that runs everything.
 
 ```bash
-cd client && npm test          # jest — 885 tests / 66 suites
+cd client && npm test          # jest — 887 tests / 66 suites
 cd server && npm test          # 1088 tests / 52 suites
 ```
 
@@ -510,7 +510,8 @@ open **one public link `/shop/<publicId>` without logging in**; the teacher sees
   On phones the sheet **closes when dragged down** (`Modal swipeToClose` → `hooks/useSwipeToClose.js`, pure rules in
   `utils/sheetSwipe.js`): only while the body is scrolled to the top, and the first move decides — sideways (photo
   swipe), upward, or a scrolled body stay the browser's. Close past 140 px (or 30% of a short sheet) or on a fast flick;
-  otherwise it springs back. Touch listeners are native `{ passive: false }` because React's `touchmove` is passive.
+  otherwise it springs back. If the sheet is still mounted 600 ms after `onClose` (an `onClose` that only steps back), it
+  slides back instead of staying hidden. Touch listeners are native `{ passive: false }` because React's `touchmove` is passive.
   Off by default — don't turn it on for forms, where an accidental close loses input (the detail turns it off
   while its reservation form is showing: `swipeToClose={step !== 'reserve'}`).
 - **API**: `/api/shop/*` is teacher-only (`rejectParents` in `server.js`, except `/api/shop/public/*`).

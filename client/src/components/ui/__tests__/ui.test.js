@@ -280,6 +280,49 @@ describe('Modal', () => {
       }
     });
 
+    it('onClose 가 창을 닫지 않으면 내려 둔 시트를 잠시 뒤 되돌린다 — 보이지 않는 시트가 화면을 막지 않게', () => {
+      const { onClose, panel, text } = sheet(); // onClose 는 아무것도 하지 않는다 — 창이 그대로 남는다
+      const scrim = document.querySelector('.ui-scrim');
+      swipe(text, { dy: 200 }).end();
+      jest.advanceTimersByTime(180);
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(panel.style.transform).toBe('translateY(100%)');
+
+      jest.advanceTimersByTime(600);
+      expect(panel.style.transform).toBe('');
+      expect(scrim.style.opacity).toBe('');
+
+      // 다시 끌어내릴 수 있다
+      swipe(text, { dy: 200 }).end();
+      jest.advanceTimersByTime(180);
+      expect(onClose).toHaveBeenCalledTimes(2);
+    });
+
+    it('창이 열린 채 swipeToClose 가 꺼지면(예: 예약 폼으로 바뀜) 끌던 자리를 남기지 않는다', () => {
+      const onClose = jest.fn();
+      const view = (swipeToClose) => (
+        <Modal open onClose={onClose} header={false} labelledBy="t" swipeToClose={swipeToClose}>
+          <h2 id="t">상품</h2>
+          <p>설명</p>
+        </Modal>
+      );
+      const { rerender } = render(view(true));
+      const panel = screen.getByRole('dialog');
+      const text = screen.getByText('설명');
+      touch(text, 'touchstart', { y: 100, t: 0 });
+      touch(text, 'touchmove', { y: 220, t: 100 });
+      expect(panel.style.transform).toBe('translateY(120px)');
+
+      rerender(view(false));
+      expect(panel.style.transform).toBe('');
+      expect(document.querySelector('.ui-scrim').style.opacity).toBe('');
+      touch(text, 'touchmove', { y: 400, t: 200 });
+      touch(text, 'touchend', { t: 300 });
+      jest.advanceTimersByTime(1000);
+      expect(panel.style.transform).toBe('');
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
     it('두 손가락이 닿으면(확대) 끌던 시트를 제자리로 돌린다', () => {
       const { onClose, panel, text } = sheet();
       touch(text, 'touchstart', { y: 100, t: 0 });
