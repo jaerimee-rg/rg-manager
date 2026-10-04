@@ -407,6 +407,28 @@ describe('PublicShop — 상품 예약 (05-reservations.md)', () => {
     expect(within(again).getByRole('button', { name: /, 오늘, 예약 불가$/ })).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('잡힌 날짜를 받아 오는 사이 친 이름은 날짜를 비울 때 지워지지 않는다', async () => {
+    const dialog = await openReserve();
+    fireEvent.click(within(dialog).getByRole('button', { name: /, 오늘$/ }));
+    fireEvent.click(within(dialog).getByRole('button', { name: '상품으로 돌아가기' }));
+
+    let release;
+    global.fetch.mockImplementation((url, options = {}) => {
+      if (url.endsWith('/unavailable-dates')) {
+        return new Promise((resolve) => { release = () => resolve({ ok: true, status: 200, json: () => Promise.resolve({ dates: [todayIso()] }) }); });
+      }
+      if (options.method === 'POST') return reserveResponse(url, options);
+      return respond(200, RESERVABLE);
+    });
+    fireEvent.click(screen.getByRole('button', { name: '예약하기' }));
+    const again = screen.getByRole('dialog', { name: '예약하기' });
+    fireEvent.change(within(again).getByLabelText(/이름/), { target: { value: '받는 사이 친 이름' } });
+
+    await act(async () => { release(); });
+    expect(within(again).getByLabelText(/이름/)).toHaveValue('받는 사이 친 이름');
+    expect(within(again).getByText('이 날짜는 예약할 수 없어요. 다른 날짜를 골라 주세요.')).toBeInTheDocument();
+  });
+
   it('잡힌 날짜를 못 읽어도 폼은 쓸 수 있다 (보낼 때 서버가 다시 확인한다)', async () => {
     global.fetch.mockImplementation((url, options = {}) => {
       if (url.endsWith('/unavailable-dates')) return Promise.reject(new Error('offline'));

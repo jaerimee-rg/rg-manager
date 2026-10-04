@@ -21,6 +21,7 @@ const readError = async (response, fallback) => {
  * 이름(학부모 또는 아이) · 전화번호 · 예약 날짜(달력)를 받아 로그인 없이 보낸다.
  *
  * draft · onDraftChange — 값은 상세(부모)가 들고 있다. 상품으로 돌아갔다 와도 입력이 남는다.
+ *   onDraftChange 는 setState 처럼 함수도 받는다 — 비동기로 날짜만 비울 때 그 사이 친 입력을 덮어쓰지 않게.
  *
  * 한 상품의 한 날짜에는 예약이 하나만 선다 — 폼을 열면 이미 잡힌 날을 받아 달력에서 줄을 긋고 고를 수 없게 한다.
  * 그 사이 다른 사람이 먼저 잡으면 서버가 409(dateUnavailable)로 막고, 그 날을 비운 뒤 달력을 새로 받는다.
@@ -53,15 +54,21 @@ function ReservationForm({ publicId, product, draft, onDraftChange, onBack, onDo
     }
   }, [publicId, product.id]);
 
-  // 상품으로 돌아갔다 오는 사이 고른 날이 잡혔으면 비우고 알린다
-  const dropDateIfTaken = (dates, current) => {
-    if (!current.date || !dates.includes(current.date)) return;
-    onDraftChange({ ...current, date: '' });
-    setErrors((e) => ({ ...e, date: DATE_UNAVAILABLE }));
-  };
+  // 받아 오는 사이에도 학부모는 이름·번호를 친다 — 늘 지금 값을 보고, 날짜만 비운다
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const clearDate = () => onDraftChange((current) => ({ ...current, date: '' }));
 
+  // 상품으로 돌아갔다 오는 사이 고른 날이 잡혔으면 비우고 알린다
   useEffect(() => {
-    loadUnavailable().then((dates) => dropDateIfTaken(dates, draft));
+    let active = true;
+    loadUnavailable().then((dates) => {
+      const picked = draftRef.current.date;
+      if (!active || !picked || !dates.includes(picked)) return;
+      clearDate();
+      setErrors((e) => ({ ...e, date: DATE_UNAVAILABLE }));
+    });
+    return () => { active = false; };
   }, [loadUnavailable]);
 
   const set = (field, value) => {
@@ -102,7 +109,7 @@ function ReservationForm({ publicId, product, draft, onDraftChange, onBack, onDo
         const { message, fields, code } = await readError(response, fallback);
         if (code === 'dateUnavailable') {
           // 그 사이 다른 사람이 그 날을 잡았다 — 고른 날을 비우고 달력을 새로 받는다
-          onDraftChange({ ...draft, date: '' });
+          clearDate();
           setErrors({ date: DATE_UNAVAILABLE });
           loadUnavailable();
         } else if (fields) setErrors(fields);
