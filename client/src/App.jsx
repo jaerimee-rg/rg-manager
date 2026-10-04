@@ -20,6 +20,8 @@ import Settings from './pages/Settings';
 import DesignSystem from './pages/DesignSystem';
 import FaqList from './pages/Faq/FaqList';
 import PublicChat from './pages/PublicChat';
+import PublicShop from './pages/PublicShop';
+import ShopManager from './pages/Shop/ShopManager';
 import EventList from './pages/Events/EventList';
 import EventForm from './pages/Events/EventForm';
 import ParentList from './pages/Parents/ParentList';
@@ -126,12 +128,16 @@ function App() {
   const isInvitePage = location.pathname.startsWith('/invite/');
   // 관리자가 보낸 선생님 초대 링크도 같은 성격이다 (로그인 전에 여는 화면).
   const isTeacherInvitePage = location.pathname.startsWith('/teacher-invite/');
+  // 추천 상품 공개 페이지 — 로그인 여부·역할과 무관하게 같은 화면이다 (docs/recommended-shop, FR-404).
+  // 선생님 관리 화면은 /products 라 이 접두어와 겹치지 않는다.
+  const isPublicShopPage = location.pathname.startsWith('/shop/');
 
   // 로그인과 무관한 화면이므로 인증 확인을 기다리지 않는다.
-  if (isPublicChatPage || isInvitePage || isTeacherInvitePage) {
+  if (isPublicChatPage || isInvitePage || isTeacherInvitePage || isPublicShopPage) {
     return (
       <Routes>
         <Route path="/chat/:publicId" element={<PublicChat />} />
+        <Route path="/shop/:publicId" element={<PublicShop />} />
         <Route path="/invite/:token" element={<InviteLanding />} />
         <Route path="/teacher-invite/:token" element={<TeacherInviteLanding />} />
       </Routes>
@@ -183,6 +189,7 @@ function App() {
     { path: '/student-competitions', label: '학생별 대회', icon: '🎖️' },
     { path: '/parents', label: '학부모', icon: '👨‍👩‍👧' },
     { path: '/faq', label: 'FAQ', icon: '💬' },
+    { path: '/products', label: '추천 상품', icon: '🛍️' },
   ];
 
 
@@ -350,6 +357,9 @@ function App() {
           <Route path="/faq/chats" element={<ProtectedRoute><FaqList initialTab="chats" /></ProtectedRoute>} />
           <Route path="/faq/manage" element={<ProtectedRoute><FaqList initialTab="faq" /></ProtectedRoute>} />
           <Route path="/faq/files" element={<ProtectedRoute><FaqList initialTab="files" /></ProtectedRoute>} />
+          <Route path="/products" element={<ProtectedRoute><ShopManager /></ProtectedRoute>} />
+          <Route path="/products/stats" element={<ProtectedRoute><ShopManager initialTab="stats" /></ProtectedRoute>} />
+          <Route path="/products/settings" element={<ProtectedRoute><ShopManager initialTab="settings" /></ProtectedRoute>} />
           <Route path="/chat/:publicId" element={<PublicChat />} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 

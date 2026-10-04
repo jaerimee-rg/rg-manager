@@ -2084,3 +2084,260 @@
   from { opacity: 0; transform: translate(-50%, var(--space-2)); }
   to { opacity: 1; transform: translate(-50%, 0); }
 }
+
+/* ================================================================== *
+ * 추천 상품 (docs/recommended-shop) — 선생님 /products · 공개 /shop/:publicId
+ * 목업(docs/recommended-shop/mockups)도 이 블록을 그대로 불러다 쓴다.
+ * ================================================================== */
+
+/* <Button as="a"> — 링크 밑줄·링크 색(App.css 의 a 규칙)을 받지 않는다 */
+a.ui-btn { text-decoration: none; }
+
+/* ---------------------------------------------------------------- *
+ * 선생님 — 공개 링크 카드
+ * ---------------------------------------------------------------- */
+
+.shop-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.shop-link .ui-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface-muted);
+  color: var(--ink-700);
+  font-size: var(--text-sm);
+}
+@media (max-width: 599px) {
+  .shop-link .ui-input { flex-basis: 100%; }
+  .shop-link .ui-btn { flex: 1; }
+}
+
+/* ---------------------------------------------------------------- *
+ * 선생님 — 목록 도구줄 (검색 + 카테고리 칩)
+ * ---------------------------------------------------------------- */
+
+.shop-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.shop-tools .ui-search { width: 260px; flex-shrink: 0; }
+.shop-tools .ui-toolbar { flex: 1; min-width: 0; }
+@media (max-width: 767px) {
+  .shop-tools { flex-direction: column; align-items: stretch; gap: 0; padding-top: var(--space-3); }
+  .shop-tools .ui-search { width: 100%; }
+}
+
+/* ---------------------------------------------------------------- *
+ * 상품 썸네일 (선생님 표·통계)
+ * ---------------------------------------------------------------- */
+
+.shop-thumb {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  color: var(--ink-400);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.shop-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.shop-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.shop-item__text { min-width: 0; }
+.shop-item[data-hidden="true"] .shop-thumb { opacity: 0.45; }
+.shop-item[data-hidden="true"] .ui-list-row__title { color: var(--ink-500); }
+
+/* 표 안의 ▲▼ 순서 버튼 */
+.shop-order { display: inline-flex; gap: var(--space-1); }
+
+/* ---------------------------------------------------------------- *
+ * 등록 모달 — 이미지 칸
+ * ---------------------------------------------------------------- */
+
+.shop-image-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.shop-image-field__preview {
+  width: 96px;
+  height: 96px;
+  flex-shrink: 0;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.shop-image-field__preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ---------------------------------------------------------------- *
+ * 통계
+ * ---------------------------------------------------------------- */
+
+.shop-stat-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (min-width: 1024px) {
+  .shop-stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); }
+}
+
+.shop-stats-layout {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+@media (min-width: 1024px) {
+  .shop-stats-layout { grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); align-items: start; }
+}
+
+.shop-rank {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  background: var(--ink-100);
+  color: var(--ink-600);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+.shop-rank[data-top="true"] { background: var(--ink-900); color: var(--surface); }
+
+/* 클릭 수 + 막대 (막대는 기존 ui-progress) */
+.shop-bar-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+.shop-bar-cell .ui-progress { width: 72px; }
+.shop-bar-cell b { min-width: 3ch; text-align: right; }
+
+.shop-cat-bars { display: flex; flex-direction: column; gap: var(--space-4); }
+.shop-cat-bars__row { display: flex; flex-direction: column; gap: var(--space-1); }
+
+/* ---------------------------------------------------------------- *
+ * 학부모 — 공개 상점 (/shop/:publicId)
+ * ---------------------------------------------------------------- */
+
+.shop-public {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-sunken);
+}
+.shop-public__inner {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-inline: var(--shell-gutter);
+}
+.shop-public__header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.shop-public__intro { white-space: pre-line; }
+.shop-public__main { flex: 1; padding-bottom: var(--space-7); }
+.shop-public__foot {
+  margin-top: var(--space-6);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--ink-500);
+  white-space: pre-line;
+}
+
+/* 카드 그리드: 모바일 2열 · 태블릿 3열 · 데스크탑 4열 */
+.shop-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (min-width: 768px) {
+  .shop-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+}
+@media (min-width: 1024px) {
+  .shop-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-5); }
+}
+
+/* 상품 카드 — 링크가 있으면 <a class="ui-card" data-interactive> 라 기존 hover 를 그대로 받는다 */
+.shop-product {
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+  color: inherit;
+}
+.shop-product__img {
+  aspect-ratio: 1 / 1;
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--ink-100);
+  display: grid;
+  place-items: center;
+  color: var(--ink-300);
+}
+.shop-product__img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.shop-product__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3);
+}
+@media (min-width: 768px) {
+  .shop-product__body { padding: var(--space-3) var(--space-4) var(--space-4); }
+}
+.shop-product__cat {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--ink-500);
+}
+.shop-product__title {
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+  font-weight: var(--weight-medium);
+  color: var(--ink-900);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: calc(var(--leading-md) * 2);
+  word-break: keep-all;
+}
+.shop-product__price {
+  margin-top: var(--space-1);
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-900);
+}
+.shop-product__host {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--link);
+}
+
+/* 비공개·없는 링크·오류 — 화면 가운데 */
+.shop-state {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: var(--space-8) var(--shell-gutter);
+}

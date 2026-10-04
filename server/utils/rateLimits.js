@@ -11,6 +11,14 @@ export const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 export const PUBLIC_CHAT_READ_MAX = 300;
 export const PUBLIC_CHAT_WRITE_MAX = 20;
 
+// 공개 추천 상품(/shop/:publicId). 읽기는 페이지를 열 때 1번이라 넉넉하고,
+// 방문·클릭 기록은 연타·봇 부풀림을 막을 만큼만 받는다 (docs/recommended-shop 02 §7).
+export const PUBLIC_SHOP_READ_MAX = 300;
+export const PUBLIC_SHOP_TRACK_MAX = 120;
+// visitorKey 는 브라우저가 보내는 값이라 바꿔 가며 보내면 칸이 계속 새로 생긴다.
+// 기록 경로에는 IP(서브넷) 기준 상한을 하나 더 건다 — 같은 와이파이의 학부모 여럿이 써도 넉넉한 값.
+export const PUBLIC_SHOP_TRACK_IP_MAX = 600;
+
 // 클라이언트 폴링 주기와 맞물린 값이라 함께 관리한다 (client/src/pages/PublicChat.jsx).
 export const PUBLIC_CHAT_POLL_INTERVAL_MS = 12000;
 

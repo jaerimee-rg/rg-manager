@@ -818,6 +818,83 @@ const initDatabase = async () => {
 
     await client.query('CREATE INDEX IF NOT EXISTS idx_media_tags_student ON media_tags ("studentId", source)');
 
+    // 추천 상품 (docs/recommended-shop) — 선생님당 상점 1개, 로그인 없이 /shop/:publicId 로 열린다
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS shops (
+        id SERIAL PRIMARY KEY,
+        "userId" INTEGER NOT NULL UNIQUE,
+        "publicId" TEXT NOT NULL UNIQUE,
+        title TEXT NOT NULL,
+        intro TEXT,
+        notice TEXT,
+        "isActive" BOOLEAN NOT NULL DEFAULT TRUE,
+        "createdAt" TEXT NOT NULL,
+        "updatedAt" TEXT NOT NULL,
+        FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS shop_categories (
+        id SERIAL PRIMARY KEY,
+        "userId" INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        "sortOrder" INTEGER NOT NULL DEFAULT 0,
+        "createdAt" TEXT NOT NULL,
+        FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    // 같은 선생님 안에서 이름이 겹치지 않게 (대소문자·앞뒤 공백 무시)
+    await client.query(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_shop_categories_user_name ON shop_categories ("userId", lower(btrim(name)))'
+    );
+
+    // 카테고리가 지워져도 상품은 남는다(카테고리 없음). 소유자는 그래서 상품에 따로 둔다.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS shop_products (
+        id SERIAL PRIMARY KEY,
+        "userId" INTEGER NOT NULL,
+        "categoryId" INTEGER,
+        title TEXT NOT NULL,
+        url TEXT,
+        price INTEGER,
+        "imagePath" TEXT,
+        "imageUrl" TEXT,
+        "isVisible" BOOLEAN NOT NULL DEFAULT TRUE,
+        "sortOrder" INTEGER NOT NULL DEFAULT 0,
+        "createdAt" TEXT NOT NULL,
+        "updatedAt" TEXT NOT NULL,
+        FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY ("categoryId") REFERENCES shop_categories(id) ON DELETE SET NULL
+      )
+    `);
+
+    await client.query(
+      'CREATE INDEX IF NOT EXISTS idx_shop_products_user ON shop_products ("userId", "sortOrder", id DESC)'
+    );
+
+    // 공개 상점 방문(view)·상품 클릭(click). 사람을 특정하는 값(IP·UA)은 저장하지 않는다.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS shop_events (
+        id BIGSERIAL PRIMARY KEY,
+        "userId" INTEGER NOT NULL,
+        "productId" INTEGER,
+        type TEXT NOT NULL CHECK (type IN ('view', 'click')),
+        "visitorKey" TEXT,
+        "createdAt" TEXT NOT NULL,
+        FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY ("productId") REFERENCES shop_products(id) ON DELETE CASCADE
+      )
+    `);
+
+    await client.query(
+      'CREATE INDEX IF NOT EXISTS idx_shop_events_user_time ON shop_events ("userId", type, "createdAt")'
+    );
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_shop_events_product_time ON shop_events ("productId", "createdAt") WHERE type = 'click'`
+    );
+
     // 설정한 적이 없을 때 기존 동작(Gemini)이 그대로 유지되도록 기본값을 채워둔다.
     await client.query(
       `INSERT INTO app_settings (key, value, "updatedAt")
