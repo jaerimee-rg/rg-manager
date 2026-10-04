@@ -4,14 +4,15 @@ import { Card, Icon } from '../ui';
 import { formatPrice, hostnameOf, safeHref } from '../../utils/shopFormat';
 
 /**
- * 공개 상점의 상품 카드. 누르면 상품 상세(?p=)가 열린다 — 쇼핑몰은 상세의 버튼으로 간다.
- * 사진도 링크도 없으면 상세에서 더 볼 것이 없어 누를 수 없는 카드다.
+ * 공개 상점의 상품 카드. 누르면 상품 상세(?p=)가 열린다 — 쇼핑몰·예약은 상세의 버튼으로 간다.
+ * 사진도 링크도 없고 예약도 받지 않으면 상세에서 더 볼 것이 없어 누를 수 없는 카드다.
  * 사진은 정사각형 칸에 잘려 보이고, 가격·도메인은 카드 맨 아래에 붙어 줄이 맞는다.
  */
 function ProductCard({ product, categoryName, to, state }) {
   const href = safeHref(product.url);
   const price = formatPrice(product.price);
   const images = product.images || [];
+  const reservable = product.isReservable === true;
 
   const body = (
     <>
@@ -19,6 +20,7 @@ function ProductCard({ product, categoryName, to, state }) {
         {images.length
           ? <img src={images[0]} alt="" loading="lazy" />
           : <Icon name="image" size={32} />}
+        {reservable && <span className="shop-product__reserve">예약 가능</span>}
         {images.length > 1 && (
           <span className="shop-product__count" aria-label={`사진 ${images.length}장`}>
             <Icon name="image" size={12} />
@@ -41,7 +43,7 @@ function ProductCard({ product, categoryName, to, state }) {
     </>
   );
 
-  if (!href && !images.length) {
+  if (!href && !images.length && !reservable) {
     return (
       <Card padding="none" className="shop-product" data-testid="shop-product">
         {body}

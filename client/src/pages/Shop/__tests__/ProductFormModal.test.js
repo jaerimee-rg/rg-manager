@@ -73,7 +73,9 @@ describe('ProductFormModal — 필수는 타이틀뿐 (FR-410~416)', () => {
     expect(fetchWithAuth).toHaveBeenCalledTimes(1);
     expect(fetchWithAuth).toHaveBeenCalledWith('/api/shop/products', {
       method: 'POST',
-      body: JSON.stringify({ title: '곤봉', description: null, url: null, price: null, categoryId: null, isVisible: true })
+      body: JSON.stringify({
+        title: '곤봉', description: null, url: null, price: null, categoryId: null, isVisible: true, isReservable: false
+      })
     });
     expect(onSaved).toHaveBeenCalledWith({ id: 7, title: '곤봉', images: [] }, { created: true, imageError: null });
   });
@@ -93,8 +95,36 @@ describe('ProductFormModal — 필수는 타이틀뿐 (FR-410~416)', () => {
     await save();
 
     expect(JSON.parse(fetchWithAuth.mock.calls[0][1].body)).toEqual({
-      title: '리본', description: '6m 새틴\n막대 포함', url: 'https://coupang.com/x', price: 32000, categoryId: 3, isVisible: false
+      title: '리본', description: '6m 새틴\n막대 포함', url: 'https://coupang.com/x', price: 32000, categoryId: 3, isVisible: false,
+      isReservable: false
     });
+  });
+
+  it('예약 받기 스위치 — 새 상품은 꺼져 있고, 켜면 함께 보낸다', async () => {
+    fetchWithAuth.mockReturnValue(respond(201, { product: { id: 9, images: [] } }));
+    setup();
+    const toggle = screen.getByRole('switch', { name: '예약 받기' });
+    expect(toggle).not.toBeChecked();
+    expect(screen.getByText('켜면 학부모가 공개 상점에서 이 상품을 예약할 수 있어요.')).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(screen.getByText(/상품 상세에 \[예약하기\] 버튼이 생겨요/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/타이틀/), { target: { value: '레오타드 맞춤' } });
+    await save();
+
+    expect(JSON.parse(fetchWithAuth.mock.calls[0][1].body)).toMatchObject({ title: '레오타드 맞춤', isReservable: true });
+  });
+
+  it('수정 — 예약을 받던 상품은 켜진 채로 열리고, 끄면 false 를 보낸다', async () => {
+    fetchWithAuth.mockReturnValue(respond(200, { product: { ...EDIT, isReservable: false } }));
+    setup({ product: { ...EDIT, isReservable: true } });
+    const toggle = screen.getByRole('switch', { name: '예약 받기' });
+    expect(toggle).toBeChecked();
+
+    fireEvent.click(toggle);
+    await save();
+    expect(fetchWithAuth.mock.calls[0][0]).toBe('/api/shop/products/12');
+    expect(JSON.parse(fetchWithAuth.mock.calls[0][1].body).isReservable).toBe(false);
   });
 
   it('설명이 1000자를 넘으면 그 칸에 안내하고 서버를 부르지 않는다', async () => {

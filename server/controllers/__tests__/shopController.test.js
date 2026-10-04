@@ -43,6 +43,9 @@ jest.unstable_mockModule('../../models/ShopProductImage.js', () => ({
 jest.unstable_mockModule('../../models/ShopEvent.js', () => ({
   default: { summary: jest.fn(), productStats: jest.fn() }
 }));
+jest.unstable_mockModule('../../models/ShopReservation.js', () => ({
+  default: { listByUser: jest.fn(), countRequested: jest.fn(), setStatus: jest.fn() }
+}));
 jest.unstable_mockModule('../../services/shopService.js', () => ({
   getOrCreateShop: jest.fn()
 }));
@@ -60,6 +63,7 @@ const ShopCategory = (await import('../../models/ShopCategory.js')).default;
 const ShopProduct = (await import('../../models/ShopProduct.js')).default;
 const ShopProductImage = (await import('../../models/ShopProductImage.js')).default;
 const ShopEvent = (await import('../../models/ShopEvent.js')).default;
+const ShopReservation = (await import('../../models/ShopReservation.js')).default;
 const { getOrCreateShop } = await import('../../services/shopService.js');
 const { uploadFile, deleteFile, isStorageConfigured } = await import('../../utils/storage.js');
 const ctrl = await import('../shopController.js');
@@ -95,19 +99,23 @@ beforeEach(() => {
   ShopProductImage.listByProducts.mockResolvedValue(new Map());
   ShopProductImage.listByProduct.mockResolvedValue([]);
   ShopProductImage.listPathsOwned.mockResolvedValue([]);
+  ShopReservation.countRequested.mockResolvedValue(0);
 });
 
 describe('GET /api/shop — 첫 진입에 상점을 만든다 (FR-400)', () => {
-  it('상점·카테고리·저장소 상태를 돌려준다', async () => {
+  it('상점·카테고리·저장소 상태·처리 전 예약 수를 돌려준다', async () => {
     ShopCategory.listByUser.mockResolvedValue([{ id: 1, name: '발레복', sortOrder: 0, productCount: '2' }]);
+    ShopReservation.countRequested.mockResolvedValue(3);
 
     const res = await call(ctrl.getShop);
 
     expect(getOrCreateShop).toHaveBeenCalledWith(9);
+    expect(ShopReservation.countRequested).toHaveBeenCalledWith(9);
     expect(res.json).toHaveBeenCalledWith({
       shop: { id: 1, publicId: 'pub123', title: '이재림 선생님 추천 상품', intro: null, notice: null, isActive: true },
       categories: [{ id: 1, name: '발레복', sortOrder: 0, productCount: 2 }],
-      storageReady: true
+      storageReady: true,
+      requestedReservations: 3
     });
   });
 });
@@ -139,7 +147,7 @@ describe('POST /api/shop/products — 필수는 타이틀뿐 (FR-411)', () => {
     const res = await call(ctrl.createProduct, { body: { title: '곤봉' } });
 
     expect(ShopProduct.create).toHaveBeenCalledWith(9, {
-      title: '곤봉', description: null, url: null, price: null, categoryId: null, isVisible: true
+      title: '곤봉', description: null, url: null, price: null, categoryId: null, isVisible: true, isReservable: false
     });
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json.mock.calls[0][0].product).not.toHaveProperty('imagePath');
@@ -175,6 +183,17 @@ describe('POST /api/shop/products — 필수는 타이틀뿐 (FR-411)', () => {
     expect(ShopCategory.getOwned).toHaveBeenCalledWith(77, 9);
     expect(res.status).toHaveBeenCalledWith(400);
     expect(ShopProduct.create).not.toHaveBeenCalled();
+  });
+
+  it('예약 받기를 켜서 등록할 수 있고, 불리언이 아니면 400', async () => {
+    ShopProduct.create.mockResolvedValue({ ...PRODUCT, isReservable: true });
+    const res = await call(ctrl.createProduct, { body: { title: '레오타드', isReservable: true } });
+    expect(ShopProduct.create.mock.calls[0][1].isReservable).toBe(true);
+    expect(res.json.mock.calls[0][0].product.isReservable).toBe(true);
+
+    const bad = await call(ctrl.createProduct, { body: { title: '레오타드', isReservable: 'yes' } });
+    expect(bad.status).toHaveBeenCalledWith(400);
+    expect(bad.json.mock.calls[0][0].fields).toHaveProperty('isReservable');
   });
 
   it('200개를 넘기면 400 (FR-418)', async () => {
@@ -236,6 +255,16 @@ describe('상품 수정·숨김·삭제 — 남의 상품은 404 (FR-460)', () =
     ShopProduct.update.mockResolvedValue({ ...PRODUCT, isVisible: false });
     await call(ctrl.updateProduct, { params: { id: '12' }, body: { title: '리본' } });
     expect(ShopProduct.update.mock.calls[0][2].isVisible).toBe(false);
+  });
+
+  it('수정: isReservable 을 빼고 보내면 예약 받기를 그대로 두고, 주면 바꾼다', async () => {
+    ShopProduct.getOwned.mockResolvedValue({ ...PRODUCT, isReservable: true });
+    ShopProduct.update.mockResolvedValue({ ...PRODUCT, isReservable: true });
+    await call(ctrl.updateProduct, { params: { id: '12' }, body: { title: '리본' } });
+    expect(ShopProduct.update.mock.calls[0][2].isReservable).toBe(true);
+
+    await call(ctrl.updateProduct, { params: { id: '12' }, body: { title: '리본', isReservable: false } });
+    expect(ShopProduct.update.mock.calls[1][2].isReservable).toBe(false);
   });
 
   it('숨김: 불리언이 아니면 400, 남의 상품이면 404', async () => {
@@ -490,5 +519,52 @@ describe('GET /api/shop/stats', () => {
     ShopCategory.listByUser.mockResolvedValue([]);
     await call(ctrl.getStats, { query: { days: 'all' } });
     expect(ShopEvent.summary).toHaveBeenCalledWith(9, null);
+  });
+});
+
+describe('예약 (05-reservations.md) — 선생님 화면', () => {
+  const ROW = {
+    id: 3, userId: 9, productId: 12, productTitle: '리본', imageUrl: null,
+    name: '김예림', phone: '010-1234-5678', reservedDate: '2026-10-10', status: 'requested',
+    createdAt: '2026-10-04T01:00:00.000Z', updatedAt: '2026-10-04T01:00:00.000Z'
+  };
+
+  it('목록: 내 예약만 읽어 선생님 모양으로 (선생님 id 는 빠진다)', async () => {
+    ShopReservation.listByUser.mockResolvedValue([ROW]);
+    const res = await call(ctrl.listReservations);
+    expect(ShopReservation.listByUser).toHaveBeenCalledWith(9);
+    const [item] = res.json.mock.calls[0][0].reservations;
+    expect(item).toMatchObject({ id: 3, name: '김예림', phone: '010-1234-5678', status: 'requested' });
+    expect(item).not.toHaveProperty('userId');
+  });
+
+  it('상태 변경: 요청 · 확정 · 취소 어느 쪽으로든 바꾼다', async () => {
+    for (const status of ['confirmed', 'cancelled', 'requested']) {
+      ShopReservation.setStatus.mockResolvedValueOnce({ ...ROW, status });
+      const res = await call(ctrl.setReservationStatus, { params: { id: '3' }, body: { status } });
+      expect(ShopReservation.setStatus).toHaveBeenLastCalledWith(3, 9, status);
+      expect(res.json.mock.calls[0][0].reservation.status).toBe(status);
+    }
+  });
+
+  it('상태 변경: 모르는 상태는 400 (저장하지 않는다)', async () => {
+    const res = await call(ctrl.setReservationStatus, { params: { id: '3' }, body: { status: 'done' } });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(ShopReservation.setStatus).not.toHaveBeenCalled();
+  });
+
+  it('상태 변경: 남의 예약·이상한 id 는 404', async () => {
+    ShopReservation.setStatus.mockResolvedValue(null);
+    let res = await call(ctrl.setReservationStatus, { params: { id: '3' }, body: { status: 'confirmed' } });
+    expect(res.status).toHaveBeenCalledWith(404);
+
+    res = await call(ctrl.setReservationStatus, { params: { id: 'x' }, body: { status: 'confirmed' } });
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('DB 오류는 500', async () => {
+    ShopReservation.listByUser.mockRejectedValue(new Error('boom'));
+    const res = await call(ctrl.listReservations);
+    expect(res.status).toHaveBeenCalledWith(500);
   });
 });

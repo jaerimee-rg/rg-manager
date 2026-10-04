@@ -144,6 +144,10 @@ const saveLog = async (req, action, target, responseData) => {
       details = `카테고리: ${responseData.category.name}`;
     } else if (action === 'DELETE_SHOP_CATEGORY' && req.params) {
       details = `카테고리 ID: ${req.params.id}`;
+    } else if (action === 'UPDATE_SHOP_RESERVATION' && req.params) {
+      // 학부모 이름·전화번호는 로그에 남기지 않는다
+      const label = { requested: '요청', confirmed: '확정', cancelled: '취소' }[req.body?.status] || req.body?.status;
+      details = `예약 ID: ${req.params.id} → ${label}`;
     } else if (action === 'UPDATE_AI_PROVIDER' && req.body) {
       details = `AI 제공자: ${req.body.provider}` +
         (req.body.model ? ` / ${req.body.model}` : '') +

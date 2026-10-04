@@ -174,8 +174,10 @@ function PublicShop() {
 
       {opened && (
         <ProductDetail
+          key={opened.id}
           product={opened}
           categoryName={names.get(opened.categoryId)}
+          publicId={publicId}
           onClose={closeDetail}
           onOpenLink={(p) => trackClick(publicId, p.id)}
         />

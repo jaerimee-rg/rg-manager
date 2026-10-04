@@ -45,6 +45,16 @@ class ShopProduct {
     return result.rows[0] || null;
   }
 
+  /** 예약을 받을 수 있는지 볼 상품 — 그 상점의 공개 상품이어야 한다. 예약 받기 여부는 부르는 쪽이 본다 */
+  static async getPublic(id, userId) {
+    const result = await pool.query(
+      `SELECT id, title, "isReservable" FROM shop_products
+       WHERE id = $1 AND "userId" = $2 AND "isVisible" = TRUE`,
+      [id, userId]
+    );
+    return result.rows[0] || null;
+  }
+
   static async countByUser(userId) {
     const result = await pool.query('SELECT COUNT(*)::int AS count FROM shop_products WHERE "userId" = $1', [userId]);
     return result.rows[0]?.count || 0;
@@ -56,26 +66,28 @@ class ShopProduct {
   }
 
   /** 새 상품은 맨 위 — 현재 가장 작은 순서보다 하나 작게 */
-  static async create(userId, { title, description, url, price, categoryId, isVisible }) {
+  static async create(userId, { title, description, url, price, categoryId, isVisible, isReservable }) {
     const now = new Date().toISOString();
     const result = await pool.query(
       `INSERT INTO shop_products
-         ("userId", "categoryId", title, description, url, price, "isVisible", "sortOrder", "createdAt", "updatedAt")
-       SELECT $1::int, $2::int, $3::text, $4::text, $5::text, $6::int, $7::boolean, COALESCE(MIN("sortOrder"), 1) - 1, $8::text, $8::text
+         ("userId", "categoryId", title, description, url, price, "isVisible", "isReservable", "sortOrder", "createdAt", "updatedAt")
+       SELECT $1::int, $2::int, $3::text, $4::text, $5::text, $6::int, $7::boolean, $9::boolean,
+              COALESCE(MIN("sortOrder"), 1) - 1, $8::text, $8::text
        FROM shop_products WHERE "userId" = $1
        RETURNING *`,
-      [userId, categoryId, title, description, url, price, isVisible, now]
+      [userId, categoryId, title, description, url, price, isVisible, now, isReservable]
     );
     return { ...result.rows[0], clickCount: 0 };
   }
 
-  static async update(id, userId, { title, description, url, price, categoryId, isVisible }) {
+  static async update(id, userId, { title, description, url, price, categoryId, isVisible, isReservable }) {
     const result = await pool.query(
       `UPDATE shop_products
-       SET title = $1, description = $2, url = $3, price = $4, "categoryId" = $5, "isVisible" = $6, "updatedAt" = $7
+       SET title = $1, description = $2, url = $3, price = $4, "categoryId" = $5, "isVisible" = $6, "updatedAt" = $7,
+           "isReservable" = $10
        WHERE id = $8 AND "userId" = $9
        ${RETURNING}`,
-      [title, description, url, price, categoryId, isVisible, new Date().toISOString(), id, userId]
+      [title, description, url, price, categoryId, isVisible, new Date().toISOString(), id, userId, isReservable]
     );
     return result.rows[0] || null;
   }

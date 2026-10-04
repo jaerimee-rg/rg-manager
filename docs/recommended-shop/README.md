@@ -26,6 +26,7 @@
 | [02-data-model-api.md](./02-data-model-api.md) | DB 스키마(테이블 4개), 순수 함수, REST API(선생님·공개), 공개 응답 화이트리스트, 클릭 기록 방식 결정, 통계 쿼리, 레이트 리밋 |
 | [03-implementation-plan.md](./03-implementation-plan.md) | 기존 코드 영향, 새 파일, 단계별 구현 순서 S1~S7, 테스트 계획(단위·e2e·브라우저), **배포 체크리스트(DDL 선적용)**, 리스크 |
 | [04-images-description.md](./04-images-description.md) | **2차** — 사진 여러 장 · 순서 · 자르기 · 상세 설명 · 상품 상세(캐러셀). 정한 것, 데이터(사진 표 · 1차 사진 옮기기), API, 저장 흐름, 배포 |
+| [05-reservations.md](./05-reservations.md) | **3차** — 상품 예약. 예약 받기 스위치, 학부모 예약 폼(이름·전화번호·달력), 선생님 예약 탭(요청·확정·취소), 데이터·API·배포 |
 | [mockups/teacher-desktop.html](./mockups/teacher-desktop.html) · [teacher-mobile.html](./mockups/teacher-mobile.html) | 선생님 화면 목업 — 상품 목록 · 등록/수정 · 삭제 확인 · 통계 · 설정 · 빈 상태 (+ 모바일 메뉴) |
 | [mockups/parent-desktop.html](./mockups/parent-desktop.html) · [parent-mobile.html](./mockups/parent-mobile.html) | 학부모 화면 목업 — 공개 상점 · 카테고리 필터 · 로딩 · 빈 상점 · 비공개 · 오류 |
 | [mockups/images-desktop.html](./mockups/images-desktop.html) · [images-mobile.html](./mockups/images-mobile.html) | **2차 목업** — 상품마다 사진 여러 장 · 순서 · 자르기 · 상세 설명, 상품 상세(모바일 캐러셀 · 데스크톱 큰 사진 + 작은 사진) |

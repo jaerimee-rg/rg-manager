@@ -16,9 +16,11 @@ import {
   renameCategory,
   deleteCategory,
   reorderCategories,
+  listReservations,
+  setReservationStatus,
   getStats
 } from '../controllers/shopController.js';
-import { getPublicShop, recordView, recordClick } from '../controllers/publicShopController.js';
+import { getPublicShop, recordView, recordClick, createReservation } from '../controllers/publicShopController.js';
 import { verifyToken } from '../middleware/auth.js';
 import { logAction } from '../middleware/logger.js';
 import { MAX_FILE_BYTES } from '../utils/faqFileTypes.js';
@@ -32,6 +34,7 @@ const rawBody = express.raw({ type: () => true, limit: MAX_FILE_BYTES + 1024 });
 router.get('/public/:publicId', getPublicShop);
 router.post('/public/:publicId/view', recordView);
 router.post('/public/:publicId/products/:productId/click', recordClick);
+router.post('/public/:publicId/products/:productId/reservations', createReservation);
 
 // 선생님
 router.get('/', verifyToken, getShop);
@@ -48,6 +51,9 @@ router.delete('/products/:id', verifyToken, logAction('DELETE_SHOP_PRODUCT'), de
 router.post('/products/:id/images', verifyToken, rawBody, logAction('UPLOAD_SHOP_IMAGE'), addProductImage);
 router.put('/products/:id/images/order', verifyToken, reorderProductImages);
 router.delete('/products/:id/images/:imageId', verifyToken, logAction('DELETE_SHOP_IMAGE'), deleteProductImage);
+
+router.get('/reservations', verifyToken, listReservations);
+router.patch('/reservations/:id/status', verifyToken, logAction('UPDATE_SHOP_RESERVATION'), setReservationStatus);
 
 router.get('/categories', verifyToken, listCategories);
 router.post('/categories', verifyToken, logAction('CREATE_SHOP_CATEGORY'), createCategory);

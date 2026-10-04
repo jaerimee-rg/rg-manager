@@ -100,4 +100,14 @@ describe('logAction — 추천 상품 (docs/recommended-shop)', () => {
     const [, params] = await run('CREATE_SHOP_CATEGORY', { user, body: {} }, { category: { name: '수구' } });
     expect(params[3]).toBe('카테고리: 수구');
   });
+
+  it('예약 상태 변경은 예약 id 와 바뀐 상태만 — 학부모 이름·전화번호는 남기지 않는다', async () => {
+    const [, params] = await run(
+      'UPDATE_SHOP_RESERVATION',
+      { user, params: { id: '3' }, body: { status: 'confirmed' } },
+      { reservation: { id: 3, name: '김예림', phone: '010-1234-5678', status: 'confirmed' } }
+    );
+    expect(params[3]).toBe('예약 ID: 3 → 확정');
+    expect(JSON.stringify(params)).not.toMatch(/김예림|010-1234-5678/);
+  });
 });

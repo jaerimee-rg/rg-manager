@@ -52,8 +52,8 @@ Client and server have **separate** Jest setups and are run from their own direc
 there is no root `package.json`, so there is no one command that runs everything.
 
 ```bash
-cd client && npm test          # jest — 783 tests / 61 suites
-cd server && npm test          # 1042 tests / 51 suites
+cd client && npm test          # jest — 860 tests / 65 suites
+cd server && npm test          # 1088 tests / 52 suites
 ```
 
 - **The server suite is ESM** (`"type": "module"` + `transform: {}`, i.e. no Babel) and only
@@ -497,14 +497,14 @@ open **one public link `/shop/<publicId>` without logging in**; the teacher sees
   `normalizeUrl()` — **http/https only**, a bare `coupang.com/…` gets `https://` — on the server
   (`utils/shopValidation.js`) *and* again at render time on the client (`utils/shopFormat.js:safeHref`).
   The two files hold the same rules and are tested with the same table; change both together.
-- **Routes**: teacher UI is `/products` (`/stats`, `/settings` tabs, `pages/Shop/`), the public page is
+- **Routes**: teacher UI is `/products` (`/reservations`, `/stats`, `/settings` tabs, `pages/Shop/`), the public page is
   `/shop/:publicId` (`pages/PublicShop.jsx`) in `App.jsx`'s **public branch** next to `/chat/` — rendered
   before the auth check, so logged-in teachers/parents see the same standalone page. The two prefixes
   are deliberately different: `/shop/*` would otherwise swallow the teacher's sub-routes.
   A card opens the **product detail** (`components/shop/ProductDetail.jsx`) via `?p=<id>` (alongside `?c=`):
   a card click pushes history with `state.shopDetail`, so closing goes `navigate(-1)` (the back button
   closes it too); a detail opened straight from a link only drops `?p=`. A product with **neither photos
-  nor a URL** stays a non-clickable card. The detail is a bottom sheet on mobile (swipe the photos —
+  nor a URL** (and not taking reservations) stays a non-clickable card. The detail is a bottom sheet on mobile (swipe the photos —
   scroll-snap — with dots) and a wide modal on desktop (big photo + thumbnail strip, ‹ › and ←/→);
   same DOM, CSS decides (`ProductGallery.jsx`). `Modal header={false}` lets the photo sit at the top.
 - **API**: `/api/shop/*` is teacher-only (`rejectParents` in `server.js`, except `/api/shop/public/*`).
@@ -552,8 +552,23 @@ open **one public link `/shop/<publicId>` without logging in**; the teacher sees
   both on one Esc). A copied image pasted anywhere in the open form is **appended**
   (`utils/clipboardImage.js`) — except text+image pasted into a text box, where the text wins.
   Without `SUPABASE_SECRET_KEY` the image field shows a notice.
+- **Reservations** (3차, `docs/recommended-shop/05-reservations.md`): a product with `isReservable` (form switch
+  **[예약 받기]**, default off, omitted on update = unchanged — same rule as `isVisible`) gets **[예약하기]** under its
+  detail, and its card becomes clickable even without photo/URL. The form (`components/shop/ReservationForm.jsx`) replaces
+  the detail **inside the same Modal**; Esc/scrim there goes back to the detail instead of closing. Name (parent or child,
+  ≤30) · phone (normalised to `010-1234-5678`) · date from the inline **`Calendar`** (`components/ui/Calendar.jsx` +
+  `utils/calendar.js`, dates are always `YYYY-MM-DD` strings) — **today (KST on the server) to +180 days**. Same rules on
+  both sides (`utils/shopReservation.js` server + client, same phone table in both tests). `POST
+  /api/shop/public/:publicId/products/:productId/reservations` (no login; own limiter `PUBLIC_SHOP_RESERVE_IP_MAX` = 20 per
+  IP per 15 min; 409 when the product stopped taking reservations; same product+phone+date still `requested` → 200
+  `duplicate`) answers **date + status only**. `shop_reservations` keeps rows when the product is deleted (`productId` →
+  NULL, the stored `productTitle` shows). Teacher tab `/products/reservations`: status chips + a 요청/확정/취소 segmented
+  control per row (`PATCH /api/shop/reservations/:id/status`, any direction); `GET /api/shop` carries
+  `requestedReservations` for the tab count. Parents are **not** notified — the teacher calls the number. The log line
+  omits name/phone.
 - **Schema rollout**: 1차 added four tables; 2차 adds `shop_products.description`, `shop_product_images` and
-  the legacy-photo move — apply the `server/database.js` DDL to production **before** merging,
+  the legacy-photo move; 3차 adds `shop_products."isReservable"` and `shop_reservations` (names + phone numbers — the
+  REVOKE matters) — apply the `server/database.js` DDL to production **before** merging,
   `ALTER TABLE … OWNER TO rg_app`, and REVOKE the public-API grants (see *Deployment*).
 
 ### Student-Class Relationship
@@ -598,7 +613,7 @@ cd ../server && DATABASE_URL=postgresql://<user>@localhost:5432/rg_manager PORT=
   JWT_SECRET=local-dev-secret API_RATE_LIMIT_MAX=100000 AUTH_RATE_LIMIT_MAX=100000 \
   SUPABASE_URL=http://localhost:5056 SUPABASE_SECRET_KEY=e2e-fake node server.js &
 cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e:setup   # writes e2e/.sessions.json
-cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 75 tests
+cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 79 tests
 ```
 
 - **The fake storage is optional** — it lets the shop photo tests upload for real (`client/e2e/fake-storage.mjs`
