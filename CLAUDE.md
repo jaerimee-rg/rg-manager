@@ -617,7 +617,11 @@ set explicitly. `KAKAO_REDIRECT_URI` must also be registered in the Kakao develo
   through; a large one (the album feature added 5 tables, 7 columns and 8 indexes) does **not**.
   After deploying a sizeable schema change, verify the tables exist in production and, if they
   do not, apply the same DDL directly (Supabase SQL editor / MCP `apply_migration`) and
-  `ALTER TABLE <t> OWNER TO rg_app` so the app can write to them. Re-running `initDatabase()`
+  `ALTER TABLE <t> OWNER TO rg_app` so the app can write to them. **Also run
+  `REVOKE ALL ON TABLE <t> FROM anon, authenticated, service_role`** (and on its `_id_seq`): the editor/MCP
+  run as `postgres`, and Supabase's default privileges grant those roles full access to anything
+  `postgres` creates in `public` — with RLS off that exposes the table through the public REST API.
+  Tables the app creates itself (as `rg_app`) only carry `rg_app` grants; match that. Re-running `initDatabase()`
   afterwards is a no-op because every statement is `IF NOT EXISTS`.
   `client/e2e/smoke-prod.mjs` (`npm run smoke:prod`) checks the deployed app end to end
 - There is no migration tool — add `ADD COLUMN IF NOT EXISTS` / `CREATE TABLE IF NOT EXISTS`

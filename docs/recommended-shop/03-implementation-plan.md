@@ -139,7 +139,9 @@ client/src/components/shop/ProductCard.jsx  공개 상점 카드 (선생님 미�
 `initDatabase()` 는 fire-and-forget 이라 Vercel 에서 DDL 이 실행되지 않은 채 새 코드만 뜰 수 있다(2026-08-30 PR #7 에서 실제로 prod 가 500).
 이번 변경은 **새 테이블만** 만들고 기존 쿼리는 새 테이블을 읽지 않으므로 앱 전체가 죽지는 않지만, 추천 상품 화면은 테이블이 없으면 500 이다. 그래서:
 
-1. **머지 전**: 02 §1 의 DDL 을 prod(Supabase)에 그대로 실행 → `ALTER TABLE shops, shop_categories, shop_products, shop_events OWNER TO rg_app` (각각) → `\d shop_*` 로 확인.
+1. **머지 전**: 02 §1 의 DDL 을 prod(Supabase)에 그대로 실행 → `ALTER TABLE shops, shop_categories, shop_products, shop_events OWNER TO rg_app` (각각) →
+   `REVOKE ALL … FROM anon, authenticated, service_role`(테이블·시퀀스 — SQL 에디터/MCP 는 `postgres` 로 돌아 Supabase 기본 권한이 붙는다) → `\d shop_*` 로 확인.
+   **2026-10-04 적용 완료** (MCP `recommended_shop_tables`, `recommended_shop_revoke_public_api_grants`).
    테이블이 먼저 생겨도 옛 코드는 읽지 않으므로 안전하다.
 2. PR: `cd server && npm test`, `cd client && npm test`, e2e 통과 결과를 본문에 첨부.
 3. 머지(= prod 배포) 후: `GET /api/shop/public/<없는id>` → 404 JSON, 선생님 계정으로 `/products` 진입 → 상점 생성 확인, 공개 링크를 시크릿 창으로 열기, 카드 클릭 → 통계 반영.
