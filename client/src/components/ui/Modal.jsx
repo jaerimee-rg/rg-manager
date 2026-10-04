@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Icon from './Icon';
+import { useSwipeToClose } from '../../hooks/useSwipeToClose';
 
 const cx = (...parts) => parts.filter(Boolean).join(' ');
 
@@ -16,6 +17,8 @@ const FOCUSABLE =
  * size: sm | md | lg
  * header: false 면 제목 줄(제목·닫기 버튼)을 그리지 않는다 — 사진이 맨 위에 오는 상세처럼
  *         본문이 닫기 버튼을 직접 둘 때. Esc·바깥 누르기로 닫히는 것은 그대로다.
+ * swipeToClose: 휴대폰 바텀시트를 손가락으로 끌어내려 닫는다(hooks/useSwipeToClose). 입력 폼처럼
+ *         실수로 닫히면 곤란한 시트에는 켜지 않는다 — 그래서 기본은 꺼져 있다.
  */
 export function Modal({
   open = true,
@@ -28,11 +31,13 @@ export function Modal({
   size = 'md',
   closeOnScrim = true,
   header = true,
+  swipeToClose = false,
   labelledBy,
   className = '',
   ...rest
 }) {
   const panelRef = useRef(null);
+  const scrimRef = useRef(null);
   const restoreFocusRef = useRef(null);
   // 부모가 그릴 때마다 새 onClose 를 넘겨도 아래 효과가 다시 돌지 않게 한다 — 다시 돌면 패널이 포커스를
   // 가져가 입력 중인 칸에서 커서가 빠진다. Esc 는 늘 지금의 onClose 를 부른다.
@@ -82,11 +87,18 @@ export function Modal({
     };
   }, [open]);
 
+  useSwipeToClose({
+    enabled: open && swipeToClose && mode === 'sheet' && Boolean(onClose),
+    panelRef,
+    scrimRef,
+    onClose
+  });
+
   if (!open) return null;
 
   return createPortal(
     <>
-      <div className="ui-scrim" onClick={closeOnScrim ? onClose : undefined} aria-hidden="true" />
+      <div ref={scrimRef} className="ui-scrim" onClick={closeOnScrim ? onClose : undefined} aria-hidden="true" />
       <div
         ref={panelRef}
         className={cx('ui-overlay', className)}

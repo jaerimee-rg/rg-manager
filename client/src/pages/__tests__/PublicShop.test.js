@@ -140,6 +140,34 @@ describe('PublicShop — 로그인 없이 보는 추천 상품', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('휴대폰에서는 상세 시트를 아래로 끌어내려 닫는다 — 카드에서 열었으면 상점으로 돌아간다', async () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = (query) => ({ matches: query === '(max-width: 767px)', media: query });
+    jest.useFakeTimers();
+    try {
+      await renderShop('/shop/pub123?c=3');
+      fireEvent.click(screen.getByRole('link', { name: '사사키 리본 6m 자세히 보기' }));
+      const title = within(screen.getByRole('dialog')).getByRole('heading', { name: '사사키 리본 6m' });
+
+      const touch = (type, y, t) => {
+        const event = new Event(type, { bubbles: true, cancelable: true });
+        Object.defineProperty(event, 'touches', { value: type === 'touchend' ? [] : [{ clientX: 50, clientY: y }] });
+        Object.defineProperty(event, 'timeStamp', { value: t });
+        title.dispatchEvent(event);
+      };
+      touch('touchstart', 100, 0);
+      [150, 220, 300].forEach((y, i) => touch('touchmove', y, (i + 1) * 100));
+      touch('touchend', 300, 300);
+      await act(async () => { jest.advanceTimersByTime(180); });
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(currentLocation.search).toBe('?c=3');
+    } finally {
+      jest.useRealTimers();
+      window.matchMedia = originalMatchMedia;
+    }
+  });
+
   it('사진이 한 장이면 넘기기 표시가 없다 · 공개 목록에 없는 ?p= 는 무시한다', async () => {
     await renderShop('/shop/pub123?p=5');
     expect(screen.queryByText('1 / 1')).not.toBeInTheDocument();
@@ -327,5 +355,39 @@ describe('PublicShop — 상품 예약 (05-reservations.md)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '상품으로 돌아가기' }));
     expect(screen.getByRole('dialog', { name: '레오타드 맞춤' })).toBeInTheDocument();
+  });
+
+  it('휴대폰 — 예약 폼에서는 끌어내려도 닫히지 않고(쓰던 입력을 지킨다), 상품으로 돌아가면 다시 끌어내려 닫힌다', async () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = (query) => ({ matches: query === '(max-width: 767px)', media: query });
+    jest.useFakeTimers();
+    try {
+      const dialog = await openReserve();
+      fireEvent.change(within(dialog).getByLabelText(/이름/), { target: { value: '김예림' } });
+
+      const dragDown = async (target) => {
+        const touch = (type, y, t) => {
+          const event = new Event(type, { bubbles: true, cancelable: true });
+          Object.defineProperty(event, 'touches', { value: type === 'touchend' ? [] : [{ clientX: 50, clientY: y }] });
+          Object.defineProperty(event, 'timeStamp', { value: t });
+          target.dispatchEvent(event);
+        };
+        touch('touchstart', 100, 0);
+        [150, 220, 300].forEach((y, i) => touch('touchmove', y, (i + 1) * 100));
+        touch('touchend', 300, 300);
+        await act(async () => { jest.advanceTimersByTime(180); });
+      };
+
+      await dragDown(within(dialog).getByRole('heading', { name: '예약하기' }));
+      expect(screen.getByRole('dialog', { name: '예약하기' })).toBeInTheDocument();
+      expect(screen.getByLabelText(/이름/)).toHaveValue('김예림');
+
+      fireEvent.click(screen.getByRole('button', { name: '상품으로 돌아가기' }));
+      await dragDown(screen.getByRole('heading', { name: '레오타드 맞춤' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    } finally {
+      jest.useRealTimers();
+      window.matchMedia = originalMatchMedia;
+    }
   });
 });

@@ -29,6 +29,22 @@ const makePng = async (page, width, height, colors) => {
   return Buffer.from(base64, 'base64');
 };
 
+/**
+ * 손가락으로 민다 — 크로미움에 진짜 터치 입력(CDP)을 넣어 브라우저 스크롤·preventDefault 가 휴대폰처럼 돈다.
+ * page.mouse 로는 touch 이벤트가 나지 않는다.
+ */
+const fingerSwipe = async (page, from, to, { steps = 10, delay = 16 } = {}) => {
+  const cdp = await page.context().newCDPSession(page);
+  const at = (i) => [{ x: Math.round(from.x + ((to.x - from.x) * i) / steps), y: Math.round(from.y + ((to.y - from.y) * i) / steps) }];
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(0) });
+  for (let i = 1; i <= steps; i += 1) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(i) });
+    await page.waitForTimeout(delay);
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+};
+
 test.describe.configure({ mode: 'serial' });
 
 let publicPath = '';
@@ -104,6 +120,34 @@ test.describe('추천 상품', () => {
     expect(popup.url()).toBe(`${baseURL}/design-system`);
     expect(beacon).toBeTruthy();
 
+    await context.close();
+  });
+
+  test('학부모(휴대폰): 상세 시트를 손가락으로 끌어내리면 닫힌다 — 조금 끌다 놓으면 제자리로', async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    const page = await context.newPage();
+    await page.goto(publicPath);
+    await page.getByRole('link', { name: `${linked} 자세히 보기` }).click();
+    await expect(page).toHaveURL(/[?&]p=\d+/);
+
+    const detail = page.getByRole('dialog', { name: linked });
+    await expect(detail).toBeVisible();
+    await page.waitForTimeout(400); // 시트가 올라오는 움직임이 끝나기를 기다린다
+    const box = await detail.boundingBox();
+    const start = { x: box.x + box.width / 2, y: box.y + 120 };
+
+    // 천천히 조금(50px) 끌다 놓으면 닫히지 않고 제자리로 돌아온다
+    await fingerSwipe(page, start, { x: start.x, y: start.y + 50 }, { steps: 10, delay: 50 });
+    await page.waitForTimeout(400);
+    await expect(detail).toBeVisible();
+    expect((await detail.boundingBox()).y).toBeCloseTo(box.y, 0);
+    await expect(page).toHaveURL(/[?&]p=\d+/);
+
+    // 충분히 끌어내리면 닫히고, 카드에서 열었으므로 상점(?p= 없음)으로 돌아간다
+    await fingerSwipe(page, start, { x: start.x, y: start.y + 320 });
+    await expect(detail).toBeHidden();
+    await expect(page).not.toHaveURL(/[?&]p=/);
+    await expect(page.getByRole('link', { name: `${linked} 자세히 보기` })).toBeVisible();
     await context.close();
   });
 
@@ -328,6 +372,13 @@ test.describe('추천 상품', () => {
     await expect(detail.getByRole('button', { name: '2번째 사진' })).toHaveAttribute('aria-current', 'true');
     await expect(detail.getByRole('link', { name: /에서 보기$/ })).toBeInViewport();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
+    // 진짜 손가락으로 사진을 옆으로 밀면 다음 사진 — 끌어내려 닫기가 가로 넘기기를 가로채지 않는다
+    const track = await detail.locator('.shop-gallery__track').boundingBox();
+    const middle = track.y + track.height / 2;
+    await fingerSwipe(page, { x: track.x + track.width * 0.8, y: middle }, { x: track.x + track.width * 0.15, y: middle + 12 });
+    await expect(detail.getByText('3 / 3')).toBeVisible();
+    await expect(detail).toBeVisible();
 
     await page.goBack();
     await expect(detail).toBeHidden();

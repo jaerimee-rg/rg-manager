@@ -52,7 +52,7 @@ Client and server have **separate** Jest setups and are run from their own direc
 there is no root `package.json`, so there is no one command that runs everything.
 
 ```bash
-cd client && npm test          # jest — 860 tests / 65 suites
+cd client && npm test          # jest — 887 tests / 66 suites
 cd server && npm test          # 1088 tests / 52 suites
 ```
 
@@ -507,6 +507,13 @@ open **one public link `/shop/<publicId>` without logging in**; the teacher sees
   nor a URL** (and not taking reservations) stays a non-clickable card. The detail is a bottom sheet on mobile (swipe the photos —
   scroll-snap — with dots) and a wide modal on desktop (big photo + thumbnail strip, ‹ › and ←/→);
   same DOM, CSS decides (`ProductGallery.jsx`). `Modal header={false}` lets the photo sit at the top.
+  On phones the sheet **closes when dragged down** (`Modal swipeToClose` → `hooks/useSwipeToClose.js`, pure rules in
+  `utils/sheetSwipe.js`): only while the body is scrolled to the top, and the first move decides — sideways (photo
+  swipe), upward, or a scrolled body stay the browser's. Close past 140 px (or 30% of a short sheet) or on a fast flick;
+  otherwise it springs back. If the sheet is still mounted 600 ms after `onClose` (an `onClose` that only steps back), it
+  slides back instead of staying hidden. Touch listeners are native `{ passive: false }` because React's `touchmove` is passive.
+  Off by default — don't turn it on for forms, where an accidental close loses input (the detail turns it off
+  while its reservation form is showing: `swipeToClose={step !== 'reserve'}`).
 - **API**: `/api/shop/*` is teacher-only (`rejectParents` in `server.js`, except `/api/shop/public/*`).
   Every teacher query is scoped by the token's user id; another teacher's ids return **404**. Public
   responses go through `utils/shopSerializer.js` (a whitelist — a test pins the exact keys), skip
@@ -613,7 +620,7 @@ cd ../server && DATABASE_URL=postgresql://<user>@localhost:5432/rg_manager PORT=
   JWT_SECRET=local-dev-secret API_RATE_LIMIT_MAX=100000 AUTH_RATE_LIMIT_MAX=100000 \
   SUPABASE_URL=http://localhost:5056 SUPABASE_SECRET_KEY=e2e-fake node server.js &
 cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e:setup   # writes e2e/.sessions.json
-cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 79 tests
+cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 80 tests
 ```
 
 - **The fake storage is optional** — it lets the shop photo tests upload for real (`client/e2e/fake-storage.mjs`
