@@ -21,7 +21,8 @@
 | 카드 | 예약 받는 상품은 사진 위에 **"예약 가능"**, 사진·링크가 없어도 누를 수 있다 | 예약하려면 상세를 열어야 한다 |
 | 상태 | **요청 → 확정 / 취소**, 어느 쪽으로든 되돌릴 수 있다 | 잘못 누른 것을 고칠 수 있게. 삭제는 두지 않았다(취소로 충분) |
 | 학부모 알림 | **없음** — 선생님이 남긴 번호로 직접 연락한다. 보낸 뒤 화면에 "선생님이 확인한 뒤 연락드려요" | 학부모에게 카카오 메시지를 보내지 않는다는 기존 결정(2026-08) |
-| 같은 요청 두 번 | 같은 상품·번호·날짜로 아직 '요청' 인 것이 있으면 **새로 만들지 않고** "이미 요청한 예약이에요" | 버튼 연타·다시 보내기로 목록이 지저분해지지 않게 |
+| 같은 요청 두 번 | 그 날을 차지한 예약이 **같은 번호** 것이면 새로 만들지 않고 "이미 요청한 예약이에요" | 버튼 연타·다시 보내기로 목록이 지저분해지지 않게 |
+| **한 날짜에 하나** (2026-10-04 추가) | 한 상품의 한 날짜에는 예약이 하나만 선다 — **요청·확정**이 그 날을 차지하고, **취소**하면 다시 열린다. 학부모 예약 폼의 달력에서 잡힌 날은 **줄을 긋고 고를 수 없게**만 보인다("예약 완료" 같은 글자·카드 표시는 없다). 상품마다 따로다 | 요청: "다른 학부모가 예약을 요청하면 … 해당 날짜는 예약이 안되게", 이어서 "예약 요청 하는 화면에서 달력에 안된다고만 표시하면 돼" |
 | 상품 삭제 | 예약은 **남는다**(`productId` 만 비고, 예약할 때의 상품 이름으로 보인다 — "삭제된 상품") | 이미 받은 예약을 말없이 지우지 않는다 |
 
 ## 3. 데이터
@@ -54,6 +55,14 @@ CREATE INDEX IF NOT EXISTS idx_shop_reservations_user ON shop_reservations ("use
 | `GET /api/shop/reservations` | 선생님 | 최근 요청이 위, 500건까지. 이름·전화번호는 상점 주인에게만 |
 | `PATCH /api/shop/reservations/:id/status` | 선생님 | `{ status: 'requested' \| 'confirmed' \| 'cancelled' }`. 남의 예약 404, 모르는 상태 400. 로그에는 `예약 ID: 3 → 확정` 만(이름·번호 없음) |
 | `GET /api/shop` | 선생님 | 응답에 `requestedReservations`(처리 전 개수) 추가 — 탭 옆 숫자 |
+| `GET /api/shop/public/:publicId/products/:productId/unavailable-dates` | 누구나 | `{ dates: ['YYYY-MM-DD', …] }` — 그 상품에서 요청·확정된 날(오늘 KST 부터). **날짜만** 나간다. `no-store`. 404/409 는 예약 POST 와 같다 |
+
+**한 날짜에 하나** — 예약 POST 는 먼저 그 날을 차지한 예약을 찾아 없을 때만 넣는다(한 문장, CTE). 그 날이 다른 번호 것이면
+**409 `{ code: 'dateUnavailable', fields: { date } }`**(누가 잡았는지는 알려 주지 않는다), 같은 번호면 200 `duplicate`.
+동시에 들어온 두 요청은 부분 고유 인덱스 `idx_shop_reservations_product_date ("productId", "reservedDate") WHERE status IN
+('requested','confirmed')` 가 하나만 통과시키고, 진 쪽(23505)은 같은 409 로 바뀐다. 선생님이 취소한 예약을 요청·확정으로
+되돌리려는데 그 사이 다른 예약이 그 날을 잡았으면 **409**("같은 날짜에 이 상품의 다른 예약이 있어요 …")로 막고 행은 그대로 둔다.
+학부모 폼은 열 때 막힌 날을 받아 달력(`Calendar unavailable`)에 줄을 긋고, 409 를 받으면 고른 날을 비우고 달력을 새로 받는다.
 
 규칙(이름·전화번호·날짜)은 서버 `utils/shopReservation.js` 와 클라이언트 `utils/shopReservation.js` 에 같은 내용이 있고,
 두 쪽 테스트가 **같은 전화번호 표**로 확인한다(주소 규칙과 같은 방식). 바꾸면 두 쪽을 함께 바꾼다.
@@ -68,7 +77,11 @@ CREATE INDEX IF NOT EXISTS idx_shop_reservations_user ON shop_reservations ("use
 
 ## 6. 배포
 
-새 컬럼 1개 · 새 표 1개 · 인덱스 1개. 1·2차와 같이 **머지 전에** 운영 DB 에 위 DDL 을 넣고(추가만 하므로 지금 코드와도 맞는다),
+새 컬럼 1개 · 새 표 1개 · 인덱스 1개(+ 2026-10-04 "한 날짜에 하나" 고유 인덱스 1개).
+고유 인덱스는 부팅 때 만들지 못해도(겹친 예약이 이미 있으면) 나머지 초기화를 막지 않고 경고만 남긴다 — 앱은 인덱스 없이도
+먼저 확인하고 넣으므로 동작은 같고, 동시에 들어온 요청만 못 막는다. 머지 전에 운영에 직접 넣어 둔다:
+`CREATE UNIQUE INDEX IF NOT EXISTS idx_shop_reservations_product_date ON shop_reservations ("productId", "reservedDate") WHERE status IN ('requested', 'confirmed')`.
+처음 들어갈 때의 내용: 1·2차와 같이 **머지 전에** 운영 DB 에 위 DDL 을 넣고(추가만 하므로 지금 코드와도 맞는다),
 `ALTER TABLE shop_reservations OWNER TO rg_app` + `REVOKE ALL ON TABLE shop_reservations, SEQUENCE shop_reservations_id_seq
 FROM anon, authenticated, service_role` — 이름·전화번호가 들어가는 표라 공개 REST API 로 새면 안 된다.
 옮기기(백필)는 없다.

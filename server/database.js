@@ -944,6 +944,18 @@ const initDatabase = async () => {
       'CREATE INDEX IF NOT EXISTS idx_shop_reservations_user ON shop_reservations ("userId", "createdAt" DESC)'
     );
 
+    // 같은 상품·같은 날은 예약 하나만 — 요청·확정만 그 날을 차지하고, 취소하면 다시 열린다.
+    // 동시에 두 학부모가 같은 날을 보내도 하나만 들어간다. 이미 겹친 예약이 있으면 만들지 못하는데,
+    // 그때도 나머지 초기화는 계속돼야 한다(앱은 인덱스 없이도 먼저 확인하고 넣는다).
+    try {
+      await client.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_shop_reservations_product_date
+        ON shop_reservations ("productId", "reservedDate") WHERE status IN ('requested', 'confirmed')
+      `);
+    } catch (error) {
+      console.error('예약 날짜 고유 인덱스 생성 실패(무시하고 계속):', error?.message || error);
+    }
+
     // 1차의 상품당 사진 1장(shop_products."imagePath")을 사진 표로 옮기고 옛 칸을 비운다.
     // 옮기기와 비우기가 한 문장이라 두 번 돌아도 겹치지 않고, 나중에 사진을 지워도 되살아나지 않는다.
     await client.query(`

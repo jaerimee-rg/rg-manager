@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { IconButton } from './Button';
 import {
   WEEKDAYS, addDays, addMonths, clampIso, compareMonth, isWithin, monthOf, monthWeeks, parseIso, todayIso
@@ -13,14 +13,19 @@ const KEY_STEPS = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
  * 입력칸 위에 뜨는 팝업이 아니라 그 자리에 펼쳐지는 달력이다 — 바텀시트 안에서도 그대로 쓴다.
  *
  * min · max 밖의 날짜는 누를 수 없고, 그 밖의 달로는 넘어가지 않는다.
+ * unavailable: 범위 안이지만 고를 수 없는 날('YYYY-MM-DD' 배열) — 줄을 그어 보이고, 눌러도 고르지 않는다.
+ *   키보드로는 지나갈 수 있고(aria-disabled), 화면 읽기에는 unavailableLabel 이 붙는다.
  * 키보드: 고른 날(없으면 오늘)에만 Tab 이 멈추고, ←→↑↓ 로 하루·한 주씩 옮긴다(달이 바뀌면 따라 넘어간다).
  */
-export function Calendar({ value, onChange, min, max, label = '날짜 선택', invalid, className = '', ...rest }) {
+export function Calendar({
+  value, onChange, min, max, unavailable, unavailableLabel = '선택 불가', label = '날짜 선택', invalid, className = '', ...rest
+}) {
   const anchor = clampIso(value || todayIso(), min, max);
   const [view, setView] = useState(() => monthOf(anchor));
   const [focusIso, setFocusIso] = useState(anchor);
   const gridRef = useRef(null);
   const moved = useRef(false); // 키보드로 옮겼을 때만 포커스를 따라 옮긴다(처음 그릴 때 빼앗지 않게)
+  const blockedDays = useMemo(() => new Set(unavailable || []), [unavailable]);
 
   // 밖에서 값이 바뀌면(초기화 등) 그 달을 보여 준다
   useEffect(() => {
@@ -85,6 +90,7 @@ export function Calendar({ value, onChange, min, max, label = '날짜 선택', i
               const { month, day } = parseIso(iso);
               const selected = iso === value;
               const enabled = isWithin(iso, min, max);
+              const blocked = enabled && blockedDays.has(iso);
               return (
                 <span key={iso} className="ui-calendar__cell" role="gridcell" aria-selected={selected}>
                   <button
@@ -93,14 +99,16 @@ export function Calendar({ value, onChange, min, max, label = '날짜 선택', i
                     data-iso={iso}
                     data-weekday={i}
                     data-today={iso === today || undefined}
+                    data-unavailable={blocked || undefined}
                     aria-pressed={selected}
-                    aria-label={`${month + 1}월 ${day}일 ${WEEKDAYS[i]}요일${iso === today ? ', 오늘' : ''}`}
+                    aria-label={`${month + 1}월 ${day}일 ${WEEKDAYS[i]}요일${iso === today ? ', 오늘' : ''}${blocked ? `, ${unavailableLabel}` : ''}`}
                     aria-current={iso === today ? 'date' : undefined}
+                    aria-disabled={blocked || undefined}
                     tabIndex={iso === tabStop ? 0 : -1}
                     disabled={!enabled}
                     onClick={() => {
                       setFocusIso(iso);
-                      onChange?.(iso);
+                      if (!blocked) onChange?.(iso);
                     }}
                   >
                     {day}

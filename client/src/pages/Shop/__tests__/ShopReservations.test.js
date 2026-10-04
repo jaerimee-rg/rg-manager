@@ -108,6 +108,16 @@ describe('ShopReservations — 예약 탭', () => {
     expect(showToast).toHaveBeenCalledWith('상태를 바꾸지 못했어요');
   });
 
+  it('취소를 되돌리려는데 그 날을 다른 예약이 잡았으면(409) 되돌리고 서버 안내를 보여 준다', async () => {
+    const reason = '같은 날짜에 이 상품의 다른 예약이 있어요. 그 예약을 먼저 취소해 주세요.';
+    const { showToast } = await renderTab(RESERVATIONS, () => respond(409, { error: reason }));
+    await act(async () => {
+      fireEvent.click(statusButton('박서연', '요청'));
+    });
+    expect(rowOf('박서연')).toHaveAttribute('data-status', 'cancelled');
+    expect(showToast).toHaveBeenCalledWith(reason);
+  });
+
   it('지금 상태를 다시 누르면 아무것도 하지 않는다', async () => {
     await renderTab();
     await act(async () => {

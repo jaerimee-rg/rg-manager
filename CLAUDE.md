@@ -52,8 +52,8 @@ Client and server have **separate** Jest setups and are run from their own direc
 there is no root `package.json`, so there is no one command that runs everything.
 
 ```bash
-cd client && npm test          # jest — 887 tests / 66 suites
-cd server && npm test          # 1088 tests / 52 suites
+cd client && npm test          # jest — 895 tests / 66 suites
+cd server && npm test          # 1094 tests / 52 suites
 ```
 
 - **The server suite is ESM** (`"type": "module"` + `transform: {}`, i.e. no Babel) and only
@@ -572,7 +572,13 @@ open **one public link `/shop/<publicId>` without logging in**; the teacher sees
   NULL, the stored `productTitle` shows). Teacher tab `/products/reservations`: status chips + a 요청/확정/취소 segmented
   control per row (`PATCH /api/shop/reservations/:id/status`, any direction); `GET /api/shop` carries
   `requestedReservations` for the tab count. Parents are **not** notified — the teacher calls the number. The log line
-  omits name/phone.
+  omits name/phone. **One reservation per product per date**: `requested`/`confirmed` hold the date, `cancelled` frees
+  it. `ShopReservation.create` checks-then-inserts in one CTE (`created` / `duplicate` = same phone / `taken` → **409
+  `code: 'dateUnavailable'`**, who holds it is never revealed); the partial unique index
+  `idx_shop_reservations_product_date` stops two simultaneous requests (23505 → same 409) and is created in a try/catch so
+  existing overlaps can't stop boot. `GET …/products/:productId/unavailable-dates` returns dates only; the form greys and
+  strikes them out (`Calendar unavailable` — `aria-disabled`, still keyboard-focusable) and refetches after a 409.
+  Un-cancelling a reservation whose date was taken meanwhile → 409, row unchanged.
 - **Schema rollout**: 1차 added four tables; 2차 adds `shop_products.description`, `shop_product_images` and
   the legacy-photo move; 3차 adds `shop_products."isReservable"` and `shop_reservations` (names + phone numbers — the
   REVOKE matters) — apply the `server/database.js` DDL to production **before** merging,
@@ -620,7 +626,7 @@ cd ../server && DATABASE_URL=postgresql://<user>@localhost:5432/rg_manager PORT=
   JWT_SECRET=local-dev-secret API_RATE_LIMIT_MAX=100000 AUTH_RATE_LIMIT_MAX=100000 \
   SUPABASE_URL=http://localhost:5056 SUPABASE_SECRET_KEY=e2e-fake node server.js &
 cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e:setup   # writes e2e/.sessions.json
-cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 80 tests
+cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 82 tests
 ```
 
 - **The fake storage is optional** — it lets the shop photo tests upload for real (`client/e2e/fake-storage.mjs`

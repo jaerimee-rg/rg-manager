@@ -1,6 +1,7 @@
 import {
   RESERVATION_MAX_DAYS_AHEAD,
   addDaysIso,
+  isActiveReservationStatus,
   isIsoDate,
   isReservationStatus,
   normalizePhone,
@@ -59,6 +60,12 @@ describe('날짜 도우미', () => {
     expect(['requested', 'confirmed', 'cancelled'].every(isReservationStatus)).toBe(true);
     expect(isReservationStatus('done')).toBe(false);
     expect(isReservationStatus(undefined)).toBe(false);
+  });
+
+  it('요청·확정만 그 날을 차지한다 — 취소하면 다시 열린다', () => {
+    expect(isActiveReservationStatus('requested')).toBe(true);
+    expect(isActiveReservationStatus('confirmed')).toBe(true);
+    expect(isActiveReservationStatus('cancelled')).toBe(false);
   });
 });
 

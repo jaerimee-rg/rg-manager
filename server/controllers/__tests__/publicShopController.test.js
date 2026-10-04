@@ -16,7 +16,7 @@ jest.unstable_mockModule('../../models/ShopEvent.js', () => ({
   default: { recordView: jest.fn(), recordClick: jest.fn() }
 }));
 jest.unstable_mockModule('../../models/ShopReservation.js', () => ({
-  default: { create: jest.fn() }
+  default: { create: jest.fn(), listTakenDates: jest.fn() }
 }));
 
 const Shop = (await import('../../models/Shop.js')).default;
@@ -25,7 +25,7 @@ const ShopProduct = (await import('../../models/ShopProduct.js')).default;
 const ShopProductImage = (await import('../../models/ShopProductImage.js')).default;
 const ShopEvent = (await import('../../models/ShopEvent.js')).default;
 const ShopReservation = (await import('../../models/ShopReservation.js')).default;
-const { getPublicShop, recordView, recordClick, createReservation } = await import('../publicShopController.js');
+const { getPublicShop, recordView, recordClick, createReservation, getUnavailableDates } = await import('../publicShopController.js');
 
 const mockRes = () => {
   const res = {};
@@ -151,7 +151,7 @@ describe('POST …/products/:productId/reservations — 로그인 없이 예약 
     ShopProduct.getPublic.mockResolvedValue({ id: 12, title: '리본', isReservable: true });
     ShopReservation.create.mockImplementation(async (_userId, value) => ({
       reservation: { id: 3, ...value, status: 'requested' },
-      duplicate: false
+      outcome: 'created'
     }));
   });
 
@@ -172,14 +172,30 @@ describe('POST …/products/:productId/reservations — 로그인 없이 예약 
     expect(res.status).toHaveBeenCalledWith(201);
   });
 
-  it('같은 요청이 이미 있으면 새로 만들지 않았다고 200 으로 알린다', async () => {
+  it('같은 번호로 이미 잡은 날이면 새로 만들지 않았다고 200 으로 알린다', async () => {
     ShopReservation.create.mockResolvedValue({
       reservation: { id: 3, reservedDate: inDays(1), status: 'requested' },
-      duplicate: true
+      outcome: 'duplicate'
     });
     const res = await call(createReservation, { params, body: { ...BODY, date: inDays(1) } });
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json.mock.calls[0][0].duplicate).toBe(true);
+  });
+
+  it('다른 사람이 잡은 날이면 409 — 날짜 칸 오류로, 누가 잡았는지는 알려 주지 않는다', async () => {
+    ShopReservation.create.mockResolvedValue({
+      reservation: { id: 9, name: '다른 학부모', phone: '010-9999-0000', reservedDate: inDays(1), status: 'confirmed' },
+      outcome: 'taken'
+    });
+    const res = await call(createReservation, { params, body: { ...BODY, date: inDays(1) } });
+    expect(res.status).toHaveBeenCalledWith(409);
+    const body = res.json.mock.calls[0][0];
+    expect(body).toEqual({
+      error: '이 날짜는 예약할 수 없어요. 다른 날짜를 골라 주세요.',
+      code: 'dateUnavailable',
+      fields: { date: '이 날짜는 예약할 수 없어요. 다른 날짜를 골라 주세요.' }
+    });
+    expect(JSON.stringify(body)).not.toMatch(/다른 학부모|9999/);
   });
 
   it('입력이 틀리면 400 과 칸별 오류 — 예약은 만들지 않는다', async () => {
@@ -217,5 +233,41 @@ describe('POST …/products/:productId/reservations — 로그인 없이 예약 
     ShopReservation.create.mockRejectedValue(new Error('boom'));
     const res = await call(createReservation, { params, body: { ...BODY, date: inDays(1) } });
     expect(res.status).toHaveBeenCalledWith(500);
+  });
+});
+
+describe('GET …/products/:productId/unavailable-dates — 학부모 달력에서 막을 날', () => {
+  const params = { publicId: 'pub123', productId: '12' };
+  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  beforeEach(() => {
+    Shop.getByPublicId.mockResolvedValue(SHOP);
+    ShopProduct.getPublic.mockResolvedValue({ id: 12, title: '리본', isReservable: true });
+    ShopReservation.listTakenDates.mockResolvedValue(['2099-01-01', '2099-01-03']);
+  });
+
+  it('그 상품에서 오늘(KST)부터 잡힌 날짜만 — 캐시하지 않는다', async () => {
+    const res = await call(getUnavailableDates, { params });
+    expect(ShopReservation.listTakenDates).toHaveBeenCalledWith(12, 9, today);
+    expect(res.set).toHaveBeenCalledWith('Cache-Control', 'no-store');
+    expect(res.json).toHaveBeenCalledWith({ dates: ['2099-01-01', '2099-01-03'] });
+  });
+
+  it('숨김·남의 상품·닫힌 상점은 404, 예약을 끈 상품은 409', async () => {
+    ShopProduct.getPublic.mockResolvedValueOnce(null);
+    expect((await call(getUnavailableDates, { params })).status).toHaveBeenCalledWith(404);
+
+    Shop.getByPublicId.mockResolvedValueOnce({ ...SHOP, isActive: false });
+    expect((await call(getUnavailableDates, { params })).status).toHaveBeenCalledWith(404);
+
+    ShopProduct.getPublic.mockResolvedValueOnce({ id: 12, title: '리본', isReservable: false });
+    expect((await call(getUnavailableDates, { params })).status).toHaveBeenCalledWith(409);
+
+    expect(ShopReservation.listTakenDates).not.toHaveBeenCalled();
+  });
+
+  it('DB 오류는 500', async () => {
+    ShopReservation.listTakenDates.mockRejectedValue(new Error('boom'));
+    expect((await call(getUnavailableDates, { params })).status).toHaveBeenCalledWith(500);
   });
 });

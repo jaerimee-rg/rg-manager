@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { Calendar } from '..';
 
-function Harness({ initial = '', min, max, onChange = () => {} }) {
+function Harness({ initial = '', min, max, unavailable, onChange = () => {} }) {
   const [value, setValue] = useState(initial);
   return (
     <Calendar
@@ -10,6 +10,8 @@ function Harness({ initial = '', min, max, onChange = () => {} }) {
       value={value}
       min={min}
       max={max}
+      unavailable={unavailable}
+      unavailableLabel="예약 불가"
       onChange={(iso) => {
         setValue(iso);
         onChange(iso);
@@ -86,5 +88,34 @@ describe('Calendar — 그 자리에 펼쳐지는 한 달 달력', () => {
     fireEvent.keyDown(first, { key: 'ArrowLeft' });
     fireEvent.keyDown(first, { key: 'ArrowUp' });
     expect(document.activeElement).toBe(first);
+  });
+
+  it('고를 수 없는 날은 줄을 긋고(예약 불가) 눌러도 고르지 않는다 — 키보드로는 지나간다', () => {
+    const onChange = jest.fn();
+    render(<Harness min="2026-10-04" max="2026-10-31" unavailable={['2026-10-07', '2026-10-08']} onChange={onChange} />);
+
+    const blocked = day('10월 7일 수요일, 예약 불가');
+    expect(blocked).toHaveAttribute('aria-disabled', 'true');
+    expect(blocked).toHaveAttribute('data-unavailable', 'true');
+    expect(blocked).toBeEnabled(); // 포커스는 받는다
+    fireEvent.click(blocked);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(blocked).toHaveAttribute('aria-pressed', 'false');
+
+    expect(day('10월 6일 화요일')).not.toHaveAttribute('aria-disabled');
+    fireEvent.click(day('10월 6일 화요일'));
+    expect(onChange).toHaveBeenCalledWith('2026-10-06');
+
+    act(() => day('10월 6일 화요일').focus());
+    fireEvent.keyDown(document.activeElement, { key: 'ArrowRight' });
+    fireEvent.keyDown(document.activeElement, { key: 'ArrowRight' });
+    fireEvent.keyDown(document.activeElement, { key: 'ArrowRight' });
+    expect(document.activeElement).toHaveAttribute('data-iso', '2026-10-09');
+  });
+
+  it('범위 밖의 날은 막힌 날 목록에 있어도 그냥 범위 밖(누를 수 없음)으로 그린다', () => {
+    render(<Harness initial="2026-10-10" min="2026-10-04" max="2026-10-31" unavailable={['2026-10-03']} />);
+    expect(day('10월 3일 토요일')).toBeDisabled();
+    expect(day('10월 3일 토요일')).not.toHaveAttribute('data-unavailable');
   });
 });
