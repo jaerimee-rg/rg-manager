@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { fetchWithAuth } from '../../utils/api';
 import InviteLinkBox from './InviteLinkBox';
+import { Spinner } from '../../components/ui';
 import { suggestStudents, buildStudentView, filterParents, sortParents, parentLabel } from './parentLinking';
 
 const STAT_STYLE = { background: '#fff', borderRadius: 'var(--radius-lg)', padding: '12px 14px' };
@@ -189,9 +190,7 @@ function ParentList({ filterUserId = null, embedded = false }) {
       </div>
 
       {loading ? (
-        <div className="card" style={{ padding: '30px', textAlign: 'center', color: 'var(--color-gray-500)' }}>
-          불러오는 중...
-        </div>
+        <Spinner />
       ) : view === 'parents' ? (
         visibleParents.length === 0 ? (
           <div className="card" style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--color-gray-500)' }}>

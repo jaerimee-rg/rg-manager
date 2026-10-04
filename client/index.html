@@ -6,7 +6,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#F7F7F5">
   <meta name="color-scheme" content="light">
-  <title>리듬체조 출석 체크</title>
+  <title>JR 리듬체조</title>
+  <meta name="description" content="JR 리듬체조 — 리듬체조 수업 출석, 이벤트 신청, 학부모 소통을 한곳에서 관리하는 앱이에요.">
+  <meta name="apple-mobile-web-app-title" content="JR 리듬체조">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+
+  <!-- 링크 미리보기 (카카오톡 초대·이벤트 공유 링크 등). 이미지 원본: og/og-image.html → npm run og -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="JR 리듬체조">
+  <meta property="og:locale" content="ko_KR">
+  <meta property="og:title" content="JR 리듬체조">
+  <meta property="og:description" content="리듬체조 수업 출석, 이벤트 신청, 학부모 소통을 한곳에서 관리하는 앱이에요.">
+  <meta property="og:url" content="https://rg-manager.vercel.app/">
+  <meta property="og:image" content="https://rg-manager.vercel.app/og-image.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="JR 리듬체조 로고와 '출석 · 이벤트 · 학부모 소통을 한곳에서' 문구">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="JR 리듬체조">
+  <meta name="twitter:description" content="리듬체조 수업 출석, 이벤트 신청, 학부모 소통을 한곳에서 관리하는 앱이에요.">
+  <meta name="twitter:image" content="https://rg-manager.vercel.app/og-image.png">
 
   <!--
     Pretendard. 디자인 토큰이 이 서체를 전제로 하는데 그동안 실제로 불러오지 않아
@@ -17,9 +39,27 @@
     rel="stylesheet"
     href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
   >
+
+  <!-- 첫 로딩 (앱 코드를 받는 동안): 앱의 로딩 표시(components/ui/Spinner)와 같은 튀는 로고.
+       React 가 뜨면 #root 안이 통째로 바뀐다. -->
+  <style>
+    html { background: #F7F7F5; }
+    .boot { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; margin: 0; font-family: 'Pretendard Variable', Pretendard, -apple-system, 'Apple SD Gothic Neo', sans-serif; font-size: 14px; color: #8A8A8A; }
+    .boot-hop { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: 84px; height: 122px; }
+    .boot-hop img { display: block; width: 100%; height: auto; transform-origin: 50% 100%; animation: boot-hop .9s cubic-bezier(.33, 0, .45, 1) infinite; }
+    .boot-hop::after { content: ""; width: 66%; height: 8px; margin-top: -3px; border-radius: 50%; background: rgba(0, 0, 0, .18); animation: boot-shadow .9s cubic-bezier(.33, 0, .45, 1) infinite; }
+    @keyframes boot-hop { 0%, 100% { transform: translateY(0) scale(1.1, .86); } 14% { transform: translateY(0) scale(.94, 1.08) rotate(-4deg); } 50% { transform: translateY(-32%) rotate(5deg); } 84% { transform: translateY(-2%) scale(.97, 1.04); } }
+    @keyframes boot-shadow { 0%, 100% { transform: scale(1.15); } 50% { transform: scale(.55); opacity: .45; } }
+    @media (prefers-reduced-motion: reduce) { .boot-hop img, .boot-hop::after { animation: none; } }
+  </style>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root">
+    <div class="boot" role="status">
+      <span class="boot-hop" aria-hidden="true"><img src="/logo-mark.png" alt=""></span>
+      <span>불러오는 중...</span>
+    </div>
+  </div>
   <script type="module" src="/src/index.jsx"></script>
 </body>
 </html>

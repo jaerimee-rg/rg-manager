@@ -55,6 +55,12 @@ export default defineConfig({
       name: 'shop',
       use: { ...devices['Desktop Chrome'] },
       testMatch: /shop\.spec\.mjs/
+    },
+    {
+      // 브랜드: 로고 아래 서비스명, 튀는 로고 로딩, 링크 미리보기(OG). 로그인 없이도 대부분 돈다.
+      name: 'brand',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: /brand\.spec\.mjs/
     }
   ]
 });

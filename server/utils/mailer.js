@@ -108,7 +108,7 @@ export const sendAttendanceEmail = async ({ date, className, schedule, students,
 
         <!-- 푸터 -->
         <div style="background-color: #f9fafb; padding: 15px; text-align: center; color: #9ca3af; font-size: 12px;">
-          리듬체조 출석 관리 시스템에서 자동 발송된 이메일입니다.
+          JR 리듬체조에서 자동 발송된 이메일입니다.
         </div>
       </div>
     </body>

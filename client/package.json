@@ -38,6 +38,7 @@
     "test:coverage": "jest --coverage",
     "test:e2e": "playwright test",
     "test:e2e:setup": "node e2e/setup.mjs",
-    "smoke:prod": "node e2e/smoke-prod.mjs"
+    "smoke:prod": "node e2e/smoke-prod.mjs",
+    "og": "node scripts/render-og.mjs"
   }
 }

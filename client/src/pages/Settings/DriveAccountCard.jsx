@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { fetchWithAuth } from '../../utils/api';
 import { formatSize } from '../../utils/mediaUrls';
+import { Spinner } from '../../components/ui';
 
 /**
  * 설정 화면의 Google Drive 연결 카드.
@@ -170,7 +171,7 @@ function DriveAccountCard() {
   );
 
   if (loading) {
-    return shell(<div style={{ color: 'var(--color-gray-500)', fontSize: '0.875rem' }}>불러오는 중...</div>);
+    return shell(<Spinner inline />);
   }
 
   if (loadFailed) {

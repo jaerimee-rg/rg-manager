@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ParentLayout from '../../components/parent/ParentLayout';
+import { Spinner } from '../../components/ui';
 import { fetchWithAuth } from '../../utils/api';
 import { albumSummaryText } from '../../utils/albumFilter';
 
@@ -31,7 +32,7 @@ function ParentAlbumList() {
   if (albums === null) {
     return (
       <ParentLayout title="사진">
-        <div style={{ textAlign: 'center', color: 'var(--color-gray-500)', padding: '40px 0' }}>불러오는 중...</div>
+        <Spinner />
       </ParentLayout>
     );
   }

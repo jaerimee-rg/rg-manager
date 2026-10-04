@@ -59,7 +59,8 @@ describe('App 라우팅 — 딥링크 유지', () => {
 
     // 예전에는 이 시점에 "*" 가 /login 으로 보내버려 딥링크가 사라졌다.
     expect(currentPath()).toBe('/admin/users');
-    expect(screen.getByText('로딩 중...')).toBeInTheDocument();
+    // 인증 확인 중에는 전체 화면 로딩 표시(튀는 로고)만 보인다
+    expect(document.querySelector('.ui-loader[data-fullscreen]')).toBeInTheDocument();
   });
 
   it('확인이 끝나고 로그인 상태면 요청한 관리자 화면을 그대로 연다', async () => {
@@ -117,7 +118,8 @@ describe('App 라우팅 — 딥링크 유지', () => {
     renderAt('/chat/abc123');
 
     expect(currentPath()).toBe('/chat/abc123');
-    expect(screen.queryByText('로딩 중...')).not.toBeInTheDocument();
+    // 채팅 화면이 자기 데이터를 받는 동안 띄우는 작은 로딩 표시는 괜찮다 — 인증 확인용 전체 화면 로딩만 없어야 한다
+    expect(document.querySelector('.ui-loader[data-fullscreen]')).not.toBeInTheDocument();
   });
 
   it('비로그인 상태에서 초대 링크는 로그인으로 튕기지 않는다', async () => {

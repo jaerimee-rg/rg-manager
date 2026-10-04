@@ -4,7 +4,7 @@ import { useIsMobile } from '../../hooks/useMediaQuery';
 import { formatWhen, typeOf } from '../../utils/eventFormat';
 import { copyToClipboard } from '../../utils/copyToClipboard';
 import { eventShareUrl, canShareEvent, SHARE_DISABLED_HINT } from '../../utils/eventShare';
-import { IconButton, Toast } from '../../components/ui';
+import { IconButton, Spinner, Toast } from '../../components/ui';
 
 const STATUS_BADGE = {
   registered: { label: '신청', className: 'badge-primary' },
@@ -179,7 +179,7 @@ function EventRegistrations({ eventId, onClose, onChanged }) {
 
       <div className="ui-registrations__body">
         {!data ? (
-          <div style={{ padding: '20px', textAlign: 'center', color: 'var(--color-gray-500)' }}>불러오는 중...</div>
+          <Spinner />
         ) : (
           <>
             {data.summary.length > 0 && (
