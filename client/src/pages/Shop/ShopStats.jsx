@@ -134,9 +134,9 @@ function ShopStats({ onCopyLink }) {
       {toolbar}
 
       <div className="shop-stat-grid">
-        <Stat label="상점 방문" value={summary.views} icon="eye" hint="링크를 연 횟수" />
+        <Stat label="상점 방문" value={summary.views} icon="eye" hint="상점 페이지를 연 횟수" />
         <Stat label="방문자" value={summary.visitors} icon="users" hint="서로 다른 브라우저" />
-        <Stat label="상품 클릭" value={summary.clicks} icon="external" tone="brand" hint="상품 링크로 이동한 횟수" />
+        <Stat label="상품 클릭" value={summary.clicks} icon="external" tone="brand" hint="구매 링크를 누른 횟수" />
         <Stat
           label="클릭한 방문자"
           value={summary.clickVisitors}

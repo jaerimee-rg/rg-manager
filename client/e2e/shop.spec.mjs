@@ -159,6 +159,10 @@ test.describe('추천 상품', () => {
     await expect(statRow).toBeVisible();
     await expect(statRow.locator('b')).toHaveText('1');
 
+    // 방문(상점 페이지)과 클릭(구매 링크)이 서로 다른 것을 센다고 타일에 적혀 있다
+    await expect(page.locator('.ui-stat', { hasText: '상점 방문' })).toContainText('상점 페이지를 연 횟수');
+    await expect(page.locator('.ui-stat', { hasText: '상품 클릭' })).toContainText('구매 링크를 누른 횟수');
+
     // 숨기기
     await page.getByRole('tab', { name: /상품/ }).click();
     // 스위치의 input 은 시각적으로 숨겨져 있어 사람처럼 라벨(.ui-switch)을 누른다
