@@ -11,6 +11,23 @@ const sessions = JSON.parse(readFileSync(new URL('./.sessions.json', import.meta
 const run = `${sessions.stamp}-${Math.random().toString(36).slice(2, 7)}`;
 const simple = `e2e 곤봉 ${run}`;
 const linked = `e2e 리본 ${run}`;
+const photos = `e2e 사진 ${run}`;
+
+/** 브라우저 캔버스로 색 띠 PNG 를 만든다 — 사진 비율·자른 위치를 색으로 확인한다 */
+const makePng = async (page, width, height, colors) => {
+  const base64 = await page.evaluate(({ width: w, height: h, colors: list }) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    list.forEach((color, i) => {
+      ctx.fillStyle = color;
+      ctx.fillRect((w / list.length) * i, 0, w / list.length, h);
+    });
+    return canvas.toDataURL('image/png').split(',')[1];
+  }, { width, height, colors });
+  return Buffer.from(base64, 'base64');
+};
 
 test.describe.configure({ mode: 'serial' });
 
@@ -52,7 +69,7 @@ test.describe('추천 상품', () => {
     await expect(row).toContainText('기구');
   });
 
-  test('학부모(로그인 없음): 공개 링크로 보고, 칩으로 거르고, 카드를 누르면 새 창으로 열린다', async ({ browser, baseURL }) => {
+  test('학부모(로그인 없음): 공개 링크로 보고, 칩으로 거르고, 카드 → 상세 → 쇼핑몰 버튼은 새 창으로 열린다', async ({ browser, baseURL }) => {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const page = await context.newPage();
 
@@ -73,13 +90,15 @@ test.describe('추천 상품', () => {
     await page.reload();
     await expect(page.getByRole('button', { name: '기구' })).toHaveAttribute('aria-pressed', 'true');
 
-    // 카드를 누르면 새 창 + 클릭 기록
-    const card = page.getByRole('link', { name: new RegExp(linked) });
-    await expect(card).toHaveAttribute('target', '_blank');
+    // 카드를 누르면 상세가 열리고(새 창 아님), 상세의 쇼핑몰 버튼을 누르면 새 창 + 클릭 기록
+    await page.getByRole('link', { name: `${linked} 자세히 보기` }).click();
+    await expect(page).toHaveURL(/[?&]p=\d+/);
+    const cta = page.getByRole('dialog').getByRole('link', { name: /에서 보기$/ });
+    await expect(cta).toHaveAttribute('target', '_blank');
     const [popup, beacon] = await Promise.all([
       context.waitForEvent('page'),
       page.waitForRequest((r) => r.url().includes('/click?visitorKey=') && r.method() === 'POST'),
-      card.click()
+      cta.click()
     ]);
     await popup.waitForLoadState();
     expect(popup.url()).toBe(`${baseURL}/design-system`);
@@ -132,6 +151,227 @@ test.describe('추천 상품', () => {
     await page.getByRole('button', { name: '저장' }).first().click();
     await expect(page.getByRole('status')).toContainText('상점 정보를 저장했어요');
   });
+
+  // ── 2차: 사진 여러 장 · 자르기 · 상세 설명 · 상품 상세 (docs/recommended-shop/04-images-description.md) ──
+  // 사진은 진짜로 올린다 — 서버를 가짜 저장소(e2e/fake-storage.mjs)에 물려 띄워야 돈다. 없으면 건너뛴다.
+
+  test('선생님: 사진을 여러 장 고르고·붙여 넣고·자르고·순서를 바꿔 상세 설명과 함께 등록한다', async ({ page, request, baseURL }) => {
+    const shop = await api(request, sessions.teacher, 'GET', '/api/shop');
+    test.skip(!shop.body.storageReady, '사진 저장소가 없다 — e2e/fake-storage.mjs 를 띄우고 서버에 SUPABASE_URL 을 주면 돈다');
+
+    await loginAs(page, sessions.teacher);
+    await page.goto('/products');
+    await page.locator('.ui-page-header').getByRole('button', { name: '상품' }).click();
+    const dialog = page.getByRole('dialog', { name: '상품 등록' });
+    await dialog.getByLabel('타이틀').fill(photos);
+    await dialog.getByLabel('상세 설명').fill('6m 새틴 리본에 막대까지 와요.\n초등 저학년은 5m 를 추천해요.');
+    await dialog.getByLabel('연결할 주소').fill(`${baseURL}/design-system`);
+
+    // 가로로 긴 사진(왼쪽 빨강 · 오른쪽 파랑)과 세로로 긴 사진을 한 번에 고른다
+    const wide = await makePng(page, 1600, 1000, ['#e53935', '#1e88e5']);
+    const tall = await makePng(page, 800, 1200, ['#43a047']);
+    await dialog.getByLabel('상품 사진 파일').setInputFiles([
+      { name: 'wide.png', mimeType: 'image/png', buffer: wide },
+      { name: 'tall.png', mimeType: 'image/png', buffer: tall }
+    ]);
+    await expect(dialog.getByTestId('shop-image-tile')).toHaveCount(2);
+    await expect(dialog.getByAltText('사진 1 (대표)')).toHaveAttribute('src', /^blob:/);
+
+    // 스크린샷처럼 이름 없는 노란 사진을 붙여 넣으면 맨 뒤에 붙는다
+    // (진짜 클립보드에 쓰면 테스트를 돌리는 사람의 클립보드를 덮어쓰므로 붙여넣기 이벤트를 직접 보낸다)
+    await page.evaluate(async () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1200;
+      canvas.height = 1200;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fdd835';
+      ctx.fillRect(0, 0, 1200, 1200);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+      const data = new DataTransfer();
+      data.items.add(new File([blob], '', { type: 'image/png' }));
+      (document.activeElement || document.body).dispatchEvent(
+        new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })
+      );
+    });
+    await expect(dialog.getByTestId('shop-image-tile')).toHaveCount(3);
+    await expect(dialog.getByText('3 / 10')).toBeVisible();
+
+    // 가로 사진은 왼쪽(빨강)이 보이게 끌어서 자른다
+    await dialog.getByRole('button', { name: '사진 1 자르기' }).click();
+    const cropper = page.getByRole('dialog', { name: '사진 자르기' });
+    const frame = cropper.getByRole('group', { name: /자를 부분/ });
+    const box = await frame.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + box.width, box.y + box.height / 2, { steps: 5 });
+    await page.mouse.up();
+    await cropper.getByRole('button', { name: '적용' }).click();
+    await expect(dialog.getByAltText('사진 1 (대표)')).toHaveAttribute('style', /object-position: 0% 50%/);
+
+    // 붙여 넣은 노란 사진을 맨 앞(대표)으로
+    await dialog.getByRole('button', { name: '사진 3 앞으로' }).click();
+    await dialog.getByRole('button', { name: '사진 2 앞으로' }).click();
+    await expect(dialog.getByAltText('사진 1 (대표)')).toHaveAttribute('src', /^blob:/);
+
+    await dialog.getByRole('button', { name: '저장' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('tr', { hasText: photos })).toContainText('사진 3장');
+
+    // 서버에는 정한 순서대로, 모두 정사각형으로 잘려 올라갔다 — 노랑(대표) · 빨강(왼쪽을 자른 가로 사진) · 초록
+    const { body } = await api(request, sessions.teacher, 'GET', '/api/shop/products');
+    const product = body.products.find((p) => p.title === photos);
+    expect(product.description).toBe('6m 새틴 리본에 막대까지 와요.\n초등 저학년은 5m 를 추천해요.');
+    expect(product.images).toHaveLength(3);
+    const samples = await page.evaluate((urls) => Promise.all(urls.map((url) => new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth;
+        c.height = img.naturalHeight;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const [r, g, b] = ctx.getImageData(Math.floor(c.width / 2), Math.floor(c.height / 2), 1, 1).data;
+        resolve({ w: img.naturalWidth, h: img.naturalHeight, r, g, b });
+      };
+      img.onerror = reject;
+      img.src = url;
+    }))), product.images.map((i) => i.url));
+    samples.forEach((s) => expect(s.w).toBe(s.h));
+    const [yellow, red, green] = samples;
+    expect(yellow.r > 200 && yellow.g > 180 && yellow.b < 120).toBe(true);
+    expect(red.r > 180 && red.b < 120).toBe(true);
+    expect(green.g > 120 && green.r < 120).toBe(true);
+  });
+
+  test('학부모(데스크톱): 사진 비율이 달라도 카드 크기·가격 줄이 맞고, 상세에서 큰 사진 + 작은 사진으로 넘긴다', async ({ browser, request }) => {
+    const shop = await api(request, sessions.teacher, 'GET', '/api/shop');
+    test.skip(!shop.body.storageReady, '사진 저장소가 없다 — e2e/fake-storage.mjs 를 띄우고 서버에 SUPABASE_URL 을 주면 돈다');
+
+    // 1차에 올린 사진처럼 정사각형이 아닌 사진을 화면을 거치지 않고 바로 붙인다.
+    // 세로로 긴 사진이 칸을 밀어내 카드가 길어지던 문제(고치기 전 1,318px)가 다시 생기면 여기서 깨진다.
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    await page.goto(publicPath);
+    const tallPhoto = await makePng(page, 300, 1600, ['#8e24aa']);
+    const { body } = await api(request, sessions.teacher, 'GET', '/api/shop/products');
+    const simpleId = body.products.find((p) => p.title === simple).id;
+    const uploaded = await request.fetch(`/api/shop/products/${simpleId}/images?filename=tall.png`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${sessions.teacher.token}`, 'Content-Type': 'image/png' },
+      data: tallPhoto
+    });
+    expect(uploaded.status()).toBe(201);
+
+    await page.reload();
+    const photoCard = page.getByRole('link', { name: `${photos} 자세히 보기` });
+    await expect(photoCard).toBeVisible();
+    await expect(photoCard.getByLabel('사진 3장')).toBeVisible();
+    await expect(photoCard).toContainText('6m 새틴 리본에 막대까지 와요.');
+    await expect(page.getByRole('link', { name: `${simple} 자세히 보기` })).toBeVisible();
+
+    // 사진 칸은 모두 같은 정사각형, 같은 줄 카드의 가격·도메인 줄은 같은 높이에 붙는다
+    const boxes = await page.locator('.shop-product').evaluateAll((cards) => cards.map((card) => {
+      const img = card.querySelector('.shop-product__img').getBoundingClientRect();
+      const foot = card.querySelector('.shop-product__foot').getBoundingClientRect();
+      return { top: Math.round(img.top), w: Math.round(img.width), h: Math.round(img.height), footBottom: Math.round(foot.bottom) };
+    }));
+    // 앞 테스트가 링크 상품을 숨겨 두었다 — 세로 사진·설명 없는 카드와 정사각형 사진·설명 있는 카드가 한 줄에 선다
+    expect(boxes.length).toBeGreaterThanOrEqual(2);
+    boxes.forEach((b) => {
+      expect(b.h).toBe(boxes[0].h);
+      expect(Math.abs(b.w - b.h)).toBeLessThanOrEqual(1);
+    });
+    const firstRow = boxes.filter((b) => b.top === boxes[0].top);
+    firstRow.forEach((b) => expect(b.footBottom).toBe(firstRow[0].footBottom));
+
+    // 상세 — 제목 바로 아래 설명, 큰 사진 아래 작은 사진 3장, 누르면 그 사진이 큰 칸에
+    await photoCard.click();
+    const detail = page.getByRole('dialog', { name: photos });
+    await expect(detail).toBeVisible();
+    await expect(detail.locator('.shop-detail__title + .shop-detail__desc')).toHaveText(
+      '6m 새틴 리본에 막대까지 와요.\n초등 저학년은 5m 를 추천해요.'
+    );
+    await expect(detail.getByRole('button', { name: /번째 사진 보기$/ })).toHaveCount(3);
+    await expect(detail.locator('.shop-gallery__dots')).toBeHidden();
+    await detail.getByRole('button', { name: '3번째 사진 보기' }).click();
+    await expect(detail.getByText('3 / 3')).toBeVisible();
+    await expect(detail.getByRole('button', { name: '다음 사진' })).toBeHidden();
+    await page.keyboard.press('ArrowLeft');
+    await expect(detail.getByText('2 / 3')).toBeVisible();
+
+    // 닫으면 상점으로 — 주소의 ?p= 도 빠진다
+    await detail.getByRole('button', { name: '닫기' }).click();
+    await expect(detail).toBeHidden();
+    await expect(page).not.toHaveURL(/[?&]p=/);
+    await context.close();
+  });
+
+  test('학부모(휴대폰): 상세는 바텀시트 — 밀어서 넘기고 점으로 위치를 보며, 뒤로 가기로 닫힌다', async ({ browser, request }) => {
+    const shop = await api(request, sessions.teacher, 'GET', '/api/shop');
+    test.skip(!shop.body.storageReady, '사진 저장소가 없다 — e2e/fake-storage.mjs 를 띄우고 서버에 SUPABASE_URL 을 주면 돈다');
+
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    const page = await context.newPage();
+    await page.goto(publicPath);
+    await page.getByRole('link', { name: `${photos} 자세히 보기` }).click();
+    await expect(page).toHaveURL(/[?&]p=\d+/);
+
+    const detail = page.getByRole('dialog', { name: photos });
+    await expect(detail.getByText('1 / 3')).toBeVisible();
+    await expect(detail.locator('.shop-gallery__thumbs')).toBeHidden();
+    await expect(detail.getByRole('button', { name: /번째 사진$/ })).toHaveCount(3);
+
+    // 손가락으로 민 것처럼 가로 스크롤 → 점·숫자가 따라온다
+    await detail.locator('.shop-gallery__track').evaluate((track) => track.scrollTo({ left: track.clientWidth, behavior: 'instant' }));
+    await expect(detail.getByText('2 / 3')).toBeVisible();
+    await expect(detail.getByRole('button', { name: '2번째 사진' })).toHaveAttribute('aria-current', 'true');
+    await expect(detail.getByRole('link', { name: /에서 보기$/ })).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
+    await page.goBack();
+    await expect(detail).toBeHidden();
+    await expect(page).not.toHaveURL(/[?&]p=/);
+    await context.close();
+  });
+
+  // 손잡이를 끌어 순서 바꾸기 — 데스크톱은 표의 행, 휴대폰은 카드. 맨 위 상품을 맨 아래로 끌어 놓고 서버 순서를 본다.
+  for (const [device, viewport] of [['데스크톱', { width: 1280, height: 900 }], ['휴대폰', { width: 390, height: 844 }]]) {
+    test(`선생님(${device}): 손잡이를 끌어 놓으면 그 순서로 저장된다`, async ({ browser, request }) => {
+      const context = await browser.newContext({ viewport });
+      const page = await context.newPage();
+      await loginAs(page, sessions.teacher);
+      await page.goto('/products');
+
+      const rows = page.locator('.shop-list tbody tr');
+      await expect(rows.first()).toBeVisible();
+      const count = await rows.count();
+      expect(count).toBeGreaterThanOrEqual(2);
+
+      const handle = rows.first().getByRole('button', { name: /순서 — 끌어서/ });
+      const movedId = Number(await handle.getAttribute('data-grip-id'));
+      const last = rows.nth(count - 1);
+      await last.scrollIntoViewIfNeeded();
+      await handle.scrollIntoViewIfNeeded();
+      const from = await handle.boundingBox();
+      const to = await last.boundingBox();
+
+      await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(from.x + from.width / 2, to.y + to.height - 4, { steps: 10 });
+      await expect(rows.first()).toHaveAttribute('data-dragging', 'true');
+      await expect(last).toHaveAttribute('data-drop', 'after');
+
+      const saved = page.waitForResponse((r) => r.url().endsWith('/api/shop/products/order') && r.request().method() === 'PUT');
+      await page.mouse.up();
+      expect((await saved).status()).toBe(200);
+      await expect(rows.nth(count - 1).getByRole('button', { name: /순서 — 끌어서/ })).toHaveAttribute('data-grip-id', String(movedId));
+
+      const { body } = await api(request, sessions.teacher, 'GET', '/api/shop/products');
+      expect(body.products.at(-1).id).toBe(movedId);
+      await context.close();
+    });
+  }
 
   test('학부모 토큰으로는 선생님 API 를 쓸 수 없다', async ({ request }) => {
     const res = await api(request, sessions.parent, 'GET', '/api/shop');

@@ -16,6 +16,7 @@
   공개 상점 /shop/:publicId — 로그인 없이 열리는 단독 화면(앱 헤더·학부모 하단 탭 없음).
   ?s=<이름> 으로 상태를 고른다. parent-desktop.html / parent-mobile.html 에서 보는 것을 권한다.
   s: shop | filter | loading | empty | closed | error
+     2차(사진 여러 장): shop2 | detail | detail-3 | detail-single | detail-nolink   (detail 은 &p=<상품 id> 로 상품을 고른다)
 -->
 <div id="root"></div>
 
@@ -53,14 +54,24 @@
   var CATS = { 1: '발레복', 2: '레오타드', 3: '기구', 4: '슈즈' };
   // 공개 API 가 내려 주는 모양 그대로 (02 §4) — 숨긴 상품은 애초에 오지 않는다
   var PRODUCTS = [
-    { id: 12, title: '사사키 리본 6m 핑크 (막대 포함)', img: 'ribbon', url: 'coupang.com', price: '32,000원', c: 3 },
-    { id: 11, title: '주니어 후프 75cm', img: 'hoop', url: 'smartstore.naver.com', price: '45,000원', c: 3 },
-    { id: 9, title: '연습용 발레복 (네이비, 긴팔)', img: 'practice-wear', url: 'musinsa.com', price: '29,900원', c: 1 },
-    { id: 8, title: '시합용 레오타드 (스팽글)', img: 'leotard', url: 'smartstore.naver.com', price: '128,000원', c: 2 },
+    { id: 12, title: '사사키 리본 6m 핑크 (막대 포함)', img: 'ribbon', url: 'coupang.com', price: '32,000원', c: 3,
+      imgs: ['ribbon', 'ribbon-detail', 'ribbon-stick', 'ribbon-package'],
+      desc: '6m 새틴 리본에 60cm 막대까지 함께 와요.\n초등 저학년은 5m 를 추천해요 — 사이즈가 고민되면 수업 때 물어봐 주세요.\nFIG 인증 제품이라 대회에서도 쓸 수 있어요.' },
+    { id: 11, title: '주니어 후프 75cm', img: 'hoop', url: 'smartstore.naver.com', price: '45,000원', c: 3, imgs: ['hoop', 'hoop-tape'],
+      desc: '75cm 는 초등 저학년 키에 맞춰요. 고학년은 80cm 를 골라 주세요.\n테이핑은 따로 해야 해요 — 수업 때 같이 감아요.' },
+    { id: 9, title: '연습용 발레복 (네이비, 긴팔)', img: 'practice-wear', url: 'musinsa.com', price: '29,900원', c: 1,
+      desc: '수업 때 입는 기본 연습복이에요. 평소 입는 치수 그대로 고르면 돼요.' },
+    { id: 8, title: '시합용 레오타드 (스팽글)', img: 'leotard', url: 'smartstore.naver.com', price: '128,000원', c: 2,
+      imgs: ['leotard', 'leotard-back', 'leotard-detail'],
+      desc: '시합용이라 스팽글이 촘촘해요. 사이즈가 작게 나와서 한 치수 크게 추천해요.' },
     { id: 7, title: '반슈즈 (스트레치)', img: 'shoes', url: 'coupang.com', price: '18,000원', c: 4 },
     { id: 6, title: '연습용 볼 17cm', img: 'ball', url: 'coupang.com', price: null, c: 3 },
-    { id: 5, title: '곤봉 (수업 때 보여 드릴게요)', img: null, url: null, price: null, c: 3 }
+    // 2차 목업에서는 링크 없이 사진만 있는 상품으로 쓴다 (1차 화면은 img 만 보므로 그대로)
+    { id: 5, title: '곤봉 (수업 때 보여 드릴게요)', img: null, url: null, price: null, c: 3, imgs: ['clubs'],
+      desc: '학원에서 같이 주문해요. 필요하면 수업 때 말씀해 주세요.' },
+    { id: 4, title: '테이핑 테이프 (색은 수업 때 골라요)', img: null, url: null, price: null, c: 3, v2only: true }
   ];
+  var V1 = PRODUCTS.filter(function (p) { return !p.v2only; });
   var NOTICE = '이 페이지의 일부 링크는 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받을 수 있습니다.';
 
   var card = function (p) {
@@ -113,10 +124,10 @@
 
   var SCREENS = {
     shop: function () {
-      return page(tpl('header'), mainWrap(chips(null) + '<div class="shop-grid">' + PRODUCTS.map(card).join('') + '</div>' + foot));
+      return page(tpl('header'), mainWrap(chips(null) + '<div class="shop-grid">' + V1.map(card).join('') + '</div>' + foot));
     },
     filter: function () {
-      var only = PRODUCTS.filter(function (p) { return p.c === 3; });
+      var only = V1.filter(function (p) { return p.c === 3; });
       return page(tpl('header'), mainWrap(chips(3) + '<div class="shop-grid">' + only.map(card).join('') + '</div>' + foot));
     },
     loading: function () {
@@ -140,11 +151,145 @@
     }
   };
 
-  var name = new URLSearchParams(location.search).get('s') || 'shop';
-  document.getElementById('root').innerHTML = (SCREENS[name] || SCREENS.shop)();
+
+  // ── 2차: 사진 여러 장 · 상세 보기 ─────────────────────────────
+  var photosOf = function (p) { return p.imgs || (p.img ? [p.img] : []); };
+
+  // 카드를 누르면 쇼핑몰이 아니라 상세(?p=)가 열린다. 사진이 2장 이상이면 장 수를 붙인다.
+  var card2 = function (p) {
+    var list = photosOf(p);
+    var img = '<div class="shop-product__img">' +
+      (list.length ? '<img src="img/' + list[0] + '.svg" alt="" loading="lazy">' : '<i data-icon="image" data-size="32"></i>') +
+      (list.length > 1 ? '<span class="shop-product__count" aria-label="사진 ' + list.length + '장"><i data-icon="image" data-size="12"></i>' + list.length + '</span>' : '') +
+      '</div>';
+    var body = '<div class="shop-product__body">' +
+      (p.c ? '<span class="shop-product__cat">' + CATS[p.c] + '</span>' : '') +
+      '<span class="shop-product__title">' + p.title + '</span>' +
+      (p.desc ? '<span class="shop-product__desc">' + p.desc + '</span>' : '') +
+      '<div class="shop-product__foot">' +
+      (p.price ? '<span class="shop-product__price">' + p.price + '</span>' : '') +
+      '<span class="shop-product__host">' + (p.url || '&nbsp;') + '</span>' +
+      '</div></div>';
+    // 사진도 링크도 없으면 상세에서 더 볼 것이 없다 — 1차처럼 누를 수 없는 카드
+    if (!list.length && !p.url) return '<div class="ui-card shop-product" data-padding="none">' + img + body + '</div>';
+    return '<a class="ui-card shop-product" data-padding="none" data-interactive="true" href="?s=detail&amp;p=' + p.id + '" data-open="' + p.id + '"' +
+      ' aria-label="' + p.title + ' 자세히 보기">' + img + body + '</a>';
+  };
+
+  var detail = function (p) {
+    var list = photosOf(p);
+    var many = list.length > 1;
+    var slides = list.length
+      ? list.map(function (img, i) {
+          return '<div class="shop-gallery__slide" role="group" aria-roledescription="slide" aria-label="' + (i + 1) + ' / ' + list.length + '">' +
+            '<img src="img/' + img + '.svg" alt="' + p.title + ' 사진 ' + (i + 1) + '"></div>';
+        }).join('')
+      : '<div class="shop-gallery__slide"><i data-icon="image" data-size="48"></i></div>';
+    var gallery = '<div class="shop-gallery" aria-roledescription="carousel" aria-label="상품 사진">' +
+      '<div class="shop-gallery__main"><div class="shop-gallery__track" tabindex="0">' + slides + '</div>' +
+      (many
+        ? '<button type="button" class="ui-icon-btn shop-gallery__nav" data-side="prev" aria-label="이전 사진" disabled><i data-icon="chevronLeft" data-size="20"></i></button>' +
+          '<button type="button" class="ui-icon-btn shop-gallery__nav" data-side="next" aria-label="다음 사진"><i data-icon="chevronRight" data-size="20"></i></button>' +
+          '<span class="shop-gallery__counter" aria-live="polite">1 / ' + list.length + '</span>'
+        : '') +
+      '</div>' +
+      (many
+        ? '<div class="shop-gallery__dots">' + list.map(function (img, i) {
+            return '<button type="button" class="shop-gallery__dot" aria-label="' + (i + 1) + '번째 사진"' + (i === 0 ? ' aria-current="true"' : '') + ' data-go="' + i + '"></button>';
+          }).join('') + '</div>' +
+          '<div class="shop-gallery__thumbs">' + list.map(function (img, i) {
+            return '<button type="button" class="shop-gallery__thumb" aria-label="' + (i + 1) + '번째 사진 보기"' + (i === 0 ? ' aria-current="true"' : '') + ' data-go="' + i + '">' +
+              '<img src="img/' + img + '.svg" alt=""></button>';
+          }).join('') + '</div>'
+        : '') +
+      '</div>';
+    var info = '<div class="shop-detail__info">' +
+      (p.c ? '<span class="shop-detail__cat">' + CATS[p.c] + '</span>' : '') +
+      '<h2 class="shop-detail__title" id="detail-title">' + p.title + '</h2>' +
+      (p.desc ? '<p class="shop-detail__desc">' + p.desc + '</p>' : '') +
+      (p.price ? '<span class="shop-detail__price">' + p.price + '</span>' : '') +
+      (p.url ? '' : '<p class="shop-detail__none">쇼핑몰 링크가 없는 상품이에요. 궁금한 점은 수업 때 선생님께 물어봐 주세요.</p>') +
+      '</div>';
+    var cta = p.url
+      ? '<div class="shop-detail__cta">' +
+          '<a class="ui-btn" data-variant="primary" data-size="lg" data-block="true" href="#" target="_blank" rel="noopener noreferrer">' +
+          p.url + '에서 보기<i data-icon="external" data-size="18"></i></a>' +
+          '<p class="shop-detail__cta-hint">쇼핑몰이 새 창으로 열려요</p></div>'
+      : '';
+    return '<div class="ui-scrim" aria-hidden="true"></div>' +
+      '<div class="ui-overlay shop-detail-overlay" data-mode="sheet" data-size="lg" role="dialog" aria-modal="true" aria-labelledby="detail-title">' +
+      '<div class="ui-overlay__grip" aria-hidden="true"></div>' +
+      '<button type="button" class="ui-icon-btn shop-detail__close" data-size="sm" aria-label="닫기" data-close="true"><i data-icon="x" data-size="18"></i></button>' +
+      '<div class="ui-overlay__body"><div class="shop-detail">' + gallery + info + cta + '</div></div></div>';
+  };
+
+  // 캐러셀 동작 — 밀어서 넘기기(스크롤 스냅) · 화살표 · 점 · 작은 사진 · ←/→ 키
+  var wireGallery = function (start) {
+    var track = document.querySelector('.shop-gallery__track');
+    if (!track) return;
+    var slides = track.children.length;
+    var current = -1;
+    var mark = function (i) {
+      if (i === current) return;
+      current = i;
+      var counter = document.querySelector('.shop-gallery__counter');
+      if (counter) counter.textContent = (i + 1) + ' / ' + slides;
+      document.querySelectorAll('[data-go]').forEach(function (b) {
+        b.setAttribute('aria-current', String(Number(b.getAttribute('data-go')) === i));
+      });
+      var prev = document.querySelector('.shop-gallery__nav[data-side="prev"]');
+      var next = document.querySelector('.shop-gallery__nav[data-side="next"]');
+      if (prev) prev.disabled = i === 0;
+      if (next) next.disabled = i === slides - 1;
+    };
+    var go = function (i, instant) {
+      i = Math.max(0, Math.min(slides - 1, i));
+      track.scrollTo({ left: i * track.clientWidth, behavior: instant ? 'instant' : 'smooth' });
+      mark(i);
+    };
+    track.addEventListener('scroll', function () { mark(Math.round(track.scrollLeft / track.clientWidth)); });
+    document.addEventListener('click', function (e) {
+      var target = e.target.closest('[data-go]');
+      if (target) go(Number(target.getAttribute('data-go')));
+      var nav = e.target.closest('.shop-gallery__nav');
+      if (nav) go(current + (nav.getAttribute('data-side') === 'next' ? 1 : -1));
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight') go(current + 1);
+      if (e.key === 'ArrowLeft') go(current - 1);
+    });
+    mark(0);
+    if (start) requestAnimationFrame(function () { go(start, true); });
+  };
+
+  var params = new URLSearchParams(location.search);
+  var shop2 = function () {
+    return page(tpl('header'), mainWrap(chips(null) + '<div class="shop-grid">' + PRODUCTS.map(card2).join('') + '</div>' + foot));
+  };
+  var byId = function (id, fallback) {
+    return PRODUCTS.filter(function (p) { return String(p.id) === String(id); })[0] || PRODUCTS.filter(function (p) { return p.id === fallback; })[0];
+  };
+  SCREENS.shop2 = shop2;
+  SCREENS.detail = function () { return { page: shop2(), overlay: detail(byId(params.get('p'), 12)) }; };
+  SCREENS['detail-3'] = function () { return { page: shop2(), overlay: detail(byId(params.get('p'), 12)), start: 2 }; };
+  SCREENS['detail-single'] = function () { return { page: shop2(), overlay: detail(byId(params.get('p'), 9)) }; };
+  SCREENS['detail-nolink'] = function () { return { page: shop2(), overlay: detail(byId(params.get('p'), 5)) }; };
+
+  var name = params.get('s') || 'shop';
+  var out = (SCREENS[name] || SCREENS.shop)();
+  if (typeof out === 'string') out = { page: out };
+  document.getElementById('root').innerHTML = out.page;
+  // 오버레이는 앱에서 document.body 로 포털된다
+  if (out.overlay) document.body.insertAdjacentHTML('beforeend', out.overlay);
   window.renderMockIcons();
+  wireGallery(out.start);
 
   document.addEventListener('click', function (e) {
+    var open = e.target.closest('[data-open]');
+    var close = e.target.closest('[data-close], .ui-scrim');
+    // 목업 안에서도 카드를 눌러 상세를, ✕ 로 목록을 볼 수 있게 한다
+    if (open) { e.preventDefault(); location.search = '?s=detail&p=' + open.getAttribute('data-open'); return; }
+    if (close) { location.search = '?s=shop2'; return; }
     if (e.target.closest('a, button')) e.preventDefault();
   });
 

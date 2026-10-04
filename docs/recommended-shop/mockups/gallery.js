@@ -7,7 +7,9 @@
     ['teacher-desktop.html', '선생님 · 데스크톱'],
     ['teacher-mobile.html', '선생님 · 모바일'],
     ['parent-desktop.html', '학부모 · 데스크톱'],
-    ['parent-mobile.html', '학부모 · 모바일']
+    ['parent-mobile.html', '학부모 · 모바일'],
+    ['images-desktop.html', '2차 사진 여러 장 · 데스크톱'],
+    ['images-mobile.html', '2차 사진 여러 장 · 모바일']
   ];
   var esc = function (s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); };
 
@@ -33,6 +35,13 @@
   var frames = [];
 
   cfg.screens.forEach(function (sc, i) {
+    // 한 갤러리에 선생님·학부모 화면이 섞일 때 묶음 제목
+    if (sc.group) {
+      var group = document.createElement('h2');
+      group.className = 'mock-group';
+      group.textContent = sc.group;
+      list.appendChild(group);
+    }
     var sec = document.createElement('section');
     sec.className = 'mock-screen';
     var notes = (sc.notes || []).length
@@ -43,7 +52,7 @@
       (sc.path ? '<span class="mock-screen__path">' + esc(sc.path) + '</span>' : '') + '</div>';
 
     var iframe = document.createElement('iframe');
-    iframe.src = cfg.src + '?s=' + encodeURIComponent(sc.s);
+    iframe.src = (sc.src || cfg.src) + '?s=' + encodeURIComponent(sc.s);
     iframe.title = sc.title;
     iframe.width = String(cfg.width);
     iframe.style.width = cfg.width + 'px';
@@ -64,10 +73,11 @@
     } else {
       var phone = document.createElement('div');
       phone.className = 'mock-phone';
-      phone.innerHTML = '<div class="mock-phone__status"><span>9:41</span><span>5G ▮▮▮</span></div>' +
-        (cfg.browserBar
-          ? '<div class="mock-phone__browser"><span>✕</span><b>' + esc(cfg.browserBar) + '</b><span>⋯</span></div>'
-          : '');
+      phone.innerHTML = '<div class="mock-phone__status"><span>9:41</span><span>5G ▮▮▮</span></div>';
+      var bar = sc.browserBar !== undefined ? sc.browserBar : cfg.browserBar;
+      phone.innerHTML += bar
+        ? '<div class="mock-phone__browser"><span>✕</span><b>' + esc(bar) + '</b><span>⋯</span></div>'
+        : '';
       phone.appendChild(iframe);
       sec.appendChild(phone);
       sec.insertAdjacentHTML('beforeend', notes);

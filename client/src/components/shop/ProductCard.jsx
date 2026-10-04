@@ -1,38 +1,47 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Card, Icon } from '../ui';
 import { formatPrice, hostnameOf, safeHref } from '../../utils/shopFormat';
 
 /**
- * 공개 상점의 상품 카드 (FR-432~433).
- * 링크가 있으면 카드 전체가 새 창 링크(<a>)이고, 없으면 누를 수 없는 카드다.
- * onOpen 은 이동을 막지 않는다 — 클릭 기록만 남긴다.
+ * 공개 상점의 상품 카드. 누르면 상품 상세(?p=)가 열린다 — 쇼핑몰은 상세의 버튼으로 간다.
+ * 사진도 링크도 없으면 상세에서 더 볼 것이 없어 누를 수 없는 카드다.
+ * 사진은 정사각형 칸에 잘려 보이고, 가격·도메인은 카드 맨 아래에 붙어 줄이 맞는다.
  */
-function ProductCard({ product, categoryName, onOpen }) {
+function ProductCard({ product, categoryName, to, state }) {
   const href = safeHref(product.url);
   const price = formatPrice(product.price);
+  const images = product.images || [];
 
   const body = (
     <>
       <div className="shop-product__img">
-        {product.imageUrl
-          ? <img src={product.imageUrl} alt="" loading="lazy" />
+        {images.length
+          ? <img src={images[0]} alt="" loading="lazy" />
           : <Icon name="image" size={32} />}
+        {images.length > 1 && (
+          <span className="shop-product__count" aria-label={`사진 ${images.length}장`}>
+            <Icon name="image" size={12} />
+            {images.length}
+          </span>
+        )}
       </div>
       <div className="shop-product__body">
         {categoryName && <span className="shop-product__cat">{categoryName}</span>}
         <span className="shop-product__title">{product.title}</span>
-        {price && <span className="shop-product__price">{price}</span>}
-        {href && (
-          <span className="shop-product__host">
-            {hostnameOf(href)}
-            <Icon name="external" size={12} />
+        {product.description && <span className="shop-product__desc">{product.description}</span>}
+        <div className="shop-product__foot">
+          {price && <span className="shop-product__price">{price}</span>}
+          {/* 링크가 없어도 줄은 비워 둔다 — 옆 카드와 가격 높이가 맞도록 */}
+          <span className="shop-product__host" aria-hidden={href ? undefined : 'true'}>
+            {href ? hostnameOf(href) : ' '}
           </span>
-        )}
+        </div>
       </div>
     </>
   );
 
-  if (!href) {
+  if (!href && !images.length) {
     return (
       <Card padding="none" className="shop-product" data-testid="shop-product">
         {body}
@@ -42,16 +51,13 @@ function ProductCard({ product, categoryName, onOpen }) {
 
   return (
     <Card
-      as="a"
+      as={Link}
+      to={to}
+      state={state}
       padding="none"
       className="shop-product"
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={`${product.title} (새 창에서 열림)`}
-      onClick={() => onOpen?.(product)}
-      // 가운데 버튼으로 새 탭에 여는 것은 click 이 아니라 auxclick 이다
-      onAuxClick={(e) => { if (e.button === 1) onOpen?.(product); }}
+      data-interactive="true"
+      aria-label={`${product.title} 자세히 보기`}
       data-testid="shop-product"
     >
       {body}

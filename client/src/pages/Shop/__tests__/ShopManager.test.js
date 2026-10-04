@@ -19,6 +19,10 @@ const PRODUCTS = [
   { id: 9, title: '연습용 발레복', url: 'https://musinsa.com/9', price: null, categoryId: 1, imageUrl: null, isVisible: true, clickCount: 3 },
   { id: 5, title: '스타킹', url: null, price: 12000, categoryId: null, imageUrl: null, isVisible: false, clickCount: 0 }
 ];
+const CLUBS = {
+  id: 4, title: '곤봉', url: null, price: null, categoryId: 3, imageUrl: 'https://cdn/c1.jpg', isVisible: true, clickCount: 0,
+  images: [{ id: 1, url: 'https://cdn/c1.jpg' }, { id: 2, url: 'https://cdn/c2.jpg' }]
+};
 
 const respond = (status, body) => Promise.resolve({ ok: status < 300, status, json: () => Promise.resolve(body) });
 
@@ -80,6 +84,14 @@ describe('ShopManager — 상품 탭', () => {
     expect(within(stocking).getByRole('switch')).not.toBeChecked();
   });
 
+  it('링크는 없어도 사진이 있으면 상세가 열린다고 알려 주고, 2장 이상이면 장 수를 붙인다', async () => {
+    await renderManager({}, [...PRODUCTS, CLUBS]);
+    const clubs = rowOf('곤봉');
+    expect(within(clubs).getByText('링크 없음 — 상세에서 사진만 보여요')).toBeInTheDocument();
+    expect(clubs).toHaveTextContent('사진 2장');
+    expect(clubs.querySelector('img')).toHaveAttribute('src', 'https://cdn/c1.jpg');
+  });
+
   it('공개 스위치를 끄면 바로 숨기고 서버에 저장한다 (FR-426)', async () => {
     await renderManager();
     await act(async () => {
@@ -113,6 +125,86 @@ describe('ShopManager — 상품 탭', () => {
     });
     const titles = screen.getAllByRole('row').slice(1).map((r) => r.querySelector('.ui-list-row__title').textContent);
     expect(titles[0]).toMatch(/연습용 발레복/);
+  });
+
+  describe('손잡이를 끌어서 순서 바꾸기', () => {
+    // jsdom 에는 PointerEvent 가 없다 — clientY·button 을 실어 보내도록 MouseEvent 로 흉내 낸다
+    beforeAll(() => {
+      if (!window.PointerEvent) {
+        window.PointerEvent = class PointerEvent extends MouseEvent {
+          constructor(type, init = {}) {
+            super(type, init);
+            this.pointerId = init.pointerId ?? 1;
+          }
+        };
+      }
+    });
+
+    // 행 높이 50, 간격 10 — 0번 행 가운데 25, 1번 85, 2번 145
+    const layoutRows = () => {
+      document.querySelector('.shop-list tbody').getBoundingClientRect = () => ({ top: 0, bottom: 170, height: 170 });
+      screen.getAllByRole('row').slice(1).forEach((row) => {
+        const index = Number(row.dataset.productIndex);
+        row.getBoundingClientRect = () => {
+          const offset = parseFloat((row.style.transform || '').replace(/[^-\d.]/g, '')) || 0;
+          const top = index * 60 + offset;
+          return { top, bottom: top + 50, height: 50, left: 0, right: 0, width: 0 };
+        };
+      });
+    };
+    const grip = (title) => within(rowOf(title)).getByRole('button', { name: new RegExp(`${title} 순서`) });
+
+    it('끌어서 놓으면 그 자리로 옮기고 전체 순서를 저장한다 — 끄는 동안 행이 따라오고 놓일 자리에 선', async () => {
+      await renderManager();
+      layoutRows();
+
+      fireEvent.pointerDown(grip('사사키 리본'), { clientY: 25, button: 0 });
+      fireEvent.pointerMove(grip('사사키 리본'), { clientY: 150 });
+      expect(rowOf('사사키 리본')).toHaveAttribute('data-dragging', 'true');
+      expect(rowOf('사사키 리본').style.transform).toBe('translateY(120px)'); // 목록 아래 끝(170)까지만 — 125 가 아니라 120
+      expect(rowOf('스타킹')).toHaveAttribute('data-drop', 'after');
+
+      await act(async () => {
+        fireEvent.pointerUp(grip('사사키 리본'), { clientY: 150 });
+      });
+      expect(fetchWithAuth).toHaveBeenCalledWith('/api/shop/products/order', {
+        method: 'PUT',
+        body: JSON.stringify({ ids: [9, 5, 12] })
+      });
+      const titles = screen.getAllByRole('row').slice(1).map((r) => r.querySelector('.ui-list-row__title').textContent);
+      expect(titles[2]).toMatch(/사사키 리본/);
+      expect(document.querySelector('[data-dragging]')).toBeNull();
+    });
+
+    it('제자리에 놓거나 끌기가 취소되면 저장하지 않는다', async () => {
+      await renderManager();
+      layoutRows();
+      fireEvent.pointerDown(grip('연습용 발레복'), { clientY: 85, button: 0 });
+      fireEvent.pointerMove(grip('연습용 발레복'), { clientY: 90 });
+      fireEvent.pointerUp(grip('연습용 발레복'), { clientY: 90 });
+
+      fireEvent.pointerDown(grip('연습용 발레복'), { clientY: 85, button: 0 });
+      fireEvent.pointerMove(grip('연습용 발레복'), { clientY: 10 });
+      fireEvent.pointerCancel(grip('연습용 발레복'));
+
+      expect(fetchWithAuth.mock.calls.map((c) => c[0])).not.toContain('/api/shop/products/order');
+    });
+
+    it('손잡이에서 ↑↓ 키로도 옮기고, 옮긴 뒤에도 그 손잡이에 포커스가 남는다', async () => {
+      await renderManager();
+      grip('연습용 발레복').focus();
+      await act(async () => {
+        fireEvent.keyDown(grip('연습용 발레복'), { key: 'ArrowDown' });
+      });
+      expect(JSON.parse(fetchWithAuth.mock.calls.find((c) => c[0] === '/api/shop/products/order')[1].body)).toEqual({ ids: [12, 5, 9] });
+      expect(grip('연습용 발레복')).toHaveFocus();
+    });
+
+    it('검색 중에는 손잡이도 잠긴다', async () => {
+      await renderManager();
+      fireEvent.change(screen.getByLabelText('상품 검색'), { target: { value: '리본' } });
+      expect(grip('사사키 리본')).toBeDisabled();
+    });
   });
 
   it('검색 중에는 순서 버튼을 잠근다', async () => {

@@ -14,6 +14,8 @@ const FOCUSABLE =
  *
  * mode: sheet(기본, 모바일에서 시트) | modal(항상 가운데)
  * size: sm | md | lg
+ * header: false 면 제목 줄(제목·닫기 버튼)을 그리지 않는다 — 사진이 맨 위에 오는 상세처럼
+ *         본문이 닫기 버튼을 직접 둘 때. Esc·바깥 누르기로 닫히는 것은 그대로다.
  */
 export function Modal({
   open = true,
@@ -25,12 +27,17 @@ export function Modal({
   mode = 'sheet',
   size = 'md',
   closeOnScrim = true,
+  header = true,
   labelledBy,
   className = '',
   ...rest
 }) {
   const panelRef = useRef(null);
   const restoreFocusRef = useRef(null);
+  // 부모가 그릴 때마다 새 onClose 를 넘겨도 아래 효과가 다시 돌지 않게 한다 — 다시 돌면 패널이 포커스를
+  // 가져가 입력 중인 칸에서 커서가 빠진다. Esc 는 늘 지금의 onClose 를 부른다.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -40,7 +47,7 @@ export function Modal({
     const onKeyDown = (event) => {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        onClose?.();
+        onCloseRef.current?.();
         return;
       }
       if (event.key !== 'Tab' || !panelRef.current) return;
@@ -73,7 +80,7 @@ export function Modal({
       document.body.style.overflow = previousOverflow;
       if (restoreFocusRef.current instanceof HTMLElement) restoreFocusRef.current.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -93,7 +100,7 @@ export function Modal({
         {...rest}
       >
         <div className="ui-overlay__grip" aria-hidden="true" />
-        {(title || onClose) && (
+        {header && (title || onClose) && (
           <div className="ui-overlay__header">
             <div>
               {title && <h2 className="ui-overlay__title">{title}</h2>}

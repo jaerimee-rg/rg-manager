@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import Shop from '../models/Shop.js';
 import ShopCategory from '../models/ShopCategory.js';
 import ShopProduct from '../models/ShopProduct.js';
+import ShopProductImage from '../models/ShopProductImage.js';
 import ShopEvent from '../models/ShopEvent.js';
 import { getOrCreateShop } from '../services/shopService.js';
 import {
@@ -15,7 +16,8 @@ import {
   isAllowedImage,
   isSameIdSet,
   MAX_PRODUCTS,
-  MAX_CATEGORIES
+  MAX_CATEGORIES,
+  MAX_PRODUCT_IMAGES
 } from '../utils/shopValidation.js';
 import { toTeacherShop, toTeacherProduct, toTeacherCategory } from '../utils/shopSerializer.js';
 import { rankProducts, sumByCategory, toSummary } from '../utils/shopStats.js';
@@ -34,6 +36,15 @@ const invalid = (res, errors) =>
 
 const UNIQUE_VIOLATION = '23505';
 const duplicateCategory = (res) => res.status(409).json({ error: '같은 이름의 카테고리가 있어요.' });
+
+const imageNotFound = (res) => res.status(404).json({ error: '사진을 찾을 수 없습니다.' });
+
+/** 상품(들)에 사진을 붙여 선생님 응답 모양으로 — 목록은 사진을 한 번에 읽는다 */
+const withImages = async (products) => {
+  const images = await ShopProductImage.listByProducts(products.map((p) => p.id));
+  return products.map((p) => toTeacherProduct(p, images.get(p.id) || []));
+};
+const withImagesOne = async (product) => toTeacherProduct(product, await ShopProductImage.listByProduct(product.id));
 
 // 고른 카테고리가 내 것인지 — 남의 카테고리 id 로 상품을 묶지 못하게 한다
 const checkCategory = async (categoryId, userId) =>
@@ -73,7 +84,7 @@ export const updateShop = async (req, res) => {
 export const listProducts = async (req, res) => {
   try {
     const products = await ShopProduct.listByUser(req.user.id);
-    res.json({ products: products.map(toTeacherProduct) });
+    res.json({ products: await withImages(products) });
   } catch (error) {
     return serverError(res, '상품 목록', error);
   }
@@ -91,8 +102,12 @@ export const createProduct = async (req, res) => {
       return invalid(res, { categoryId: '카테고리를 다시 골라 주세요' });
     }
 
-    const product = await ShopProduct.create(req.user.id, { ...value, isVisible: value.isVisible ?? true });
-    res.status(201).json({ product: toTeacherProduct(product) });
+    const product = await ShopProduct.create(req.user.id, {
+      ...value,
+      description: value.description ?? null,
+      isVisible: value.isVisible ?? true
+    });
+    res.status(201).json({ product: toTeacherProduct(product, []) });
   } catch (error) {
     return serverError(res, '상품 등록', error);
   }
@@ -114,9 +129,10 @@ export const updateProduct = async (req, res) => {
 
     const product = await ShopProduct.update(id, req.user.id, {
       ...value,
+      description: value.description === undefined ? existing.description ?? null : value.description,
       isVisible: value.isVisible ?? existing.isVisible !== false
     });
-    res.json({ product: toTeacherProduct(product) });
+    res.json({ product: await withImagesOne(product) });
   } catch (error) {
     return serverError(res, '상품 수정', error);
   }
@@ -132,7 +148,7 @@ export const setProductVisibility = async (req, res) => {
 
     const product = await ShopProduct.setVisibility(id, req.user.id, req.body.isVisible);
     if (!product) return productNotFound(res);
-    res.json({ product: toTeacherProduct(product) });
+    res.json({ product: await withImagesOne(product) });
   } catch (error) {
     return serverError(res, '공개 변경', error);
   }
@@ -143,12 +159,14 @@ export const deleteProduct = async (req, res) => {
     const id = parseId(req.params.id);
     if (!id) return productNotFound(res);
 
+    // 사진 행은 상품과 함께 지워지므로(FK CASCADE) 저장소 경로를 먼저 읽어 둔다
+    const paths = await ShopProductImage.listPathsOwned(id, req.user.id);
     const product = await ShopProduct.delete(id, req.user.id);
     if (!product) return productNotFound(res);
 
     // 행은 이미 지웠다. 저장소 파일 정리가 실패해도 화면에 유령이 남지 않는다.
-    const storageDeleted = product.imagePath ? await deleteFile(product.imagePath) : true;
-    res.json({ message: '상품이 삭제되었습니다.', storageDeleted });
+    const results = await Promise.all(paths.map((path) => deleteFile(path)));
+    res.json({ message: '상품이 삭제되었습니다.', storageDeleted: results.every(Boolean) });
   } catch (error) {
     return serverError(res, '상품 삭제', error);
   }
@@ -168,10 +186,11 @@ export const reorderProducts = async (req, res) => {
 };
 
 /**
- * 상품 이미지. 본문은 파일 바이트 그대로(express.raw), 파일명은 쿼리스트링 — FAQ 파일 업로드와 같다.
- * 새 파일을 올린 뒤에 이전 파일을 지운다(올리기가 실패하면 이전 이미지가 그대로 남는다).
+ * 상품 사진 — 한 장씩 맨 뒤에 붙인다(상품마다 MAX_PRODUCT_IMAGES 장).
+ * 본문은 파일 바이트 그대로(express.raw), 파일명은 쿼리스트링 — FAQ 파일 업로드와 같다.
+ * 브라우저가 정사각형으로 잘라 줄인 JPEG 를 보낸다(GIF 는 그대로일 수 있다).
  */
-export const uploadProductImage = async (req, res) => {
+export const addProductImage = async (req, res) => {
   try {
     const id = parseId(req.params.id);
     if (!id) return productNotFound(res);
@@ -199,17 +218,32 @@ export const uploadProductImage = async (req, res) => {
       });
     }
 
+    // 이미 찼으면 저장소에 쓰기 전에 거절한다(최종 판단은 아래 append 의 잠금 안에서 한 번 더)
+    const full = () => res.status(409).json({ error: `사진은 ${MAX_PRODUCT_IMAGES}장까지 올릴 수 있어요.` });
+    if ((await ShopProductImage.countByProduct(id)) >= MAX_PRODUCT_IMAGES) return full();
+
     const storagePath = `shop/${req.user.id}/${crypto.randomUUID()}/${toStorageSafeName(filename)}`;
     const imageUrl = await uploadFile(storagePath, buffer, lookupType(filename).mime);
-    const updated = await ShopProduct.setImage(id, req.user.id, { imagePath: storagePath, imageUrl });
+    let result;
+    try {
+      result = await ShopProductImage.append(id, req.user.id, { imagePath: storagePath, imageUrl }, MAX_PRODUCT_IMAGES);
+    } catch (error) {
+      await deleteFile(storagePath);
+      throw error;
+    }
+    if (result.error) {
+      // 올리는 사이에 상품이 지워졌거나 장 수가 찼다 — 방금 올린 파일이 고아가 되지 않게 치운다
+      await deleteFile(storagePath);
+      return result.error === 'notFound' ? productNotFound(res) : full();
+    }
+
+    const updated = await ShopProduct.touch(id, req.user.id);
     if (!updated) {
-      // 올리는 사이에 상품이 지워졌다 — 방금 올린 파일이 고아가 되지 않게 치운다
+      // 붙인 직후 상품이 지워졌다 — 사진 행은 함께 지워졌으니 파일만 치운다
       await deleteFile(storagePath);
       return productNotFound(res);
     }
-
-    if (product.imagePath) await deleteFile(product.imagePath);
-    res.json({ product: toTeacherProduct(updated) });
+    res.status(201).json({ image: { id: result.image.id, url: result.image.imageUrl }, product: await withImagesOne(updated) });
   } catch (error) {
     return serverError(res, '이미지 업로드', error);
   }
@@ -218,16 +252,42 @@ export const uploadProductImage = async (req, res) => {
 export const deleteProductImage = async (req, res) => {
   try {
     const id = parseId(req.params.id);
+    const imageId = parseId(req.params.imageId);
+    if (!id) return productNotFound(res);
+    if (!imageId) return imageNotFound(res);
+
+    const image = await ShopProductImage.delete(imageId, id, req.user.id);
+    if (!image) return imageNotFound(res);
+
+    // 행을 먼저 지웠다 — 저장소 정리가 실패해도 화면에는 남지 않는다
+    await deleteFile(image.imagePath);
+    const updated = await ShopProduct.touch(id, req.user.id);
+    if (!updated) return productNotFound(res);
+    res.json({ product: await withImagesOne(updated) });
+  } catch (error) {
+    return serverError(res, '이미지 삭제', error);
+  }
+};
+
+/** 사진 순서 — 그 상품의 사진 전부를 한 번씩 담아야 한다. 첫 장이 대표 사진이 된다. */
+export const reorderProductImages = async (req, res) => {
+  try {
+    const id = parseId(req.params.id);
     if (!id) return productNotFound(res);
 
     const product = await ShopProduct.getOwned(id, req.user.id);
     if (!product) return productNotFound(res);
 
-    const updated = await ShopProduct.setImage(id, req.user.id, { imagePath: null, imageUrl: null });
-    if (product.imagePath) await deleteFile(product.imagePath);
-    res.json({ product: toTeacherProduct(updated) });
+    const owned = (await ShopProductImage.listByProduct(id)).map((image) => image.id);
+    if (!isSameIdSet(req.body?.ids, owned)) {
+      return res.status(400).json({ error: '사진 순서를 저장하지 못했어요. 새로고침 후 다시 시도해 주세요.' });
+    }
+
+    await ShopProductImage.reorder(id, req.body.ids);
+    const updated = await ShopProduct.touch(id, req.user.id);
+    res.json({ product: await withImagesOne(updated) });
   } catch (error) {
-    return serverError(res, '이미지 삭제', error);
+    return serverError(res, '사진 순서', error);
   }
 };
 

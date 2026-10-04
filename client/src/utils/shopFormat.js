@@ -4,6 +4,7 @@ import { extractChosung } from './koreanSearch';
 // 두 쪽 테스트가 같은 표로 확인한다 — 공유 패키지가 없는 이 저장소의 기존 방식이다.
 
 export const TITLE_MAX = 80;
+export const DESCRIPTION_MAX = 1000;
 export const URL_MAX = 2000;
 export const PRICE_MAX = 100000000;
 export const CATEGORY_NAME_MAX = 20;
@@ -81,11 +82,23 @@ export const parsePriceInput = (text) => {
 };
 
 /** 등록 모달 검사 — 서버와 같은 규칙. 통과하면 errors 가 null */
-export const validateProductForm = ({ title, url, price }) => {
+/** 상세 설명 — 서버 parseDescription 과 같은 규칙. 비우면 null, 줄바꿈은 지킨다 */
+export const parseDescriptionInput = (raw) => {
+  if (raw == null) return { value: null };
+  const text = String(raw).replace(/\r\n?/g, '\n').trim();
+  if (!text) return { value: null };
+  if (text.length > DESCRIPTION_MAX) return { error: `상세 설명은 ${DESCRIPTION_MAX}자까지 입력할 수 있어요` };
+  return { value: text };
+};
+
+export const validateProductForm = ({ title, description, url, price }) => {
   const errors = {};
   const cleanTitle = String(title ?? '').trim();
   if (!cleanTitle) errors.title = TITLE_ERROR;
   else if (cleanTitle.length > TITLE_MAX) errors.title = `타이틀은 ${TITLE_MAX}자까지 입력할 수 있어요`;
+
+  const cleanDescription = parseDescriptionInput(description);
+  if (cleanDescription.error) errors.description = cleanDescription.error;
 
   const cleanUrl = normalizeUrl(url);
   if (cleanUrl.error) errors.url = cleanUrl.error;
@@ -94,7 +107,12 @@ export const validateProductForm = ({ title, url, price }) => {
   if (cleanPrice.error) errors.price = cleanPrice.error;
 
   return {
-    value: { title: cleanTitle, url: cleanUrl.value ?? null, price: cleanPrice.value ?? null },
+    value: {
+      title: cleanTitle,
+      description: cleanDescription.value ?? null,
+      url: cleanUrl.value ?? null,
+      price: cleanPrice.value ?? null
+    },
     errors: Object.keys(errors).length ? errors : null
   };
 };

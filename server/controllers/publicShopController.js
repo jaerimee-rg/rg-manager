@@ -3,6 +3,7 @@
 import Shop from '../models/Shop.js';
 import ShopCategory from '../models/ShopCategory.js';
 import ShopProduct from '../models/ShopProduct.js';
+import ShopProductImage from '../models/ShopProductImage.js';
 import ShopEvent from '../models/ShopEvent.js';
 import { parseId, normalizeVisitorKey } from '../utils/shopValidation.js';
 import { toPublicShop, toPublicCategory, toPublicProduct } from '../utils/shopSerializer.js';
@@ -24,6 +25,8 @@ export const getPublicShop = async (req, res) => {
       ShopCategory.listByUser(shop.userId)
     ]);
 
+    const images = await ShopProductImage.listByProducts(products.map((p) => p.id));
+
     // 칩은 공개 상품이 있는 카테고리만 (FR-431)
     const used = new Set(products.map((p) => p.categoryId).filter((id) => id != null));
 
@@ -32,7 +35,7 @@ export const getPublicShop = async (req, res) => {
     res.json({
       shop: toPublicShop(shop),
       categories: categories.filter((c) => used.has(c.id)).map(toPublicCategory),
-      products: products.map(toPublicProduct)
+      products: products.map((p) => toPublicProduct(p, images.get(p.id) || []))
     });
   } catch (error) {
     console.error('공개 상점 조회 오류:', error?.message || error);

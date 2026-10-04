@@ -56,26 +56,26 @@ class ShopProduct {
   }
 
   /** 새 상품은 맨 위 — 현재 가장 작은 순서보다 하나 작게 */
-  static async create(userId, { title, url, price, categoryId, isVisible }) {
+  static async create(userId, { title, description, url, price, categoryId, isVisible }) {
     const now = new Date().toISOString();
     const result = await pool.query(
       `INSERT INTO shop_products
-         ("userId", "categoryId", title, url, price, "isVisible", "sortOrder", "createdAt", "updatedAt")
-       SELECT $1::int, $2::int, $3::text, $4::text, $5::int, $6::boolean, COALESCE(MIN("sortOrder"), 1) - 1, $7::text, $7::text
+         ("userId", "categoryId", title, description, url, price, "isVisible", "sortOrder", "createdAt", "updatedAt")
+       SELECT $1::int, $2::int, $3::text, $4::text, $5::text, $6::int, $7::boolean, COALESCE(MIN("sortOrder"), 1) - 1, $8::text, $8::text
        FROM shop_products WHERE "userId" = $1
        RETURNING *`,
-      [userId, categoryId, title, url, price, isVisible, now]
+      [userId, categoryId, title, description, url, price, isVisible, now]
     );
     return { ...result.rows[0], clickCount: 0 };
   }
 
-  static async update(id, userId, { title, url, price, categoryId, isVisible }) {
+  static async update(id, userId, { title, description, url, price, categoryId, isVisible }) {
     const result = await pool.query(
       `UPDATE shop_products
-       SET title = $1, url = $2, price = $3, "categoryId" = $4, "isVisible" = $5, "updatedAt" = $6
-       WHERE id = $7 AND "userId" = $8
+       SET title = $1, description = $2, url = $3, price = $4, "categoryId" = $5, "isVisible" = $6, "updatedAt" = $7
+       WHERE id = $8 AND "userId" = $9
        ${RETURNING}`,
-      [title, url, price, categoryId, isVisible, new Date().toISOString(), id, userId]
+      [title, description, url, price, categoryId, isVisible, new Date().toISOString(), id, userId]
     );
     return result.rows[0] || null;
   }
@@ -89,11 +89,11 @@ class ShopProduct {
     return result.rows[0] || null;
   }
 
-  static async setImage(id, userId, { imagePath, imageUrl }) {
+  /** 사진이 바뀌면 수정 시각만 올린다(사진 행은 shop_product_images) */
+  static async touch(id, userId) {
     const result = await pool.query(
-      `UPDATE shop_products SET "imagePath" = $1, "imageUrl" = $2, "updatedAt" = $3
-       WHERE id = $4 AND "userId" = $5 ${RETURNING}`,
-      [imagePath, imageUrl, new Date().toISOString(), id, userId]
+      `UPDATE shop_products SET "updatedAt" = $1 WHERE id = $2 AND "userId" = $3 ${RETURNING}`,
+      [new Date().toISOString(), id, userId]
     );
     return result.rows[0] || null;
   }

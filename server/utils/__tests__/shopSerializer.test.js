@@ -12,6 +12,7 @@ const PRODUCT_ROW = {
   userId: 9,
   categoryId: 3,
   title: '리본',
+  description: '6m 리본\n막대 포함',
   url: 'https://coupang.com/x',
   price: 32000,
   imagePath: 'shop/9/uuid/ribbon.jpg',
@@ -22,6 +23,11 @@ const PRODUCT_ROW = {
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-02T00:00:00.000Z'
 };
+
+const IMAGE_ROWS = [
+  { id: 7, productId: 12, userId: 9, imagePath: 'shop/9/a/1.jpg', imageUrl: 'https://cdn/1.jpg', sortOrder: 0, createdAt: 'x' },
+  { id: 8, productId: 12, userId: 9, imagePath: 'shop/9/b/2.jpg', imageUrl: 'https://cdn/2.jpg', sortOrder: 1, createdAt: 'y' }
+];
 
 const SHOP_ROW = {
   id: 1,
@@ -36,10 +42,15 @@ const SHOP_ROW = {
 };
 
 describe('공개 응답 화이트리스트 (FR-435 · 461)', () => {
-  it('상품은 화면에 필요한 6개 필드만 나간다', () => {
-    expect(Object.keys(toPublicProduct(PRODUCT_ROW)).sort()).toEqual(
-      ['categoryId', 'id', 'imageUrl', 'price', 'title', 'url']
+  it('상품은 화면에 필요한 7개 필드만 나간다', () => {
+    expect(Object.keys(toPublicProduct(PRODUCT_ROW, IMAGE_ROWS)).sort()).toEqual(
+      ['categoryId', 'description', 'id', 'images', 'price', 'title', 'url']
     );
+  });
+
+  it('사진은 순서대로 주소만 — 저장소 경로·사진 id 는 나가지 않는다', () => {
+    expect(toPublicProduct(PRODUCT_ROW, IMAGE_ROWS).images).toEqual(['https://cdn/1.jpg', 'https://cdn/2.jpg']);
+    expect(JSON.stringify(toPublicProduct(PRODUCT_ROW, IMAGE_ROWS))).not.toMatch(/shop\/9\//);
   });
 
   it('선생님 id·저장소 경로·공개 여부·클릭 수는 나가지 않는다', () => {
@@ -60,7 +71,7 @@ describe('공개 응답 화이트리스트 (FR-435 · 461)', () => {
 
   it('빈 값은 null 로 맞춘다', () => {
     expect(toPublicProduct({ id: 1, title: '곤봉' })).toEqual({
-      id: 1, title: '곤봉', url: null, imageUrl: null, price: null, categoryId: null
+      id: 1, title: '곤봉', description: null, url: null, images: [], price: null, categoryId: null
     });
   });
 });
@@ -73,8 +84,17 @@ describe('선생님 화면용 직렬화', () => {
   });
 
   it('상품의 저장소 경로는 선생님에게도 보내지 않고, 클릭 수는 숫자로', () => {
-    const out = toTeacherProduct(PRODUCT_ROW);
+    const out = toTeacherProduct(PRODUCT_ROW, IMAGE_ROWS);
     expect(out).not.toHaveProperty('imagePath');
+    expect(JSON.stringify(out)).not.toMatch(/shop\/9\//);
     expect(out.clickCount).toBe(58);
+  });
+
+  it('사진은 id·주소로 순서대로, 대표 사진(imageUrl)은 첫 장 — 옛 칸(imageUrl 컬럼)은 보지 않는다', () => {
+    const out = toTeacherProduct(PRODUCT_ROW, IMAGE_ROWS);
+    expect(out.images).toEqual([{ id: 7, url: 'https://cdn/1.jpg' }, { id: 8, url: 'https://cdn/2.jpg' }]);
+    expect(out.imageUrl).toBe('https://cdn/1.jpg');
+    expect(out.description).toBe('6m 리본\n막대 포함');
+    expect(toTeacherProduct(PRODUCT_ROW).imageUrl).toBeNull();
   });
 });
