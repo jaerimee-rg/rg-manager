@@ -120,6 +120,13 @@ export const validateProductInput = (body = {}) => {
     else errors.isVisible = '공개 여부가 올바르지 않아요';
   }
 
+  // 예약 받기 — 공개 여부와 같다: 주지 않으면 undefined (등록은 끔, 수정은 기존 값)
+  let isReservable;
+  if (body.isReservable !== undefined) {
+    if (typeof body.isReservable === 'boolean') isReservable = body.isReservable;
+    else errors.isReservable = '예약 받기 여부가 올바르지 않아요';
+  }
+
   return {
     value: {
       title,
@@ -127,7 +134,8 @@ export const validateProductInput = (body = {}) => {
       url: url.value ?? null,
       price: price.value ?? null,
       categoryId: categoryId ?? null,
-      isVisible
+      isVisible,
+      isReservable
     },
     errors: Object.keys(errors).length ? errors : null
   };

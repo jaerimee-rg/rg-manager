@@ -2089,6 +2089,75 @@
   to { opacity: 1; transform: translate(-50%, 0); }
 }
 
+/* ---------------------------------------------------------------- *
+ * Calendar — 그 자리에 펼쳐지는 한 달 달력 (날짜 하나 고르기)
+ * ---------------------------------------------------------------- */
+
+.ui-calendar {
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.ui-calendar[data-invalid="true"] { border-color: var(--danger-border); }
+.ui-calendar__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+.ui-calendar__title {
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-900);
+}
+.ui-calendar__grid { display: flex; flex-direction: column; gap: 2px; }
+.ui-calendar__row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.ui-calendar__weekday {
+  padding-block: var(--space-1);
+  text-align: center;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--ink-500);
+}
+.ui-calendar__cell { display: flex; justify-content: center; }
+.ui-calendar__day {
+  width: 100%;
+  max-width: var(--control-md);
+  aspect-ratio: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-900);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+}
+/* 일요일 빨강 · 토요일 파랑 (한국 달력 관례) */
+.ui-calendar__weekday[data-weekday="0"],
+.ui-calendar__day[data-weekday="0"] { color: var(--danger-fg); }
+.ui-calendar__weekday[data-weekday="6"],
+.ui-calendar__day[data-weekday="6"] { color: var(--info-fg); }
+.ui-calendar__day:hover:not(:disabled) { background: var(--ink-50); }
+.ui-calendar__day[data-today="true"] { border-color: var(--border-strong); font-weight: var(--weight-semibold); }
+.ui-calendar__day[aria-pressed="true"],
+.ui-calendar__day[aria-pressed="true"]:hover {
+  background: var(--ink-900);
+  border-color: var(--ink-900);
+  color: #FFFFFF;
+  font-weight: var(--weight-semibold);
+}
+.ui-calendar__day:disabled { color: var(--ink-300); cursor: not-allowed; }
+.ui-calendar__day:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
+
 /* ================================================================== *
  * 추천 상품 (docs/recommended-shop) — 선생님 /products · 공개 /shop/:publicId
  * 목업(docs/recommended-shop/mockups)도 이 블록을 그대로 불러다 쓴다.
@@ -2805,3 +2874,138 @@ a.ui-btn { text-decoration: none; }
   place-items: center;
   padding: var(--space-8) var(--shell-gutter);
 }
+
+/* ---------------------------------------------------------------- *
+ * 상품 예약 (docs/recommended-shop/05-reservations.md)
+ * 공개 상점: 카드의 "예약 가능" 표시 · 상세 창 안에서 바뀌는 예약 폼 · 보낸 뒤 확인
+ * 선생님: 예약 탭
+ * ---------------------------------------------------------------- */
+
+.shop-product__reserve {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--ink-900);
+  color: #FFFFFF;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-medium);
+}
+
+.shop-reserve { display: flex; flex-direction: column; }
+.shop-reserve__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  /* 오른쪽은 패널의 닫기 버튼 자리 */
+  padding: var(--space-4) var(--space-9) 0 var(--space-3);
+}
+.shop-reserve__title {
+  margin: 0;
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-900);
+}
+.shop-reserve__product {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-3) var(--space-5) 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+.shop-reserve__product .shop-thumb { background: var(--surface); }
+.shop-reserve__product-text { display: flex; flex-direction: column; min-width: 0; }
+.shop-reserve__product-title {
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-medium);
+  color: var(--ink-900);
+  word-break: keep-all;
+}
+.shop-reserve__product-price {
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-600);
+}
+.shop-reserve__form { padding: var(--space-5) var(--space-5) 0; }
+
+.shop-reserve--done { align-items: center; padding-top: var(--space-8); text-align: center; }
+.shop-reserve__done-icon {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  margin-bottom: var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--success-bg);
+  color: var(--success-fg);
+}
+.shop-reserve--done .shop-reserve__title { font-size: var(--text-xl); line-height: var(--leading-xl); }
+.shop-reserve__done-text {
+  margin: var(--space-2) var(--space-5) 0;
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+  color: var(--ink-600);
+  word-break: keep-all;
+}
+.shop-reserve__summary {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-5) var(--space-5) 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  text-align: left;
+}
+.shop-reserve__summary > div { display: flex; gap: var(--space-3); }
+.shop-reserve__summary dt {
+  flex: 0 0 64px;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--ink-500);
+}
+.shop-reserve__summary dd {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-medium);
+  color: var(--ink-900);
+  word-break: keep-all;
+}
+.shop-reserve--done .shop-detail__cta { align-self: stretch; }
+
+@media (min-width: 768px) {
+  /* 넓은 창 가운데에 폼 한 줄 — 사진 칸이 없으니 상세처럼 두 칸으로 나누지 않는다 */
+  .shop-reserve { width: 100%; max-width: 520px; margin: 0 auto; padding: var(--space-6) 0 0; }
+  .shop-reserve__head { padding: 0 var(--space-7) 0 0; }
+  /* 달력까지 있으면 창보다 길다 — 보내기 버튼은 데스크톱에서도 창 아래에 붙여 둔다 */
+  .shop-reserve .shop-detail__cta {
+    /* 상세의 데스크톱 규칙(align-self: end — 오른쪽 칸 맨 아래)이 여기서는 버튼을 오른쪽으로 몰아 버린다 */
+    align-self: stretch;
+    position: sticky;
+    bottom: 0;
+    background: var(--surface);
+    margin-top: var(--space-5);
+    padding: var(--space-3) 0 var(--space-5);
+    border-top: 1px solid var(--ink-100);
+  }
+  .shop-reserve__product,
+  .shop-reserve__summary,
+  .shop-reserve__done-text { margin-inline: 0; }
+  .shop-reserve__form { padding-inline: 0; }
+}
+
+/* 선생님 — 예약 탭 */
+.shop-reserve-list .ui-table td { vertical-align: middle; }
+.shop-reserve-date { font-weight: var(--weight-medium); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.shop-reserve-list tr[data-status="cancelled"] .shop-reserve-date,
+.shop-reserve-list tr[data-status="cancelled"] .shop-item__text { color: var(--ink-400); text-decoration: line-through; }

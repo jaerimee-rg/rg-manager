@@ -373,6 +373,99 @@ test.describe('추천 상품', () => {
     });
   }
 
+  // ── 3차: 상품 예약 (docs/recommended-shop/05-reservations.md) ──
+
+  const reserver = `e2e ${run.slice(-5)}`;
+
+  test('선생님: 상품 수정에서 "예약 받기"를 켜면 상품 표에 예약 배지가 붙는다', async ({ page }) => {
+    await loginAs(page, sessions.teacher);
+    await page.goto('/products');
+    const row = page.locator('tr', { hasText: simple });
+    await row.getByRole('button', { name: `${simple} 수정` }).click();
+
+    const dialog = page.getByRole('dialog', { name: '상품 수정' });
+    await dialog.locator('.ui-switch', { hasText: '예약 받기' }).click();
+    await expect(dialog.getByRole('switch', { name: '예약 받기' })).toBeChecked();
+    await dialog.getByRole('button', { name: '저장' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(row.locator('.ui-badge', { hasText: '예약' })).toBeVisible();
+  });
+
+  test('학부모(휴대폰·로그인 없음): 상품 상세 → [예약하기] → 이름·전화번호·달력 날짜로 예약을 요청한다', async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
+    await page.goto(publicPath);
+
+    // 사진도 링크도 없는 상품이지만 예약을 받으니 누를 수 있다
+    const card = page.getByRole('link', { name: `${simple} 자세히 보기` });
+    await expect(card.getByText('예약 가능')).toBeVisible();
+    await card.click();
+
+    const detail = page.getByRole('dialog', { name: simple });
+    await detail.getByRole('button', { name: '예약하기' }).click();
+
+    const form = page.getByRole('dialog', { name: '예약하기' });
+    await form.getByLabel('이름').fill(reserver);
+    await form.getByLabel('전화번호').fill('01012345678');
+    await expect(form.getByLabel('전화번호')).toHaveValue('010-1234-5678');
+
+    // 다음 달 15일 — 오늘이 언제든 180일 안이다
+    await form.getByRole('button', { name: '다음 달' }).click();
+    const next = new Date();
+    next.setDate(1);
+    next.setMonth(next.getMonth() + 1);
+    await form.getByRole('button', { name: new RegExp(`^${next.getMonth() + 1}월 15일 `) }).click();
+    await expect(form.getByText(new RegExp(`${next.getMonth() + 1}월 15일 \\(.\\)에 예약해요`))).toBeVisible();
+
+    const [response] = await Promise.all([
+      page.waitForResponse((r) => r.url().includes('/reservations') && r.request().method() === 'POST'),
+      form.getByRole('button', { name: '예약 요청 보내기' }).click()
+    ]);
+    expect(response.status()).toBe(201);
+
+    const done = page.getByRole('dialog', { name: '예약을 요청했어요' });
+    await expect(done).toContainText(reserver);
+    await expect(done).toContainText('010-1234-5678');
+    await done.getByRole('button', { name: '확인' }).click();
+    await expect(done).toBeHidden();
+    await context.close();
+  });
+
+  test('선생님: 예약 탭에 들어온 요청을 확정하면 저장되고, 다시 취소로 바꿀 수 있다', async ({ page }) => {
+    await loginAs(page, sessions.teacher);
+    await page.goto('/products');
+    await expect(page.getByRole('tab', { name: /^예약 \(\d+\)$/ })).toBeVisible();
+    await page.getByRole('tab', { name: /^예약/ }).click();
+    await expect(page).toHaveURL(/\/products\/reservations$/);
+
+    const row = page.locator('tr', { hasText: reserver });
+    await expect(row).toContainText(simple);
+    await expect(row.getByRole('link', { name: '010-1234-5678' })).toHaveAttribute('href', 'tel:01012345678');
+    await expect(row.getByRole('button', { name: '요청' })).toHaveAttribute('aria-pressed', 'true');
+
+    await row.getByRole('button', { name: '확정' }).click();
+    await expect(page.getByRole('status')).toContainText('예약을 확정했어요');
+    await page.reload();
+    await expect(page.locator('tr', { hasText: reserver }).getByRole('button', { name: '확정' })).toHaveAttribute('aria-pressed', 'true');
+
+    await page.locator('tr', { hasText: reserver }).getByRole('button', { name: '취소' }).click();
+    await expect(page.getByRole('status')).toContainText('예약을 취소했어요');
+    await expect(page.locator('tr', { hasText: reserver })).toHaveAttribute('data-status', 'cancelled');
+  });
+
+  test('예약 API — 예약을 받지 않는 상품은 409, 학부모 토큰으로는 예약 목록·상태 변경을 쓸 수 없다', async ({ request }) => {
+    const { body } = await api(request, sessions.teacher, 'GET', '/api/shop/products');
+    const notReservable = body.products.find((p) => !p.isReservable);
+    const publicId = publicPath.split('/').pop();
+    const res = await request.post(`/api/shop/public/${publicId}/products/${notReservable.id}/reservations`, {
+      data: { name: '김예림', phone: '01012345678', date: '2099-01-01' }
+    });
+    expect(res.status()).toBe(409);
+
+    expect((await api(request, sessions.parent, 'GET', '/api/shop/reservations')).status).toBe(403);
+    expect((await api(request, sessions.parent, 'PATCH', '/api/shop/reservations/1/status', { status: 'confirmed' })).status).toBe(403);
+  });
+
   test('학부모 토큰으로는 선생님 API 를 쓸 수 없다', async ({ request }) => {
     const res = await api(request, sessions.parent, 'GET', '/api/shop');
     expect(res.status).toBe(403);

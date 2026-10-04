@@ -42,6 +42,7 @@ function ProductFormModal({ product, categories, storageReady, onClose, onSaved,
     product?.categoryId != null && categories.some((c) => c.id === product.categoryId) ? String(product.categoryId) : ''
   );
   const [isVisible, setIsVisible] = useState(product ? product.isVisible !== false : true);
+  const [isReservable, setIsReservable] = useState(product?.isReservable === true);
   const [images, setImages] = useState(() => fromSavedImages(product?.images));
   const [imageNotice, setImageNotice] = useState('');
   const [errors, setErrors] = useState({});
@@ -238,7 +239,7 @@ function ProductFormModal({ product, categories, storageReady, onClose, onSaved,
     try {
       const response = await fetchWithAuth(editing ? `/api/shop/products/${product.id}` : '/api/shop/products', {
         method: editing ? 'PUT' : 'POST',
-        body: JSON.stringify({ ...value, categoryId: categoryId ? Number(categoryId) : null, isVisible })
+        body: JSON.stringify({ ...value, categoryId: categoryId ? Number(categoryId) : null, isVisible, isReservable })
       });
       if (!response.ok) {
         const { message, fields } = await readError(response, '저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
@@ -443,6 +444,15 @@ function ProductFormModal({ product, categories, storageReady, onClose, onSaved,
             checked={isVisible}
             onChange={(e) => setIsVisible(e.target.checked)}
             description={isVisible ? '공개 상점에 보여요.' : '공개 상점에서 숨겨지고, 클릭 기록은 남아요.'}
+          />
+
+          <SwitchField
+            label="예약 받기"
+            checked={isReservable}
+            onChange={(e) => setIsReservable(e.target.checked)}
+            description={isReservable
+              ? '상품 상세에 [예약하기] 버튼이 생겨요. 학부모가 이름·전화번호·날짜를 남기면 예약 탭에 들어와요.'
+              : '켜면 학부모가 공개 상점에서 이 상품을 예약할 수 있어요.'}
           />
 
         </Stack>

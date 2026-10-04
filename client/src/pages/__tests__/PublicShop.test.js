@@ -8,6 +8,7 @@ jest.mock('../../utils/shopTracking', () => ({
 }));
 
 import { trackClick, trackViewOnce } from '../../utils/shopTracking';
+import { addDays, todayIso } from '../../utils/calendar';
 import PublicShop from '../PublicShop';
 
 const DATA = {
@@ -196,5 +197,135 @@ describe('PublicShop — 로그인 없이 보는 추천 상품', () => {
     global.fetch.mockImplementation(() => respond(200, { ...DATA, categories: [], products: [] }));
     await renderShop();
     expect(screen.getByText('아직 등록된 상품이 없어요')).toBeInTheDocument();
+  });
+});
+
+describe('PublicShop — 상품 예약 (05-reservations.md)', () => {
+  const RESERVABLE = {
+    ...DATA,
+    products: [
+      { ...DATA.products[0], isReservable: true },
+      // 사진도 링크도 없지만 예약을 받으니 누를 수 있다
+      { id: 21, title: '레오타드 맞춤', description: '사이즈를 재고 맞춰요', url: null, images: [], price: 89000, categoryId: 1, isReservable: true },
+      ...DATA.products.slice(1)
+    ]
+  };
+
+  let reserveResponse;
+  beforeEach(() => {
+    reserveResponse = () => respond(201, { reservation: { reservedDate: 'x', status: 'requested' }, duplicate: false });
+    global.fetch = jest.fn((url, options = {}) => {
+      if (options.method === 'POST') return reserveResponse(url, options);
+      return respond(200, RESERVABLE);
+    });
+  });
+
+  const openReserve = async (productId = 21) => {
+    await renderShop(`/shop/pub123?p=${productId}`);
+    fireEvent.click(screen.getByRole('button', { name: '예약하기' }));
+    return screen.getByRole('dialog', { name: '예약하기' });
+  };
+  const posts = () => global.fetch.mock.calls.filter(([, o]) => o?.method === 'POST');
+  const send = async (dialog) => {
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: '예약 요청 보내기' }));
+    });
+  };
+
+  it('예약 받는 상품은 카드에 "예약 가능" 이 붙고, 사진·링크가 없어도 상세가 열린다', async () => {
+    await renderShop();
+    const card = screen.getByRole('link', { name: '레오타드 맞춤 자세히 보기' });
+    expect(within(card).getByText('예약 가능')).toBeInTheDocument();
+    expect(within(screen.getByRole('link', { name: '연습용 발레복 자세히 보기' })).queryByText('예약 가능')).not.toBeInTheDocument();
+  });
+
+  it('상세 아래에 [예약하기] — 쇼핑몰 링크가 있으면 둘 다, 링크 없음 안내는 숨긴다', async () => {
+    await renderShop('/shop/pub123?p=12');
+    expect(screen.getByRole('button', { name: '예약하기' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'coupang.com에서 보기' })).toBeInTheDocument();
+    cleanupAll();
+
+    await renderShop('/shop/pub123?p=21');
+    expect(screen.getByRole('button', { name: '예약하기' })).toBeInTheDocument();
+    expect(screen.queryByText(/쇼핑몰 링크가 없는 상품이에요/)).not.toBeInTheDocument();
+    cleanupAll();
+
+    await renderShop('/shop/pub123?p=9');
+    expect(screen.queryByRole('button', { name: '예약하기' })).not.toBeInTheDocument();
+  });
+
+  it('이름·전화번호·달력 날짜를 받아 로그인 없이 보내고, 보낸 내용을 보여 준다', async () => {
+    const dialog = await openReserve();
+    expect(within(dialog).getByText('레오타드 맞춤')).toBeInTheDocument();
+
+    fireEvent.change(within(dialog).getByLabelText(/이름/), { target: { value: ' 예림엄마 ' } });
+    fireEvent.change(within(dialog).getByLabelText(/전화번호/), { target: { value: '01012345678' } });
+    expect(within(dialog).getByLabelText(/전화번호/)).toHaveValue('010-1234-5678');
+    fireEvent.click(within(dialog).getByRole('button', { name: /, 오늘$/ }));
+    await send(dialog);
+
+    const [[url, options]] = posts();
+    expect(url).toBe('/api/shop/public/pub123/products/21/reservations');
+    expect(options.headers).toEqual({ 'Content-Type': 'application/json' });
+    expect(options.headers).not.toHaveProperty('Authorization');
+    expect(JSON.parse(options.body)).toEqual({ name: '예림엄마', phone: '010-1234-5678', date: todayIso() });
+
+    const done = screen.getByRole('dialog', { name: '예약을 요청했어요' });
+    expect(within(done).getByText('예림엄마')).toBeInTheDocument();
+    expect(within(done).getByText('010-1234-5678')).toBeInTheDocument();
+    fireEvent.click(within(done).getByRole('button', { name: '확인' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('빈 칸은 그 칸 아래에 알리고 서버를 부르지 않는다', async () => {
+    const dialog = await openReserve();
+    await send(dialog);
+    expect(within(dialog).getByText('이름을 입력해 주세요')).toBeInTheDocument();
+    expect(within(dialog).getByText('전화번호를 입력해 주세요')).toBeInTheDocument();
+    expect(within(dialog).getByText('예약 날짜를 골라 주세요')).toBeInTheDocument();
+    expect(posts()).toHaveLength(0);
+  });
+
+  it('오늘 전 날짜는 고를 수 없다', async () => {
+    const dialog = await openReserve();
+    const yesterday = addDays(todayIso(), -1);
+    const cell = within(dialog).queryByRole('button', { name: new RegExp(`^${Number(yesterday.slice(5, 7))}월 ${Number(yesterday.slice(8))}일 `) });
+    // 어제가 지난달이면 이 달 달력에 없다 — 있으면 잠겨 있어야 한다
+    if (cell) expect(cell).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: '이전 달' })).toBeDisabled();
+  });
+
+  it('선생님이 예약을 막았으면(409) 서버 안내를 보여 준다', async () => {
+    reserveResponse = () => respond(409, { error: '이 상품은 지금 예약을 받지 않아요.' });
+    const dialog = await openReserve();
+    fireEvent.change(within(dialog).getByLabelText(/이름/), { target: { value: '김예림' } });
+    fireEvent.change(within(dialog).getByLabelText(/전화번호/), { target: { value: '010-1234-5678' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /, 오늘$/ }));
+    await send(dialog);
+    expect(within(dialog).getByText('이 상품은 지금 예약을 받지 않아요.')).toBeInTheDocument();
+  });
+
+  it('같은 요청을 다시 보내면 이미 요청했다고 알려 준다', async () => {
+    reserveResponse = () => respond(200, { reservation: { reservedDate: 'x', status: 'requested' }, duplicate: true });
+    const dialog = await openReserve();
+    fireEvent.change(within(dialog).getByLabelText(/이름/), { target: { value: '김예림' } });
+    fireEvent.change(within(dialog).getByLabelText(/전화번호/), { target: { value: '010-1234-5678' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /, 오늘$/ }));
+    await send(dialog);
+    expect(screen.getByRole('dialog', { name: '이미 요청한 예약이에요' })).toBeInTheDocument();
+  });
+
+  it('예약 폼에서 Esc 는 창을 닫지 않고 상품으로 돌아간다 — 쓰던 이름은 남는다', async () => {
+    const dialog = await openReserve();
+    fireEvent.change(within(dialog).getByLabelText(/이름/), { target: { value: '김예림' } });
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.getByRole('dialog', { name: '레오타드 맞춤' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '예약하기' }));
+    expect(screen.getByLabelText(/이름/)).toHaveValue('김예림');
+
+    fireEvent.click(screen.getByRole('button', { name: '상품으로 돌아가기' }));
+    expect(screen.getByRole('dialog', { name: '레오타드 맞춤' })).toBeInTheDocument();
   });
 });

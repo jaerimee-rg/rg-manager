@@ -5,8 +5,10 @@ import ShopCategory from '../models/ShopCategory.js';
 import ShopProduct from '../models/ShopProduct.js';
 import ShopProductImage from '../models/ShopProductImage.js';
 import ShopEvent from '../models/ShopEvent.js';
+import ShopReservation from '../models/ShopReservation.js';
 import { parseId, normalizeVisitorKey } from '../utils/shopValidation.js';
-import { toPublicShop, toPublicCategory, toPublicProduct } from '../utils/shopSerializer.js';
+import { validateReservationInput } from '../utils/shopReservation.js';
+import { toPublicShop, toPublicCategory, toPublicProduct, toPublicReservation } from '../utils/shopSerializer.js';
 
 const notFound = (res) => res.status(404).json({ error: '페이지를 찾을 수 없습니다.' });
 
@@ -71,6 +73,38 @@ export const recordClick = async (req, res) => {
     res.status(204).end();
   } catch (error) {
     console.error('공개 상점 클릭 기록 오류:', error?.message || error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/**
+ * 예약 요청 — 로그인 없이 이름(학부모 또는 아이)·전화번호·날짜를 남긴다 (05-reservations.md).
+ * 그 상점의 공개 상품이어야 하고, 선생님이 "예약 받기"를 켜 둔 상품이어야 한다.
+ * 같은 상품·번호·날짜로 아직 처리 전인 요청이 있으면 새로 만들지 않고 200 으로 알려 준다.
+ */
+export const createReservation = async (req, res) => {
+  try {
+    const shop = await activeShop(req.params.publicId);
+    if (!shop) return notFound(res);
+
+    const productId = parseId(req.params.productId);
+    const product = productId ? await ShopProduct.getPublic(productId, shop.userId) : null;
+    if (!product) return notFound(res);
+    if (!product.isReservable) {
+      return res.status(409).json({ error: '이 상품은 지금 예약을 받지 않아요.' });
+    }
+
+    const { value, errors } = validateReservationInput(req.body);
+    if (errors) return res.status(400).json({ error: Object.values(errors)[0], fields: errors });
+
+    const { reservation, duplicate } = await ShopReservation.create(shop.userId, {
+      productId: product.id,
+      productTitle: product.title,
+      ...value
+    });
+    res.status(duplicate ? 200 : 201).json({ reservation: toPublicReservation(reservation), duplicate });
+  } catch (error) {
+    console.error('공개 상점 예약 오류:', error?.message || error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
   }
 };

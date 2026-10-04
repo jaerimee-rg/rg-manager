@@ -27,6 +27,7 @@ import {
   PUBLIC_SHOP_READ_MAX,
   PUBLIC_SHOP_TRACK_MAX,
   PUBLIC_SHOP_TRACK_IP_MAX,
+  PUBLIC_SHOP_RESERVE_IP_MAX,
   visitorKeyGenerator
 } from './utils/rateLimits.js';
 import notificationRoutes from './routes/notifications.js';
@@ -152,6 +153,15 @@ const publicShopTrackIpLimiter = rateLimit({
   legacyHeaders: false
 });
 
+const publicShopReserveLimiter = rateLimit({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: PUBLIC_SHOP_RESERVE_IP_MAX,
+  message: { error: '예약 요청이 너무 많아요. 잠시 후 다시 시도해 주세요.' },
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 // HTTPS 리다이렉션 (프로덕션)
 if (process.env.NODE_ENV === 'production') {
   app.use((req, res, next) => {
@@ -176,6 +186,8 @@ app.post('/api/chat/public/:publicId/messages', publicChatWriteLimiter);
 app.use('/api/chat/public', publicChatReadLimiter);
 app.use('/api/shop/public', (req, res, next) => {
   if (req.method === 'GET') return publicShopReadLimiter(req, res, next);
+  // 예약 요청은 따로, 더 엄격하게 (선생님이 손으로 처리할 행이 생긴다)
+  if (/\/reservations\/?$/.test(req.path)) return publicShopReserveLimiter(req, res, next);
   // 방문·클릭 기록: 방문자 기준 + IP 기준 두 칸을 모두 통과해야 한다
   return publicShopTrackIpLimiter(req, res, () => publicShopTrackLimiter(req, res, next));
 });

@@ -18,6 +18,9 @@ export const PUBLIC_SHOP_TRACK_MAX = 120;
 // visitorKey 는 브라우저가 보내는 값이라 바꿔 가며 보내면 칸이 계속 새로 생긴다.
 // 기록 경로에는 IP(서브넷) 기준 상한을 하나 더 건다 — 같은 와이파이의 학부모 여럿이 써도 넉넉한 값.
 export const PUBLIC_SHOP_TRACK_IP_MAX = 600;
+// 예약 요청은 선생님 목록에 사람 손으로 처리할 행이 쌓이므로 훨씬 엄격하게, IP(서브넷) 기준으로 센다.
+// 같은 와이파이의 학부모 몇 명이 몇 개씩 예약해도 넉넉한 값.
+export const PUBLIC_SHOP_RESERVE_IP_MAX = 20;
 
 // 클라이언트 폴링 주기와 맞물린 값이라 함께 관리한다 (client/src/pages/PublicChat.jsx).
 export const PUBLIC_CHAT_POLL_INTERVAL_MS = 12000;

@@ -358,6 +358,7 @@ function App() {
           <Route path="/faq/manage" element={<ProtectedRoute><FaqList initialTab="faq" /></ProtectedRoute>} />
           <Route path="/faq/files" element={<ProtectedRoute><FaqList initialTab="files" /></ProtectedRoute>} />
           <Route path="/products" element={<ProtectedRoute><ShopManager /></ProtectedRoute>} />
+          <Route path="/products/reservations" element={<ProtectedRoute><ShopManager initialTab="reservations" /></ProtectedRoute>} />
           <Route path="/products/stats" element={<ProtectedRoute><ShopManager initialTab="stats" /></ProtectedRoute>} />
           <Route path="/products/settings" element={<ProtectedRoute><ShopManager initialTab="settings" /></ProtectedRoute>} />
           <Route path="/chat/:publicId" element={<PublicChat />} />

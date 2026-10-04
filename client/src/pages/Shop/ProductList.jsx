@@ -17,6 +17,7 @@ export function ProductItem({ product, subtitle }) {
         <div className="ui-list-row__title" style={{ whiteSpace: 'normal', wordBreak: 'keep-all' }}>
           {product.title}
           {hidden && <> <Badge tone="neutral">숨김</Badge></>}
+          {product.isReservable && <> <Badge tone="brand">예약</Badge></>}
         </div>
         <div className="ui-list-row__subtitle">{subtitle}</div>
       </div>
@@ -29,7 +30,9 @@ const subtitleOf = (product) => {
   const host = hostnameOf(product.url);
   const link = host || (
     <span className="ui-text-subtle">
-      {photos ? '링크 없음 — 상세에서 사진만 보여요' : '링크 없음 — 누를 수 없는 카드'}
+      {product.isReservable
+        ? '링크 없음 — 상세에서 예약을 받아요'
+        : photos ? '링크 없음 — 상세에서 사진만 보여요' : '링크 없음 — 누를 수 없는 카드'}
     </span>
   );
   return photos > 1 ? <>{link} · 사진 {photos}장</> : link;

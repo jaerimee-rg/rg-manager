@@ -3,7 +3,9 @@ import {
   toPublicCategory,
   toPublicProduct,
   toTeacherShop,
-  toTeacherProduct
+  toTeacherProduct,
+  toTeacherReservation,
+  toPublicReservation
 } from '../shopSerializer.js';
 
 // DB 행에 있을 수 있는 모든 컬럼 — 공개 응답으로 새면 안 되는 것들이 섞여 있다
@@ -42,10 +44,16 @@ const SHOP_ROW = {
 };
 
 describe('공개 응답 화이트리스트 (FR-435 · 461)', () => {
-  it('상품은 화면에 필요한 7개 필드만 나간다', () => {
+  it('상품은 화면에 필요한 8개 필드만 나간다', () => {
     expect(Object.keys(toPublicProduct(PRODUCT_ROW, IMAGE_ROWS)).sort()).toEqual(
-      ['categoryId', 'description', 'id', 'images', 'price', 'title', 'url']
+      ['categoryId', 'description', 'id', 'images', 'isReservable', 'price', 'title', 'url']
     );
+  });
+
+  it('예약 받기는 켜 둔 상품만 true — 옛 행(칸 없음)은 false', () => {
+    expect(toPublicProduct({ ...PRODUCT_ROW, isReservable: true }).isReservable).toBe(true);
+    expect(toPublicProduct({ ...PRODUCT_ROW, isReservable: false }).isReservable).toBe(false);
+    expect(toPublicProduct(PRODUCT_ROW).isReservable).toBe(false);
   });
 
   it('사진은 순서대로 주소만 — 저장소 경로·사진 id 는 나가지 않는다', () => {
@@ -71,7 +79,7 @@ describe('공개 응답 화이트리스트 (FR-435 · 461)', () => {
 
   it('빈 값은 null 로 맞춘다', () => {
     expect(toPublicProduct({ id: 1, title: '곤봉' })).toEqual({
-      id: 1, title: '곤봉', description: null, url: null, images: [], price: null, categoryId: null
+      id: 1, title: '곤봉', description: null, url: null, images: [], price: null, categoryId: null, isReservable: false
     });
   });
 });
@@ -96,5 +104,39 @@ describe('선생님 화면용 직렬화', () => {
     expect(out.imageUrl).toBe('https://cdn/1.jpg');
     expect(out.description).toBe('6m 리본\n막대 포함');
     expect(toTeacherProduct(PRODUCT_ROW).imageUrl).toBeNull();
+  });
+});
+
+describe('예약 직렬화 (05-reservations.md)', () => {
+  const ROW = {
+    id: 3, userId: 9, productId: 12, productTitle: '리본', imageUrl: 'https://cdn/1.jpg',
+    name: '김예림', phone: '010-1234-5678', reservedDate: '2026-10-10', status: 'requested',
+    createdAt: '2026-10-04T01:00:00.000Z', updatedAt: '2026-10-04T01:00:00.000Z'
+  };
+
+  it('선생님에게는 이름·전화번호까지 — 선생님 id 는 빼고', () => {
+    expect(toTeacherReservation(ROW)).toEqual({
+      id: 3, productId: 12, productTitle: '리본', imageUrl: 'https://cdn/1.jpg',
+      name: '김예림', phone: '010-1234-5678', reservedDate: '2026-10-10', status: 'requested',
+      createdAt: '2026-10-04T01:00:00.000Z', updatedAt: '2026-10-04T01:00:00.000Z'
+    });
+  });
+
+  it('상품이 지워진 예약은 productId·사진이 null', () => {
+    const out = toTeacherReservation({ ...ROW, productId: null, imageUrl: undefined });
+    expect(out.productId).toBeNull();
+    expect(out.imageUrl).toBeNull();
+    expect(out.productTitle).toBe('리본');
+  });
+
+  it('학부모에게 되돌려 주는 것은 날짜·상태뿐 — 이름·전화번호·id 는 나가지 않는다', () => {
+    expect(toPublicReservation(ROW)).toEqual({ reservedDate: '2026-10-10', status: 'requested' });
+  });
+});
+
+describe('선생님 상품의 예약 받기', () => {
+  it('켜 둔 상품만 true', () => {
+    expect(toTeacherProduct({ ...PRODUCT_ROW, isReservable: true }).isReservable).toBe(true);
+    expect(toTeacherProduct(PRODUCT_ROW).isReservable).toBe(false);
   });
 });

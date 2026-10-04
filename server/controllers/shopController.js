@@ -6,6 +6,7 @@ import ShopCategory from '../models/ShopCategory.js';
 import ShopProduct from '../models/ShopProduct.js';
 import ShopProductImage from '../models/ShopProductImage.js';
 import ShopEvent from '../models/ShopEvent.js';
+import ShopReservation from '../models/ShopReservation.js';
 import { getOrCreateShop } from '../services/shopService.js';
 import {
   validateProductInput,
@@ -19,7 +20,8 @@ import {
   MAX_CATEGORIES,
   MAX_PRODUCT_IMAGES
 } from '../utils/shopValidation.js';
-import { toTeacherShop, toTeacherProduct, toTeacherCategory } from '../utils/shopSerializer.js';
+import { toTeacherShop, toTeacherProduct, toTeacherCategory, toTeacherReservation } from '../utils/shopSerializer.js';
+import { isReservationStatus } from '../utils/shopReservation.js';
 import { rankProducts, sumByCategory, toSummary } from '../utils/shopStats.js';
 import { MAX_FILE_BYTES, lookupType, sanitizeFilename, toStorageSafeName } from '../utils/faqFileTypes.js';
 import { uploadFile, deleteFile, isStorageConfigured } from '../utils/storage.js';
@@ -55,11 +57,16 @@ const checkCategory = async (categoryId, userId) =>
 export const getShop = async (req, res) => {
   try {
     const shop = await getOrCreateShop(req.user.id);
-    const categories = await ShopCategory.listByUser(req.user.id);
+    const [categories, requestedReservations] = await Promise.all([
+      ShopCategory.listByUser(req.user.id),
+      ShopReservation.countRequested(req.user.id)
+    ]);
     res.json({
       shop: toTeacherShop(shop),
       categories: categories.map(toTeacherCategory),
-      storageReady: isStorageConfigured()
+      storageReady: isStorageConfigured(),
+      // 예약 탭 옆 숫자 — 아직 확정·취소하지 않은 요청
+      requestedReservations
     });
   } catch (error) {
     return serverError(res, '상점 조회', error);
@@ -105,7 +112,8 @@ export const createProduct = async (req, res) => {
     const product = await ShopProduct.create(req.user.id, {
       ...value,
       description: value.description ?? null,
-      isVisible: value.isVisible ?? true
+      isVisible: value.isVisible ?? true,
+      isReservable: value.isReservable ?? false
     });
     res.status(201).json({ product: toTeacherProduct(product, []) });
   } catch (error) {
@@ -130,7 +138,9 @@ export const updateProduct = async (req, res) => {
     const product = await ShopProduct.update(id, req.user.id, {
       ...value,
       description: value.description === undefined ? existing.description ?? null : value.description,
-      isVisible: value.isVisible ?? existing.isVisible !== false
+      isVisible: value.isVisible ?? existing.isVisible !== false,
+      // 예약 받기도 주지 않으면 그대로 — 이 칸이 없던 화면이 저장해도 꺼지지 않게
+      isReservable: value.isReservable ?? existing.isReservable === true
     });
     res.json({ product: await withImagesOne(product) });
   } catch (error) {
@@ -359,6 +369,36 @@ export const reorderCategories = async (req, res) => {
     res.json({ ok: true });
   } catch (error) {
     return serverError(res, '카테고리 순서', error);
+  }
+};
+
+// ── 예약 ──────────────────────────────────────────────────────────
+
+const reservationNotFound = (res) => res.status(404).json({ error: '예약을 찾을 수 없습니다.' });
+
+export const listReservations = async (req, res) => {
+  try {
+    const reservations = await ShopReservation.listByUser(req.user.id);
+    res.json({ reservations: reservations.map(toTeacherReservation) });
+  } catch (error) {
+    return serverError(res, '예약 목록', error);
+  }
+};
+
+/** 요청 · 확정 · 취소 사이를 자유롭게 오간다(잘못 누른 것을 되돌릴 수 있게) */
+export const setReservationStatus = async (req, res) => {
+  try {
+    const id = parseId(req.params.id);
+    if (!id) return reservationNotFound(res);
+    if (!isReservationStatus(req.body?.status)) {
+      return res.status(400).json({ error: '예약 상태가 올바르지 않아요.' });
+    }
+
+    const reservation = await ShopReservation.setStatus(id, req.user.id, req.body.status);
+    if (!reservation) return reservationNotFound(res);
+    res.json({ reservation: toTeacherReservation(reservation) });
+  } catch (error) {
+    return serverError(res, '예약 상태 변경', error);
   }
 };
 

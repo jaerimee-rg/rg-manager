@@ -10,12 +10,18 @@ import {
 import ProductList from './ProductList';
 import ProductFormModal from './ProductFormModal';
 import ShopStats from './ShopStats';
+import ShopReservations from './ShopReservations';
 import ShopSettings from './ShopSettings';
 
-const TAB_PATHS = { products: '/products', stats: '/products/stats', settings: '/products/settings' };
+const TAB_PATHS = {
+  products: '/products',
+  reservations: '/products/reservations',
+  stats: '/products/stats',
+  settings: '/products/settings'
+};
 
 /**
- * 선생님 — 추천 상품 (docs/recommended-shop). 상품 · 통계 · 설정 탭.
+ * 선생님 — 추천 상품 (docs/recommended-shop). 상품 · 예약 · 통계 · 설정 탭.
  * 상점은 처음 들어올 때 서버가 만든다(GET /api/shop). 공개 링크 카드는 탭과 상관없이 맨 위에 둔다.
  */
 function ShopManager({ initialTab = 'products' }) {
@@ -25,6 +31,7 @@ function ShopManager({ initialTab = 'products' }) {
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [storageReady, setStorageReady] = useState(true);
+  const [requestedReservations, setRequestedReservations] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -49,6 +56,7 @@ function ShopManager({ initialTab = 'products' }) {
     setShop(data.shop);
     setCategories(data.categories || []);
     setStorageReady(data.storageReady !== false);
+    setRequestedReservations(data.requestedReservations || 0);
   };
 
   const loadProducts = async () => {
@@ -211,6 +219,8 @@ function ShopManager({ initialTab = 'products' }) {
         onChange={changeTab}
         items={[
           { id: 'products', label: '상품', count: products.length },
+          // 숫자는 아직 확정·취소하지 않은 요청만 — 없으면 붙이지 않는다
+          { id: 'reservations', label: '예약', count: requestedReservations || undefined },
           { id: 'stats', label: '통계' },
           { id: 'settings', label: '설정' }
         ]}
@@ -227,6 +237,9 @@ function ShopManager({ initialTab = 'products' }) {
           onMove={move}
           onReorder={reorder}
         />
+      )}
+      {tab === 'reservations' && (
+        <ShopReservations onRequestedChange={setRequestedReservations} showToast={showToast} />
       )}
       {tab === 'stats' && <ShopStats onCopyLink={copyLink} />}
       {tab === 'settings' && (

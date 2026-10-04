@@ -916,6 +916,34 @@ const initDatabase = async () => {
       'CREATE INDEX IF NOT EXISTS idx_shop_product_images_product ON shop_product_images ("productId", "sortOrder", id)'
     );
 
+    // 3차 (docs/recommended-shop/05-reservations.md) — 상품 예약.
+    // 선생님이 상품마다 "예약 받기"를 켜면 공개 상점 상세에 [예약하기]가 생긴다.
+    await client.query(
+      'ALTER TABLE shop_products ADD COLUMN IF NOT EXISTS "isReservable" BOOLEAN NOT NULL DEFAULT FALSE'
+    );
+
+    // 상품이 지워져도 예약 기록은 남는다(상품 칸만 비고, 그때의 상품 이름을 함께 적어 둔다).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS shop_reservations (
+        id SERIAL PRIMARY KEY,
+        "userId" INTEGER NOT NULL,
+        "productId" INTEGER,
+        "productTitle" TEXT NOT NULL,
+        name TEXT NOT NULL,
+        phone TEXT NOT NULL,
+        "reservedDate" TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'requested' CHECK (status IN ('requested', 'confirmed', 'cancelled')),
+        "createdAt" TEXT NOT NULL,
+        "updatedAt" TEXT NOT NULL,
+        FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY ("productId") REFERENCES shop_products(id) ON DELETE SET NULL
+      )
+    `);
+
+    await client.query(
+      'CREATE INDEX IF NOT EXISTS idx_shop_reservations_user ON shop_reservations ("userId", "createdAt" DESC)'
+    );
+
     // 1차의 상품당 사진 1장(shop_products."imagePath")을 사진 표로 옮기고 옛 칸을 비운다.
     // 옮기기와 비우기가 한 문장이라 두 번 돌아도 겹치지 않고, 나중에 사진을 지워도 되살아나지 않는다.
     await client.query(`

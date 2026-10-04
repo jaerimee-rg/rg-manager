@@ -26,9 +26,12 @@ const CLUBS = {
 
 const respond = (status, body) => Promise.resolve({ ok: status < 300, status, json: () => Promise.resolve(body) });
 
-const route = (products = PRODUCTS) => (url, options = {}) => {
+const route = (products = PRODUCTS, requestedReservations = 0) => (url, options = {}) => {
   const method = options.method || 'GET';
-  if (url === '/api/shop' && method === 'GET') return respond(200, { shop: SHOP, categories: CATEGORIES, storageReady: true });
+  if (url === '/api/shop' && method === 'GET') {
+    return respond(200, { shop: SHOP, categories: CATEGORIES, storageReady: true, requestedReservations });
+  }
+  if (url === '/api/shop/reservations' && method === 'GET') return respond(200, { reservations: [] });
   if (url === '/api/shop/products' && method === 'GET') return respond(200, { products });
   return respond(200, { ok: true });
 };
@@ -253,5 +256,54 @@ describe('ShopManager — 상품 탭', () => {
       render(<MemoryRouter><ShopManager /></MemoryRouter>);
     });
     expect(screen.getByText(/추천 상품을 불러오지 못했어요/)).toBeInTheDocument();
+  });
+});
+
+describe('ShopManager — 예약 탭', () => {
+  const renderWith = async (requested, props = {}) => {
+    fetchWithAuth.mockImplementation(route(PRODUCTS, requested));
+    await act(async () => {
+      render(
+        <MemoryRouter>
+          <ShopManager {...props} />
+        </MemoryRouter>
+      );
+    });
+  };
+
+  it('상품 다음에 예약 탭 — 처리 전 요청이 있으면 숫자를 붙인다', async () => {
+    await renderWith(2);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['상품 (3)', '예약 (2)', '통계', '설정']);
+  });
+
+  it('예약을 받는 상품은 상품 표에 "예약" 배지가 붙는다', async () => {
+    fetchWithAuth.mockImplementation(route([{ ...PRODUCTS[0], isReservable: true }, PRODUCTS[1]]));
+    await act(async () => {
+      render(<MemoryRouter><ShopManager /></MemoryRouter>);
+    });
+    expect(within(rowOf('사사키 리본')).getByText('예약')).toBeInTheDocument();
+    expect(within(rowOf('연습용 발레복')).queryByText('예약')).not.toBeInTheDocument();
+  });
+
+  it('링크·사진이 없어도 예약을 받으면 "누를 수 없는 카드" 가 아니라 예약을 받는다고 알려 준다', async () => {
+    fetchWithAuth.mockImplementation(route([{ ...PRODUCTS[2], isReservable: true }]));
+    await act(async () => {
+      render(<MemoryRouter><ShopManager /></MemoryRouter>);
+    });
+    expect(within(rowOf('스타킹')).getByText('링크 없음 — 상세에서 예약을 받아요')).toBeInTheDocument();
+  });
+
+  it('처리 전 요청이 없으면 숫자 없이', async () => {
+    await renderWith(0);
+    expect(screen.getByRole('tab', { name: '예약' })).toBeInTheDocument();
+  });
+
+  it('/products/reservations 로 들어오면 예약 탭이 열려 목록을 부른다', async () => {
+    await renderWith(0, { initialTab: 'reservations' });
+    expect(screen.getByRole('tab', { name: '예약' })).toHaveAttribute('aria-selected', 'true');
+    expect(fetchWithAuth.mock.calls.map((c) => c[0])).toContain('/api/shop/reservations');
+    expect(screen.getByText('아직 예약 요청이 없어요')).toBeInTheDocument();
+    // 상품 탭이 아니면 [+ 상품] 버튼은 없다
+    expect(screen.queryByRole('button', { name: '상품' })).not.toBeInTheDocument();
   });
 });
