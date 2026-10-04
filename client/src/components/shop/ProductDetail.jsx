@@ -7,12 +7,13 @@ import ReservationForm, { ReservationDone } from './ReservationForm';
 const EMPTY_DRAFT = { name: '', phone: '', date: '' };
 
 /**
- * 공개 상점의 상품 상세 — 모바일은 바텀시트, 데스크톱은 가운데 넓은 모달.
+ * 공개 상점의 상품 상세 — 모바일은 바텀시트(끌어내려 닫는다), 데스크톱은 가운데 넓은 모달.
  * 사진(캐러셀) · 카테고리 · 타이틀 · 상세 설명 · 가격 · [예약하기] · [쇼핑몰에서 보기].
  * 클릭 통계는 쇼핑몰 버튼을 누른 것만 센다(상세를 연 것은 세지 않는다). onOpenLink 는 이동을 막지 않는다.
  *
  * 선생님이 예약을 받는 상품이면 아래에 [예약하기]가 생기고, 누르면 같은 창 안에서 예약 폼으로 바뀐다.
  * 예약 폼에서 Esc·바깥 누르기는 창을 닫지 않고 상품으로 돌아간다(쓰던 입력을 잃지 않게).
+ * 같은 이유로 끌어내려 닫기도 예약 폼에서는 끈다 — 상품 상세와 보낸 뒤 확인 화면에서만 된다.
  */
 function ProductDetail({ product, categoryName, publicId, onClose, onOpenLink }) {
   const [step, setStep] = useState('detail'); // detail | reserve | done
@@ -99,6 +100,7 @@ function ProductDetail({ product, categoryName, publicId, onClose, onOpenLink })
       className="shop-detail-overlay"
       data-step={step}
       labelledBy="shop-detail-title"
+      swipeToClose={step !== 'reserve'}
       onClose={handleClose}
     >
       <IconButton className="shop-detail__close" icon="x" label="닫기" size="sm" onClick={onClose} />
