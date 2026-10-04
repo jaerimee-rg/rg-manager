@@ -8,8 +8,9 @@ import {
   setProductVisibility,
   deleteProduct,
   reorderProducts,
-  uploadProductImage,
+  addProductImage,
   deleteProductImage,
+  reorderProductImages,
   listCategories,
   createCategory,
   renameCategory,
@@ -44,8 +45,9 @@ router.put('/products/order', verifyToken, reorderProducts);
 router.put('/products/:id', verifyToken, logAction('UPDATE_SHOP_PRODUCT'), updateProduct);
 router.patch('/products/:id/visibility', verifyToken, logAction('UPDATE_SHOP_PRODUCT'), setProductVisibility);
 router.delete('/products/:id', verifyToken, logAction('DELETE_SHOP_PRODUCT'), deleteProduct);
-router.post('/products/:id/image', verifyToken, rawBody, logAction('UPLOAD_SHOP_IMAGE'), uploadProductImage);
-router.delete('/products/:id/image', verifyToken, deleteProductImage);
+router.post('/products/:id/images', verifyToken, rawBody, logAction('UPLOAD_SHOP_IMAGE'), addProductImage);
+router.put('/products/:id/images/order', verifyToken, reorderProductImages);
+router.delete('/products/:id/images/:imageId', verifyToken, logAction('DELETE_SHOP_IMAGE'), deleteProductImage);
 
 router.get('/categories', verifyToken, listCategories);
 router.post('/categories', verifyToken, logAction('CREATE_SHOP_CATEGORY'), createCategory);

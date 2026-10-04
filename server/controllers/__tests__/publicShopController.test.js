@@ -9,6 +9,9 @@ jest.unstable_mockModule('../../models/ShopCategory.js', () => ({
 jest.unstable_mockModule('../../models/ShopProduct.js', () => ({
   default: { listPublic: jest.fn(), getClickable: jest.fn() }
 }));
+jest.unstable_mockModule('../../models/ShopProductImage.js', () => ({
+  default: { listByProducts: jest.fn() }
+}));
 jest.unstable_mockModule('../../models/ShopEvent.js', () => ({
   default: { recordView: jest.fn(), recordClick: jest.fn() }
 }));
@@ -16,6 +19,7 @@ jest.unstable_mockModule('../../models/ShopEvent.js', () => ({
 const Shop = (await import('../../models/Shop.js')).default;
 const ShopCategory = (await import('../../models/ShopCategory.js')).default;
 const ShopProduct = (await import('../../models/ShopProduct.js')).default;
+const ShopProductImage = (await import('../../models/ShopProductImage.js')).default;
 const ShopEvent = (await import('../../models/ShopEvent.js')).default;
 const { getPublicShop, recordView, recordClick } = await import('../publicShopController.js');
 
@@ -57,9 +61,16 @@ describe('GET /api/shop/public/:publicId — 로그인 없이 연다', () => {
   it('공개 상품만, 화이트리스트 필드로, 공개 상품이 있는 카테고리만 내려준다', async () => {
     Shop.getByPublicId.mockResolvedValue(SHOP);
     ShopProduct.listPublic.mockResolvedValue([
-      { id: 12, userId: 9, title: '리본', url: 'https://a.com', imageUrl: null, imagePath: 'shop/9/x', price: 32000, categoryId: 3, isVisible: true, sortOrder: 0 },
-      { id: 5, userId: 9, title: '곤봉', url: null, imageUrl: null, imagePath: null, price: null, categoryId: null, isVisible: true, sortOrder: 1 }
+      { id: 12, userId: 9, title: '리본', description: '6m\n막대 포함', url: 'https://a.com', imageUrl: null, imagePath: null, price: 32000, categoryId: 3, isVisible: true, sortOrder: 0 },
+      { id: 5, userId: 9, title: '곤봉', description: null, url: null, imageUrl: null, imagePath: null, price: null, categoryId: null, isVisible: true, sortOrder: 1 }
     ]);
+    // 사진은 순서대로 — 주소만 나가고 저장소 경로·사진 id 는 나가지 않는다
+    ShopProductImage.listByProducts.mockResolvedValue(new Map([
+      [12, [
+        { id: 7, productId: 12, userId: 9, imagePath: 'shop/9/a/1.jpg', imageUrl: 'https://cdn/1.jpg', sortOrder: 0 },
+        { id: 8, productId: 12, userId: 9, imagePath: 'shop/9/b/2.jpg', imageUrl: 'https://cdn/2.jpg', sortOrder: 1 }
+      ]]
+    ]));
     ShopCategory.listByUser.mockResolvedValue([
       { id: 1, name: '발레복', userId: 9 },
       { id: 3, name: '기구', userId: 9 }
@@ -73,10 +84,14 @@ describe('GET /api/shop/public/:publicId — 로그인 없이 연다', () => {
       shop: { title: '추천', intro: '소개', notice: '고지' },
       categories: [{ id: 3, name: '기구' }],
       products: [
-        { id: 12, title: '리본', url: 'https://a.com', imageUrl: null, price: 32000, categoryId: 3 },
-        { id: 5, title: '곤봉', url: null, imageUrl: null, price: null, categoryId: null }
+        {
+          id: 12, title: '리본', description: '6m\n막대 포함', url: 'https://a.com',
+          images: ['https://cdn/1.jpg', 'https://cdn/2.jpg'], price: 32000, categoryId: 3
+        },
+        { id: 5, title: '곤봉', description: null, url: null, images: [], price: null, categoryId: null }
       ]
     });
+    expect(ShopProductImage.listByProducts).toHaveBeenCalledWith([12, 5]);
   });
 });
 

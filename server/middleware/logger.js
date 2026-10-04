@@ -136,6 +136,8 @@ const saveLog = async (req, action, target, responseData) => {
       details = `상품 ID: ${req.params.id}`;
     } else if (action === 'UPLOAD_SHOP_IMAGE' && responseData?.product) {
       details = `상품 이미지: ${responseData.product.title}`;
+    } else if (action === 'DELETE_SHOP_IMAGE' && responseData?.product) {
+      details = `상품 이미지 삭제: ${responseData.product.title}`;
     } else if (action === 'UPDATE_SHOP' && req.body) {
       details = `상점: ${req.body.title}${req.body.isActive === false ? ' (비공개)' : ''}`;
     } else if ((action === 'CREATE_SHOP_CATEGORY' || action === 'UPDATE_SHOP_CATEGORY') && responseData?.category) {

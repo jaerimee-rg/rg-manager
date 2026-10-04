@@ -2,6 +2,7 @@ import {
   normalizeUrl,
   parsePrice,
   parseId,
+  parseDescription,
   validateProductInput,
   validateCategoryName,
   validateShopSettings,
@@ -12,7 +13,8 @@ import {
   defaultShopTitle,
   URL_ERROR,
   TITLE_MAX,
-  PRICE_MAX
+  PRICE_MAX,
+  DESCRIPTION_MAX
 } from '../shopValidation.js';
 
 describe('normalizeUrl — 상품 주소는 http/https 만 받는다', () => {
@@ -88,10 +90,37 @@ describe('parseId', () => {
   });
 });
 
+describe('parseDescription — 상세 설명', () => {
+  it.each([
+    [undefined, null],
+    [null, null],
+    ['', null],
+    ['  \n  ', null]
+  ])('%j 는 비운 것(null)', (raw, expected) => {
+    expect(parseDescription(raw)).toEqual({ value: expected });
+  });
+
+  it('앞뒤 공백은 지우고 줄바꿈은 지킨다 (\\r\\n → \\n)', () => {
+    expect(parseDescription('  6m 리본\r\n\r\n막대 포함 ')).toEqual({ value: '6m 리본\n\n막대 포함' });
+  });
+
+  it('1000자는 되고 1001자는 안 된다', () => {
+    expect(parseDescription('a'.repeat(DESCRIPTION_MAX))).toEqual({ value: 'a'.repeat(DESCRIPTION_MAX) });
+    expect(parseDescription('a'.repeat(DESCRIPTION_MAX + 1)).error).toMatch(/1000자/);
+  });
+});
+
 describe('validateProductInput — 필수는 타이틀뿐', () => {
+  it('설명을 보내면 정리하고, 빈 설명은 null(지우기) — 안 보내면 undefined(수정에서 기존 값을 지킴)', () => {
+    expect(validateProductInput({ title: '리본', description: ' 막대 포함 ' }).value.description).toBe('막대 포함');
+    expect(validateProductInput({ title: '리본', description: '' }).value.description).toBeNull();
+    expect(validateProductInput({ title: '리본' }).value.description).toBeUndefined();
+    expect(validateProductInput({ title: '리본', description: 'a'.repeat(1001) }).errors).toHaveProperty('description');
+  });
+
   it('타이틀만 있으면 통과하고 나머지는 비운다 — 공개 여부는 정하지 않는다(등록은 공개, 수정은 기존 값)', () => {
     expect(validateProductInput({ title: '  곤봉  ' })).toEqual({
-      value: { title: '곤봉', url: null, price: null, categoryId: null, isVisible: undefined },
+      value: { title: '곤봉', description: undefined, url: null, price: null, categoryId: null, isVisible: undefined },
       errors: null
     });
   });
@@ -105,7 +134,7 @@ describe('validateProductInput — 필수는 타이틀뿐', () => {
       isVisible: false
     });
     expect(errors).toBeNull();
-    expect(value).toEqual({ title: '리본', url: 'https://coupang.com/x', price: 32000, categoryId: 3, isVisible: false });
+    expect(value).toEqual({ title: '리본', description: undefined, url: 'https://coupang.com/x', price: 32000, categoryId: 3, isVisible: false });
   });
 
   it.each([[''], ['   '], [undefined]])('타이틀 %j 는 거절', (title) => {

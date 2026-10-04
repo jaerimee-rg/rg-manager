@@ -13,11 +13,13 @@ export const toPublicCategory = (category) => ({
   name: category.name
 });
 
-export const toPublicProduct = (product) => ({
+/** images: 그 상품의 사진 행(순서대로). 공개 응답에는 주소만 — 저장소 경로·id 는 나가지 않는다 */
+export const toPublicProduct = (product, images = []) => ({
   id: product.id,
   title: product.title,
+  description: product.description ?? null,
   url: product.url ?? null,
-  imageUrl: product.imageUrl ?? null,
+  images: images.map((image) => image.imageUrl),
   price: product.price ?? null,
   categoryId: product.categoryId ?? null
 });
@@ -32,14 +34,21 @@ export const toTeacherShop = (shop) => ({
   isActive: shop.isActive !== false
 });
 
-/** 선생님 화면용 상품 — 저장소 경로(imagePath)는 서버에만 둔다 */
-export const toTeacherProduct = (product) => ({
+export const toTeacherImage = (image) => ({ id: image.id, url: image.imageUrl });
+
+/**
+ * 선생님 화면용 상품 — 저장소 경로(imagePath)는 서버에만 둔다.
+ * imageUrl 은 대표 사진(첫 장) — 목록·통계 썸네일용.
+ */
+export const toTeacherProduct = (product, images = []) => ({
   id: product.id,
   title: product.title,
+  description: product.description ?? null,
   url: product.url ?? null,
   price: product.price ?? null,
   categoryId: product.categoryId ?? null,
-  imageUrl: product.imageUrl ?? null,
+  imageUrl: images[0]?.imageUrl ?? null,
+  images: images.map(toTeacherImage),
   isVisible: product.isVisible !== false,
   sortOrder: product.sortOrder ?? 0,
   clickCount: Number(product.clickCount ?? 0),

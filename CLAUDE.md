@@ -52,8 +52,8 @@ Client and server have **separate** Jest setups and are run from their own direc
 there is no root `package.json`, so there is no one command that runs everything.
 
 ```bash
-cd client && npm test          # jest — 705 tests / 57 suites
-cd server && npm test          # 1022 tests / 51 suites
+cd client && npm test          # jest — 783 tests / 61 suites
+cd server && npm test          # 1042 tests / 51 suites
 ```
 
 - **The server suite is ESM** (`"type": "module"` + `transform: {}`, i.e. no Babel) and only
@@ -487,12 +487,13 @@ the rest of the app is unaffected.
 Design docs and mockups: `docs/recommended-shop/`. A teacher lists products they recommend; parents
 open **one public link `/shop/<publicId>` without logging in**; the teacher sees which links get clicked.
 
-- **Tables** (`shops` 1 per teacher, `shop_categories`, `shop_products`, `shop_events`). `shops.publicId`
-  is `generatePublicId()` (same as the FAQ chat link) and never changes. The shop and the 5 default
+- **Tables** (`shops` 1 per teacher, `shop_categories`, `shop_products`, `shop_product_images`,
+  `shop_events`). `shops.publicId` is `generatePublicId()` (same as the FAQ chat link) and never changes. The shop and the 5 default
   categories (발레복·레오타드·기구·슈즈·용품) are created on the teacher's first `GET /api/shop`
   (`services/shopService.js`, one transaction, `ON CONFLICT ("userId")`). Category names are unique per
   teacher via an expression index (`lower(btrim(name))`) → the API maps pg `23505` to **409**.
-- **Only the title is required.** URL, image, category, price are optional. URLs go through
+- **Only the title is required.** Description (≤1,000 chars, line breaks kept, rendered as plain text), URL,
+  photos, category, price are optional. URLs go through
   `normalizeUrl()` — **http/https only**, a bare `coupang.com/…` gets `https://` — on the server
   (`utils/shopValidation.js`) *and* again at render time on the client (`utils/shopFormat.js:safeHref`).
   The two files hold the same rules and are tested with the same table; change both together.
@@ -500,12 +501,19 @@ open **one public link `/shop/<publicId>` without logging in**; the teacher sees
   `/shop/:publicId` (`pages/PublicShop.jsx`) in `App.jsx`'s **public branch** next to `/chat/` — rendered
   before the auth check, so logged-in teachers/parents see the same standalone page. The two prefixes
   are deliberately different: `/shop/*` would otherwise swallow the teacher's sub-routes.
+  A card opens the **product detail** (`components/shop/ProductDetail.jsx`) via `?p=<id>` (alongside `?c=`):
+  a card click pushes history with `state.shopDetail`, so closing goes `navigate(-1)` (the back button
+  closes it too); a detail opened straight from a link only drops `?p=`. A product with **neither photos
+  nor a URL** stays a non-clickable card. The detail is a bottom sheet on mobile (swipe the photos —
+  scroll-snap — with dots) and a wide modal on desktop (big photo + thumbnail strip, ‹ › and ←/→);
+  same DOM, CSS decides (`ProductGallery.jsx`). `Modal header={false}` lets the photo sit at the top.
 - **API**: `/api/shop/*` is teacher-only (`rejectParents` in `server.js`, except `/api/shop/public/*`).
   Every teacher query is scoped by the token's user id; another teacher's ids return **404**. Public
   responses go through `utils/shopSerializer.js` (a whitelist — a test pins the exact keys), skip
   hidden products, and list only categories that have visible products. A closed shop and an unknown
   `publicId` return the **same 404**.
-- **Click/visit tracking**: the product card is a plain `<a target="_blank">` to the product URL; on click
+- **Click/visit tracking**: the detail's **[○○에서 보기]** button is a plain `<a target="_blank">` to the
+  product URL — opening the detail is **not** counted, only this button is; on click
   `utils/shopTracking.js` fires `navigator.sendBeacon` (fallback `fetch keepalive`) — **values in the
   query string only, no body** — so navigation never waits. The server counts a click only for a visible
   product with a URL, ignores the same `visitorKey` on the same product within **10 s**, and counts a
@@ -513,17 +521,40 @@ open **one public link `/shop/<publicId>` without logging in**; the teacher sees
   have their own limiters and are skipped by `apiLimiter`; the view/click endpoints must pass **both** a
   per-`visitorKey` limit and a per-IP limit (`PUBLIC_SHOP_TRACK_IP_MAX`), because `visitorKey` is
   client-supplied and could otherwise be rotated to dodge the limit. Middle-click (`auxclick`) counts too.
+- **Product order** (teacher list, `pages/Shop/ProductList.jsx`): drag the row's grip handle (pointer events, so
+  mouse **and** touch — `touch-action: none` on the handle), ▲▼, or ↑↓ on the focused handle; all go through
+  `ShopManager.reorder(from, to)` → `PUT /api/shop/products/order`. The landing slot is computed from the other
+  rows' midpoints (`utils/reorder.js:dropIndex/dropMarker`); the dragged row is clamped inside the list and
+  edge auto-scroll stops once the list's end is on screen (a transformed row past the end grows the page, and
+  auto-scroll used to run away on phones). Disabled while searching/filtering. `DataTable rowProps` puts the
+  per-row data/style on `<tr>`.
 - **Hidden stays hidden**: `PUT /api/shop/products/:id` without `isVisible` keeps the current value
   (create defaults to visible) — a client that omits the field must not silently re-publish a product.
 - **Stats** (`GET /api/shop/stats?days=7|30|90|all`) rank products by clicks (ties share a rank,
   products without a URL have no rank), include zero-click and hidden products, and sum by category.
   Deleting a product deletes its clicks (FK cascade); hiding keeps them — the UI says so.
-- **Images** reuse the FAQ upload path: raw bytes, extension decides the MIME (no SVG), 4 MB, stored in
-  the existing bucket under `shop/{userId}/{uuid}/…`. The browser shrinks photos to 1,200 px JPEG first
-  (`utils/imageResize.js`, GIF untouched). The product is saved **before** its image, so a failed upload
-  leaves the product in place with a toast. Without `SUPABASE_SECRET_KEY` the image field shows a notice.
-- **Schema rollout**: four new tables — apply the `server/database.js` DDL to production **before**
-  merging and `ALTER TABLE … OWNER TO rg_app` (see *Deployment*).
+- **Photos** (2차, `docs/recommended-shop/04-images-description.md`): up to **10 per product** in
+  `shop_product_images`; the first is the **main photo** (`imageUrl` in teacher responses = list/stats
+  thumbnail). They reuse the FAQ upload path: raw bytes, extension decides the MIME (no SVG), 4 MB, stored in
+  the existing bucket under `shop/{userId}/{uuid}/…`. API: `POST …/products/:id/images` appends one
+  (locks the product row; **409** when full, the uploaded file is removed), `PUT …/images/order` takes all
+  ids exactly once, `DELETE …/images/:imageId`. Product delete reads the paths first, then deletes files.
+  The legacy single-image columns `shop_products."imagePath"/"imageUrl"` are **moved into the table and
+  cleared by one boot-time statement** — 2차 code never reads them.
+- **Square photos, crop in the browser**: every photo box is square and the photo is absolutely positioned
+  inside it — a tall photo used to stretch its card (247 → 1,318 px) and break price alignment; price/host
+  sit at the card bottom. New photos get **[자르기]** (`pages/Shop/ImageCropper.jsx`: drag + 1–3× zoom,
+  `{x, y, zoom}`); upload crops to a ≤1,200 px **square JPEG** with the same math the preview CSS uses
+  (`utils/imageCrop.js:cropRect` ↔ `cropStyle` — change both together). GIF with an untouched crop is sent
+  as-is. Already-uploaded photos are not re-croppable. The form keeps the list in `utils/productImages.js`
+  (pure) and saves product → deletes → uploads one by one → order; a failed photo leaves the product
+  saved with a toast. The crop view replaces the form inside the same Modal (a nested Modal would close
+  both on one Esc). A copied image pasted anywhere in the open form is **appended**
+  (`utils/clipboardImage.js`) — except text+image pasted into a text box, where the text wins.
+  Without `SUPABASE_SECRET_KEY` the image field shows a notice.
+- **Schema rollout**: 1차 added four tables; 2차 adds `shop_products.description`, `shop_product_images` and
+  the legacy-photo move — apply the `server/database.js` DDL to production **before** merging,
+  `ALTER TABLE … OWNER TO rg_app`, and REVOKE the public-API grants (see *Deployment*).
 
 ### Student-Class Relationship
 
@@ -562,11 +593,18 @@ never the production DB. Three things must line up or almost everything fails in
 
 ```bash
 cd client && npm run build
+cd ../client && node e2e/fake-storage.mjs &                                   # fake Supabase Storage on :5056
 cd ../server && DATABASE_URL=postgresql://<user>@localhost:5432/rg_manager PORT=5055 \
-  JWT_SECRET=local-dev-secret API_RATE_LIMIT_MAX=100000 AUTH_RATE_LIMIT_MAX=100000 node server.js &
+  JWT_SECRET=local-dev-secret API_RATE_LIMIT_MAX=100000 AUTH_RATE_LIMIT_MAX=100000 \
+  SUPABASE_URL=http://localhost:5056 SUPABASE_SECRET_KEY=e2e-fake node server.js &
 cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e:setup   # writes e2e/.sessions.json
-cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 70 tests
+cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 75 tests
 ```
+
+- **The fake storage is optional** — it lets the shop photo tests upload for real (`client/e2e/fake-storage.mjs`
+  mimics the three Storage REST calls `server/utils/storage.js` makes and keeps files in memory; `GET /__files`
+  lists them). Without `SUPABASE_URL`/`SUPABASE_SECRET_KEY` the server reports `storageReady:false` and the
+  three photo tests in `shop.spec.mjs` **skip**. Never point e2e at the real Supabase key.
 
 - **`JWT_SECRET` must be `local-dev-secret`** — that is what `e2e/setup.mjs` defaults to when signing
   the fixture tokens. Any other value makes every request unauthenticated, so every screen redirects

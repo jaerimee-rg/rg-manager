@@ -895,6 +895,49 @@ const initDatabase = async () => {
       `CREATE INDEX IF NOT EXISTS idx_shop_events_product_time ON shop_events ("productId", "createdAt") WHERE type = 'click'`
     );
 
+    // 2차 (docs/recommended-shop/04-images-description.md) — 상세 설명, 상품마다 사진 여러 장
+    await client.query('ALTER TABLE shop_products ADD COLUMN IF NOT EXISTS description TEXT');
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS shop_product_images (
+        id SERIAL PRIMARY KEY,
+        "productId" INTEGER NOT NULL,
+        "userId" INTEGER NOT NULL,
+        "imagePath" TEXT NOT NULL,
+        "imageUrl" TEXT NOT NULL,
+        "sortOrder" INTEGER NOT NULL DEFAULT 0,
+        "createdAt" TEXT NOT NULL,
+        FOREIGN KEY ("productId") REFERENCES shop_products(id) ON DELETE CASCADE,
+        FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    await client.query(
+      'CREATE INDEX IF NOT EXISTS idx_shop_product_images_product ON shop_product_images ("productId", "sortOrder", id)'
+    );
+
+    // 1차의 상품당 사진 1장(shop_products."imagePath")을 사진 표로 옮기고 옛 칸을 비운다.
+    // 옮기기와 비우기가 한 문장이라 두 번 돌아도 겹치지 않고, 나중에 사진을 지워도 되살아나지 않는다.
+    await client.query(`
+      WITH legacy AS (
+        UPDATE shop_products p
+        SET "imagePath" = NULL, "imageUrl" = NULL
+        FROM (
+          SELECT id, "imagePath", "imageUrl", COALESCE("updatedAt", "createdAt") AS at
+          FROM shop_products
+          WHERE "imagePath" IS NOT NULL AND "imageUrl" IS NOT NULL
+        ) prev
+        -- 바깥 조건에도 둔다: 두 인스턴스가 동시에 부팅하면 뒤 문장은 행 잠금을 기다린 뒤 이 조건만 다시 본다
+        WHERE p.id = prev.id AND p."imagePath" IS NOT NULL
+        RETURNING p.id, p."userId", prev."imagePath", prev."imageUrl", prev.at
+      )
+      INSERT INTO shop_product_images ("productId", "userId", "imagePath", "imageUrl", "sortOrder", "createdAt")
+      SELECT l.id, l."userId", l."imagePath", l."imageUrl",
+             COALESCE((SELECT MAX(i."sortOrder") + 1 FROM shop_product_images i WHERE i."productId" = l.id), 0),
+             l.at
+      FROM legacy l
+    `);
+
     // 설정한 적이 없을 때 기존 동작(Gemini)이 그대로 유지되도록 기본값을 채워둔다.
     await client.query(
       `INSERT INTO app_settings (key, value, "updatedAt")

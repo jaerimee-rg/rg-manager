@@ -10,12 +10,15 @@ const cx = (...parts) => parts.filter(Boolean).join(' ');
  *
  * hidden(row) 이 true 면 그 행에서만 칸이 비고, 모바일 카드에서는 줄 자체가 사라진다.
  * (종류에 따라 해당 없는 칸 — 예: 휴관일의 장소·신청 — 을 "—" 로 채우지 않기 위해서다)
+ *
+ * rowProps(row, i) — 행(<tr>)에 붙일 속성(data-* · style 등). 끌어서 순서 바꾸기처럼 행 단위 표시가 필요할 때.
  */
 export function DataTable({
   columns = [],
   rows = [],
   rowKey = (row, i) => row.id ?? i,
   onRowClick,
+  rowProps,
   caption,
   stackOnMobile = true,
   empty,
@@ -43,6 +46,7 @@ export function DataTable({
               key={rowKey(row, i)}
               data-clickable={onRowClick ? 'true' : undefined}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
+              {...(rowProps ? rowProps(row, i) : null)}
             >
               {columns.map((col) => {
                 const blank = col.hidden?.(row) || false;

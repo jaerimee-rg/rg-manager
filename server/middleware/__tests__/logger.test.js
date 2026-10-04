@@ -87,6 +87,15 @@ describe('logAction — 추천 상품 (docs/recommended-shop)', () => {
     expect(params[3]).toBe('상점: 추천 (비공개)');
   });
 
+  it('상품 사진 올리기·빼기는 상품 이름을 남긴다', async () => {
+    let [, params] = await run('UPLOAD_SHOP_IMAGE', { user, body: {} }, { product: { title: '리본' } });
+    expect(params[3]).toBe('상품 이미지: 리본');
+
+    jest.clearAllMocks();
+    [, params] = await run('DELETE_SHOP_IMAGE', { user, params: { id: '12', imageId: '5' }, body: {} }, { product: { title: '리본' } });
+    expect(params[3]).toBe('상품 이미지 삭제: 리본');
+  });
+
   it('카테고리 추가는 이름을 남긴다', async () => {
     const [, params] = await run('CREATE_SHOP_CATEGORY', { user, body: {} }, { category: { name: '수구' } });
     expect(params[3]).toBe('카테고리: 수구');

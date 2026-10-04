@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button, Card, Chip, EmptyState, Skeleton, Toolbar } from '../components/ui';
 import ProductCard from '../components/shop/ProductCard';
+import ProductDetail from '../components/shop/ProductDetail';
 import { trackClick, trackViewOnce } from '../utils/shopTracking';
 
 /**
@@ -11,6 +12,8 @@ import { trackClick, trackViewOnce } from '../utils/shopTracking';
 function PublicShop() {
   const { publicId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [state, setState] = useState({ status: 'loading' });
 
   const load = async () => {
@@ -102,6 +105,25 @@ function PublicShop() {
     setSearchParams(next, { replace: true });
   };
 
+  // 상품 상세는 주소의 ?p= — 뒤로 가기로 닫히고, 그 주소를 보내면 상세가 바로 열린다
+  const detailSearch = (productId) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('p', String(productId));
+    return `?${next.toString()}`;
+  };
+  const openedId = Number(searchParams.get('p'));
+  const opened = products.find((p) => p.id === openedId) || null;
+  const closeDetail = () => {
+    // 카드를 눌러 열었으면 그 기록을 되돌리고, 링크로 바로 들어왔으면 주소에서 ?p= 만 뺀다
+    if (location.state?.shopDetail) {
+      navigate(-1);
+      return;
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete('p');
+    setSearchParams(next, { replace: true });
+  };
+
   return (
     <div className="shop-public">
       <header className="shop-public__header">
@@ -139,7 +161,8 @@ function PublicShop() {
                     key={product.id}
                     product={product}
                     categoryName={names.get(product.categoryId)}
-                    onOpen={(p) => trackClick(publicId, p.id)}
+                    to={detailSearch(product.id)}
+                    state={{ shopDetail: true }}
                   />
                 ))}
               </div>
@@ -148,6 +171,15 @@ function PublicShop() {
           {shop.notice && <p className="shop-public__foot">{shop.notice}</p>}
         </div>
       </main>
+
+      {opened && (
+        <ProductDetail
+          product={opened}
+          categoryName={names.get(opened.categoryId)}
+          onClose={closeDetail}
+          onOpenLink={(p) => trackClick(publicId, p.id)}
+        />
+      )}
     </div>
   );
 }

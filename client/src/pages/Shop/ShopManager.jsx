@@ -114,8 +114,9 @@ function ShopManager({ initialTab = 'products' }) {
     }
   };
 
-  const move = async (index, direction) => {
-    const next = moveItem(products, index, index + direction);
+  // 끌어서 놓기·▲▼·↑↓ 모두 여기로 — 화면을 먼저 바꾸고, 저장이 실패하면 서버 순서로 되돌린다
+  const reorder = async (from, to) => {
+    const next = moveItem(products, from, to);
     if (next === products) return;
     setProducts(next);
     try {
@@ -130,6 +131,7 @@ function ShopManager({ initialTab = 'products' }) {
       loadProducts().catch(() => {});
     }
   };
+  const move = (index, direction) => reorder(index, index + direction);
 
   const confirmDelete = async () => {
     if (!deleting) return;
@@ -223,6 +225,7 @@ function ShopManager({ initialTab = 'products' }) {
           onDelete={setDeleting}
           onToggle={toggleVisibility}
           onMove={move}
+          onReorder={reorder}
         />
       )}
       {tab === 'stats' && <ShopStats onCopyLink={copyLink} />}

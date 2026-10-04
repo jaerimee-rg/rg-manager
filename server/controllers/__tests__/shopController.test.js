@@ -24,7 +24,18 @@ jest.unstable_mockModule('../../models/ShopProduct.js', () => ({
     create: jest.fn(),
     update: jest.fn(),
     setVisibility: jest.fn(),
-    setImage: jest.fn(),
+    touch: jest.fn(),
+    delete: jest.fn(),
+    reorder: jest.fn()
+  }
+}));
+jest.unstable_mockModule('../../models/ShopProductImage.js', () => ({
+  default: {
+    listByProducts: jest.fn(),
+    listByProduct: jest.fn(),
+    listPathsOwned: jest.fn(),
+    countByProduct: jest.fn(),
+    append: jest.fn(),
     delete: jest.fn(),
     reorder: jest.fn()
   }
@@ -47,6 +58,7 @@ jest.unstable_mockModule('../../utils/storage.js', () => ({
 const Shop = (await import('../../models/Shop.js')).default;
 const ShopCategory = (await import('../../models/ShopCategory.js')).default;
 const ShopProduct = (await import('../../models/ShopProduct.js')).default;
+const ShopProductImage = (await import('../../models/ShopProductImage.js')).default;
 const ShopEvent = (await import('../../models/ShopEvent.js')).default;
 const { getOrCreateShop } = await import('../../services/shopService.js');
 const { uploadFile, deleteFile, isStorageConfigured } = await import('../../utils/storage.js');
@@ -70,13 +82,19 @@ const call = async (handler, { params = {}, body = {}, query = {}, user = TEACHE
 };
 
 const SHOP = { id: 1, userId: 9, publicId: 'pub123', title: '이재림 선생님 추천 상품', intro: null, notice: null, isActive: true };
-const PRODUCT = { id: 12, userId: 9, title: '리본', url: 'https://coupang.com/x', price: 32000, categoryId: 3, imagePath: null, imageUrl: null, isVisible: true, sortOrder: 0, clickCount: 4 };
+const PRODUCT = { id: 12, userId: 9, title: '리본', description: null, url: 'https://coupang.com/x', price: 32000, categoryId: 3, imagePath: null, imageUrl: null, isVisible: true, sortOrder: 0, clickCount: 4 };
+const IMAGE = (id, sortOrder = 0) => ({
+  id, productId: 12, userId: 9, imagePath: `shop/9/u${id}/p.jpg`, imageUrl: `https://cdn/shop/9/u${id}/p.jpg`, sortOrder
+});
 
 beforeEach(() => {
   jest.clearAllMocks();
   jest.spyOn(console, 'error').mockImplementation(() => {});
   isStorageConfigured.mockReturnValue(true);
   getOrCreateShop.mockResolvedValue(SHOP);
+  ShopProductImage.listByProducts.mockResolvedValue(new Map());
+  ShopProductImage.listByProduct.mockResolvedValue([]);
+  ShopProductImage.listPathsOwned.mockResolvedValue([]);
 });
 
 describe('GET /api/shop — 첫 진입에 상점을 만든다 (FR-400)', () => {
@@ -120,9 +138,22 @@ describe('POST /api/shop/products — 필수는 타이틀뿐 (FR-411)', () => {
 
     const res = await call(ctrl.createProduct, { body: { title: '곤봉' } });
 
-    expect(ShopProduct.create).toHaveBeenCalledWith(9, { title: '곤봉', url: null, price: null, categoryId: null, isVisible: true });
+    expect(ShopProduct.create).toHaveBeenCalledWith(9, {
+      title: '곤봉', description: null, url: null, price: null, categoryId: null, isVisible: true
+    });
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json.mock.calls[0][0].product).not.toHaveProperty('imagePath');
+    expect(res.json.mock.calls[0][0].product.images).toEqual([]);
+  });
+
+  it('상세 설명은 줄바꿈을 지켜 저장하고, 1000자를 넘으면 400', async () => {
+    ShopProduct.create.mockResolvedValue({ ...PRODUCT, description: '6m 리본\n막대 포함' });
+    await call(ctrl.createProduct, { body: { title: '리본', description: '  6m 리본\r\n막대 포함  ' } });
+    expect(ShopProduct.create.mock.calls[0][1].description).toBe('6m 리본\n막대 포함');
+
+    const res = await call(ctrl.createProduct, { body: { title: '리본', description: 'a'.repeat(1001) } });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0].fields).toHaveProperty('description');
   });
 
   it('타이틀이 없으면 400 + 필드 오류', async () => {
@@ -177,6 +208,29 @@ describe('상품 수정·숨김·삭제 — 남의 상품은 404 (FR-460)', () =
     expect(res.json.mock.calls[0][0].product.clickCount).toBe(4);
   });
 
+  it('수정: 사진을 순서대로 붙여 돌려준다 — 첫 장이 대표(imageUrl)', async () => {
+    ShopProduct.getOwned.mockResolvedValue(PRODUCT);
+    ShopProduct.update.mockResolvedValue(PRODUCT);
+    ShopProductImage.listByProduct.mockResolvedValue([IMAGE(5, 0), IMAGE(3, 1)]);
+    const res = await call(ctrl.updateProduct, { params: { id: '12' }, body: { title: '리본' } });
+    const { product } = res.json.mock.calls[0][0];
+    expect(product.images).toEqual([
+      { id: 5, url: 'https://cdn/shop/9/u5/p.jpg' },
+      { id: 3, url: 'https://cdn/shop/9/u3/p.jpg' }
+    ]);
+    expect(product.imageUrl).toBe('https://cdn/shop/9/u5/p.jpg');
+  });
+
+  it('수정: description 을 빼고 보내면 기존 설명을 지킨다 (설명 칸이 없던 화면)', async () => {
+    ShopProduct.getOwned.mockResolvedValue({ ...PRODUCT, description: '기존 설명' });
+    ShopProduct.update.mockResolvedValue(PRODUCT);
+    await call(ctrl.updateProduct, { params: { id: '12' }, body: { title: '리본' } });
+    expect(ShopProduct.update.mock.calls[0][2].description).toBe('기존 설명');
+
+    await call(ctrl.updateProduct, { params: { id: '12' }, body: { title: '리본', description: '' } });
+    expect(ShopProduct.update.mock.calls[1][2].description).toBeNull();
+  });
+
   it('수정: isVisible 을 빼고 보내면 숨긴 상품은 숨긴 채로 둔다', async () => {
     ShopProduct.getOwned.mockResolvedValue({ ...PRODUCT, isVisible: false });
     ShopProduct.update.mockResolvedValue({ ...PRODUCT, isVisible: false });
@@ -194,11 +248,14 @@ describe('상품 수정·숨김·삭제 — 남의 상품은 404 (FR-460)', () =
     expect(res.status).toHaveBeenCalledWith(404);
   });
 
-  it('삭제: 이미지가 있으면 저장소 파일도 지운다', async () => {
-    ShopProduct.delete.mockResolvedValue({ ...PRODUCT, imagePath: 'shop/9/u/r.jpg' });
+  it('삭제: 사진 파일을 모두 저장소에서도 지운다 (경로는 행이 지워지기 전에 읽는다)', async () => {
+    ShopProductImage.listPathsOwned.mockResolvedValue(['shop/9/a/1.jpg', 'shop/9/b/2.jpg']);
+    ShopProduct.delete.mockResolvedValue(PRODUCT);
     deleteFile.mockResolvedValue(true);
     const res = await call(ctrl.deleteProduct, { params: { id: '12' } });
-    expect(deleteFile).toHaveBeenCalledWith('shop/9/u/r.jpg');
+    expect(ShopProductImage.listPathsOwned).toHaveBeenCalledWith(12, 9);
+    expect(ShopProductImage.listPathsOwned.mock.invocationCallOrder[0]).toBeLessThan(ShopProduct.delete.mock.invocationCallOrder[0]);
+    expect(deleteFile.mock.calls.map((c) => c[0])).toEqual(['shop/9/a/1.jpg', 'shop/9/b/2.jpg']);
     expect(res.json).toHaveBeenCalledWith({ message: '상품이 삭제되었습니다.', storageDeleted: true });
   });
 
@@ -226,9 +283,9 @@ describe('PUT /api/shop/products/order', () => {
   });
 });
 
-describe('POST /api/shop/products/:id/image', () => {
+describe('POST /api/shop/products/:id/images — 사진 한 장씩 맨 뒤에', () => {
   const upload = (overrides = {}) =>
-    call(ctrl.uploadProductImage, {
+    call(ctrl.addProductImage, {
       params: { id: '12' },
       query: { filename: '리본.jpg' },
       body: Buffer.from('jpeg-bytes'),
@@ -237,26 +294,61 @@ describe('POST /api/shop/products/:id/image', () => {
 
   beforeEach(() => {
     ShopProduct.getOwned.mockResolvedValue(PRODUCT);
+    ShopProduct.touch.mockResolvedValue(PRODUCT);
     uploadFile.mockResolvedValue('https://cdn/shop/9/u/file.jpg');
-    ShopProduct.setImage.mockImplementation(async (id, userId, v) => ({ ...PRODUCT, ...v }));
+    ShopProductImage.countByProduct.mockResolvedValue(2);
+    ShopProductImage.append.mockImplementation(async (productId, userId, v) => ({ image: { id: 31, productId, userId, ...v } }));
   });
 
-  it('올리면 shop/{선생님}/{난수}/ 경로에 확장자 기준 MIME 으로 저장한다', async () => {
+  it('올리면 shop/{선생님}/{난수}/ 경로에 확장자 기준 MIME 으로 저장하고, 10장 제한으로 붙인다', async () => {
+    ShopProductImage.listByProduct.mockResolvedValue([IMAGE(30, 0), { ...IMAGE(31, 1), imageUrl: 'https://cdn/shop/9/u/file.jpg' }]);
     const res = await upload();
     const [path, buffer, mime] = uploadFile.mock.calls[0];
     expect(path).toMatch(/^shop\/9\/[0-9a-f-]{36}\/file\.jpg$/);
     expect(buffer.toString()).toBe('jpeg-bytes');
     expect(mime).toBe('image/jpeg');
-    expect(ShopProduct.setImage).toHaveBeenCalledWith(12, 9, { imagePath: path, imageUrl: 'https://cdn/shop/9/u/file.jpg' });
-    expect(res.json.mock.calls[0][0].product.imageUrl).toBe('https://cdn/shop/9/u/file.jpg');
+    expect(ShopProductImage.append).toHaveBeenCalledWith(12, 9, { imagePath: path, imageUrl: 'https://cdn/shop/9/u/file.jpg' }, 10);
+    expect(res.status).toHaveBeenCalledWith(201);
+    const body = res.json.mock.calls[0][0];
+    expect(body.image).toEqual({ id: 31, url: 'https://cdn/shop/9/u/file.jpg' });
+    expect(body.product.images.map((i) => i.id)).toEqual([30, 31]);
+    expect(deleteFile).not.toHaveBeenCalled();
   });
 
-  it('교체하면 새 파일을 올린 뒤 이전 파일을 지운다', async () => {
-    ShopProduct.getOwned.mockResolvedValue({ ...PRODUCT, imagePath: 'shop/9/old/a.png' });
-    await upload();
-    expect(uploadFile).toHaveBeenCalled();
-    expect(deleteFile).toHaveBeenCalledWith('shop/9/old/a.png');
-    expect(uploadFile.mock.invocationCallOrder[0]).toBeLessThan(deleteFile.mock.invocationCallOrder[0]);
+  it('10장이 찼으면 올린 파일을 치우고 409', async () => {
+    ShopProductImage.append.mockResolvedValue({ error: 'full' });
+    const res = await upload();
+    expect(deleteFile).toHaveBeenCalledWith(uploadFile.mock.calls[0][0]);
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json.mock.calls[0][0].error).toMatch(/10장/);
+  });
+
+  it('이미 10장이면 저장소에 쓰기 전에 409', async () => {
+    ShopProductImage.countByProduct.mockResolvedValue(10);
+    const res = await upload();
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(uploadFile).not.toHaveBeenCalled();
+  });
+
+  it('올리는 사이에 상품이 지워졌으면 올린 파일을 치우고 404', async () => {
+    ShopProductImage.append.mockResolvedValue({ error: 'notFound' });
+    const res = await upload();
+    expect(deleteFile).toHaveBeenCalledWith(uploadFile.mock.calls[0][0]);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('사진 행을 넣다가 DB 오류가 나도 올린 파일을 치운다 (500)', async () => {
+    ShopProductImage.append.mockRejectedValue(new Error('db down'));
+    const res = await upload();
+    expect(deleteFile).toHaveBeenCalledWith(uploadFile.mock.calls[0][0]);
+    expect(res.status).toHaveBeenCalledWith(500);
+  });
+
+  it('붙인 직후 상품이 지워졌으면 파일을 치우고 404', async () => {
+    ShopProduct.touch.mockResolvedValue(null);
+    const res = await upload();
+    expect(deleteFile).toHaveBeenCalledWith(uploadFile.mock.calls[0][0]);
+    expect(res.status).toHaveBeenCalledWith(404);
   });
 
   it('svg 는 거절 (스크립트를 품을 수 있다)', async () => {
@@ -286,21 +378,53 @@ describe('POST /api/shop/products/:id/image', () => {
     isStorageConfigured.mockReturnValue(false);
     const res = await upload();
     expect(res.status).toHaveBeenCalledWith(404);
+    expect(uploadFile).not.toHaveBeenCalled();
+  });
+});
+
+describe('사진 빼기 · 순서', () => {
+  beforeEach(() => {
+    ShopProduct.getOwned.mockResolvedValue(PRODUCT);
+    ShopProduct.touch.mockResolvedValue(PRODUCT);
   });
 
-  it('올리는 사이에 상품이 지워졌으면 올린 파일을 치우고 404', async () => {
-    ShopProduct.setImage.mockResolvedValue(null);
-    const res = await upload();
-    const [path] = uploadFile.mock.calls[0];
-    expect(deleteFile).toHaveBeenCalledWith(path);
+  it('빼기: 내 상품의 그 사진 행을 지우고 저장소 파일도 지운다', async () => {
+    ShopProductImage.delete.mockResolvedValue(IMAGE(5));
+    const res = await call(ctrl.deleteProductImage, { params: { id: '12', imageId: '5' } });
+    expect(ShopProductImage.delete).toHaveBeenCalledWith(5, 12, 9);
+    expect(deleteFile).toHaveBeenCalledWith('shop/9/u5/p.jpg');
+    expect(res.json.mock.calls[0][0].product.id).toBe(12);
+  });
+
+  it('빼기: 남의 상품·없는 사진이면 404 이고 저장소는 건드리지 않는다', async () => {
+    ShopProductImage.delete.mockResolvedValue(null);
+    const res = await call(ctrl.deleteProductImage, { params: { id: '12', imageId: '5' } });
     expect(res.status).toHaveBeenCalledWith(404);
+    expect(deleteFile).not.toHaveBeenCalled();
   });
 
-  it('이미지 빼기: 행을 비우고 저장소 파일을 지운다', async () => {
-    ShopProduct.getOwned.mockResolvedValue({ ...PRODUCT, imagePath: 'shop/9/old/a.png' });
-    await call(ctrl.deleteProductImage, { params: { id: '12' } });
-    expect(ShopProduct.setImage).toHaveBeenCalledWith(12, 9, { imagePath: null, imageUrl: null });
-    expect(deleteFile).toHaveBeenCalledWith('shop/9/old/a.png');
+  it('순서: 그 상품 사진 전부를 한 번씩 담으면 저장, 대표 사진이 바뀐다', async () => {
+    ShopProductImage.listByProduct
+      .mockResolvedValueOnce([IMAGE(5, 0), IMAGE(6, 1), IMAGE(7, 2)])
+      .mockResolvedValueOnce([IMAGE(7, 0), IMAGE(5, 1), IMAGE(6, 2)]);
+    const res = await call(ctrl.reorderProductImages, { params: { id: '12' }, body: { ids: [7, 5, 6] } });
+    expect(ShopProductImage.reorder).toHaveBeenCalledWith(12, [7, 5, 6]);
+    expect(res.json.mock.calls[0][0].product.imageUrl).toBe('https://cdn/shop/9/u7/p.jpg');
+  });
+
+  it('순서: 다른 상품의 사진이 섞이거나 빠지면 400', async () => {
+    ShopProductImage.listByProduct.mockResolvedValue([IMAGE(5, 0), IMAGE(6, 1)]);
+    let res = await call(ctrl.reorderProductImages, { params: { id: '12' }, body: { ids: [6, 99] } });
+    expect(res.status).toHaveBeenCalledWith(400);
+    res = await call(ctrl.reorderProductImages, { params: { id: '12' }, body: { ids: [6] } });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(ShopProductImage.reorder).not.toHaveBeenCalled();
+  });
+
+  it('순서: 남의 상품이면 404', async () => {
+    ShopProduct.getOwned.mockResolvedValue(null);
+    const res = await call(ctrl.reorderProductImages, { params: { id: '12' }, body: { ids: [] } });
+    expect(res.status).toHaveBeenCalledWith(404);
   });
 });
 

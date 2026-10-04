@@ -16,6 +16,7 @@
   이 파일은 화면 하나를 ?s=<이름> 으로 골라 그린다. 직접 열기보다
   teacher-desktop.html / teacher-mobile.html 에서 보는 것을 권한다.
   s: list | create | edit | delete | stats | settings | empty | menu
+     2차(사진 여러 장): images | images-empty | images-drag | images-saving | images-limit | list-images
 -->
 
 <div class="app">
@@ -449,15 +450,68 @@
 </template>
 
 
+
+<!-- =============================================================== -->
+<!-- 2차 — 상품 폼의 사진 칸: 여러 장 · 순서 바꾸기                      -->
+<!-- 사진 칸만 바뀌고 나머지 칸은 1차와 같다. #image-field · #images-footer 는 JS 가 채운다 -->
+<!-- =============================================================== -->
+<template id="ov-images">
+  <div class="ui-scrim" aria-hidden="true"></div>
+  <div class="ui-overlay" data-mode="sheet" data-size="md" role="dialog" aria-modal="true" aria-label="상품 등록">
+    <div class="ui-overlay__grip" aria-hidden="true"></div>
+    <div class="ui-overlay__header">
+      <div><h2 class="ui-overlay__title" id="images-title">상품 등록</h2><p class="ui-overlay__description" id="images-desc">타이틀만 꼭 입력하면 돼요.</p></div>
+      <button type="button" class="ui-callout__dismiss" aria-label="닫기"><i data-icon="x" data-size="20"></i></button>
+    </div>
+    <div class="ui-overlay__body">
+      <div class="ui-stack" data-gap="5">
+        <div class="ui-field">
+          <label class="ui-field__label">타이틀<span class="ui-field__required" aria-hidden="true">*</span></label>
+          <input class="ui-input" value="사사키 리본 6m 핑크 (막대 포함)">
+          <div class="ui-field__foot"><span></span><span class="ui-field__counter">20 / 80</span></div>
+        </div>
+        <div class="ui-field">
+          <label class="ui-field__label">상세 설명 <span class="ui-text-subtle" style="font-weight: 400;">선택</span></label>
+          <textarea class="ui-textarea" rows="4" placeholder="예: 사이즈·색상, 이 상품을 추천하는 이유">6m 새틴 리본에 60cm 막대까지 함께 와요.
+초등 저학년은 5m 를 추천해요 — 사이즈가 고민되면 수업 때 물어봐 주세요.
+FIG 인증 제품이라 대회에서도 쓸 수 있어요.</textarea>
+          <div class="ui-field__foot"><span><span class="ui-field__hint">상품 제목 바로 아래에 보여요. 줄을 바꾸면 그대로 보여요.</span></span><span class="ui-field__counter">97 / 1000</span></div>
+        </div>
+        <div class="ui-field">
+          <label class="ui-field__label">연결할 주소 <span class="ui-text-subtle" style="font-weight: 400;">선택</span></label>
+          <input class="ui-input" value="https://www.coupang.com/vp/products/7381129402">
+          <div class="ui-field__foot"><span><span class="ui-field__hint">coupang.com 으로 연결돼요.</span></span></div>
+        </div>
+        <div class="ui-field" id="image-field"></div>
+        <div class="ui-field">
+          <label class="ui-field__label">카테고리 <span class="ui-text-subtle" style="font-weight: 400;">선택</span></label>
+          <select class="ui-select">
+            <option>선택 안 함</option><option>발레복</option><option>레오타드</option><option selected>기구</option><option>슈즈</option><option>용품</option>
+          </select>
+        </div>
+        <div class="ui-field">
+          <label class="ui-field__label">가격 <span class="ui-text-subtle" style="font-weight: 400;">선택</span></label>
+          <div class="ui-input-group"><input class="ui-input" inputmode="numeric" value="32,000"><span class="ui-input-group__addon">원</span></div>
+        </div>
+        <div class="ui-switch-field">
+          <label class="ui-switch"><input type="checkbox" role="switch" checked><span class="ui-switch__track"><span class="ui-switch__thumb"></span></span><span>학부모에게 보이기</span></label>
+          <p class="ui-switch-field__description">공개 상점에 보여요.</p>
+        </div>
+      </div>
+    </div>
+    <div class="ui-overlay__footer" id="images-footer"></div>
+  </div>
+</template>
+
 <script src="mock-icons.js"></script>
 <script>
 (function () {
   // ── 목업 데이터 ───────────────────────────────────────────────
   var PRODUCTS = [
-    { title: '사사키 리본 6m 핑크 (막대 포함)', img: 'ribbon', host: 'coupang.com', cat: '기구', price: '32,000원', total: 58 },
-    { title: '주니어 후프 75cm', img: 'hoop', host: 'smartstore.naver.com', cat: '기구', price: '45,000원', total: 34 },
+    { title: '사사키 리본 6m 핑크 (막대 포함)', img: 'ribbon', host: 'coupang.com', cat: '기구', price: '32,000원', total: 58, photos: 4 },
+    { title: '주니어 후프 75cm', img: 'hoop', host: 'smartstore.naver.com', cat: '기구', price: '45,000원', total: 34, photos: 2 },
     { title: '연습용 발레복 (네이비, 긴팔)', img: 'practice-wear', host: 'musinsa.com', cat: '발레복', price: '29,900원', total: 25 },
-    { title: '시합용 레오타드 (스팽글)', img: 'leotard', host: 'smartstore.naver.com', cat: '레오타드', price: '128,000원', total: 12 },
+    { title: '시합용 레오타드 (스팽글)', img: 'leotard', host: 'smartstore.naver.com', cat: '레오타드', price: '128,000원', total: 12, photos: 3 },
     { title: '반슈즈 (스트레치)', img: 'shoes', host: 'coupang.com', cat: '슈즈', price: '18,000원', total: 6 },
     { title: '연습용 볼 17cm', img: 'ball', host: 'coupang.com', cat: '기구', price: null, total: 0 },
     { title: '곤봉 (수업 때 보여 드릴게요)', img: null, host: null, cat: '기구', price: null, total: null },
@@ -499,7 +553,8 @@
     return PRODUCTS.map(function (p, i) {
       return '<tr>' +
         '<td data-label="순서"><div class="shop-order">' + iconBtn('chevronUp', '위로', i === 0) + iconBtn('chevronDown', '아래로', i === PRODUCTS.length - 1) + '</div></td>' +
-        '<td data-label="상품">' + item(p, p.host || '<span class="ui-text-subtle">링크 없음 — 누를 수 없는 카드</span>') + '</td>' +
+        '<td data-label="상품">' + item(p, (p.host || '<span class="ui-text-subtle">링크 없음 — 누를 수 없는 카드</span>') +
+          (screen.photos && p.photos > 1 ? ' · 사진 ' + p.photos + '장' : '')) + '</td>' +
         '<td data-label="카테고리">' + (p.cat ? '<span class="ui-badge" data-tone="neutral">' + p.cat + '</span>' : '<span class="ui-text-subtle">카테고리 없음</span>') + '</td>' +
         '<td data-label="가격" data-numeric="true">' + (p.price || dash) + '</td>' +
         '<td data-label="공개">' + sw(!p.hidden) + '</td>' +
@@ -555,6 +610,150 @@
     }).join('');
   };
 
+
+  // ── 2차: 사진 칸 (여러 장 · 순서 바꾸기) ─────────────────────────
+  var MAX_PHOTOS = 10;
+  var photos = ['ribbon', 'ribbon-detail', 'ribbon-stick', 'ribbon-package'];
+  var imageMode = 'ready';
+
+  var moveBtn = function (icon, label, disabled, attrs) {
+    return '<button type="button" class="ui-icon-btn" data-size="sm" data-variant="plain" aria-label="' + label + '" title="' + label + '"' +
+      (disabled ? ' disabled' : '') + ' ' + attrs + '><i data-icon="' + icon + '" data-size="16"></i></button>';
+  };
+
+  var tile = function (img, i) {
+    var saving = imageMode === 'saving';
+    var state = saving ? (i < 2 ? 'done' : i === 2 ? 'uploading' : 'waiting') : '';
+    var status = state === 'uploading'
+      ? '<span class="shop-images__status"><span class="ui-progress" role="progressbar" aria-label="올리는 중"><span class="ui-progress__bar" style="display:block; width: 62%"></span></span>올리는 중</span>'
+      : state === 'waiting' ? '<span class="shop-images__status">기다리는 중</span>' : '';
+    var drag = imageMode === 'drag';
+    return '<div class="shop-images__tile"' + (i === 0 ? ' data-main="true"' : '') +
+      (drag && i === 3 ? ' data-dragging="true"' : '') + (drag && i === 1 ? ' data-drop="before"' : '') +
+      (saving ? '' : ' draggable="true"') + ' data-index="' + i + '">' +
+      '<div class="shop-images__frame"' + (state ? ' data-state="' + state + '"' : '') + '>' +
+        '<img src="img/' + img + '.svg" alt="사진 ' + (i + 1) + '">' +
+        (i === 0 ? '<span class="ui-badge shop-images__badge" data-tone="solid">대표</span>' : '') +
+        (saving ? '' : '<button type="button" class="shop-images__remove" aria-label="사진 ' + (i + 1) + ' 빼기" data-remove="' + i + '"><i data-icon="x" data-size="14"></i></button>') +
+        // 새로 넣은(아직 안 올린) 사진에만 [자르기] — 목업에서는 모두 새 사진이다
+        (saving ? '' : '<button type="button" class="shop-images__crop" aria-label="사진 ' + (i + 1) + ' 자르기"><i data-icon="crop" data-size="14"></i>자르기</button>') +
+        status +
+      '</div>' +
+      '<div class="shop-images__moves">' +
+        moveBtn('chevronLeft', '앞으로', saving || i === 0, 'data-move="' + i + '" data-step="-1"') +
+        moveBtn('chevronRight', '뒤로', saving || i === photos.length - 1, 'data-move="' + i + '" data-step="1"') +
+      '</div></div>';
+  };
+
+  var label = '<label class="ui-field__label">이미지 <span class="ui-text-subtle" style="font-weight: 400;">선택 · 최대 ' + MAX_PHOTOS + '장</span></label>';
+
+  var drawImageField = function () {
+    var field = document.getElementById('image-field');
+    if (imageMode === 'empty' || photos.length === 0) {
+      field.innerHTML = label +
+        '<div class="ui-dropzone"><i data-icon="image" data-size="24"></i>' +
+        '<div class="ui-dropzone__title">상품 사진을 골라 주세요</div>' +
+        '<p class="ui-dropzone__hint">여러 장을 한 번에 골라도 돼요 · jpg · png · webp · gif, 한 장에 4MB 이하 — 자동으로 줄여서 올려요</p>' +
+        '<p class="ui-dropzone__hint shop-paste-hint">복사한 사진은 붙여 넣어도 돼요 (⌘V · Ctrl+V)</p>' +
+        '<button type="button" class="ui-btn" data-variant="outline" data-size="sm"><i data-icon="upload" data-size="16"></i>사진 선택</button></div>';
+    } else {
+      var full = photos.length >= MAX_PHOTOS;
+      var saving = imageMode === 'saving';
+      field.innerHTML = label +
+        '<div class="shop-images" id="image-tiles">' + photos.map(tile).join('') +
+        (full || saving ? '' : '<button type="button" class="shop-images__add"><i data-icon="plus" data-size="20"></i><b>사진 추가</b><span>여러 장 가능</span></button>') +
+        '</div>' +
+        '<div class="ui-field__foot"><span>' +
+          (imageMode === 'limit'
+            ? '<span class="ui-field__error" role="alert">사진은 ' + MAX_PHOTOS + '장까지예요 — 고른 사진 중 2장은 넣지 못했어요.</span>'
+            : '<span class="ui-field__hint">첫 번째 사진이 <b>대표 사진</b>이에요 — 상점 목록 카드에 보여요. ‹ › 로 순서를, [자르기]로 보일 부분을 바꿔요.' +
+              '<span class="shop-paste-hint"> 끌어서 옮기거나, 복사한 사진을 붙여 넣어도 돼요 (⌘V · Ctrl+V).</span></span>') +
+        '</span><span class="ui-field__counter">' + photos.length + ' / ' + MAX_PHOTOS + '</span></div>';
+    }
+    window.renderMockIcons(field);
+  };
+
+  var renderImageField = function (mode) {
+    imageMode = mode;
+    if (mode === 'limit') {
+      photos = ['ribbon', 'ribbon-detail', 'ribbon-stick', 'ribbon-package', 'hoop', 'hoop-tape', 'leotard', 'leotard-back', 'leotard-detail', 'ball'];
+    }
+    if (mode === 'saving') {
+      document.getElementById('images-footer').innerHTML =
+        '<button type="button" class="ui-btn" data-variant="outline" data-size="md" disabled>취소</button>' +
+        '<button type="button" class="ui-btn" data-variant="primary" data-size="md" disabled aria-busy="true"><span class="ui-btn__spinner"></span>사진 올리는 중 3/4</button>';
+    } else {
+      document.getElementById('images-footer').innerHTML =
+        '<button type="button" class="ui-btn" data-variant="outline" data-size="md">취소</button>' +
+        '<button type="button" class="ui-btn" data-variant="primary" data-size="md">저장</button>';
+    }
+    drawImageField();
+
+    // 올리는 중은 사진 칸 맨 위, 10장은 아래의 빨간 안내가 보이도록 시트 안을 내려 둔다
+    if (mode === 'limit' || mode === 'saving') {
+      var body = document.querySelector('.ui-overlay__body');
+      var box = body.getBoundingClientRect();
+      var field = document.getElementById('image-field').getBoundingClientRect();
+      body.scrollTop += mode === 'saving' ? field.top - box.top - 8 : field.bottom - box.bottom + 16;
+    }
+
+    // 목업에서도 직접 눌러 보게 — ‹ › · 빼기 · 끌어서 옮기기
+    var field = document.getElementById('image-field');
+    var move = function (from, to) {
+      if (to < 0 || to >= photos.length || from === to) return;
+      var item = photos.splice(from, 1)[0];
+      photos.splice(to, 0, item);
+      if (imageMode !== 'saving') imageMode = 'ready';
+      drawImageField();
+    };
+    field.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-move]');
+      if (btn) {
+        var from = Number(btn.getAttribute('data-move'));
+        move(from, from + Number(btn.getAttribute('data-step')));
+        return;
+      }
+      var rm = e.target.closest('[data-remove]');
+      if (rm) {
+        photos.splice(Number(rm.getAttribute('data-remove')), 1);
+        imageMode = photos.length ? 'ready' : 'empty';
+        drawImageField();
+      }
+    });
+    var dragFrom = null;
+    field.addEventListener('dragstart', function (e) {
+      var t = e.target.closest('.shop-images__tile');
+      if (!t) return;
+      dragFrom = Number(t.getAttribute('data-index'));
+      e.dataTransfer.effectAllowed = 'move';
+      t.setAttribute('data-dragging', 'true');
+    });
+    field.addEventListener('dragover', function (e) {
+      var t = e.target.closest('.shop-images__tile');
+      if (dragFrom === null || !t) return;
+      e.preventDefault();
+      field.querySelectorAll('[data-drop]').forEach(function (n) { n.removeAttribute('data-drop'); });
+      t.setAttribute('data-drop', 'before');
+    });
+    field.addEventListener('drop', function (e) {
+      var t = e.target.closest('.shop-images__tile');
+      if (dragFrom === null || !t) return;
+      e.preventDefault();
+      var to = Number(t.getAttribute('data-index'));
+      var from = dragFrom;
+      dragFrom = null;
+      move(from, to > from ? to - 1 : to);
+      drawImageField();
+    });
+    field.addEventListener('dragend', function () {
+      dragFrom = null;
+      field.querySelectorAll('[data-drop],[data-dragging]').forEach(function (n) {
+        n.removeAttribute('data-drop');
+        n.removeAttribute('data-dragging');
+      });
+    });
+  };
+
   // ── 화면 조립 ───────────────────────────────────────────────
   var SCREENS = {
     list:     { tab: 'products', parts: ['page-list'] },
@@ -564,7 +763,14 @@
     stats:    { tab: 'stats', parts: ['page-stats'] },
     settings: { tab: 'settings', parts: ['page-settings'] },
     empty:    { tab: 'products', parts: ['page-empty'], empty: true },
-    menu:     { tab: 'products', parts: ['page-list'], menu: true }
+    menu:     { tab: 'products', parts: ['page-list'], menu: true },
+    // 2차 — 사진 여러 장
+    images:          { tab: 'products', parts: ['page-list', 'ov-images'], images: 'ready' },
+    'images-empty':  { tab: 'products', parts: ['page-list', 'ov-images'], images: 'empty' },
+    'images-drag':   { tab: 'products', parts: ['page-list', 'ov-images'], images: 'drag' },
+    'images-saving': { tab: 'products', parts: ['page-list', 'ov-images'], images: 'saving' },
+    'images-limit':  { tab: 'products', parts: ['page-list', 'ov-images'], images: 'limit' },
+    'list-images':   { tab: 'products', parts: ['page-list'], photos: true }
   };
   var name = new URLSearchParams(location.search).get('s') || 'list';
   var screen = SCREENS[name] || SCREENS.list;
@@ -589,6 +795,7 @@
   fill('rank-rows', rankRows());
   fill('cat-bars', catBars());
   fill('category-rows', categoryRows());
+  if (screen.images) renderImageField(screen.images);
   if (screen.menu) {
     document.getElementById('mobile-menu').classList.add('open');
     // 새로 생긴 항목이 보이도록 메뉴를 그 자리까지 내린다

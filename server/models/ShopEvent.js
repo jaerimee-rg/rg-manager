@@ -49,7 +49,9 @@ class ShopEvent {
   /** 상품별 클릭 — 클릭 0 상품도 나오도록 상품 기준으로 묶는다 */
   static async productStats(userId, since) {
     const result = await pool.query(
-      `SELECT p.id, p.title, p."imageUrl", p."isVisible", p."categoryId",
+      `SELECT p.id, p.title, p."isVisible", p."categoryId",
+              (SELECT i."imageUrl" FROM shop_product_images i
+               WHERE i."productId" = p.id ORDER BY i."sortOrder", i.id LIMIT 1) AS "imageUrl",
               (p.url IS NOT NULL) AS "hasUrl",
               COUNT(e.id) AS clicks,
               COUNT(DISTINCT e."visitorKey") AS visitors,

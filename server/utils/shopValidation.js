@@ -3,6 +3,7 @@
 import { lookupType } from './faqFileTypes.js';
 
 export const TITLE_MAX = 80;
+export const DESCRIPTION_MAX = 1000;
 export const URL_MAX = 2000;
 export const PRICE_MAX = 100_000_000;
 export const CATEGORY_NAME_MAX = 20;
@@ -10,6 +11,7 @@ export const SHOP_TITLE_MAX = 40;
 export const SHOP_TEXT_MAX = 300;
 export const MAX_PRODUCTS = 200;
 export const MAX_CATEGORIES = 20;
+export const MAX_PRODUCT_IMAGES = 10;
 export const VISITOR_KEY_MAX = 100;
 
 // 같은 사람이 짧은 시간에 다시 누른 것은 한 번으로 센다
@@ -68,6 +70,15 @@ export const parsePrice = (raw) => {
   return { value };
 };
 
+/** 상세 설명. 비우면 null. 줄바꿈은 그대로 두되 \r\n 은 \n 으로 맞춘다. */
+export const parseDescription = (raw) => {
+  if (raw == null) return { value: null };
+  const text = String(raw).replace(/\r\n?/g, '\n').trim();
+  if (!text) return { value: null };
+  if (text.length > DESCRIPTION_MAX) return { error: `상세 설명은 ${DESCRIPTION_MAX}자까지 입력할 수 있어요` };
+  return { value: text };
+};
+
 /** 정수 id 또는 null. 그 외는 undefined(잘못된 값). */
 export const parseId = (raw) => {
   if (raw == null || raw === '') return null;
@@ -86,6 +97,13 @@ export const validateProductInput = (body = {}) => {
   if (!title) errors.title = '타이틀을 입력해 주세요';
   else if (title.length > TITLE_MAX) errors.title = `타이틀은 ${TITLE_MAX}자까지 입력할 수 있어요`;
 
+  // 주지 않으면 undefined — 수정에서 기존 설명을 지킨다(설명 칸이 없던 화면이 저장해도 지워지지 않게)
+  let description;
+  if (body.description !== undefined) {
+    description = parseDescription(body.description);
+    if (description.error) errors.description = description.error;
+  }
+
   const url = normalizeUrl(body.url);
   if (url.error) errors.url = url.error;
 
@@ -103,7 +121,14 @@ export const validateProductInput = (body = {}) => {
   }
 
   return {
-    value: { title, url: url.value ?? null, price: price.value ?? null, categoryId: categoryId ?? null, isVisible },
+    value: {
+      title,
+      description: description === undefined ? undefined : description.value ?? null,
+      url: url.value ?? null,
+      price: price.value ?? null,
+      categoryId: categoryId ?? null,
+      isVisible
+    },
     errors: Object.keys(errors).length ? errors : null
   };
 };

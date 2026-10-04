@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>추천 상품 목업 — 2차 사진 여러 장 · 모바일</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../../../client/src/styles/tokens.css">
+<link rel="stylesheet" href="gallery.css">
+</head>
+<body>
+<!-- 2차(사진 여러 장) — 선생님 화면은 teacher-screens.html, 학부모 화면은 parent-screens.html 의 새 상태(?s=)를 iframe 으로 띄운다.
+     앱의 실제 CSS(client/src/styles)를 쓰므로 저장소 안에서 열어야 한다. -->
+<script>
+window.MOCK = {
+  "page": "images-mobile.html",
+  "device": "mobile",
+  "src": "parent-screens.html",
+  "title": "2차 사진 여러 장 · 모바일",
+  "intro": [
+    "<b>2차 — 상품마다 사진 여러 장 + 상세 설명</b>: 선생님은 사진 여러 장을 올려 순서를 바꾸고 상세 설명을 적는다. 학부모는 상품을 눌러 사진을 넘겨 보고, 제목 아래에서 설명을 읽는다.",
+    "390px 휴대폰이에요. 학부모 화면은 카카오톡 인앱 브라우저로 연 모습이에요.",
+    "1차와 같이 앱의 실제 스타일(<code>tokens.css · ui.css · App.css</code>)로 그렸어요. 이번 기능의 스타일도 구현과 함께 <code>ui.css</code> 에 들어갔어요(구현 완료 — 2026-10-04). 노란 칸은 화면 설명이에요.",
+    "목업 안에서 직접 눌러 볼 수 있어요 — 사진 칸의 ‹ › · ✕ · 끌어서 옮기기, 상점 카드 → 상세, 상세의 작은 사진·화살표·점·밀어서 넘기기.",
+    "<b>기본값으로 정해 구현한 것</b><br>① 상품 상세를 연 것은 통계로 세지 않는다 — 지금처럼 쇼핑몰 링크를 누른 것만 '클릭'<br>② 한 상품에 사진은 10장까지<br>③ 휴대폰 상세에는 작은 사진 줄 없이 밀어서 넘기고 점으로 위치만<br>④ (추가 요청) 사진은 크기와 상관없이 정사각형 칸에 잘려 보이고 가격 줄이 맞는다 · 새로 넣은 사진은 [자르기]로 보일 부분을 고른다"
+  ],
+  "host": "rg-manager.vercel.app",
+  "width": 390,
+  "height": 780,
+  "browserBar": "rg-manager.vercel.app",
+  "screens": [
+    {
+      "group": "선생님 — 상품 등록·수정",
+      "src": "teacher-screens.html",
+      "s": "images",
+      "title": "상세 설명과 사진 4장을 넣은 상태",
+      "path": "/products",
+      "notes": [
+        "<b>상세 설명</b>(선택, 1,000자) 칸을 타이틀 바로 아래에 둔다. 적은 줄바꿈이 그대로 보이고, 링크·굵게 같은 서식 없이 글자로만 보인다.",
+        "사진을 <b>여러 장</b>(최대 10장) 넣는다. [사진 추가]에서 여러 장을 한 번에 고르거나, 복사한 사진을 붙여 넣으면 맨 뒤에 붙는다.",
+        "<b>첫 번째 사진이 대표 사진</b> — 공개 상점 카드와 선생님 목록 썸네일에 쓰인다. 진한 테두리 + <b>대표</b> 배지.",
+        "순서는 사진 아래 ‹ › 로 바꾼다. 휴대폰에서는 끌어 옮기기 대신 이 버튼을 쓴다.",
+        "새로 넣은 사진에는 <b>[자르기]</b> — 정사각형 칸에서 끌어서 보일 부분을 고르고 막대로 확대한다. 그 정사각형 그대로 잘려 올라간다(이미 올린 사진은 빼고 다시 넣는다).",
+        "✕ 는 폼에서만 빠지고 실제 삭제는 [저장] 때 — [취소]하면 원래대로다. 나머지 칸(타이틀·주소·카테고리·가격·공개)은 1차와 같다."
+      ],
+      "fixed": true,
+      "browserBar": ""
+    },
+    {
+      "src": "teacher-screens.html",
+      "s": "images-saving",
+      "title": "저장 — 사진 올리는 중",
+      "path": "/products",
+      "notes": [
+        "저장 순서: 상품 정보 저장 → 새 사진을 <b>한 장씩</b> 올림(한 요청 4.5MB 한도 때문) → 순서 저장. 버튼에 진행 상황(3/4).",
+        "올리는 동안은 순서·빼기를 잠근다. 한 장이 실패해도 상품과 나머지 사진은 저장되고, 닫은 뒤 \"사진 1장을 올리지 못했어요\" 안내 (1차의 '사진만 실패' 원칙과 같다)."
+      ],
+      "fixed": true,
+      "browserBar": ""
+    },
+    {
+      "src": "teacher-screens.html",
+      "s": "images-limit",
+      "title": "10장이 찬 상태",
+      "path": "/products",
+      "notes": [
+        "10장이 차면 [사진 추가] 칸이 사라진다. 한 번에 더 많이 고르면 들어갈 만큼만 앞에서부터 넣고, 나머지는 빨간 안내."
+      ],
+      "fixed": true,
+      "browserBar": ""
+    },
+    {
+      "src": "teacher-screens.html",
+      "s": "images-empty",
+      "title": "사진이 없을 때",
+      "path": "/products",
+      "notes": [
+        "1차와 같은 드롭존에 '여러 장을 한 번에 골라도 돼요' 만 더했다."
+      ],
+      "fixed": true,
+      "browserBar": ""
+    },
+    {
+      "src": "teacher-screens.html",
+      "s": "list-images",
+      "title": "상품 목록",
+      "path": "/products",
+      "notes": [
+        "목록 썸네일은 대표 사진. 2장 이상이면 부제에 '사진 4장'. 그 밖에는 1차와 같다."
+      ],
+      "browserBar": ""
+    },
+    {
+      "group": "학부모 — 공개 상점과 상품 상세",
+      "src": "parent-screens.html",
+      "s": "shop2",
+      "title": "공개 상점 — 카드에 사진 수",
+      "path": "/shop/xY3kP9qLmT2vB7nR4sWd1A",
+      "notes": [
+        "카드를 누르면 쇼핑몰로 바로 가지 않고 <b>상품 상세</b>가 열린다. 주소에 <code>?p=12</code> 가 붙어 <b>뒤로 가기로 닫히고</b>, 그 주소를 보내면 상세가 바로 열린다.",
+        "사진이 2장 이상이면 카드 오른쪽 아래에 장 수. 쇼핑몰 도메인은 그대로 두고 '새 창' 아이콘만 뺀다(카드가 새 창을 열지 않으니까).",
+        "상세 설명이 있으면 카드의 <b>제목 아래</b>에 두 줄까지 미리 보여 주고, 전체는 상세에서 본다. 설명이 없는 상품(\"반슈즈\", \"볼\")은 그 줄이 없다.",
+        "사진은 크기·비율과 상관없이 <b>정사각형 칸</b>에 잘려 보이고, 가격·도메인은 카드 맨 아래에 붙어 같은 줄 카드끼리 높이가 맞는다.",
+        "사진도 링크도 없는 상품(맨 끝 \"테이핑 테이프\")은 상세에서 더 볼 것이 없어 1차처럼 누를 수 없는 카드로 둔다.",
+        "카드를 눌러 보세요 — 그 상품 상세가 열린다."
+      ],
+      "height": 740
+    },
+    {
+      "src": "parent-screens.html",
+      "s": "detail",
+      "title": "상품 상세 — 첫 사진",
+      "path": "/shop/xY3kP9qLmT2vB7nR4sWd1A?p=12",
+      "notes": [
+        "바텀시트. 사진은 화면 폭 가득, <b>옆으로 밀어서</b> 넘긴다. 아래 점과 사진 위 <b>1 / 4</b> 로 위치를 보여 준다.",
+        "[쇼핑몰에서 보기]는 시트 맨 아래에 붙어 있다. ✕ · 뒤로 가기 · 바깥(어두운 곳)을 눌러 닫는다.",
+        "상세 설명은 <b>제목 바로 아래</b>에 전체가 보인다(선생님이 바꾼 줄 그대로). 그 아래가 가격.",
+        "<b>클릭 통계</b>는 지금처럼 쇼핑몰 버튼을 누른 것만 센다 — 상세를 연 것은 세지 않는다(위 질문 ①). 버튼은 1차 카드처럼 새 창 링크 + 비콘이다."
+      ],
+      "fixed": true,
+      "height": 740
+    },
+    {
+      "src": "parent-screens.html",
+      "s": "detail-3",
+      "title": "세 번째 사진으로 넘긴 상태",
+      "path": "/shop/xY3kP9qLmT2vB7nR4sWd1A?p=12",
+      "notes": [
+        "밀어서 넘기면 점과 3 / 4 가 따라온다. 첫 사진에서 왼쪽, 마지막 사진에서 오른쪽으로는 더 넘어가지 않는다(돌아가지 않음)."
+      ],
+      "fixed": true,
+      "height": 740
+    },
+    {
+      "src": "parent-screens.html",
+      "s": "detail-single",
+      "title": "사진이 한 장인 상품",
+      "path": "/shop/xY3kP9qLmT2vB7nR4sWd1A?p=9",
+      "notes": [
+        "1장이면 화살표 · 점 · 작은 사진 줄 · 1 / 1 표시 없이 사진만."
+      ],
+      "fixed": true,
+      "height": 740
+    },
+    {
+      "src": "parent-screens.html",
+      "s": "detail-nolink",
+      "title": "링크 없이 사진만 있는 상품",
+      "path": "/shop/xY3kP9qLmT2vB7nR4sWd1A?p=5",
+      "notes": [
+        "링크가 없어도 사진이 있으면 상세가 열린다(사진을 보려고). 쇼핑몰 버튼 대신 안내 한 줄 — 클릭은 세지 않는다.",
+        "링크는 있는데 사진이 없는 상품은 빈 사진 칸 + 쇼핑몰 버튼으로 열린다."
+      ],
+      "fixed": true,
+      "height": 740
+    }
+  ]
+};
+</script>
+<script src="gallery.js"></script>
+</body>
+</html>

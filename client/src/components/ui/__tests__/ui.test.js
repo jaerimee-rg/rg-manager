@@ -130,6 +130,33 @@ describe('Modal', () => {
     render(<Modal open onClose={() => {}} title="이벤트 신청">내용</Modal>);
     expect(screen.getByRole('dialog', { name: '이벤트 신청' })).toBeInTheDocument();
   });
+
+  it('부모가 그릴 때마다 새 onClose 를 넘겨도 입력 중인 칸의 포커스를 빼앗지 않고, Esc 는 지금의 onClose 를 부른다', () => {
+    const first = jest.fn();
+    const second = jest.fn();
+    const { rerender } = render(<Modal open onClose={first} title="상품"><input aria-label="이름" /></Modal>);
+    const input = screen.getByLabelText('이름');
+    input.focus();
+    rerender(<Modal open onClose={second} title="상품"><input aria-label="이름" /></Modal>);
+    expect(input).toHaveFocus();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(second).toHaveBeenCalled();
+    expect(first).not.toHaveBeenCalled();
+  });
+
+  it('header={false} 면 제목 줄(닫기 버튼)이 없어도 Esc·바깥 누르기로 닫힌다', () => {
+    const onClose = jest.fn();
+    render(
+      <Modal open onClose={onClose} header={false} labelledBy="t">
+        <h2 id="t">상품</h2>
+      </Modal>
+    );
+    expect(screen.getByRole('dialog', { name: '상품' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '닫기' })).not.toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.click(document.querySelector('.ui-scrim'));
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('DataTable', () => {
@@ -138,6 +165,13 @@ describe('DataTable', () => {
     { key: 'count', header: '출석', numeric: true }
   ];
   const rows = [{ id: 1, name: '김하늘', count: 12 }];
+
+  it('rowProps 로 행(<tr>)에 속성을 붙인다', () => {
+    render(<DataTable columns={columns} rows={rows} rowProps={(row, i) => ({ 'data-index': i, 'data-name': row.name })} />);
+    const row = screen.getByText('김하늘').closest('tr');
+    expect(row).toHaveAttribute('data-index', '0');
+    expect(row).toHaveAttribute('data-name', '김하늘');
+  });
 
   it('컬럼 정의 하나로 표를 그린다', () => {
     render(<DataTable columns={columns} rows={rows} />);

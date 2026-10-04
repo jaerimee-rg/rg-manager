@@ -6,6 +6,8 @@ import {
   formatPriceInput,
   parsePriceInput,
   validateProductForm,
+  parseDescriptionInput,
+  DESCRIPTION_MAX,
   usedCategories,
   filterByCategory,
   shopPublicUrl,
@@ -92,17 +94,42 @@ describe('가격', () => {
   });
 });
 
+// server parseDescription 과 같은 표
+describe('parseDescriptionInput — 서버와 같은 규칙', () => {
+  it.each([
+    [undefined, null],
+    [null, null],
+    ['', null],
+    ['  \n  ', null],
+    ['  6m 리본\r\n\r\n막대 포함 ', '6m 리본\n\n막대 포함']
+  ])('%j → %j', (raw, expected) => {
+    expect(parseDescriptionInput(raw)).toEqual({ value: expected });
+  });
+
+  it('1000자는 되고 1001자는 안 된다', () => {
+    expect(parseDescriptionInput('a'.repeat(1000)).error).toBeUndefined();
+    expect(parseDescriptionInput('a'.repeat(1001)).error).toMatch(/1000자/);
+  });
+});
+
 describe('validateProductForm — 필수는 타이틀뿐', () => {
   it('타이틀만 있으면 통과', () => {
     expect(validateProductForm({ title: ' 곤봉 ', url: '', price: '' })).toEqual({
-      value: { title: '곤봉', url: null, price: null },
+      value: { title: '곤봉', description: null, url: null, price: null },
       errors: null
     });
   });
 
   it('주소와 가격을 서버가 받을 모양으로 정리한다', () => {
     expect(validateProductForm({ title: '리본', url: 'coupang.com/x', price: '32,000' }).value).toEqual({
-      title: '리본', url: 'https://coupang.com/x', price: 32000
+      title: '리본', description: null, url: 'https://coupang.com/x', price: 32000
+    });
+  });
+
+  it('상세 설명은 줄바꿈을 지켜 보내고, 1000자를 넘으면 그 칸에 안내', () => {
+    expect(validateProductForm({ title: '리본', description: ' 6m\r\n막대 포함 ' }).value.description).toBe('6m\n막대 포함');
+    expect(validateProductForm({ title: '리본', description: 'a'.repeat(DESCRIPTION_MAX + 1) }).errors).toEqual({
+      description: '상세 설명은 1000자까지 입력할 수 있어요'
     });
   });
 
