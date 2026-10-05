@@ -64,6 +64,32 @@ describe('competitionMirror', () => {
     expect(patch.options).toEqual([{ id: 'opt_a', label: '볼' }]);
   });
 
+  it('옛 대회 화면에서 장소를 바꾸면 이벤트의 예전 주소·지도를 지운다', async () => {
+    Event.getByCompetitionId.mockResolvedValue({
+      id: 1, options: [], location: '올림픽공원', address: '서울 송파구 올림픽로 424', latitude: 37.5, longitude: 127.1
+    });
+    Event.update.mockResolvedValue({ id: 1 });
+
+    await syncCompetitionMirror({ ...competition, location: '잠실학생체육관' });
+
+    expect(Event.update.mock.calls[0][1]).toEqual(expect.objectContaining({
+      location: '잠실학생체육관', address: null, latitude: null, longitude: null
+    }));
+  });
+
+  it('장소가 그대로면 주소·지도를 남긴다 (이름·날짜만 바꾼 경우)', async () => {
+    Event.getByCompetitionId.mockResolvedValue({
+      id: 1, options: [], location: '올림픽공원', address: '서울 송파구 올림픽로 424', latitude: 37.5, longitude: 127.1
+    });
+    Event.update.mockResolvedValue({ id: 1 });
+
+    await syncCompetitionMirror({ ...competition, name: '이름 변경' });
+
+    expect(Event.update.mock.calls[0][1]).toEqual(expect.objectContaining({
+      address: '서울 송파구 올림픽로 424', latitude: 37.5, longitude: 127.1
+    }));
+  });
+
   it('이벤트가 없던 대회를 수정하면 그때 만들어 준다', async () => {
     Event.getByCompetitionId.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
     Event.create.mockResolvedValue({ id: 1 });

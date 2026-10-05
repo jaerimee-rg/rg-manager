@@ -1,6 +1,6 @@
 import pool from '../database.js';
 import Event from '../models/Event.js';
-import { competitionToEventFields } from './eventService.js';
+import { competitionToEventFields, placeAfterLocationChange } from './eventService.js';
 
 /**
  * 대회(competitions) ↔ 이벤트(events) 1:1 동기화.
@@ -26,7 +26,7 @@ export const mirrorFromCompetition = async (competition) => {
     if (existing) {
       return await Event.update(
         existing.id,
-        { ...existing, ...fields, options: existing.options },
+        { ...existing, ...fields, ...placeAfterLocationChange(existing, fields.location), options: existing.options },
         competition.userId,
         'admin'
       );
@@ -40,7 +40,10 @@ export const mirrorFromCompetition = async (competition) => {
   }
 };
 
-/** 대회를 수정했을 때 이벤트의 이름·날짜·장소를 맞춘다 */
+/**
+ * 대회를 수정했을 때 이벤트의 이름·날짜·장소를 맞춘다.
+ * 옛 대회 화면에는 주소 검색이 없으므로, 거기서 장소를 바꾸면 이벤트에 남은 예전 주소·지도는 지운다.
+ */
 export const syncCompetitionMirror = async (competition) => {
   if (!competition?.id) return null;
 
@@ -51,7 +54,7 @@ export const syncCompetitionMirror = async (competition) => {
     const fields = competitionToEventFields(competition);
     return await Event.update(
       existing.id,
-      { ...existing, ...fields },
+      { ...existing, ...fields, ...placeAfterLocationChange(existing, fields.location) },
       competition.userId,
       'admin'
     );

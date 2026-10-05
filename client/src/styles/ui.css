@@ -2226,6 +2226,32 @@ html { font-synthesis: none; }
   background: var(--rule);
 }
 
+/* 장소 지도 미리보기 (components/common/PlaceMap) — 카카오 지도가 이 칸을 채운다.
+   손그림 상자 모양으로 잘라 종이 위에 붙인 지도처럼 보이게 한다. */
+.ui-place-map {
+  width: 100%;
+  height: 200px;
+  border: var(--stroke-thin);
+  border-radius: var(--shape-box);
+  overflow: hidden;
+  background: var(--surface-muted);
+}
+.ui-place-map[hidden] { display: none; }
+@media (min-width: 768px) {
+  .ui-place-map { height: 260px; }
+}
+
+/* 주소 검색 (components/common/AddressSearchDialog) — 다음 우편번호 창을 끼워 넣는 칸.
+   검색 결과 목록이 창 안에서 스크롤되므로 높이를 고정한다. */
+.ui-address-search {
+  width: 100%;
+  height: 460px;
+}
+.ui-address-search[hidden] { display: none; }
+@media (max-width: 767px) {
+  .ui-address-search { height: 60vh; }
+}
+
 /* ---------------------------------------------------------------- *
  * 여백 유틸 — style={{ marginBottom: ... }} 를 대신한다.
  * 토큰 밖 숫자가 화면에 흩어지는 걸 막는 최소 세트만 둔다.

@@ -367,6 +367,10 @@ export const getEvent = async (req, res) => {
       endDate: event.endDate,
       startTime: event.startTime,
       location: event.location,
+      // 오시는 길 지도 — 선생님이 주소 검색으로 고른 경우에만 채워져 있다
+      address: event.address || null,
+      latitude: event.latitude ?? null,
+      longitude: event.longitude ?? null,
       description: event.description,
       options: event.options,
       requireOption: event.requireOption === true,

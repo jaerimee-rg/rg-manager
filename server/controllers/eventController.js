@@ -6,7 +6,9 @@ import {
   isKnownType,
   normalizeOptions,
   todayKst,
-  parseOptions
+  parseOptions,
+  parsePlace,
+  placeAfterLocationChange
 } from '../services/eventService.js';
 
 export const TITLE_MAX = 100;
@@ -41,6 +43,8 @@ const parseBody = (body, { type, previousOptions = [] }) => {
 
   const location = isClosure ? null : String(body.location ?? '').trim();
   if (!isClosure && !location) return { error: '장소를 입력해주세요.' };
+  // 주소·좌표는 선택이다(주소 검색을 쓴 경우에만). 휴관일은 장소가 없으니 함께 비운다.
+  const place = isClosure ? parsePlace(null) : parsePlace(body);
 
   const description = String(body.description ?? '').trim().slice(0, DESCRIPTION_MAX) || null;
   const options = isClosure ? [] : normalizeOptions(body.options, previousOptions);
@@ -53,6 +57,7 @@ const parseBody = (body, { type, previousOptions = [] }) => {
       endDate,
       startTime,
       location,
+      ...place,
       description,
       options,
       requireOption: !isClosure && body.requireOption === true && options.length > 0,
@@ -160,6 +165,17 @@ export const updateEvent = async (req, res) => {
 
     const parsed = parseBody(req.body, { type: existing.type, previousOptions: existing.options });
     if (parsed.error) return res.status(400).json({ error: parsed.error });
+
+    // 주소 칸을 아예 보내지 않은 수정(주소 기능 이전 번들이 열려 있던 탭 등)은 저장된 주소·좌표를 지우지 않는다.
+    // 다만 장소 이름이 바뀌었으면 예전 주소는 더 이상 맞지 않으니 지운다.
+    if (!Object.prototype.hasOwnProperty.call(req.body, 'address') && existing.type !== 'closure') {
+      Object.assign(parsed.value, {
+        address: existing.address ?? null,
+        latitude: existing.latitude ?? null,
+        longitude: existing.longitude ?? null,
+        ...placeAfterLocationChange(existing, parsed.value.location)
+      });
+    }
 
     // 신청이 걸린 옵션이 사라지면 화면에서 알려줄 수 있도록 수를 세어 함께 돌려준다.
     const keptIds = new Set(parsed.value.options.map((o) => o.id));

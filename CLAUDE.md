@@ -52,8 +52,8 @@ Client and server have **separate** Jest setups and are run from their own direc
 there is no root `package.json`, so there is no one command that runs everything.
 
 ```bash
-cd client && npm test          # jest — 951 tests / 71 suites
-cd server && npm test          # 1094 tests / 52 suites
+cd client && npm test          # jest — 999 tests / 74 suites
+cd server && npm test          # 1113 tests / 53 suites
 ```
 
 - **The server suite is ESM** (`"type": "module"` + `transform: {}`, i.e. no Babel) and only
@@ -367,7 +367,7 @@ Parents get their own accounts and a separate app under `/parent/*`. Design docs
 - **`middleware/roles.js`** — `rejectParents` reads the role off the JWT *without* deciding
   authentication (`verifyToken` still owns 401), so it is mounted at the router registration in
   `server.js` and every route file stays untouched. `requireRole('parent')` guards `/api/parent/*`.
-  Open to parents: `/api/auth/login|signup|kakao*|verify`, `/api/invite/*`, `/api/parent/*`,
+  Open to parents: `/api/auth/login|signup|kakao*|verify`, `/api/invite/*`, `/api/parent/*`, `/api/maps/*`,
   `/api/chat/public/*`, `GET /api/faq-files/:id/view`. **Add new teacher routers to the guarded
   list in `server.js`.**
 - **Invite link**: one per teacher (`parent_invites`), shown at 학부모 (`/parents`). The token
@@ -478,7 +478,7 @@ the rest of the app is unaffected.
 
 - **학부모 쪽 라우트** `/parent/events/:eventId` 는 **전체 화면 페이지** `pages/parent/ParentEventDetail.jsx`
   다 (2026-09-02, 바텀시트 `EventDetailSheet` 를 대체). 일정 카드를 눌러도 같은 페이지로 간다.
-  위에서 아래로 일시·장소 → (아이 선택) → **옵션 + 신청 버튼** → 안내 → 사진 → **신청한 학생 명단**.
+  위에서 아래로 일시·장소 → (아이 선택) → **옵션 + 신청 버튼** → 안내 → 오시는 길(지도) → 사진 → **신청한 학생 명단**.
   상세는 목록과 따로 조회하므로 올해 밖의 일정이어도 열리고, 404 면 "이벤트를 찾을 수 없어요" 화면.
   헤더의 뒤로 가기는 `ParentLayout` 의 `back` prop 이 그린다.
 - **신청한 학생 명단은 서버가 만든다.** `GET /api/parent/events/:id` 의 `registrations` 는
@@ -497,6 +497,33 @@ the rest of the app is unaffected.
   겹치지 않게 한다. 휴관일 행은 열지 않는다.
 - 초대(가입)는 이 링크에 실려 있지 않다. 계정이 없는 학부모는 `needsInvite` 안내를 보고, 초대 링크로
   가입한 뒤 (1시간 안이면) 같은 이벤트로 돌아간다.
+
+### Event Location Map (주소 검색 · 지도)
+
+이벤트 폼(`/events/new`, 수정)의 장소 아래 **[주소 검색]** 으로 주소를 고르면 지도가 바로 떠서 맞는 곳인지
+확인하고, 학부모 일정 상세(`/parent/events/:id`)의 **오시는 길** 섹션에 같은 지도와 카카오맵 링크가 뜬다.
+
+- **저장**: `events.address`(TEXT) · `latitude` · `longitude`(DOUBLE PRECISION), 셋 다 nullable. `location`(장소 이름)은
+  그대로 필수이고 주소는 선택이다 — 주소를 고르지 않은 예전 이벤트는 장소 이름만 보인다. 서버 `parsePlace()`
+  (`services/eventService.js`)가 주소 없으면 좌표를 버리고, 좌표가 하나라도 틀리면 주소만 남긴다. 휴관일은 모두 null.
+  옛 대회 화면에서 장소 이름을 바꾸면 미러(`competitionMirror.js`)가 예전 주소·좌표를 지운다(`placeAfterLocationChange`).
+- **주소 검색 = 다음 우편번호 서비스** (`t1.daumcdn.net/.../postcode.v2.js`, 키 없음). `AddressSearchDialog` 가 모달
+  안에 embed 한다(팝업은 휴대폰에서 막힌다). 장소 이름을 먼저 적어 두면 그 말로 바로 검색하고, 비어 있으면 고른
+  건물명(없으면 주소)으로 채운다.
+- **좌표·지도 = 카카오 지도 SDK** (`dapi.kakao.com/v2/maps/sdk.js?libraries=services&autoload=false`). 키는 빌드에 넣지 않고
+  `GET /api/maps/config` 가 서버 환경변수 `KAKAO_JS_KEY` 를 내려준다(로그인만 확인, 학부모 가드 없음) — 키를 바꿀 때
+  재빌드가 필요 없다. 주소 → 좌표는 선생님 브라우저가 `Geocoder.addressSearch` 로 찾아 함께 저장하고, 학부모 화면은
+  저장된 좌표로 그리기만 한다. 코드는 `utils/kakaoMap.js`(스크립트 로더·좌표·링크) · `components/common/PlaceMap.jsx`.
+- **키가 없거나 SDK 가 실패해도 깨지지 않는다**: 주소는 그대로 저장되고(좌표 null), 선생님 폼은 안내 문구, 학부모
+  화면은 지도 없이 주소 + "카카오맵에서 보기"(`map.kakao.com/link/search/<주소>`) 링크. 좌표 없이 저장된 주소는
+  수정 화면을 열 때 한 번 더 찾아 본다.
+- **카카오 콘솔 설정** (로그인과 같은 앱): [제품 설정 › 카카오맵] 사용 설정 ON(2026-07-21부터 필수) · [플랫폼 키 ›
+  JavaScript 키]의 JavaScript SDK 도메인에 `https://rg-manager.vercel.app`, `http://localhost:3000`. 와일드카드가 안 되므로
+  Vercel PR 미리보기 도메인에서는 지도가 안 뜬다(정상).
+- 지도 미리보기는 끌기·휠 확대를 끈다 — 휴대폰에서 페이지를 내리다 지도가 스크롤을 가로채지 않게. 크게 보기·길찾기는
+  카카오맵 링크(`map.kakao.com/link/map|to/<이름>,<위도>,<경도>`)가 맡는다.
+- **e2e** 는 두 스크립트와 `/api/maps/config` 를 `e2e/kakao-fakes.mjs` 로 바꿔 끼운다(localhost 는 카카오 콘솔에 없는 도메인이고
+  우편번호 창은 다른 출처의 iframe 이다). 진짜 SDK·키·도메인은 운영에서 눈으로 확인한다.
 
 ### Recommended Shop (추천 상품)
 
@@ -642,7 +669,7 @@ cd ../server && DATABASE_URL=postgresql://<user>@localhost:5432/rg_manager PORT=
   JWT_SECRET=local-dev-secret API_RATE_LIMIT_MAX=100000 AUTH_RATE_LIMIT_MAX=100000 \
   SUPABASE_URL=http://localhost:5056 SUPABASE_SECRET_KEY=e2e-fake node server.js &
 cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e:setup   # writes e2e/.sessions.json
-cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 92 tests
+cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 98 tests
 ```
 
 - **`design` project** (`e2e/design.spec.mjs`) checks the redesign in a real browser — computed
@@ -706,6 +733,9 @@ on every push to `main` via the GitHub integration. Render is no longer used.
 - `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` — event photo albums (Google Drive).
   Without them the album screens show "관리자에게 문의" guidance and nothing else breaks.
 - `GOOGLE_OAUTH_REDIRECT_URI` — optional; defaults to `${APP_URL}/api/drive/callback`
+- `KAKAO_JS_KEY` — Kakao **JavaScript** key for the event location map (see *Event Location Map*).
+  Optional: without it addresses are still searched and saved, only the map picture is missing.
+  Not the REST key (`KAKAO_CLIENT_ID`) — the map SDK rejects it.
 
 `APP_URL` and `KAKAO_REDIRECT_URI` must both match the live domain. They are resolved in
 `server/utils/appUrl.js`, which derives `KAKAO_REDIRECT_URI` from `APP_URL` when it is not

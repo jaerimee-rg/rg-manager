@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'fs';
 import { loginAs, api } from './helpers.mjs';
+import { stubKakaoMaps } from './kakao-fakes.mjs';
 
 const sessions = JSON.parse(readFileSync(new URL('./.sessions.json', import.meta.url)));
 const childName = sessions.students[0].name;
@@ -308,6 +309,68 @@ test.describe('학부모 — 선생님이 보낸 이벤트 공유 링크', () =>
 
     await expect(page).toHaveURL(new RegExp(`/parent/events/${event.id}$`));
     await expect(page.getByRole('heading', { name: event.title })).toBeVisible();
+  });
+
+  test('선생님이 주소를 고른 이벤트는 오시는 길에 지도와 카카오맵 링크가 보인다', async ({ page, request }) => {
+    await stubKakaoMaps(page);
+    const event = await createEvent(request, {
+      title: `e2e 오시는길 ${run}`,
+      location: '여의도 한강공원',
+      address: '서울 영등포구 여의동로 330',
+      latitude: 37.5284,
+      longitude: 126.9327
+    });
+
+    await loginAs(page, sessions.parentMulti);
+    await page.goto(`/parent/events/${event.id}`);
+
+    const section = page.getByTestId('place-section');
+    await expect(section.getByRole('heading', { name: '오시는 길' })).toBeVisible();
+    await expect(section.getByText('서울 영등포구 여의동로 330')).toBeVisible();
+    await expect(section.getByRole('img', { name: /위치 지도/ })).toContainText('가짜 지도 37.5284,126.9327');
+
+    const label = encodeURIComponent('여의도 한강공원');
+    await expect(section.getByRole('link', { name: '카카오맵에서 보기' }))
+      .toHaveAttribute('href', `https://map.kakao.com/link/map/${label},37.5284,126.9327`);
+    await expect(section.getByRole('link', { name: '길찾기' }))
+      .toHaveAttribute('href', `https://map.kakao.com/link/to/${label},37.5284,126.9327`);
+
+    // 휴대폰 폭에서 지도가 화면 밖으로 넘치지 않는다
+    const box = await section.getByRole('img', { name: /위치 지도/ }).boundingBox();
+    expect(box.width).toBeGreaterThan(200);
+    expect(box.x + box.width).toBeLessThanOrEqual(414);
+
+    // 신청이 먼저, 오시는 길은 그 아래
+    const registrationY = (await page.getByTestId('registration-section').boundingBox()).y;
+    expect(registrationY).toBeLessThan((await section.boundingBox()).y);
+  });
+
+  test('지도 키가 없으면 지도 없이 주소와 카카오맵 링크만 보인다', async ({ page, request }) => {
+    await stubKakaoMaps(page, { key: null });
+    const event = await createEvent(request, {
+      title: `e2e 지도키없음 ${run}`,
+      address: '서울 송파구 올림픽로 25',
+      latitude: 37.5122,
+      longitude: 127.0719
+    });
+
+    await loginAs(page, sessions.parentMulti);
+    await page.goto(`/parent/events/${event.id}`);
+
+    const section = page.getByTestId('place-section');
+    await expect(section.getByText('서울 송파구 올림픽로 25')).toBeVisible();
+    await expect(section.getByRole('img', { name: /위치 지도/ })).toHaveCount(0);
+    await expect(section.getByRole('link', { name: '카카오맵에서 보기' })).toBeVisible();
+  });
+
+  test('주소를 고르지 않은 이벤트에는 오시는 길이 없다', async ({ page, request }) => {
+    const event = await createEvent(request, { title: `e2e 주소없음 ${run}` });
+
+    await loginAs(page, sessions.parentMulti);
+    await page.goto(`/parent/events/${event.id}`);
+
+    await expect(page.getByRole('heading', { name: event.title })).toBeVisible();
+    await expect(page.getByTestId('place-section')).toHaveCount(0);
   });
 
   test('열 수 없는 이벤트(비공개) 링크는 안내를 보여주고 일정으로 갈 수 있다', async ({ page, request }) => {

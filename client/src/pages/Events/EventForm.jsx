@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import { EVENT_TYPES, splitDeadline, joinDeadline } from '../../utils/eventFormat';
+import { hasCoordinates, locateAddress } from '../../utils/kakaoMap';
 import OptionsEditor from './OptionsEditor';
+import AddressSearchDialog from '../../components/common/AddressSearchDialog';
+import PlaceMap from '../../components/common/PlaceMap';
 import {
-  Button, Callout, Card, ClearableInput, Container, Field, Input, PageHeader, SwitchField, Textarea
+  Button, Callout, Card, ClearableInput, Container, Field, Icon, Input, PageHeader, Row, Spinner, SwitchField, Textarea
 } from '../../components/ui';
 
 const TYPE_HINTS = {
@@ -13,6 +16,15 @@ const TYPE_HINTS = {
   closure: '신청 없음 · 안내만'
 };
 
+// 주소를 골랐는데 지도에 못 올렸을 때의 안내. 어느 경우든 주소는 저장된다.
+const MAP_NOTES = {
+  no_key: '지도 키가 아직 설정되지 않아 지도는 보이지 않아요. 주소는 저장되고, 학부모에게는 카카오맵 링크로 보여요.',
+  not_found: '이 주소를 지도에서 찾지 못했어요. 주소는 저장되고, 학부모에게는 카카오맵 링크로 보여요.',
+  error: '지도를 불러오지 못했어요. 주소는 그대로 저장돼요.'
+};
+
+const toCoordinate = (value) => (value === null || value === undefined || value === '' ? null : Number(value));
+
 const emptyForm = {
   type: 'competition',
   title: '',
@@ -20,6 +32,9 @@ const emptyForm = {
   endDate: '',
   startTime: '',
   location: '',
+  address: '',
+  latitude: null,
+  longitude: null,
   description: '',
   requireOption: false,
   isPublished: true,
@@ -66,6 +81,30 @@ function EventForm({ basePath = '/events' }) {
   const [usageById, setUsageById] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [mapNote, setMapNote] = useState(null);
+  // 주소를 연달아 바꾸면 늦게 도착한 좌표가 새 주소를 덮지 않도록 요청마다 번호를 붙인다
+  const locateSeq = useRef(0);
+
+  /** 주소 → 좌표를 찾아 폼에 넣는다. 못 찾으면 이유만 남기고 주소는 그대로 둔다. */
+  const locate = async (address) => {
+    const seq = ++locateSeq.current;
+    setMapNote(null);
+    setLocating(true);
+
+    const found = await locateAddress(address);
+    if (seq !== locateSeq.current) return;
+
+    setLocating(false);
+    if (found.ok) {
+      setForm((prev) => (prev.address === address
+        ? { ...prev, latitude: found.latitude, longitude: found.longitude }
+        : prev));
+    } else {
+      setMapNote(found.reason);
+    }
+  };
 
   useEffect(() => {
     if (!editing) return;
@@ -78,6 +117,9 @@ function EventForm({ basePath = '/events' }) {
       endDate: editing.endDate || '',
       startTime: editing.startTime || '',
       location: editing.location || '',
+      address: editing.address || '',
+      latitude: editing.address ? toCoordinate(editing.latitude) : null,
+      longitude: editing.address ? toCoordinate(editing.longitude) : null,
       description: editing.description || '',
       requireOption: editing.requireOption === true,
       isPublished: editing.isPublished !== false,
@@ -86,6 +128,13 @@ function EventForm({ basePath = '/events' }) {
       deadlineTime: deadline.time
     });
     setOptions(editing.options || []);
+
+    // 키가 없을 때 저장해 좌표가 빠진 주소는 다시 열 때 한 번 더 찾아 본다
+    if (editing.type !== 'closure' && editing.address && !hasCoordinates({
+      latitude: toCoordinate(editing.latitude), longitude: toCoordinate(editing.longitude)
+    })) {
+      locate(editing.address);
+    }
 
     // 옵션을 지울 때 "n건의 신청이 선택했습니다" 를 보여주기 위해 사용 수를 받아둔다.
     if (editing.type !== 'closure') {
@@ -104,9 +153,32 @@ function EventForm({ basePath = '/events' }) {
   const isClosure = form.type === 'closure';
   const set = (patch) => setForm((prev) => ({ ...prev, ...patch }));
 
+  const pickAddress = ({ address, placeName }) => {
+    setSearchOpen(false);
+    if (!address) return;
+
+    setForm((prev) => ({
+      ...prev,
+      address,
+      latitude: null,
+      longitude: null,
+      // 장소 이름을 아직 비워 뒀으면 건물명(없으면 주소)으로 채운다 — 그대로 고쳐 쓸 수 있다
+      location: prev.location.trim() ? prev.location : (placeName || address)
+    }));
+    locate(address);
+  };
+
+  const clearAddress = () => {
+    locateSeq.current += 1;
+    setLocating(false);
+    setMapNote(null);
+    set({ address: '', latitude: null, longitude: null });
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     setError('');
+    if (locating) return;
 
     if (!form.title.trim()) return setError('이벤트 이름을 입력해주세요.');
     if (!form.date) return setError('날짜를 선택해주세요.');
@@ -125,6 +197,10 @@ function EventForm({ basePath = '/events' }) {
         ...form,
         title: form.title.trim(),
         location: isClosure ? null : form.location.trim(),
+        // 주소·좌표는 주소 검색으로 고른 경우에만. 휴관일은 장소가 없으니 함께 비운다.
+        address: isClosure ? null : (form.address || null),
+        latitude: isClosure || !form.address ? null : form.latitude,
+        longitude: isClosure || !form.address ? null : form.longitude,
         description: form.description.trim(),
         endDate: form.endDate || null,
         startTime: isClosure ? null : (form.startTime || null),
@@ -224,6 +300,49 @@ function EventForm({ basePath = '/events' }) {
                       />
                     )}
                   </Field>
+                </div>
+              )}
+
+              {/* 주소는 선택이다. 고르면 아래에 지도가 떠서 맞는 곳인지 바로 확인하고,
+                  학부모 일정 상세에도 같은 지도가 보인다. */}
+              {!isClosure && (
+                <div className="event-form__field">
+                  <span className="ui-field__label" id="ev-address-label">
+                    주소
+                    <span className="event-form__note">고르면 학부모 일정에 지도가 보여요</span>
+                  </span>
+                  <div className="event-form__place" role="group" aria-labelledby="ev-address-label">
+                    {form.address && (
+                      <div className="event-form__address">
+                        <Icon name="mapPin" size={18} />
+                        <span data-testid="event-address">{form.address}</span>
+                      </div>
+                    )}
+
+                    <Row gap={2} wrap>
+                      <Button icon="search" onClick={() => setSearchOpen(true)}>
+                        {form.address ? '주소 변경' : '주소 검색'}
+                      </Button>
+                      {form.address && (
+                        <Button variant="ghost" icon="x" onClick={clearAddress}>주소 지우기</Button>
+                      )}
+                    </Row>
+
+                    {locating && <Spinner inline label="지도에서 위치를 찾는 중" />}
+
+                    {form.address && hasCoordinates(form) && (
+                      <PlaceMap
+                        latitude={form.latitude}
+                        longitude={form.longitude}
+                        name={form.location}
+                        fallback={<p className="ui-field__hint event-form__map-note">{MAP_NOTES.error}</p>}
+                      />
+                    )}
+
+                    {mapNote && !locating && (
+                      <p className="ui-field__hint event-form__map-note" role="status">{MAP_NOTES[mapNote]}</p>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -330,9 +449,17 @@ function EventForm({ basePath = '/events' }) {
           </div>
         )}
 
+        <AddressSearchDialog
+          open={searchOpen}
+          onClose={() => setSearchOpen(false)}
+          onSelect={pickAddress}
+          query={form.address ? '' : form.location}
+        />
+
         <div className="event-form__actions">
-          <Button type="submit" variant="primary" loading={saving} disabled={saving}>
-            {saving ? '저장 중...' : '저장'}
+          {/* 좌표를 찾는 사이 저장하면 주소만 남고 지도가 빠진다 — 찾을 때까지(최대 10초) 기다린다 */}
+          <Button type="submit" variant="primary" loading={saving} disabled={saving || locating}>
+            {saving ? '저장 중...' : locating ? '위치 찾는 중...' : '저장'}
           </Button>
           <Button type="button" variant="outline" onClick={() => navigate(basePath)}>
             취소

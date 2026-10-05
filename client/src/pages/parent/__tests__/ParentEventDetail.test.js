@@ -10,6 +10,11 @@ jest.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate
 }));
 
+// 지도 SDK 는 PlaceMap 자체 테스트가 본다 — 여기서는 어떤 좌표로 그리는지만.
+jest.mock('../../../components/common/PlaceMap', () => (props) => (
+  <div data-testid="map" data-lat={props.latitude} data-lng={props.longitude} data-name={props.name} />
+));
+
 import { fetchWithAuth } from '../../../utils/api';
 import ParentEventDetail from '../ParentEventDetail';
 
@@ -160,5 +165,63 @@ describe('ParentEventDetail — 전체 화면 상세', () => {
 
     expect(screen.getByText(/이 선생님께 등록된 아이가 없어요/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /신청/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('ParentEventDetail — 오시는 길 (지도)', () => {
+  const PLACED = { ...EVENT, address: '서울 영등포구 여의동로 330', latitude: 37.5284, longitude: 126.9327 };
+
+  it('선생님이 고른 주소가 있으면 장소 이름·주소·지도와 카카오맵 링크를 보여 준다', async () => {
+    await renderDetail(PLACED);
+
+    const section = screen.getByTestId('place-section');
+    expect(within(section).getByText('오시는 길')).toBeInTheDocument();
+    expect(within(section).getByText('한강공원')).toBeInTheDocument();
+    expect(within(section).getByText('서울 영등포구 여의동로 330')).toBeInTheDocument();
+
+    const map = within(section).getByTestId('map');
+    expect(map).toHaveAttribute('data-lat', '37.5284');
+    expect(map).toHaveAttribute('data-lng', '126.9327');
+
+    const label = encodeURIComponent('한강공원');
+    const view = within(section).getByRole('link', { name: '카카오맵에서 보기' });
+    expect(view).toHaveAttribute('href', `https://map.kakao.com/link/map/${label},37.5284,126.9327`);
+    expect(view).toHaveAttribute('target', '_blank');
+    expect(view).toHaveAttribute('rel', expect.stringContaining('noopener'));
+    expect(within(section).getByRole('link', { name: '길찾기' }))
+      .toHaveAttribute('href', `https://map.kakao.com/link/to/${label},37.5284,126.9327`);
+  });
+
+  it('안내 아래, 신청한 학생 명단 위에 온다', async () => {
+    await renderDetail(PLACED);
+
+    const description = screen.getByText('운동화를 신고 오세요.');
+    const place = screen.getByTestId('place-section');
+    const roster = screen.getByTestId('roster-section');
+    expect(description.compareDocumentPosition(place) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(place.compareDocumentPosition(roster) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('좌표 없이 주소만 있으면 지도 없이 주소 검색 링크만 (길찾기 없음)', async () => {
+    await renderDetail({ ...PLACED, latitude: null, longitude: null });
+
+    const section = screen.getByTestId('place-section');
+    expect(within(section).queryByTestId('map')).not.toBeInTheDocument();
+    expect(within(section).getByRole('link', { name: '카카오맵에서 보기' }))
+      .toHaveAttribute('href', `https://map.kakao.com/link/search/${encodeURIComponent('서울 영등포구 여의동로 330')}`);
+    expect(within(section).queryByRole('link', { name: '길찾기' })).not.toBeInTheDocument();
+  });
+
+  it('주소를 고르지 않은 이벤트(예전 이벤트)는 오시는 길이 없다 — 장소 이름만', async () => {
+    await renderDetail({ ...EVENT, address: null, latitude: null, longitude: null });
+
+    expect(screen.queryByTestId('place-section')).not.toBeInTheDocument();
+    expect(screen.getByText('한강공원')).toBeInTheDocument();
+  });
+
+  it('휴관일은 주소가 남아 있어도 지도를 그리지 않는다', async () => {
+    await renderDetail({ ...PLACED, type: 'closure', options: [], children: [] });
+
+    expect(screen.queryByTestId('place-section')).not.toBeInTheDocument();
   });
 });

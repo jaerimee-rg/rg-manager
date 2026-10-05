@@ -20,6 +20,7 @@ import parentRoutes from './routes/parent.js';
 import faqRoutes from './routes/faqs.js';
 import chatRoutes from './routes/chat.js';
 import shopRoutes from './routes/shop.js';
+import mapRoutes from './routes/maps.js';
 import {
   RATE_LIMIT_WINDOW_MS,
   PUBLIC_CHAT_READ_MAX,
@@ -227,6 +228,8 @@ app.use('/api/teacher-invites', rejectParents, teacherInviteRoutes);
 
 // 학부모 전용 API (라우터 안에서 role='parent' 만 통과시킨다)
 app.use('/api/parent', parentRoutes);
+// 지도 SDK 키 — 선생님 이벤트 폼과 학부모 일정 상세가 함께 쓰므로 학부모 가드를 걸지 않는다.
+app.use('/api/maps', mapRoutes);
 app.use('/api/faqs', rejectParents, faqRoutes);
 app.use('/api/chat', (req, res, next) => {
   // 공개 채팅(/api/chat/public/*)은 비로그인 학부모용이라 그대로 통과시킨다.

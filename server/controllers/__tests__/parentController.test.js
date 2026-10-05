@@ -376,6 +376,26 @@ describe('parentController', () => {
       expect(payload.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
 
+    it('오시는 길 지도용 주소·좌표를 함께 준다 (없으면 null)', async () => {
+      req.params.id = '5';
+      Event.getPublishedForParent.mockResolvedValue({
+        ...openEvent, address: '서울 송파구 올림픽로 424', latitude: 37.5203, longitude: 127.1236
+      });
+
+      await getEvent(req, res);
+
+      expect(res.json.mock.calls[0][0]).toEqual(expect.objectContaining({
+        address: '서울 송파구 올림픽로 424', latitude: 37.5203, longitude: 127.1236
+      }));
+
+      Event.getPublishedForParent.mockResolvedValue(openEvent);
+      await getEvent(req, res);
+
+      expect(res.json.mock.calls[1][0]).toEqual(expect.objectContaining({
+        address: null, latitude: null, longitude: null
+      }));
+    });
+
     describe('신청한 학생 명단 (registrations)', () => {
       const roster = [
         { id: 1, studentId: 100, status: 'registered', optionIds: [openEvent.options[0].id], studentName: '김민서', parentName: '민서엄마', studentBirthdate: '2018-01-01' },
