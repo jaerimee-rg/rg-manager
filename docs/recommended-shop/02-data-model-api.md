@@ -196,7 +196,9 @@ WHERE "userId" = $1 AND ($2::text IS NULL OR "createdAt" >= $2);
 
 -- 상품별 (클릭 0 상품도 나오도록 상품 기준 LEFT JOIN)
 SELECT p.id, p.title, p."imageUrl", p."isVisible", p."categoryId",
-       (p.url IS NOT NULL) AS "hasUrl",
+       -- 공개 목록에서 누를 수 있는 상품(링크·사진·예약 중 하나) — ShopProduct.CLICKABLE_SQL
+       (p.url IS NOT NULL OR p."isReservable" = TRUE
+        OR EXISTS (SELECT 1 FROM shop_product_images i WHERE i."productId" = p.id)) AS clickable,
        COUNT(e.id)                  AS clicks,
        COUNT(DISTINCT e."visitorKey") AS visitors,
        MAX(e."createdAt")           AS "lastClickedAt"
@@ -217,7 +219,7 @@ GROUP BY p.id;
   "summary": { "views": 124, "visitors": 41, "clicks": 87, "clickVisitors": 29 },
   "products": [
     { "rank": 1, "id": 12, "title": "사사키 리본 6m (핑크)", "imageUrl": "…", "categoryId": 3, "categoryName": "기구",
-      "isVisible": true, "hasUrl": true, "clicks": 31, "visitors": 18, "lastClickedAt": "2026-10-03T11:20:00.000Z" }
+      "isVisible": true, "clickable": true, "clicks": 31, "visitors": 18, "lastClickedAt": "2026-10-03T11:20:00.000Z" }
   ],
   "categories": [ { "id": 3, "name": "기구", "clicks": 52 }, { "id": null, "name": "카테고리 없음", "clicks": 0 } ]
 }

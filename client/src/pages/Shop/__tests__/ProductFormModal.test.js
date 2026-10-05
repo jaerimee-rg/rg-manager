@@ -55,6 +55,18 @@ beforeEach(() => {
   global.URL.revokeObjectURL = jest.fn();
 });
 
+describe('ProductFormModal — 수정 창의 누적 클릭', () => {
+  it('링크가 없어도 사진이 있으면 공개 목록에서 누를 수 있으니 누적 클릭을 보여 준다', () => {
+    setup({ product: { ...EDIT, url: null, clickCount: 3 } });
+    expect(screen.getByText('누적 클릭 3')).toBeInTheDocument();
+  });
+
+  it('링크·사진·예약이 모두 없으면 누를 수 없는 카드라 세지 않는다고 적는다', () => {
+    setup({ product: { ...EDIT, url: null, images: [], isReservable: false, clickCount: 0 } });
+    expect(screen.getByText('누를 수 없는 카드라 클릭을 세지 않아요')).toBeInTheDocument();
+  });
+});
+
 describe('ProductFormModal — 필수는 타이틀뿐 (FR-410~416)', () => {
   it('타이틀 없이 저장하면 필드 아래에 안내하고 서버를 부르지 않는다', async () => {
     setup();

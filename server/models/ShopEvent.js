@@ -1,5 +1,6 @@
 import pool from '../database.js';
 import { CLICK_DEDUP_MS, VIEW_DEDUP_MS } from '../utils/shopValidation.js';
+import { CLICKABLE_SQL } from './ShopProduct.js';
 
 // 공개 상점 방문·클릭 기록. 시각은 다른 테이블처럼 ISO 문자열이라 문자열 비교가 곧 시간 비교다.
 class ShopEvent {
@@ -46,13 +47,13 @@ class ShopEvent {
     return result.rows[0];
   }
 
-  /** 상품별 클릭 — 클릭 0 상품도 나오도록 상품 기준으로 묶는다 */
+  /** 상품별 클릭 — 클릭 0 상품도 나오도록 상품 기준으로 묶는다. clickable = 공개 목록에서 누를 수 있는 상품 */
   static async productStats(userId, since) {
     const result = await pool.query(
       `SELECT p.id, p.title, p."isVisible", p."categoryId",
               (SELECT i."imageUrl" FROM shop_product_images i
                WHERE i."productId" = p.id ORDER BY i."sortOrder", i.id LIMIT 1) AS "imageUrl",
-              (p.url IS NOT NULL) AS "hasUrl",
+              (${CLICKABLE_SQL}) AS clickable,
               COUNT(e.id) AS clicks,
               COUNT(DISTINCT e."visitorKey") AS visitors,
               MAX(e."createdAt") AS "lastClickedAt"

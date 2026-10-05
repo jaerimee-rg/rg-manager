@@ -48,6 +48,13 @@ export const safeHref = (url) => {
   return normalizeUrl(url).value ?? null;
 };
 
+/**
+ * 공개 상점 목록에서 누를 수 있는 상품 — 링크·사진·예약 중 하나라도 있으면 상세가 열린다.
+ * 누르면 클릭으로 센다(FR-440). 서버 ShopProduct.getClickable 과 같은 규칙.
+ */
+export const isClickableProduct = (product) =>
+  Boolean(safeHref(product?.url)) || (product?.images?.length || 0) > 0 || product?.isReservable === true;
+
 /** "coupang.com" — www. 는 뗀다. 주소가 아니면 빈 문자열 */
 export const hostnameOf = (url) => {
   const href = safeHref(url);

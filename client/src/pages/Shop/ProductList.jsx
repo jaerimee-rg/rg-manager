@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { filterByCategory, formatPrice, hostnameOf, matchProductTitle } from '../../utils/shopFormat';
+import { filterByCategory, formatPrice, hostnameOf, isClickableProduct, matchProductTitle } from '../../utils/shopFormat';
 import { dropIndex, dropMarker } from '../../utils/reorder';
 import {
   Badge, Button, Callout, Card, Chip, DataTable, EmptyState, Icon, IconButton, Row, SearchInput, Switch, Toolbar
@@ -251,7 +251,8 @@ function ProductList({ products, categories, onCreate, onEdit, onDelete, onToggl
       header: '누적 클릭',
       width: '88px',
       numeric: true,
-      render: (product) => (product.url ? product.clickCount || 0 : <span className="ui-text-subtle">—</span>)
+      // 공개 목록에서 누를 수 없는 카드(링크·사진·예약 모두 없음)는 셀 클릭이 없다
+      render: (product) => (isClickableProduct(product) ? product.clickCount || 0 : <span className="ui-text-subtle">—</span>)
     },
     {
       key: 'actions',

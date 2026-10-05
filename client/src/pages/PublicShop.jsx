@@ -123,6 +123,12 @@ function PublicShop() {
     next.delete('p');
     setSearchParams(next, { replace: true });
   };
+  // 목록에서 상품을 누른 것이 클릭이다(FR-440). 그렇게 연 상세의 쇼핑몰 버튼은 같은 클릭이라 다시 세지 않고,
+  // 공유된 ?p= 주소로 바로 들어온 상세에서만 쇼핑몰 버튼을 센다
+  const countClick = (product) => trackClick(publicId, product.id);
+  const countLinkClick = (product) => {
+    if (!location.state?.shopDetail) countClick(product);
+  };
 
   return (
     <div className="shop-public">
@@ -163,6 +169,7 @@ function PublicShop() {
                     categoryName={names.get(product.categoryId)}
                     to={detailSearch(product.id)}
                     state={{ shopDetail: true }}
+                    onOpen={countClick}
                   />
                 ))}
               </div>
@@ -179,7 +186,7 @@ function PublicShop() {
           categoryName={names.get(opened.categoryId)}
           publicId={publicId}
           onClose={closeDetail}
-          onOpenLink={(p) => trackClick(publicId, p.id)}
+          onOpenLink={countLinkClick}
         />
       )}
     </div>

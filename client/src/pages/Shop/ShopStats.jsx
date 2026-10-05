@@ -16,7 +16,7 @@ const RANGES = [
 const dash = <span className="ui-text-subtle">—</span>;
 
 /**
- * 통계 탭 (FR-450~455) — 어떤 상품 링크가 많이 눌렸는지.
+ * 통계 탭 (FR-450~455) — 공개 상점에서 어떤 상품이 많이 눌렸는지.
  * 클릭 0 상품도 표에 남겨 "안 눌리는 상품" 이 보이게 한다.
  */
 function ShopStats({ onCopyLink }) {
@@ -74,8 +74,8 @@ function ShopStats({ onCopyLink }) {
   }
 
   const { summary, products, categories } = data;
-  const linked = products.filter((p) => p.hasUrl);
-  const maxClicks = Math.max(0, ...linked.map((p) => p.clicks));
+  const clickable = products.filter((p) => p.clickable);
+  const maxClicks = Math.max(0, ...clickable.map((p) => p.clicks));
   const maxCategory = Math.max(0, ...categories.map((c) => c.clicks));
 
   if (summary.views === 0 && summary.clicks === 0) {
@@ -109,7 +109,7 @@ function ShopStats({ onCopyLink }) {
       render: (p) => (
         <ProductItem
           product={p}
-          subtitle={p.hasUrl ? p.categoryName : <>{p.categoryName} · <span className="ui-text-subtle">링크 없음</span></>}
+          subtitle={p.clickable ? p.categoryName : <>{p.categoryName} · <span className="ui-text-subtle">누를 수 없는 카드</span></>}
         />
       )
     },
@@ -118,14 +118,14 @@ function ShopStats({ onCopyLink }) {
       header: '클릭',
       width: '132px',
       numeric: true,
-      render: (p) => (p.hasUrl ? (
+      render: (p) => (p.clickable ? (
         <span className="shop-bar-cell">
           <Progress value={p.clicks} max={maxClicks || 1} label={`${p.title} 클릭`} />
           <b className="ui-num">{p.clicks}</b>
         </span>
       ) : dash)
     },
-    { key: 'visitors', header: '클릭한 방문자', width: '108px', numeric: true, render: (p) => (p.hasUrl ? p.visitors : dash) },
+    { key: 'visitors', header: '클릭한 방문자', width: '108px', numeric: true, render: (p) => (p.clickable ? p.visitors : dash) },
     { key: 'last', header: '마지막 클릭', width: '120px', render: (p) => formatClickTime(p.lastClickedAt) || dash }
   ];
 
@@ -136,7 +136,7 @@ function ShopStats({ onCopyLink }) {
       <div className="shop-stat-grid">
         <Stat label="상점 방문" value={summary.views} icon="eye" hint="상점 페이지를 연 횟수" />
         <Stat label="방문자" value={summary.visitors} icon="users" hint="서로 다른 브라우저" />
-        <Stat label="상품 클릭" value={summary.clicks} icon="external" tone="brand" hint="구매 링크를 누른 횟수" />
+        <Stat label="상품 클릭" value={summary.clicks} icon="external" tone="brand" hint="상품을 누른 횟수" />
         <Stat
           label="클릭한 방문자"
           value={summary.clickVisitors}
