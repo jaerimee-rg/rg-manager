@@ -60,10 +60,14 @@ export async function loadPostcode() {
 export function getKakaoMapKey() {
   if (!configPromise) {
     configPromise = fetchWithAuth('/api/maps/config')
-      .then((response) => (response.ok ? response.json() : null))
+      .then((response) => {
+        if (!response.ok) throw new Error(`지도 설정 응답 ${response.status}`);
+        return response.json();
+      })
       .then((data) => (typeof data?.kakaoJsKey === 'string' && data.kakaoJsKey ? data.kakaoJsKey : null))
       .catch((error) => {
-        // 네트워크 실패는 다음 화면에서 다시 물을 수 있게 기억하지 않는다
+        // 네트워크 실패·429·5xx 는 "키 없음" 으로 굳히지 않고 다음에 다시 묻는다.
+        // 서버가 정상 응답으로 null 을 준 경우(진짜 키 없음)만 기억한다.
         configPromise = null;
         console.error('지도 설정 조회 실패:', error);
         return null;
@@ -111,13 +115,28 @@ export function pickPostcodeAddress(data = {}) {
 export const hasCoordinates = (place) =>
   Number.isFinite(place?.latitude) && Number.isFinite(place?.longitude);
 
+export const LOCATE_TIMEOUT_MS = 10000;
+
 /**
  * 주소 → 좌표. 지도에 쓸 수 없으면 이유를 함께 돌려준다.
+ * 선생님 폼은 찾는 동안 저장을 막으므로, SDK 가 응답하지 않아도 정해진 시간 뒤에는 error 로 끝낸다.
  * @returns {Promise<{ok:true,latitude:number,longitude:number}|{ok:false,reason:'no_key'|'not_found'|'error'}>}
  */
-export async function locateAddress(address) {
-  if (!address) return { ok: false, reason: 'not_found' };
+export function locateAddress(address, { timeoutMs = LOCATE_TIMEOUT_MS } = {}) {
+  if (!address) return Promise.resolve({ ok: false, reason: 'not_found' });
 
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      console.error('주소 좌표 찾기 시간 초과:', address);
+      resolve({ ok: false, reason: 'error' });
+    }, timeoutMs);
+  });
+
+  return Promise.race([geocode(address), timeout]).finally(() => clearTimeout(timer));
+}
+
+async function geocode(address) {
   try {
     const key = await getKakaoMapKey();
     if (!key) return { ok: false, reason: 'no_key' };

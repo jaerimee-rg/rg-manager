@@ -293,6 +293,28 @@ describe('eventController', () => {
       }));
     });
 
+    it('주소 칸을 아예 보내지 않은 수정(예전 번들)은 저장된 주소·좌표를 지우지 않는다', async () => {
+      Event.getById.mockResolvedValue({
+        ...existing, location: '올림픽공원', address: '서울 송파구 올림픽로 424', latitude: 37.5203, longitude: 127.1236
+      });
+      Event.update.mockResolvedValue({ id: 5 });
+      EventRegistration.listByEvent.mockResolvedValue([]);
+      req.params.id = '5';
+
+      req.body = { title: '이름만 바꿈', date: '2026-09-12', location: '올림픽공원', options: existing.options };
+      await updateEvent(req, res);
+      expect(Event.update.mock.calls[0][1]).toEqual(expect.objectContaining({
+        title: '이름만 바꿈', address: '서울 송파구 올림픽로 424', latitude: 37.5203, longitude: 127.1236
+      }));
+
+      // 장소 이름까지 바꿨다면 예전 주소는 맞지 않으니 지운다
+      req.body = { title: '이름만 바꿈', date: '2026-09-12', location: '잠실학생체육관', options: existing.options };
+      await updateEvent(req, res);
+      expect(Event.update.mock.calls[1][1]).toEqual(expect.objectContaining({
+        location: '잠실학생체육관', address: null, latitude: null, longitude: null
+      }));
+    });
+
     it('신청이 걸린 옵션을 지우면 그 수를 알려준다', async () => {
       Event.getById.mockResolvedValue(existing);
       Event.update.mockResolvedValue({ id: 5 });

@@ -178,6 +178,7 @@ function EventForm({ basePath = '/events' }) {
   const submit = async (e) => {
     e.preventDefault();
     setError('');
+    if (locating) return;
 
     if (!form.title.trim()) return setError('이벤트 이름을 입력해주세요.');
     if (!form.date) return setError('날짜를 선택해주세요.');
@@ -456,8 +457,9 @@ function EventForm({ basePath = '/events' }) {
         />
 
         <div className="event-form__actions">
-          <Button type="submit" variant="primary" loading={saving} disabled={saving}>
-            {saving ? '저장 중...' : '저장'}
+          {/* 좌표를 찾는 사이 저장하면 주소만 남고 지도가 빠진다 — 찾을 때까지(최대 10초) 기다린다 */}
+          <Button type="submit" variant="primary" loading={saving} disabled={saving || locating}>
+            {saving ? '저장 중...' : locating ? '위치 찾는 중...' : '저장'}
           </Button>
           <Button type="button" variant="outline" onClick={() => navigate(basePath)}>
             취소

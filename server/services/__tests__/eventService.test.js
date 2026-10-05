@@ -201,4 +201,8 @@ describe('placeAfterLocationChange', () => {
   it('비어 있던 장소는 null 과 빈 문자열을 같게 본다', () => {
     expect(placeAfterLocationChange({ location: null }, '')).toEqual({});
   });
+
+  it('앞뒤 공백만 다르면 같은 장소다 (옛 대회 화면이 공백을 남겨 저장해도 지도를 지우지 않는다)', () => {
+    expect(placeAfterLocationChange(existing, '  올림픽공원 ')).toEqual({});
+  });
 });

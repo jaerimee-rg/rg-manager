@@ -118,9 +118,11 @@ export const parsePlace = (body) => {
   return { address, latitude, longitude };
 };
 
-/** 장소 이름이 바뀌었으면 예전 장소의 주소·지도는 더 이상 맞지 않는다 */
+const sameLocation = (a, b) => String(a ?? '').trim() === String(b ?? '').trim();
+
+/** 장소 이름이 바뀌었으면 예전 장소의 주소·지도는 더 이상 맞지 않는다 (앞뒤 공백만 다른 건 같은 장소) */
 export const placeAfterLocationChange = (existing, nextLocation) =>
-  (existing && (existing.location || null) !== (nextLocation || null) ? { ...NO_PLACE } : {});
+  (existing && !sameLocation(existing.location, nextLocation) ? { ...NO_PLACE } : {});
 
 /** 대회 행 → 이벤트 필드 (미러 생성·갱신에 함께 쓴다) */
 export const competitionToEventFields = (competition) => ({

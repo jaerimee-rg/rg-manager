@@ -338,6 +338,27 @@ describe('EventForm — 주소 검색과 지도', () => {
     expect(field('장소')).toHaveValue('KSPO DOME');
   });
 
+  it('좌표를 찾는 동안에는 저장을 막는다 — 그 사이 저장하면 지도가 빠진다', async () => {
+    let answer;
+    locateAddress.mockImplementation(() => new Promise((resolve) => { answer = resolve; }));
+    await renderForm();
+    fillBasics();
+
+    await searchAndPick();
+
+    const saveButton = screen.getByRole('button', { name: '위치 찾는 중...' });
+    expect(saveButton).toBeDisabled();
+    expect(screen.getByText('지도에서 위치를 찾는 중')).toBeInTheDocument();
+
+    await act(async () => {
+      answer({ ok: true, latitude: 37.5203, longitude: 127.1236 });
+    });
+    expect(screen.getByRole('button', { name: '저장' })).toBeEnabled();
+
+    await save();
+    expect(savedPayload()).toMatchObject({ latitude: 37.5203, longitude: 127.1236 });
+  });
+
   it('지도 키가 없으면 안내만 보이고, 주소는 좌표 없이 저장된다', async () => {
     locateAddress.mockResolvedValue({ ok: false, reason: 'no_key' });
     await renderForm();

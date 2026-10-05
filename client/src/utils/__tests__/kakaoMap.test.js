@@ -165,13 +165,20 @@ describe('getKakaoMapKey', () => {
     expect(fetchWithAuth).toHaveBeenCalledWith('/api/maps/config');
   });
 
-  it('키가 없거나 응답이 이상하면 null', async () => {
+  it('서버가 정상 응답으로 키 없음(null)을 주면 그대로 기억한다', async () => {
     fetchWithAuth.mockImplementation(() => ok({ kakaoJsKey: null }));
     await expect(getKakaoMapKey()).resolves.toBeNull();
-
-    resetKakaoMapState();
-    fetchWithAuth.mockImplementation(() => Promise.resolve({ ok: false, json: () => Promise.resolve({}) }));
     await expect(getKakaoMapKey()).resolves.toBeNull();
+    expect(fetchWithAuth).toHaveBeenCalledTimes(1);
+  });
+
+  it('429·5xx 같은 실패 응답은 "키 없음" 으로 굳히지 않고 다음에 다시 묻는다', async () => {
+    fetchWithAuth.mockImplementationOnce(() => Promise.resolve({ ok: false, status: 429, json: () => Promise.resolve({}) }));
+    await expect(getKakaoMapKey()).resolves.toBeNull();
+
+    fetchWithAuth.mockImplementation(() => ok({ kakaoJsKey: 'js-key' }));
+    await expect(getKakaoMapKey()).resolves.toBe('js-key');
+    expect(fetchWithAuth).toHaveBeenCalledTimes(2);
   });
 
   it('네트워크 실패는 기억하지 않고 다음에 다시 묻는다', async () => {
@@ -237,6 +244,14 @@ describe('locateAddress — 주소 → 좌표', () => {
     scriptFor(kakaoSdkSrc('js-key')).onerror();
 
     await expect(pending).resolves.toEqual({ ok: false, reason: 'error' });
+  });
+
+  it('SDK 가 응답하지 않으면 시간 제한 뒤 error 로 끝난다 — 폼이 영영 잠기지 않게', async () => {
+    fetchWithAuth.mockImplementation(() => ok({ kakaoJsKey: 'js-key' }));
+    // 스크립트 onload 를 부르지 않는다 = 로딩이 멈춘 상태
+
+    await expect(locateAddress('서울 송파구 올림픽로 424', { timeoutMs: 20 }))
+      .resolves.toEqual({ ok: false, reason: 'error' });
   });
 
   it('빈 주소는 묻지 않는다', async () => {
