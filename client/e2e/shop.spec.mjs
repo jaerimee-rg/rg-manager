@@ -85,7 +85,7 @@ test.describe('추천 상품', () => {
     await expect(row).toContainText('기구');
   });
 
-  test('학부모(로그인 없음): 공개 링크로 보고, 칩으로 거르고, 카드 → 상세 → 쇼핑몰 버튼은 새 창으로 열린다', async ({ browser, baseURL }) => {
+  test('학부모(로그인 없음): 공개 링크로 보고, 칩으로 거르고, 카드를 누르면 클릭 → 상세 → 쇼핑몰 버튼은 새 창으로 열린다', async ({ browser, baseURL }) => {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const page = await context.newPage();
 
@@ -106,19 +106,24 @@ test.describe('추천 상품', () => {
     await page.reload();
     await expect(page.getByRole('button', { name: '기구' })).toHaveAttribute('aria-pressed', 'true');
 
-    // 카드를 누르면 상세가 열리고(새 창 아님), 상세의 쇼핑몰 버튼을 누르면 새 창 + 클릭 기록
-    await page.getByRole('link', { name: `${linked} 자세히 보기` }).click();
+    // 목록에서 카드를 누르는 것만으로 클릭이 기록되고, 상세가 열린다(새 창 아님)
+    const isClick = (r) => r.url().includes('/click?visitorKey=') && r.method() === 'POST';
+    const clicks = [];
+    page.on('request', (r) => { if (isClick(r)) clicks.push(r.url()); });
+    const [recorded] = await Promise.all([
+      page.waitForResponse((r) => isClick(r.request())),
+      page.getByRole('link', { name: `${linked} 자세히 보기` }).click()
+    ]);
+    expect(recorded.status()).toBe(204);
     await expect(page).toHaveURL(/[?&]p=\d+/);
+
+    // 상세의 쇼핑몰 버튼은 새 창 — 카드로 연 상세라 같은 관심을 두 번 세지 않는다
     const cta = page.getByRole('dialog').getByRole('link', { name: /에서 보기$/ });
     await expect(cta).toHaveAttribute('target', '_blank');
-    const [popup, beacon] = await Promise.all([
-      context.waitForEvent('page'),
-      page.waitForRequest((r) => r.url().includes('/click?visitorKey=') && r.method() === 'POST'),
-      cta.click()
-    ]);
+    const [popup] = await Promise.all([context.waitForEvent('page'), cta.click()]);
     await popup.waitForLoadState();
     expect(popup.url()).toBe(`${baseURL}/design-system`);
-    expect(beacon).toBeTruthy();
+    expect(clicks).toHaveLength(1);
 
     await context.close();
   });
@@ -155,13 +160,14 @@ test.describe('추천 상품', () => {
     await loginAs(page, sessions.teacher);
     await page.goto('/products/stats');
 
+    // 앞의 두 학부모가 목록에서 카드를 한 번씩 눌렀다(쇼핑몰 버튼은 같은 클릭이라 더하지 않는다)
     const statRow = page.locator('tr', { hasText: linked });
     await expect(statRow).toBeVisible();
-    await expect(statRow.locator('b')).toHaveText('1');
+    await expect(statRow.locator('b')).toHaveText('2');
 
-    // 방문(상점 페이지)과 클릭(구매 링크)이 서로 다른 것을 센다고 타일에 적혀 있다
+    // 방문(상점 페이지)과 클릭(상품을 누른 것)이 서로 다른 것을 센다고 타일에 적혀 있다
     await expect(page.locator('.ui-stat', { hasText: '상점 방문' })).toContainText('상점 페이지를 연 횟수');
-    await expect(page.locator('.ui-stat', { hasText: '상품 클릭' })).toContainText('구매 링크를 누른 횟수');
+    await expect(page.locator('.ui-stat', { hasText: '상품 클릭' })).toContainText('상품을 누른 횟수');
 
     // 숨기기
     await page.getByRole('tab', { name: /상품/ }).click();
@@ -464,10 +470,14 @@ test.describe('추천 상품', () => {
     const page = await context.newPage();
     await page.goto(publicPath);
 
-    // 사진도 링크도 없는 상품이지만 예약을 받으니 누를 수 있다
+    // 사진도 링크도 없는 상품이지만 예약을 받으니 누를 수 있고, 누르면 서버도 클릭으로 센다
     const card = page.getByRole('link', { name: `${simple} 자세히 보기` });
     await expect(card.getByText('예약 가능')).toBeVisible();
-    await card.click();
+    const [recorded] = await Promise.all([
+      page.waitForResponse((r) => r.url().includes('/click?visitorKey=') && r.request().method() === 'POST'),
+      card.click()
+    ]);
+    expect(recorded.status()).toBe(204);
 
     const detail = page.getByRole('dialog', { name: simple });
     await detail.getByRole('button', { name: '예약하기' }).click();

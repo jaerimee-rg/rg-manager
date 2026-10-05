@@ -3,6 +3,10 @@ import pool from '../database.js';
 // 추천 상품. 표시 순서는 "sortOrder" 오름차순(작을수록 위), 같으면 최신이 위.
 const ORDER = 'ORDER BY p."sortOrder" ASC, p.id DESC';
 
+/** 공개 상점 목록에서 누를 수 있는 상품(별칭 p) — 링크·사진·예약 중 하나라도 있으면 카드가 상세를 연다 */
+export const CLICKABLE_SQL = `p.url IS NOT NULL OR p."isReservable" = TRUE
+  OR EXISTS (SELECT 1 FROM shop_product_images i WHERE i."productId" = p.id)`;
+
 // 수정 응답에도 누적 클릭을 담아 목록 숫자가 0 으로 바뀌지 않게 한다
 const RETURNING = `RETURNING *,
   (SELECT COUNT(*)::int FROM shop_events e WHERE e."productId" = shop_products.id AND e.type = 'click') AS "clickCount"`;
@@ -35,11 +39,15 @@ class ShopProduct {
     return result.rows[0] || null;
   }
 
-  /** 클릭을 셀 수 있는 상품 — 그 상점의 공개 상품이고 링크가 있어야 한다(FR-441) */
+  /**
+   * 클릭을 셀 수 있는 상품 — 그 상점의 공개 상품이고, 목록에서 누를 수 있어야 한다(FR-441).
+   * 클라이언트 utils/shopFormat.js:isClickableProduct 와 같은 규칙.
+   */
   static async getClickable(id, userId) {
     const result = await pool.query(
-      `SELECT id FROM shop_products
-       WHERE id = $1 AND "userId" = $2 AND "isVisible" = TRUE AND url IS NOT NULL`,
+      `SELECT p.id FROM shop_products p
+       WHERE p.id = $1 AND p."userId" = $2 AND p."isVisible" = TRUE
+         AND (${CLICKABLE_SQL})`,
       [id, userId]
     );
     return result.rows[0] || null;

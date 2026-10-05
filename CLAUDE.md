@@ -562,11 +562,15 @@ open **one public link `/shop/<publicId>` without logging in**; the teacher sees
   responses go through `utils/shopSerializer.js` (a whitelist — a test pins the exact keys), skip
   hidden products, and list only categories that have visible products. A closed shop and an unknown
   `publicId` return the **same 404**.
-- **Click/visit tracking**: the detail's **[○○에서 보기]** button is a plain `<a target="_blank">` to the
-  product URL — opening the detail is **not** counted, only this button is; on click
+- **Click/visit tracking**: **pressing a product card in the list is the click** (2026-10-05 — it used to
+  be only the detail's mall button). `PublicShop` passes `onOpen` to `ProductCard`; the detail's
+  **[○○에서 보기]** (a plain `<a target="_blank">`) counts only when the detail was opened straight from a
+  `?p=` link (no `state.shopDetail`), so one card → mall-button visit is one click, not two. Either way
   `utils/shopTracking.js` fires `navigator.sendBeacon` (fallback `fetch keepalive`) — **values in the
   query string only, no body** — so navigation never waits. The server counts a click only for a visible
-  product with a URL, ignores the same `visitorKey` on the same product within **10 s**, and counts a
+  product that the list lets you press — URL **or** photo **or** reservations (`ShopProduct.CLICKABLE_SQL`,
+  same rule as the client's `utils/shopFormat.js:isClickableProduct`) — ignores the same `visitorKey` on
+  the same product within **10 s**, and counts a
   visit once per `visitorKey` per **30 min** (`models/ShopEvent.js`). No IP/UA is stored. Public routes
   have their own limiters and are skipped by `apiLimiter`; the view/click endpoints must pass **both** a
   per-`visitorKey` limit and a per-IP limit (`PUBLIC_SHOP_TRACK_IP_MAX`), because `visitorKey` is
@@ -581,7 +585,8 @@ open **one public link `/shop/<publicId>` without logging in**; the teacher sees
 - **Hidden stays hidden**: `PUT /api/shop/products/:id` without `isVisible` keeps the current value
   (create defaults to visible) — a client that omits the field must not silently re-publish a product.
 - **Stats** (`GET /api/shop/stats?days=7|30|90|all`) rank products by clicks (ties share a rank,
-  products without a URL have no rank), include zero-click and hidden products, and sum by category.
+  non-pressable cards — no URL, photo or reservations — have no rank; the response carries `clickable`),
+  include zero-click and hidden products, and sum by category.
   Deleting a product deletes its clicks (FK cascade); hiding keeps them — the UI says so.
 - **Photos** (2차, `docs/recommended-shop/04-images-description.md`): up to **10 per product** in
   `shop_product_images`; the first is the **main photo** (`imageUrl` in teacher responses = list/stats

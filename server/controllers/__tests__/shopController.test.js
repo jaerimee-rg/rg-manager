@@ -498,8 +498,8 @@ describe('GET /api/shop/stats', () => {
   it('기간을 해석해 요약·순위·카테고리 합계를 만든다', async () => {
     ShopEvent.summary.mockResolvedValue({ views: '10', visitors: '4', clicks: '6', clickVisitors: '3' });
     ShopEvent.productStats.mockResolvedValue([
-      { id: 1, title: '리본', hasUrl: true, clicks: '4', visitors: '2', categoryId: 3, isVisible: true },
-      { id: 2, title: '후프', hasUrl: true, clicks: '2', visitors: '1', categoryId: null, isVisible: true }
+      { id: 1, title: '리본', clickable: true, clicks: '4', visitors: '2', categoryId: 3, isVisible: true },
+      { id: 2, title: '후프', clickable: true, clicks: '2', visitors: '1', categoryId: null, isVisible: true }
     ]);
     ShopCategory.listByUser.mockResolvedValue([{ id: 3, name: '기구' }]);
 

@@ -14,8 +14,9 @@ export const toSummary = (row = {}) => ({
 
 /**
  * 상품별 클릭 순위.
- * 링크 있는 상품 먼저 → 클릭 ↓ → 클릭한 방문자 ↓ → 타이틀 가나다순.
- * 순위는 클릭 수가 같으면 같다(1, 2, 2, 4). 링크 없는 상품은 순위가 없다(누를 수 없으니까).
+ * 누를 수 있는 상품 먼저 → 클릭 ↓ → 클릭한 방문자 ↓ → 타이틀 가나다순.
+ * 순위는 클릭 수가 같으면 같다(1, 2, 2, 4). 링크·사진·예약이 모두 없는 상품은 공개 목록에서 누를 수 없어
+ * 순위가 없다.
  */
 export const rankProducts = (rows = [], categories = []) => {
   const names = new Map(categories.map((c) => [c.id, c.name]));
@@ -27,14 +28,14 @@ export const rankProducts = (rows = [], categories = []) => {
     categoryId: r.categoryId ?? null,
     categoryName: r.categoryId != null && names.has(r.categoryId) ? names.get(r.categoryId) : UNCATEGORIZED,
     isVisible: r.isVisible !== false,
-    hasUrl: Boolean(r.hasUrl),
+    clickable: Boolean(r.clickable),
     clicks: num(r.clicks),
     visitors: num(r.visitors),
     lastClickedAt: r.lastClickedAt ?? null
   }));
 
   items.sort((a, b) =>
-    Number(b.hasUrl) - Number(a.hasUrl) ||
+    Number(b.clickable) - Number(a.clickable) ||
     b.clicks - a.clicks ||
     b.visitors - a.visitors ||
     String(a.title).localeCompare(String(b.title), 'ko')
@@ -43,7 +44,7 @@ export const rankProducts = (rows = [], categories = []) => {
   let previous = null;
   let rank = 0;
   items.forEach((item, index) => {
-    if (!item.hasUrl) {
+    if (!item.clickable) {
       item.rank = null;
       return;
     }

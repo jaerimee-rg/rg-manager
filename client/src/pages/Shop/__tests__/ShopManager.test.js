@@ -95,6 +95,14 @@ describe('ShopManager — 상품 탭', () => {
     expect(clubs.querySelector('img')).toHaveAttribute('src', 'https://cdn/c1.jpg');
   });
 
+  it('누적 클릭은 공개 목록에서 누를 수 있는 상품이면 링크가 없어도 센다 — 누를 수 없는 카드만 —', async () => {
+    await renderManager({}, [...PRODUCTS, { ...CLUBS, clickCount: 7 }]);
+    const clicksOf = (title) => rowOf(title).querySelector('[data-label="누적 클릭"]');
+    expect(clicksOf('곤봉')).toHaveTextContent('7');
+    expect(clicksOf('사사키 리본')).toHaveTextContent('58');
+    expect(clicksOf('스타킹')).toHaveTextContent('—');
+  });
+
   it('공개 스위치를 끄면 바로 숨기고 서버에 저장한다 (FR-426)', async () => {
     await renderManager();
     await act(async () => {

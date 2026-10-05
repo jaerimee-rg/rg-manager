@@ -118,7 +118,7 @@ describe('POST …/view', () => {
 describe('POST …/products/:productId/click (FR-441)', () => {
   beforeEach(() => Shop.getByPublicId.mockResolvedValue(SHOP));
 
-  it('그 상점의 공개·링크 있는 상품이면 기록하고 204', async () => {
+  it('그 상점의 공개 상품이고 목록에서 누를 수 있으면(링크·사진·예약) 기록하고 204', async () => {
     ShopProduct.getClickable.mockResolvedValue({ id: 12 });
     const res = await call(recordClick, { params: { publicId: 'pub123', productId: '12' }, query: { visitorKey: 'v-1' } });
     expect(ShopProduct.getClickable).toHaveBeenCalledWith(12, 9);
@@ -126,7 +126,7 @@ describe('POST …/products/:productId/click (FR-441)', () => {
     expect(res.status).toHaveBeenCalledWith(204);
   });
 
-  it('숨김·링크 없음·남의 상품이면 404 (기록 없음)', async () => {
+  it('숨김·누를 수 없는 카드·남의 상품이면 404 (기록 없음)', async () => {
     ShopProduct.getClickable.mockResolvedValue(null);
     const res = await call(recordClick, { params: { publicId: 'pub123', productId: '12' } });
     expect(res.status).toHaveBeenCalledWith(404);

@@ -11,10 +11,10 @@ const STATS = {
   since: '2026-09-04T03:00:00.000Z',
   summary: { views: 124, visitors: 41, clicks: 96, clickVisitors: 29 },
   products: [
-    { rank: 1, id: 12, title: '사사키 리본', categoryName: '기구', hasUrl: true, isVisible: true, clicks: 31, visitors: 18, lastClickedAt: '2026-10-03T11:20:00.000Z' },
-    { rank: 2, id: 8, title: '스타킹', categoryName: '카테고리 없음', hasUrl: true, isVisible: false, clicks: 9, visitors: 6, lastClickedAt: null },
-    { rank: 3, id: 6, title: '연습용 볼', categoryName: '기구', hasUrl: true, isVisible: true, clicks: 0, visitors: 0, lastClickedAt: null },
-    { rank: null, id: 5, title: '곤봉', categoryName: '기구', hasUrl: false, isVisible: true, clicks: 0, visitors: 0, lastClickedAt: null }
+    { rank: 1, id: 12, title: '사사키 리본', categoryName: '기구', clickable: true, isVisible: true, clicks: 31, visitors: 18, lastClickedAt: '2026-10-03T11:20:00.000Z' },
+    { rank: 2, id: 8, title: '스타킹', categoryName: '카테고리 없음', clickable: true, isVisible: false, clicks: 9, visitors: 6, lastClickedAt: null },
+    { rank: 3, id: 6, title: '연습용 볼', categoryName: '기구', clickable: true, isVisible: true, clicks: 0, visitors: 0, lastClickedAt: null },
+    { rank: null, id: 5, title: '곤봉', categoryName: '기구', clickable: false, isVisible: true, clicks: 0, visitors: 0, lastClickedAt: null }
   ],
   categories: [{ id: 3, name: '기구', clicks: 31 }, { id: null, name: '카테고리 없음', clicks: 9 }]
 };
@@ -41,12 +41,14 @@ describe('ShopStats (FR-450~455)', () => {
     expect(screen.getByText(/9월 4일부터/)).toBeInTheDocument();
   });
 
-  it('방문은 상점 페이지, 클릭은 구매 링크라고 구분해 적는다 — "링크를 연 횟수" 가 클릭 합계로 읽혔다', async () => {
+  it('방문은 상점 페이지, 클릭은 상품을 누른 것이라고 구분해 적는다 — "링크를 연 횟수" 가 클릭 합계로 읽혔다', async () => {
     await renderStats();
     const tile = (label) => screen.getByText(label, { selector: '.ui-stat__label' }).closest('.ui-stat');
 
     expect(tile('상점 방문')).toHaveTextContent('상점 페이지를 연 횟수');
-    expect(tile('상품 클릭')).toHaveTextContent('구매 링크를 누른 횟수');
+    // 목록에서 상품을 누르는 것도 클릭이다 — 구매 링크만 센다고 적으면 숫자를 잘못 읽는다
+    expect(tile('상품 클릭')).toHaveTextContent('상품을 누른 횟수');
+    expect(tile('상품 클릭')).not.toHaveTextContent('구매 링크');
     expect(screen.queryByText('링크를 연 횟수')).not.toBeInTheDocument();
   });
 
@@ -58,14 +60,14 @@ describe('ShopStats (FR-450~455)', () => {
     expect(fetchWithAuth).toHaveBeenLastCalledWith('/api/shop/stats?days=7');
   });
 
-  it('순위 표 — 클릭 0 상품도, 숨김 배지도, 링크 없는 상품은 순위 없이', async () => {
+  it('순위 표 — 클릭 0 상품도, 숨김 배지도, 누를 수 없는 카드는 순위 없이', async () => {
     await renderStats();
     const row = (title) => screen.getByText(title).closest('tr');
 
     expect(within(row('사사키 리본')).getByText('10/3 20:20')).toBeInTheDocument();
     expect(within(row('스타킹')).getByText('숨김')).toBeInTheDocument();
     expect(within(row('연습용 볼')).getByText('0', { selector: 'b' })).toBeInTheDocument();
-    expect(within(row('곤봉')).getByText('링크 없음')).toBeInTheDocument();
+    expect(within(row('곤봉')).getByText('누를 수 없는 카드')).toBeInTheDocument();
     expect(within(row('곤봉')).queryByRole('progressbar')).not.toBeInTheDocument();
   });
 

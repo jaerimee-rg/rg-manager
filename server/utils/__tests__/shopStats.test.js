@@ -7,7 +7,7 @@ const CATEGORIES = [
 ];
 
 const row = (id, title, clicks, visitors, extra = {}) => ({
-  id, title, clicks: String(clicks), visitors: String(visitors), hasUrl: true, categoryId: 3, isVisible: true, ...extra
+  id, title, clicks: String(clicks), visitors: String(visitors), clickable: true, categoryId: 3, isVisible: true, ...extra
 });
 
 describe('toSummary', () => {
@@ -36,13 +36,13 @@ describe('rankProducts — 상품별 클릭 순위 (FR-452)', () => {
     expect(ranked.map((r) => r.rank)).toEqual([1, 2, 2, 4]);
   });
 
-  it('클릭 0 상품도 들어가고, 링크 없는 상품은 순위 없이 맨 아래', () => {
+  it('클릭 0 상품도 들어가고, 공개 목록에서 누를 수 없는 상품은 순위 없이 맨 아래', () => {
     const ranked = rankProducts([
-      row(1, '곤봉', 0, 0, { hasUrl: false }),
+      row(1, '곤봉', 0, 0, { clickable: false }),
       row(2, '볼', 0, 0),
       row(3, '리본', 4, 2)
     ], CATEGORIES);
-    expect(ranked.map((r) => [r.title, r.rank])).toEqual([['리본', 1], ['볼', 2], ['곤봉', null]]);
+    expect(ranked.map((r) => [r.title, r.rank, r.clickable])).toEqual([['리본', 1, true], ['볼', 2, true], ['곤봉', null, false]]);
   });
 
   it('카테고리 이름을 붙이고, 없거나 지워진 카테고리는 "카테고리 없음"', () => {

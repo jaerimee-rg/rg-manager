@@ -87,7 +87,7 @@ describe('PublicShop — 로그인 없이 보는 추천 상품', () => {
     expect(screen.getAllByRole('link')).toHaveLength(3);
   });
 
-  it('카드를 누르면 상세가 열리고, 카드 클릭은 통계로 세지 않는다', async () => {
+  it('목록에서 카드를 누르면 상세가 열리고, 그 자체로 클릭을 기록한다 (FR-440)', async () => {
     await renderShop();
     fireEvent.click(screen.getByRole('link', { name: '사사키 리본 6m 자세히 보기' }));
 
@@ -95,10 +95,28 @@ describe('PublicShop — 로그인 없이 보는 추천 상품', () => {
     const dialog = screen.getByRole('dialog', { name: '사사키 리본 6m' });
     expect(within(dialog).getByText('6m 새틴 리본\n막대 포함', { normalizer: (t) => t })).toBeInTheDocument();
     expect(within(dialog).getByText('1 / 3')).toBeInTheDocument();
-    expect(trackClick).not.toHaveBeenCalled();
+    expect(trackClick).toHaveBeenCalledTimes(1);
+    expect(trackClick).toHaveBeenCalledWith('pub123', 12);
   });
 
-  it('상세의 [쇼핑몰에서 보기] 는 새 창 링크이고, 누르면 클릭을 기록한다 (가운데 버튼도)', async () => {
+  it('링크가 없어도 상세가 열리는 카드(사진만)는 눌렀을 때 클릭으로 센다', async () => {
+    await renderShop();
+    fireEvent.click(screen.getByRole('link', { name: '곤봉 자세히 보기' }));
+    expect(trackClick).toHaveBeenCalledWith('pub123', 5);
+  });
+
+  it('카드로 연 상세의 쇼핑몰 버튼은 같은 클릭이라 다시 세지 않는다', async () => {
+    await renderShop();
+    fireEvent.click(screen.getByRole('link', { name: '사사키 리본 6m 자세히 보기' }));
+    expect(trackClick).toHaveBeenCalledTimes(1);
+
+    const button = screen.getByRole('link', { name: 'coupang.com에서 보기' });
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    button.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, button: 1 }));
+    expect(trackClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('주소(?p=)로 바로 들어온 상세의 [쇼핑몰에서 보기] 는 새 창 링크이고, 누르면 클릭을 기록한다 (가운데 버튼도)', async () => {
     await renderShop('/shop/pub123?p=12');
     const button = screen.getByRole('link', { name: 'coupang.com에서 보기' });
     expect(button).toHaveAttribute('href', 'https://www.coupang.com/vp/products/1');

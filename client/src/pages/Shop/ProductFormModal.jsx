@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { fetchWithAuth } from '../../utils/api';
 import {
-  DESCRIPTION_MAX, TITLE_MAX, formatPriceInput, hostnameOf, normalizeUrl, validateProductForm
+  DESCRIPTION_MAX, TITLE_MAX, formatPriceInput, hostnameOf, isClickableProduct, normalizeUrl, validateProductForm
 } from '../../utils/shopFormat';
 import { cropToSquare } from '../../utils/imageCrop';
 import { pastedProductImage } from '../../utils/clipboardImage';
@@ -300,7 +300,7 @@ function ProductFormModal({ product, categories, storageReady, onClose, onSaved,
     <Modal
       title={editing ? '상품 수정' : '상품 등록'}
       description={editing
-        ? (product.url ? `누적 클릭 ${product.clickCount || 0}` : '링크가 없어 클릭을 세지 않아요')
+        ? (isClickableProduct(product) ? `누적 클릭 ${product.clickCount || 0}` : '누를 수 없는 카드라 클릭을 세지 않아요')
         : '타이틀만 꼭 입력하면 돼요.'}
       onClose={saving ? undefined : handleClose}
       footer={

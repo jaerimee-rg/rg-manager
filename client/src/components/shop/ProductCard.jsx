@@ -1,14 +1,15 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Card, Icon } from '../ui';
-import { formatPrice, hostnameOf, safeHref } from '../../utils/shopFormat';
+import { formatPrice, hostnameOf, isClickableProduct, safeHref } from '../../utils/shopFormat';
 
 /**
  * 공개 상점의 상품 카드. 누르면 상품 상세(?p=)가 열린다 — 쇼핑몰·예약은 상세의 버튼으로 간다.
+ * 누르는 순간 onOpen 을 부른다(클릭 통계 FR-440). 이동은 막지 않는다.
  * 사진도 링크도 없고 예약도 받지 않으면 상세에서 더 볼 것이 없어 누를 수 없는 카드다.
  * 사진은 정사각형 칸에 잘려 보이고, 가격·도메인은 카드 맨 아래에 붙어 줄이 맞는다.
  */
-function ProductCard({ product, categoryName, to, state }) {
+function ProductCard({ product, categoryName, to, state, onOpen }) {
   const href = safeHref(product.url);
   const price = formatPrice(product.price);
   const images = product.images || [];
@@ -43,7 +44,7 @@ function ProductCard({ product, categoryName, to, state }) {
     </>
   );
 
-  if (!href && !images.length && !reservable) {
+  if (!isClickableProduct(product)) {
     return (
       <Card padding="none" className="shop-product" data-testid="shop-product">
         {body}
@@ -56,6 +57,7 @@ function ProductCard({ product, categoryName, to, state }) {
       as={Link}
       to={to}
       state={state}
+      onClick={() => onOpen?.(product)}
       padding="none"
       className="shop-product"
       data-interactive="true"

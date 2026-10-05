@@ -1,6 +1,7 @@
 import {
   normalizeUrl,
   safeHref,
+  isClickableProduct,
   hostnameOf,
   formatPrice,
   formatPriceInput,
@@ -174,6 +175,22 @@ describe('matchProductTitle — 상품 이름 검색', () => {
 
   it('완성형 검색어를 초성으로 넓히지 않는다 ("리본" 이 "발레복" 에 걸리지 않게)', () => {
     expect(matchProductTitle('리본', '연습용 발레복')).toBe(false);
+  });
+});
+
+describe('isClickableProduct — 공개 목록에서 누를 수 있는(클릭을 세는) 상품', () => {
+  it('링크·사진·예약 중 하나라도 있으면 누를 수 있다 — 서버 ShopProduct.getClickable 과 같은 규칙', () => {
+    expect(isClickableProduct({ url: 'https://a.com/x', images: [] })).toBe(true);
+    expect(isClickableProduct({ url: null, images: ['https://cdn/1.jpg'] })).toBe(true);
+    expect(isClickableProduct({ url: null, images: [{ id: 1, url: 'https://cdn/1.jpg' }] })).toBe(true);
+    expect(isClickableProduct({ url: null, images: [], isReservable: true })).toBe(true);
+  });
+
+  it('셋 다 없으면 누를 수 없는 카드 — http(s) 가 아닌 주소는 링크로 치지 않는다', () => {
+    expect(isClickableProduct({ url: null, images: [], isReservable: false })).toBe(false);
+    expect(isClickableProduct({ url: 'javascript:alert(1)' })).toBe(false);
+    expect(isClickableProduct({})).toBe(false);
+    expect(isClickableProduct(null)).toBe(false);
   });
 });
 
