@@ -662,6 +662,12 @@ const initDatabase = async () => {
 
     await client.query('CREATE INDEX IF NOT EXISTS idx_events_user_date ON events ("userId", date)');
 
+    // 장소의 주소·좌표 — 선생님이 이벤트 폼에서 주소 검색으로 고른 것. 학부모 일정 상세의 지도가 쓴다.
+    // location(장소 이름)은 그대로 두고 옆에 붙인다. 옛 이벤트와 주소를 고르지 않은 이벤트는 NULL.
+    await client.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS address TEXT');
+    await client.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION');
+    await client.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION');
+
     // 학부모 신청 (자녀 1명 = 이벤트당 1행, 취소는 status 로 남긴다)
     await client.query(`
       CREATE TABLE IF NOT EXISTS event_registrations (

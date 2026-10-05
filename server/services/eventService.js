@@ -91,6 +91,37 @@ export const canRegister = (event, child, now = Date.now()) => {
   return { ok: true, reason: null };
 };
 
+export const ADDRESS_MAX = 200;
+
+const NO_PLACE = Object.freeze({ address: null, latitude: null, longitude: null });
+
+const toCoordinate = (value, limit) => {
+  if (value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
+  const n = Number(value);
+  return Number.isFinite(n) && Math.abs(n) <= limit ? n : null;
+};
+
+/**
+ * 주소 검색으로 고른 주소와 그 좌표를 다듬는다.
+ * - 주소가 없으면 좌표도 버린다 — 지도는 주소를 고른 이벤트에만 뜬다.
+ * - 좌표는 위도·경도가 둘 다 맞아야 남긴다. 하나라도 틀리면 주소만 남기고
+ *   학부모 화면은 지도 대신 "카카오맵에서 보기" 링크(주소 검색)를 보여준다.
+ */
+export const parsePlace = (body) => {
+  const address = String(body?.address ?? '').trim().slice(0, ADDRESS_MAX) || null;
+  if (!address) return { ...NO_PLACE };
+
+  const latitude = toCoordinate(body.latitude, 90);
+  const longitude = toCoordinate(body.longitude, 180);
+  if (latitude === null || longitude === null) return { address, latitude: null, longitude: null };
+
+  return { address, latitude, longitude };
+};
+
+/** 장소 이름이 바뀌었으면 예전 장소의 주소·지도는 더 이상 맞지 않는다 */
+export const placeAfterLocationChange = (existing, nextLocation) =>
+  (existing && (existing.location || null) !== (nextLocation || null) ? { ...NO_PLACE } : {});
+
 /** 대회 행 → 이벤트 필드 (미러 생성·갱신에 함께 쓴다) */
 export const competitionToEventFields = (competition) => ({
   userId: competition.userId,
@@ -110,6 +141,8 @@ export default {
   eventEndMs,
   normalizeOptions,
   parseOptions,
+  parsePlace,
+  placeAfterLocationChange,
   canRegister,
   competitionToEventFields
 };

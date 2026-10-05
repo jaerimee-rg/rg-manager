@@ -68,18 +68,20 @@ class Event {
     const {
       userId, type, title, date, endDate = null, startTime = null, location = null,
       description = null, options = [], requireOption = false, isPublished = true,
-      registrationOpen = true, registrationDeadline = null, competitionId = null
+      registrationOpen = true, registrationDeadline = null, competitionId = null,
+      address = null, latitude = null, longitude = null
     } = data;
 
     const result = await client.query(
       `INSERT INTO events
          ("userId", type, title, date, "endDate", "startTime", location, description, options,
           "requireOption", "isPublished", "registrationOpen", "registrationDeadline",
-          "competitionId", "createdAt", "updatedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15)
+          "competitionId", "createdAt", "updatedAt", address, latitude, longitude)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15,$16,$17,$18)
        RETURNING *`,
       [userId, type, title, date, endDate, startTime, location, description, JSON.stringify(options),
-       requireOption, isPublished, registrationOpen, registrationDeadline, competitionId, now]
+       requireOption, isPublished, registrationOpen, registrationDeadline, competitionId, now,
+       address, latitude, longitude]
     );
     return hydrate(result.rows[0]);
   }
@@ -89,21 +91,23 @@ class Event {
     const {
       title, date, endDate = null, startTime = null, location = null, description = null,
       options = [], requireOption = false, isPublished = true, registrationOpen = true,
-      registrationDeadline = null
+      registrationDeadline = null, address = null, latitude = null, longitude = null
     } = data;
 
     const params = [title, date, endDate, startTime, location, description, JSON.stringify(options),
-      requireOption, isPublished, registrationOpen, registrationDeadline, now, id];
+      requireOption, isPublished, registrationOpen, registrationDeadline, now,
+      address, latitude, longitude, id];
 
     let query = `UPDATE events
        SET title = $1, date = $2, "endDate" = $3, "startTime" = $4, location = $5,
            description = $6, options = $7, "requireOption" = $8, "isPublished" = $9,
-           "registrationOpen" = $10, "registrationDeadline" = $11, "updatedAt" = $12
-       WHERE id = $13`;
+           "registrationOpen" = $10, "registrationDeadline" = $11, "updatedAt" = $12,
+           address = $13, latitude = $14, longitude = $15
+       WHERE id = $16`;
 
     if (role !== 'admin') {
       params.push(userId);
-      query += ` AND "userId" = $14`;
+      query += ` AND "userId" = $17`;
     }
 
     const result = await client.query(`${query} RETURNING *`, params);

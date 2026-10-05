@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'fs';
 import { loginAs, api } from './helpers.mjs';
+import { FAKE_PLACE, stubKakaoMaps } from './kakao-fakes.mjs';
 
 const sessions = JSON.parse(readFileSync(new URL('./.sessions.json', import.meta.url)));
 // 같은 DB 에 여러 번 돌려도 서로 부딪히지 않도록 실행마다 다른 이름을 쓴다
@@ -59,6 +60,81 @@ test.describe('선생님 — 이벤트 관리', () => {
     await page.getByRole('button', { name: '저장', exact: true }).click();
 
     await expect(page.locator('tr', { hasText: `e2e 휴관 ${run}` }).first()).toBeVisible();
+  });
+
+  test('주소 검색으로 장소를 고르면 아래에 지도가 떠서 확인하고, 주소·좌표가 함께 저장된다', async ({ page, request }) => {
+    await stubKakaoMaps(page);
+    const placeTitle = `e2e 주소 ${run}`;
+    await page.goto('/events/new');
+
+    await page.getByLabel('이벤트 이름').fill(placeTitle);
+    await page.getByLabel('날짜', { exact: false }).first().fill('2026-11-22');
+
+    // 장소 이름을 비워 둔 채 주소를 고르면 건물명이 장소 이름으로 채워진다
+    await page.getByRole('button', { name: '주소 검색' }).click();
+    const dialog = page.getByRole('dialog', { name: '주소 검색' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: '가짜 주소 고르기' }).click();
+    await expect(dialog).toHaveCount(0);
+
+    await expect(page.getByLabel('장소')).toHaveValue(FAKE_PLACE.placeName);
+    await expect(page.getByTestId('event-address')).toHaveText(FAKE_PLACE.address);
+    const map = page.getByRole('img', { name: /위치 지도/ });
+    await expect(map).toBeVisible();
+    await expect(map).toContainText(`가짜 지도 ${FAKE_PLACE.latitude},${FAKE_PLACE.longitude}`);
+    await expect(page.getByRole('button', { name: '주소 변경' })).toBeVisible();
+
+    await page.getByRole('button', { name: '저장', exact: true }).click();
+    await expect(page).toHaveURL(/\/events$/);
+
+    const events = await api(request, sessions.teacher, 'GET', '/api/events?includePast=true');
+    const saved = events.body.find((e) => e.title === placeTitle);
+    expect(saved).toMatchObject({
+      location: FAKE_PLACE.placeName,
+      address: FAKE_PLACE.address,
+      latitude: FAKE_PLACE.latitude,
+      longitude: FAKE_PLACE.longitude
+    });
+
+    // 다시 열면 저장된 주소와 지도가 그대로 보이고, 지우면 주소 없이 저장된다
+    await page.locator('tr', { hasText: placeTitle }).first().getByRole('button', { name: '수정' }).click();
+    await expect(page.getByTestId('event-address')).toHaveText(FAKE_PLACE.address);
+    await expect(page.getByRole('img', { name: /위치 지도/ })).toBeVisible();
+    await page.getByRole('button', { name: '주소 지우기' }).click();
+    await expect(page.getByRole('img', { name: /위치 지도/ })).toHaveCount(0);
+    await page.getByRole('button', { name: '저장', exact: true }).click();
+    await expect(page).toHaveURL(/\/events$/);
+
+    const after = await api(request, sessions.teacher, 'GET', `/api/events/${saved.id}`);
+    expect(after.body).toMatchObject({ location: FAKE_PLACE.placeName, address: null, latitude: null, longitude: null });
+  });
+
+  test('지도 키가 없는 서버에서도 주소는 고를 수 있고, 지도 대신 안내가 나온다', async ({ page }) => {
+    await stubKakaoMaps(page, { key: null });
+    await page.goto('/events/new');
+
+    await page.getByLabel('장소').fill('e2e 체육관');
+    await page.getByRole('button', { name: '주소 검색' }).click();
+    // 이미 적은 장소 이름으로 바로 검색한다
+    await expect(page.getByRole('button', { name: '가짜 주소 고르기' })).toHaveAttribute('data-q', 'e2e 체육관');
+    await page.getByRole('button', { name: '가짜 주소 고르기' }).click();
+
+    await expect(page.getByLabel('장소')).toHaveValue('e2e 체육관');
+    await expect(page.getByTestId('event-address')).toHaveText(FAKE_PLACE.address);
+    await expect(page.getByRole('img', { name: /위치 지도/ })).toHaveCount(0);
+    await expect(page.getByRole('status').filter({ hasText: '지도 키가 아직 설정되지 않아' })).toBeVisible();
+  });
+
+  test('지도 설정 API 는 로그인한 선생님·학부모 모두 읽고, 비로그인은 401', async ({ request }) => {
+    const asTeacher = await api(request, sessions.teacher, 'GET', '/api/maps/config');
+    expect(asTeacher.status).toBe(200);
+    expect(asTeacher.body).toHaveProperty('kakaoJsKey');
+
+    const asParent = await api(request, sessions.parent, 'GET', '/api/maps/config');
+    expect(asParent.status).toBe(200);
+
+    const anonymous = await request.get('/api/maps/config');
+    expect(anonymous.status()).toBe(401);
   });
 
   // 모바일 날짜·시간 피커에는 "비우기" 가 없어서, 한 번 고른 값을 되돌릴 수 없었다.

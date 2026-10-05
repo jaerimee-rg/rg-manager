@@ -4,6 +4,8 @@ import { fetchWithAuth } from '../../utils/api';
 import ParentLayout from '../../components/parent/ParentLayout';
 import { formatCardDate, dDay, reasonText } from '../../utils/parentSchedule';
 import { typeOf } from '../../utils/eventFormat';
+import { hasCoordinates, kakaoMapLinks } from '../../utils/kakaoMap';
+import PlaceMap from '../../components/common/PlaceMap';
 import { Badge, Button, Callout, Choice, Icon, List, ListRow, Row, Section, Spinner, Stack } from '../../components/ui';
 
 const SCHEDULE_PATH = '/parent/schedule';
@@ -12,7 +14,7 @@ const SCHEDULE_PATH = '/parent/schedule';
  * 이벤트 상세 + 신청 — 전체 화면 페이지 (`/parent/events/:eventId`).
  * 일정 카드를 누르거나 선생님이 보낸 공유 링크를 열면 여기로 온다.
  *
- * 위에서 아래로: 일시·장소 → (아이 선택) → **옵션 선택과 신청 버튼** → 안내 → 사진 → **신청한 학생 명단**.
+ * 위에서 아래로: 일시·장소 → (아이 선택) → **옵션 선택과 신청 버튼** → 안내 → 오시는 길(지도) → 사진 → **신청한 학생 명단**.
  * 옵션을 맨 위에 두는 건 학부모가 여기 오는 이유가 신청이기 때문이고, 명단을 맨 아래 두는 건
  * "누가 같이 가는지" 는 신청을 마친 뒤 궁금한 것이기 때문이다.
  * 신청 가능 여부는 서버가 내려준 판정을 그대로 쓰고, 저장할 때 서버가 한 번 더 확인한다.
@@ -99,6 +101,11 @@ function ParentEventDetail() {
     (picked.length !== child.optionIds.length || picked.some((id) => !child.optionIds.includes(id)));
   const requireMissing = event.requireOption && picked.length === 0;
   const roster = event.registrations || [];
+  // 선생님이 주소 검색으로 주소를 고른 이벤트만 지도가 있다 (예전 이벤트는 장소 이름만)
+  const place = !isClosure && event.address
+    ? { name: event.location, address: event.address, latitude: event.latitude, longitude: event.longitude }
+    : null;
+  const mapLinks = place ? kakaoMapLinks(place) : null;
 
   const selectChild = (id) => {
     setChildId(id);
@@ -307,6 +314,38 @@ function ParentEventDetail() {
             >
               {event.description}
             </div>
+          </Section>
+        )}
+
+        {place && (
+          <Section title="오시는 길" data-testid="place-section">
+            <Stack gap={3}>
+              <div>
+                {place.name && <div className="ui-list-row__title">{place.name}</div>}
+                <div className="ui-text-sm ui-text-subtle">{place.address}</div>
+              </div>
+
+              {hasCoordinates(place) && (
+                <PlaceMap latitude={place.latitude} longitude={place.longitude} name={place.name || place.address} />
+              )}
+
+              <Row gap={2}>
+                <Button
+                  as="a" href={mapLinks.view} target="_blank" rel="noopener noreferrer"
+                  icon="mapPin" block
+                >
+                  카카오맵에서 보기
+                </Button>
+                {mapLinks.directions && (
+                  <Button
+                    as="a" href={mapLinks.directions} target="_blank" rel="noopener noreferrer"
+                    icon="send" block
+                  >
+                    길찾기
+                  </Button>
+                )}
+              </Row>
+            </Stack>
           </Section>
         )}
 

@@ -6,7 +6,8 @@ import {
   isKnownType,
   normalizeOptions,
   todayKst,
-  parseOptions
+  parseOptions,
+  parsePlace
 } from '../services/eventService.js';
 
 export const TITLE_MAX = 100;
@@ -41,6 +42,8 @@ const parseBody = (body, { type, previousOptions = [] }) => {
 
   const location = isClosure ? null : String(body.location ?? '').trim();
   if (!isClosure && !location) return { error: '장소를 입력해주세요.' };
+  // 주소·좌표는 선택이다(주소 검색을 쓴 경우에만). 휴관일은 장소가 없으니 함께 비운다.
+  const place = isClosure ? parsePlace(null) : parsePlace(body);
 
   const description = String(body.description ?? '').trim().slice(0, DESCRIPTION_MAX) || null;
   const options = isClosure ? [] : normalizeOptions(body.options, previousOptions);
@@ -53,6 +56,7 @@ const parseBody = (body, { type, previousOptions = [] }) => {
       endDate,
       startTime,
       location,
+      ...place,
       description,
       options,
       requireOption: !isClosure && body.requireOption === true && options.length > 0,

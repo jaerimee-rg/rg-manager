@@ -15,7 +15,28 @@ jest.mock('react-router-dom', () => ({
 // 옵션 편집기는 자체 테스트가 있다 — 여기서는 자리만 잡는다.
 jest.mock('../OptionsEditor', () => () => <div data-testid="options" />);
 
+// 주소 검색 창·지도는 각자 테스트가 있다. 여기서는 "고르면 무엇이 저장되나" 만 본다.
+jest.mock('../../../components/common/AddressSearchDialog', () => (props) => (props.open ? (
+  <div role="dialog" aria-label="주소 검색">
+    <span data-testid="search-query">{props.query}</span>
+    <button
+      type="button"
+      onClick={() => props.onSelect({ address: '서울 송파구 올림픽로 424', placeName: '올림픽공원' })}
+    >
+      올림픽로 424 고르기
+    </button>
+  </div>
+) : null));
+jest.mock('../../../components/common/PlaceMap', () => (props) => (
+  <div data-testid="map" data-lat={props.latitude} data-lng={props.longitude} />
+));
+jest.mock('../../../utils/kakaoMap', () => ({
+  ...jest.requireActual('../../../utils/kakaoMap'),
+  locateAddress: jest.fn()
+}));
+
 import { fetchWithAuth } from '../../../utils/api';
+import { locateAddress } from '../../../utils/kakaoMap';
 import EventForm from '../EventForm';
 
 const ok = (body) => Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
@@ -64,6 +85,7 @@ const savedPayload = () => JSON.parse(fetchWithAuth.mock.calls.at(-1)[1].body);
 beforeEach(() => {
   jest.clearAllMocks();
   fetchWithAuth.mockImplementation(() => ok({ id: 1 }));
+  locateAddress.mockResolvedValue({ ok: true, latitude: 37.5203, longitude: 127.1236 });
 });
 
 describe('EventForm — 휴관일은 날짜만 입력한다', () => {
@@ -260,5 +282,125 @@ describe('EventForm — 화면 구성', () => {
     expect(side).toContainElement(screen.getByLabelText('학부모에게 공개'));
     expect(side).toContainElement(screen.getByLabelText(/^마감 날짜/));
     expect(side).not.toContainElement(screen.getByLabelText(/^이벤트 이름/));
+  });
+});
+
+describe('EventForm — 주소 검색과 지도', () => {
+  const searchAndPick = async (buttonName = '주소 검색') => {
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: buttonName }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '올림픽로 424 고르기' }));
+    });
+  };
+
+  const fillBasics = () => {
+    fill('이벤트 이름', '가을 대회');
+    fill('날짜', '2026-09-12');
+  };
+
+  it('주소를 고르면 주소와 지도가 보이고, 비어 있던 장소 이름은 건물명으로 채워져 좌표와 함께 저장된다', async () => {
+    await renderForm();
+    fillBasics();
+
+    await searchAndPick();
+
+    expect(screen.queryByRole('dialog', { name: '주소 검색' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('event-address')).toHaveTextContent('서울 송파구 올림픽로 424');
+    expect(field('장소')).toHaveValue('올림픽공원');
+    expect(locateAddress).toHaveBeenCalledWith('서울 송파구 올림픽로 424');
+    expect(screen.getByTestId('map')).toHaveAttribute('data-lat', '37.5203');
+    expect(screen.getByRole('button', { name: '주소 변경' })).toBeInTheDocument();
+
+    await save();
+    expect(savedPayload()).toMatchObject({
+      location: '올림픽공원',
+      address: '서울 송파구 올림픽로 424',
+      latitude: 37.5203,
+      longitude: 127.1236
+    });
+  });
+
+  it('장소 이름을 이미 적었으면 덮어쓰지 않고, 그 이름으로 바로 검색한다', async () => {
+    await renderForm();
+    fillBasics();
+    fill('장소', 'KSPO DOME');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '주소 검색' }));
+    });
+    expect(screen.getByTestId('search-query')).toHaveTextContent('KSPO DOME');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '올림픽로 424 고르기' }));
+    });
+
+    expect(field('장소')).toHaveValue('KSPO DOME');
+  });
+
+  it('지도 키가 없으면 안내만 보이고, 주소는 좌표 없이 저장된다', async () => {
+    locateAddress.mockResolvedValue({ ok: false, reason: 'no_key' });
+    await renderForm();
+    fillBasics();
+
+    await searchAndPick();
+
+    expect(screen.queryByTestId('map')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(/지도 키가 아직 설정되지 않아/);
+
+    await save();
+    expect(savedPayload()).toMatchObject({ address: '서울 송파구 올림픽로 424', latitude: null, longitude: null });
+  });
+
+  it('주소를 지우면 주소·좌표 없이 저장된다 (장소 이름은 남는다)', async () => {
+    await renderForm();
+    fillBasics();
+    await searchAndPick();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '주소 지우기' }));
+    });
+
+    expect(screen.queryByTestId('event-address')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('map')).not.toBeInTheDocument();
+    await save();
+    expect(savedPayload()).toMatchObject({ location: '올림픽공원', address: null, latitude: null, longitude: null });
+  });
+
+  it('휴관일은 주소 칸이 없고, 골라 둔 주소도 보내지 않는다', async () => {
+    await renderForm();
+    fill('이벤트 이름', '추석 휴관');
+    fill('날짜', '2026-09-25');
+    await searchAndPick();
+
+    await pickType('휴관일');
+
+    expect(screen.queryByRole('button', { name: /주소 (검색|변경)/ })).not.toBeInTheDocument();
+    await save();
+    expect(savedPayload()).toMatchObject({ location: null, address: null, latitude: null, longitude: null });
+  });
+
+  it('수정할 때 저장된 주소와 지도를 그대로 보여 준다 (다시 찾지 않는다)', async () => {
+    await renderForm({
+      id: 9, type: 'special', title: '가을 러닝', date: '2026-10-10', location: '한강공원',
+      address: '서울 영등포구 여의동로 330', latitude: 37.5284, longitude: 126.9327, isPublished: true, options: []
+    });
+
+    expect(screen.getByTestId('event-address')).toHaveTextContent('서울 영등포구 여의동로 330');
+    expect(screen.getByTestId('map')).toHaveAttribute('data-lng', '126.9327');
+    expect(locateAddress).not.toHaveBeenCalled();
+
+    await save();
+    expect(savedPayload()).toMatchObject({ address: '서울 영등포구 여의동로 330', latitude: 37.5284, longitude: 126.9327 });
+  });
+
+  it('좌표 없이 저장됐던 주소는(키가 없던 때) 수정 화면을 열 때 다시 찾아본다', async () => {
+    await renderForm({
+      id: 9, type: 'special', title: '가을 러닝', date: '2026-10-10', location: '한강공원',
+      address: '서울 영등포구 여의동로 330', latitude: null, longitude: null, isPublished: true, options: []
+    });
+
+    expect(locateAddress).toHaveBeenCalledWith('서울 영등포구 여의동로 330');
+    expect(screen.getByTestId('map')).toHaveAttribute('data-lat', '37.5203');
   });
 });

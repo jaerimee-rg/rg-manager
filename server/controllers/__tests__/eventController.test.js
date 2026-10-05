@@ -156,6 +156,42 @@ describe('eventController', () => {
       );
     });
 
+    it('주소 검색으로 고른 주소·좌표를 함께 저장한다', async () => {
+      req.body = { ...valid, address: '서울 송파구 올림픽로 424', latitude: 37.5203, longitude: 127.1236 };
+      Event.create.mockResolvedValue({ id: 1 });
+
+      await createEvent(req, res);
+
+      expect(Event.create).toHaveBeenCalledWith(
+        expect.objectContaining({ location: '여의도', address: '서울 송파구 올림픽로 424', latitude: 37.5203, longitude: 127.1236 }),
+        mockClient
+      );
+    });
+
+    it('주소 없이 등록하면 주소·좌표는 비운다 (예전처럼 장소 이름만)', async () => {
+      req.body = { ...valid, latitude: 37.5, longitude: 127.1 };
+      Event.create.mockResolvedValue({ id: 1 });
+
+      await createEvent(req, res);
+
+      expect(Event.create).toHaveBeenCalledWith(
+        expect.objectContaining({ address: null, latitude: null, longitude: null }),
+        mockClient
+      );
+    });
+
+    it('휴관일은 주소를 보내도 저장하지 않는다', async () => {
+      req.body = { type: 'closure', title: '휴관', date: '2026-08-25', address: '서울 송파구 올림픽로 424', latitude: 37.5, longitude: 127.1 };
+      Event.create.mockResolvedValue({ id: 1 });
+
+      await createEvent(req, res);
+
+      expect(Event.create).toHaveBeenCalledWith(
+        expect.objectContaining({ address: null, latitude: null, longitude: null }),
+        mockClient
+      );
+    });
+
     it('종료일이 시작일보다 빠르면 400', async () => {
       req.body = { type: 'closure', title: 'x', date: '2026-08-27', endDate: '2026-08-25' };
       await createEvent(req, res);
@@ -235,6 +271,26 @@ describe('eventController', () => {
 
       const saved = Event.update.mock.calls[0][1];
       expect(saved.options[0]).toEqual({ id: 'opt_aaaaaaaa', label: '볼(수정)' });
+    });
+
+    it('주소를 고르면 저장하고, 주소를 지우고 저장하면 좌표도 함께 지운다', async () => {
+      Event.getById.mockResolvedValue({ ...existing, location: '올림픽공원', address: '옛 주소', latitude: 37, longitude: 127 });
+      Event.update.mockResolvedValue({ id: 5 });
+      EventRegistration.listByEvent.mockResolvedValue([]);
+      req.params.id = '5';
+      const body = { title: '서울시 대회', date: '2026-09-12', location: '올림픽공원', options: existing.options };
+
+      req.body = { ...body, address: '서울 송파구 올림픽로 424', latitude: 37.5203, longitude: 127.1236 };
+      await updateEvent(req, res);
+      expect(Event.update.mock.calls[0][1]).toEqual(expect.objectContaining({
+        address: '서울 송파구 올림픽로 424', latitude: 37.5203, longitude: 127.1236
+      }));
+
+      req.body = { ...body, address: '' };
+      await updateEvent(req, res);
+      expect(Event.update.mock.calls[1][1]).toEqual(expect.objectContaining({
+        address: null, latitude: null, longitude: null
+      }));
     });
 
     it('신청이 걸린 옵션을 지우면 그 수를 알려준다', async () => {

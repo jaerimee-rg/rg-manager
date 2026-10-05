@@ -1,4 +1,6 @@
 import {
+  parsePlace,
+  placeAfterLocationChange,
   canRegister,
   eventStartMs,
   eventEndMs,
@@ -154,5 +156,49 @@ describe('isKnownType / competitionToEventFields', () => {
       userId: 3, type: 'competition', title: '서울시 대회',
       date: '2026-09-12', location: '올림픽공원', competitionId: 7
     });
+  });
+});
+
+describe('parsePlace (주소 검색으로 고른 주소·좌표)', () => {
+  it('주소와 좌표를 그대로 남긴다 (숫자 문자열도 받는다)', () => {
+    expect(parsePlace({ address: ' 서울 송파구 올림픽로 424 ', latitude: '37.5203', longitude: 127.1236 }))
+      .toEqual({ address: '서울 송파구 올림픽로 424', latitude: 37.5203, longitude: 127.1236 });
+  });
+
+  it('주소가 없으면 좌표도 버린다', () => {
+    expect(parsePlace({ address: '  ', latitude: 37.5, longitude: 127.1 }))
+      .toEqual({ address: null, latitude: null, longitude: null });
+    expect(parsePlace(null)).toEqual({ address: null, latitude: null, longitude: null });
+    expect(parsePlace({})).toEqual({ address: null, latitude: null, longitude: null });
+  });
+
+  it('좌표가 하나라도 없거나 범위를 벗어나면 주소만 남긴다', () => {
+    const only = { address: '서울 송파구 올림픽로 424', latitude: null, longitude: null };
+    expect(parsePlace({ address: only.address, latitude: 37.5 })).toEqual(only);
+    expect(parsePlace({ address: only.address, latitude: 91, longitude: 127 })).toEqual(only);
+    expect(parsePlace({ address: only.address, latitude: 37.5, longitude: 'abc' })).toEqual(only);
+    expect(parsePlace({ address: only.address, latitude: true, longitude: true })).toEqual(only);
+    expect(parsePlace({ address: only.address, latitude: '', longitude: '' })).toEqual(only);
+  });
+
+  it('주소는 200자에서 자른다', () => {
+    expect(parsePlace({ address: '가'.repeat(250) }).address).toHaveLength(200);
+  });
+});
+
+describe('placeAfterLocationChange', () => {
+  const existing = { location: '올림픽공원', address: '서울 송파구 올림픽로 424', latitude: 37.5, longitude: 127.1 };
+
+  it('장소 이름이 그대로면 주소·좌표를 건드리지 않는다', () => {
+    expect(placeAfterLocationChange(existing, '올림픽공원')).toEqual({});
+  });
+
+  it('장소 이름이 바뀌면 예전 주소·좌표를 지운다', () => {
+    expect(placeAfterLocationChange(existing, '잠실학생체육관'))
+      .toEqual({ address: null, latitude: null, longitude: null });
+  });
+
+  it('비어 있던 장소는 null 과 빈 문자열을 같게 본다', () => {
+    expect(placeAfterLocationChange({ location: null }, '')).toEqual({});
   });
 });
