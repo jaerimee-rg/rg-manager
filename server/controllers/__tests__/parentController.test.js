@@ -372,7 +372,7 @@ describe('parentController', () => {
       expect(albumService.markAlbumsStale).not.toHaveBeenCalled();
     });
 
-    it('태그 정리가 실패해도 삭제는 정상 응답한다', async () => {
+    it('태그 정리가 실패해도 삭제는 정상 응답한다 — 앨범은 다음에 열 때 다시 매칭되게 표시돼 있다', async () => {
       req.params.childId = '1';
       ChildFaceProfile.deleteByParentAndStudent.mockResolvedValue(1);
       MediaTag.removeAutoTagsForStudent.mockRejectedValue(new Error('db'));
@@ -381,6 +381,7 @@ describe('parentController', () => {
 
       expect(res.status).not.toHaveBeenCalled();
       expect(res.json.mock.calls[0][0].deleted.id).toBe(1);
+      expect(albumService.markAlbumsStale).toHaveBeenCalledWith(7);
     });
 
     it('신청은 건드리지 않는다 — 학생의 것이라 선생님 명단에 남는다', async () => {
@@ -388,6 +389,9 @@ describe('parentController', () => {
 
       await deleteChild(req, res);
 
+      // 삭제 자체는 성공했다 (오류 응답으로 빠져서 안 부른 것이 아니다)
+      expect(res.status).not.toHaveBeenCalled();
+      expect(res.json.mock.calls[0][0].deleted.id).toBe(1);
       expect(EventRegistration.cancel).not.toHaveBeenCalled();
       expect(sendEventRegistrationKakaoMessage).not.toHaveBeenCalled();
     });

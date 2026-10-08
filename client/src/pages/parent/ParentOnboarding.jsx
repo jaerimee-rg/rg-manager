@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import { consumeReturnTo, returnPathFor } from '../../utils/returnTo';
+import { useAuth } from '../../context/AuthContext';
+import RoleSwitcher from '../../components/common/RoleSwitcher';
+import { Button } from '../../components/ui';
 
 const emptyChild = () => ({ name: '', birthdate: '' });
 
@@ -16,14 +19,19 @@ const PARENT_NAME_MAX = 20;
 /**
  * 가입 직후 아이 등록.
  * 이름·생년월일이 선생님 학생과 맞으면 자동 연결되고, 아니면 확인 대기로 남는다.
+ *
+ * 내 정보에서 아이를 모두 지운 학부모도 여기로 돌아온다. 그때는 `currentName`(이미 정해 둔 학부모명)이
+ * 넘어오며, 그 이름을 그대로 채워 두고 아래에 나갈 길(역할 전환·로그아웃)을 보여 준다.
  */
-function ParentOnboarding({ teachers = [], onDone }) {
+function ParentOnboarding({ teachers = [], onDone, currentName = '' }) {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const [children, setChildren] = useState([emptyChild()]);
   /* 학부모명("예림엄마")은 첫 아이 이름에서 자동으로 만들어 제안한다.
-     한 번이라도 직접 고치면 그 뒤로는 아이 이름을 바꿔도 건드리지 않는다. */
-  const [parentName, setParentName] = useState('');
-  const [nameTouched, setNameTouched] = useState(false);
+     한 번이라도 직접 고치면 그 뒤로는 아이 이름을 바꿔도 건드리지 않는다.
+     이미 정해 둔 이름이 있으면 고친 것으로 본다 — 제안값이 그 이름을 덮어쓰면 안 된다. */
+  const [parentName, setParentName] = useState(currentName);
+  const [nameTouched, setNameTouched] = useState(Boolean(currentName));
   /* 아이는 선생님 1명의 학생에 대응한다 (docs/accounts-roles FR-354~355).
      선생님이 한 명이면 고를 것이 없으므로 자동으로 정해진다. */
   const [teacherId, setTeacherId] = useState(teachers.length === 1 ? teachers[0].id : '');
@@ -210,6 +218,15 @@ function ParentOnboarding({ teachers = [], onDone }) {
           {saving ? '저장 중...' : '시작하기'}
         </button>
       </form>
+
+      {/* 아이를 모두 지우고 돌아온 계정은 일정·내 정보가 닫혀 있으므로 여기서 나갈 수 있어야 한다.
+          처음 가입하는 화면은 그대로 둔다. */}
+      {currentName && (
+        <div style={{ maxWidth: '480px', margin: '16px auto 0' }}>
+          <RoleSwitcher variant="card" />
+          <Button block onClick={logout}>로그아웃</Button>
+        </div>
+      )}
     </div>
   );
 }

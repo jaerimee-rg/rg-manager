@@ -133,6 +133,50 @@ describe('ParentSettings — 내 아이 삭제', () => {
     expect(onChildrenChanged).not.toHaveBeenCalled();
   });
 
+  it('삭제는 됐는데 목록 새로 고침이 실패해도 삭제 실패로 보이지 않고, 지운 아이는 목록에서 빠진다', async () => {
+    serve([CHOPA, KANCHO]);
+    const onChildrenChanged = jest.fn();
+    await renderSettings({ onChildrenChanged });
+
+    // 삭제 뒤의 /me 만 네트워크 오류가 난다
+    const served = fetchWithAuth.getMockImplementation();
+    let deleted = false;
+    fetchWithAuth.mockImplementation((url, options = {}) => {
+      if (options.method === 'DELETE') { deleted = true; return served(url, options); }
+      if (deleted && url === '/api/parent/me') return Promise.reject(new Error('network'));
+      return served(url, options);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '이쵸파 삭제' }));
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '삭제' }));
+    });
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('이쵸파 정보를 삭제했어요.');
+    expect(screen.queryByRole('button', { name: '이쵸파 삭제' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '이칸쵸 삭제' })).toBeInTheDocument();
+    expect(onChildrenChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it('삭제 요청 자체가 끊기면 다시 시도하라고 알리고 아이는 남는다', async () => {
+    serve([CHOPA, KANCHO]);
+    await renderSettings();
+
+    const served = fetchWithAuth.getMockImplementation();
+    fetchWithAuth.mockImplementation((url, options = {}) =>
+      (options.method === 'DELETE' ? Promise.reject(new Error('network')) : served(url, options)));
+
+    fireEvent.click(screen.getByRole('button', { name: '이쵸파 삭제' }));
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '삭제' }));
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('삭제하지 못했어요. 잠시 뒤 다시 시도해 주세요.');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '이쵸파 삭제' })).toBeInTheDocument();
+  });
+
   it('마지막 아이를 지우려 하면 다시 등록해야 한다고 미리 알린다', async () => {
     serve([PENDING]);
     await renderSettings();

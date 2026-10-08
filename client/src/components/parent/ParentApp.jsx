@@ -52,7 +52,7 @@ function ParentApp() {
           (읽지 않으면 저장에 성공하고도 온보딩으로 되돌아온다) */}
       <Route
         path="/parent/onboarding"
-        element={<ParentOnboarding teachers={teachers} onDone={loadMe} />}
+        element={<ParentOnboarding teachers={teachers} onDone={loadMe} currentName={me?.user?.displayName || ''} />}
       />
       {needsOnboarding ? (
         /* 공유 링크로 들어왔다면 아이를 등록한 뒤 그 이벤트로 돌아가야 한다 */

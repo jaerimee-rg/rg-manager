@@ -292,6 +292,30 @@ await pool.query(
   [parentOther.id, teacher2.id, `다른반아이${stamp}`, now]
 );
 
+/* 아이 삭제(마지막 아이 → 다시 등록) 전용 학부모 — 첫 번째 선생님, 아이 하나(학생과 아직 안 맞춰짐), 학부모명 있음.
+   공용 학부모(parent)의 아이를 지우면 그 학부모에게 넣어 둔 얼굴 사진·자동 태그가 함께 지워져
+   뒤의 사진 테스트가 깨지므로 따로 둔다. */
+const p4 = await pool.query(
+  `INSERT INTO users (username, password, role, "createdAt", "kakaoId") VALUES ($1,$2,'parent',$3,$4) RETURNING id, username, role`,
+  [`e2e삭제학부모_${stamp}`, parentPw, now, `e2e-kakao-solo-${stamp}`]
+);
+const parentSolo = p4.rows[0];
+const parentSoloName = '솔로엄마';
+await pool.query(
+  `INSERT INTO parent_accounts ("userId","teacherId","inviteId","createdAt","lastLoginAt","displayName") VALUES ($1,$2,$3,$4,$4,$5)`,
+  [parentSolo.id, teacher.id, inv.rows[0].id, now, parentSoloName]
+);
+await pool.query(
+  `INSERT INTO parent_teachers ("parentUserId","teacherId","inviteId","createdAt") VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+  [parentSolo.id, teacher.id, inv.rows[0].id, now]
+);
+const soloChild = { name: `솔로${String(stamp).slice(-6)}`, birthdate: '2020-02-02' };
+await pool.query(
+  `INSERT INTO parent_children ("parentUserId","teacherId","studentId","childName","childBirthdate",status,"createdAt")
+   VALUES ($1,$2,NULL,$3,$4,'pending',$5)`,
+  [parentSolo.id, teacher.id, soloChild.name, soloChild.birthdate, now]
+);
+
 /* 관리자: 첫 번째 선생님과 **같은 카카오 계정** 을 쓴다.
    역할 전환(관리자 ↔ 선생님)을 카카오 화면 없이 검증하기 위한 구성이다. */
 const sharedKakao = `e2e-shared-${stamp}`;
@@ -318,6 +342,10 @@ const sessions = {
   parent: { token: sign(parent), user: { id: parent.id, username: parent.username, role: 'parent' } },
   parentMulti: { token: sign(parentMulti), user: { id: parentMulti.id, username: parentMulti.username, role: 'parent' } },
   parentOther: { token: sign(parentOther), user: { id: parentOther.id, username: parentOther.username, role: 'parent' } },
+  parentSolo: {
+    token: sign(parentSolo), user: { id: parentSolo.id, username: parentSolo.username, role: 'parent' },
+    displayName: parentSoloName, child: soloChild
+  },
   admin: { token: sign(adminUser), user: { id: adminUser.id, username: adminUser.username, role: 'admin' } },
   teacher2: { id: teacher2.id, username: teacher2.username, displayName: teacher2DisplayName, invite: invB.rows[0].token, eventId: eventB.rows[0].id },
   teacherInvite: { id: tinv.rows[0].id, token: tinv.rows[0].token },

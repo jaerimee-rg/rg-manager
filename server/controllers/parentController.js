@@ -234,6 +234,9 @@ export const deleteChild = async (req, res) => {
     /* 기준 얼굴이 빠졌으니 자동 태그를 맞춘다 (얼굴 한 장을 지울 때와 같은 규칙 — FR-263).
        아이는 이미 지워졌으므로 여기가 실패해도 응답을 막지 않는다. */
     if (facesRemoved > 0) {
+      // 지운 얼굴에 붙어 있던 사진이 다른 아이에게 더 가까울 수 있다 — 앨범을 다음에 열 때 다시 매칭한다.
+      // 먼저 표시해 두면 아래 즉시 정리가 실패해도 다음에 열 때 바로잡힌다 (이 호출은 던지지 않는다).
+      await albumService.markAlbumsStale(child.teacherId);
       try {
         const remaining = await ChildFaceProfile.countByStudent(child.studentId);
         if (remaining === 0) {
@@ -241,8 +244,6 @@ export const deleteChild = async (req, res) => {
         } else {
           await albumService.matchStudentAcrossAlbums(child.teacherId, child.studentId);
         }
-        // 지운 얼굴에 붙어 있던 사진이 다른 아이에게 더 가까울 수 있다 — 앨범을 다음에 열 때 다시 매칭한다.
-        await albumService.markAlbumsStale(child.teacherId);
       } catch (error) {
         console.error('아이 삭제 뒤 자동 태그 정리 실패(생략하고 계속):', error?.message || error);
       }

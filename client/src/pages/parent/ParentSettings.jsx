@@ -130,8 +130,10 @@ function ParentSettings({ onChildrenChanged }) {
         return;
       }
 
+      // 삭제는 끝났다. 목록에서 먼저 빼 두면 아래 새로 고침이 실패해도 지운 아이가 남아 보이지 않는다.
       setChildNotice(`${target.childName} 정보를 삭제했어요.`);
-      await load();
+      setMe((prev) => (prev ? { ...prev, children: (prev.children || []).filter((c) => c.id !== target.id) } : prev));
+      await load().catch(() => {});
       onChildrenChanged?.();
     } catch {
       setChildError('삭제하지 못했어요. 잠시 뒤 다시 시도해 주세요.');

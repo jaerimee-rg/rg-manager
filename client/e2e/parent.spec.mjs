@@ -125,6 +125,40 @@ test.describe('학부모 — 가입부터 신청까지', () => {
     expect(after.body.children.find((c) => c.childName === childName).status).toBe('linked');
   });
 
+  test('마지막 아이를 삭제하면 등록 화면으로 가고, 정해 둔 학부모명과 나갈 길이 있다 — 다시 등록하면 그 이름 그대로다', async ({ page, request }) => {
+    // 전용 학부모를 쓴다 — 공용 학부모의 아이를 지우면 그 학부모의 얼굴 사진·태그가 사라져 뒤의 사진 테스트가 깨진다
+    const solo = sessions.parentSolo;
+    await loginAs(page, solo);
+    await page.goto('/parent/settings');
+
+    await page.getByRole('button', { name: `${solo.child.name} 삭제` }).click();
+    const dialog = page.getByRole('dialog', { name: '아이를 삭제할까요?' });
+    await expect(dialog).toContainText('마지막 아이라서, 삭제하면 아이를 다시 등록하는 화면으로 이동해요.');
+    await dialog.getByRole('button', { name: '삭제', exact: true }).click();
+
+    // 아이가 없으면 일정·내 정보가 닫히고 등록 화면만 남는다
+    await expect(page.getByRole('heading', { name: '아이 정보를 알려 주세요' })).toBeVisible();
+    await expect(page).toHaveURL(/\/parent\/onboarding$/);
+    expect((await api(request, solo, 'GET', '/api/parent/me')).body.children).toHaveLength(0);
+
+    // 아이 이름에서 만든 제안값이 정해 둔 이름을 덮어쓰지 않고, 여기서 나갈 수도 있다
+    const nameField = page.getByRole('textbox', { name: /학부모명/ });
+    await expect(nameField).toHaveValue(solo.displayName);
+    await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
+
+    await page.getByLabel('이름').first().fill(solo.child.name);
+    await page.getByLabel('생년월일').first().fill(solo.child.birthdate);
+    await expect(nameField).toHaveValue(solo.displayName);
+    await page.getByRole('button', { name: '시작하기' }).click();
+    // 떠나온 화면(내 정보)으로 돌아온다
+    await expect(page).toHaveURL(/\/parent\/settings$/);
+    await expect(page.getByRole('button', { name: `${solo.child.name} 삭제` })).toBeVisible();
+
+    const after = await api(request, solo, 'GET', '/api/parent/me');
+    expect(after.body.user.displayName).toBe(solo.displayName);
+    expect(after.body.children.map((c) => c.childName)).toEqual([solo.child.name]);
+  });
+
   test('다른 학부모의 아이는 삭제할 수 없다 (404, 지워지지 않는다)', async ({ request }) => {
     const theirs = await api(request, sessions.parentMulti, 'GET', '/api/parent/me');
     const target = theirs.body.children[0];

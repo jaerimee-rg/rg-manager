@@ -385,7 +385,11 @@ Parents get their own accounts and a separate app under `/parent/*`. Design docs
   stay), then auto tags are cleaned as in a single face delete (incl. `markAlbumsStale`) — that cleanup
   never fails the response.
   Deleting the last child sends the parent back to onboarding (`ParentSettings onChildrenChanged` →
-  `ParentApp.loadMe`); the confirm dialog says so beforehand (`deleteChildMessage`).
+  `ParentApp.loadMe`); the confirm dialog says so beforehand (`deleteChildMessage`). That makes onboarding
+  reachable by an **established** account, so `ParentOnboarding` takes `currentName`: it prefills the
+  parent's existing name (the "첫 아이 이름 + 엄마" suggestion must not overwrite it) and shows
+  `RoleSwitcher` + 로그아웃 under the form — with no children 일정/내 정보 are closed, and `lastRole` survives
+  logout, so a teacher+parent account would otherwise be stuck. The first-signup screen (no name yet) is unchanged.
 - **내 아이 row = `생년월일 · ○○○ 선생님` only.** The linked student's name is deliberately **not** shown
   (owner's call, 2026-10-08): a hand-linked child can carry a different name than the roster student
   ("이쵸파" ↔ "윤해서"), and the extra name read as a mystery. The teacher name shows even with one teacher.

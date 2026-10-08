@@ -4,6 +4,11 @@ import { MemoryRouter } from 'react-router-dom';
 
 jest.mock('../../../utils/api', () => ({ fetchWithAuth: jest.fn() }));
 
+const mockLogout = jest.fn();
+jest.mock('../../../context/AuthContext', () => ({ useAuth: () => ({ logout: mockLogout }) }));
+// 역할 전환 카드는 자기 테스트가 있다 — 여기서는 그려지는지만 본다
+jest.mock('../../../components/common/RoleSwitcher', () => () => <div data-testid="role-switcher" />);
+
 const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
@@ -16,10 +21,10 @@ import ParentOnboarding, { defaultParentName } from '../ParentOnboarding';
 
 const teachers = [{ id: 7, name: '이재림' }];
 
-const renderForm = () =>
+const renderForm = (props = {}) =>
   render(
     <MemoryRouter>
-      <ParentOnboarding teachers={teachers} onDone={jest.fn()} />
+      <ParentOnboarding teachers={teachers} onDone={jest.fn()} {...props} />
     </MemoryRouter>
   );
 
@@ -132,5 +137,38 @@ describe('ParentOnboarding — 학부모명', () => {
     await submit();
 
     expect(mockNavigate).toHaveBeenCalledWith('/parent/schedule', { state: { justOnboarded: true } });
+  });
+});
+
+describe('ParentOnboarding — 아이를 모두 지우고 돌아온 학부모', () => {
+  it('정해 둔 학부모명이 그대로 채워져 있다', () => {
+    renderForm({ currentName: '칸쵸엄마' });
+
+    expect(screen.getByLabelText(/^학부모명/)).toHaveValue('칸쵸엄마');
+  });
+
+  it('아이 이름을 입력해도 정해 둔 학부모명을 덮어쓰지 않고, 그 이름을 그대로 보낸다', async () => {
+    renderForm({ currentName: '칸쵸엄마' });
+
+    fillChild('이칸쵸', '2024-07-30');
+    expect(screen.getByLabelText(/^학부모명/)).toHaveValue('칸쵸엄마');
+
+    await submit();
+    expect(sentBody().parentName).toBe('칸쵸엄마');
+  });
+
+  it('나갈 길이 있다 — 역할 전환과 로그아웃', () => {
+    renderForm({ currentName: '칸쵸엄마' });
+
+    expect(screen.getByTestId('role-switcher')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '로그아웃' }));
+    expect(mockLogout).toHaveBeenCalledTimes(1);
+  });
+
+  it('처음 가입하는 화면에는 역할 전환·로그아웃이 없다 (그대로다)', () => {
+    renderForm();
+
+    expect(screen.queryByTestId('role-switcher')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '로그아웃' })).not.toBeInTheDocument();
   });
 });

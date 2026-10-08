@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 
 const mockAuth = { user: null, loading: true, logout: jest.fn() };
@@ -221,6 +221,34 @@ describe('App 라우팅 — 역할 분리', () => {
     await waitFor(() => expect(currentPath()).toBe('/parent/events/12'));
     // 로그인돼 있으니 돌아갈 곳을 남길 일도 없다
     expect(peekReturnTo()).toBeNull();
+  });
+
+  it('내 정보에서 마지막 아이를 삭제하면 온보딩으로 가고, 정해 둔 학부모명이 채워져 있다', async () => {
+    mockAuth.user = PARENT;
+    // 서버 흉내 — 삭제가 성공하면 다음 /me 부터 아이가 없다
+    let children = [{ id: 3, childName: '이칸쵸', childBirthdate: '2024-07-30', status: 'pending', studentId: null, teacherId: 7, teacherName: '이재림' }];
+    fetchWithAuth.mockImplementation((url, options = {}) => {
+      if (options.method === 'DELETE') children = [];
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          user: { ...PARENT, displayName: '칸쵸엄마' },
+          teachers: [{ id: 7, name: '이재림' }],
+          children
+        })
+      });
+    });
+
+    renderAt('/parent/settings');
+
+    fireEvent.click(await screen.findByRole('button', { name: '이칸쵸 삭제' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '삭제' }));
+
+    await waitFor(() => expect(currentPath()).toBe('/parent/onboarding'));
+    // 아이 이름으로 만든 제안값이 정해 둔 이름을 덮어쓰지 않는다
+    expect(screen.getByLabelText(/^학부모명/)).toHaveValue('칸쵸엄마');
+    // 일정·내 정보가 닫혀 있으니 여기서 나갈 수 있어야 한다
+    expect(screen.getByRole('button', { name: '로그아웃' })).toBeInTheDocument();
   });
 
   it('아이 등록 전 학부모가 공유 링크를 열면 주소를 남기고 온보딩으로 보낸다', async () => {
