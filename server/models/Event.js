@@ -308,6 +308,20 @@ class Event {
   }
 
   /**
+   * 사진 전용 폴더의 이름·날짜를 고친다 (docs/photo-menu FR-519). **type='folder' 행만** 건드린다 —
+   * 이벤트의 제목·날짜는 이벤트 폼(update)이 대회 행 동기화까지 함께 맡는다.
+   */
+  static async updateFolder(id, { title, date }) {
+    const result = await pool.query(
+      `UPDATE events SET title = $1, date = $2, "updatedAt" = $3
+        WHERE id = $4 AND type = 'folder'
+        RETURNING *`,
+      [title, date, new Date().toISOString(), id]
+    );
+    return result.rows.length > 0 ? hydrate(result.rows[0]) : null;
+  }
+
+  /**
    * 공개하면 몇 명이 보게 되는지 (공개 패널 문구 · 0명 경고, photo-menu FR-521~522).
    * participants = 이 이벤트에 확정됐거나 참가 학생으로 들어간 학생과 연결된 학부모 계정 수
    * all          = 이 선생님과 연결된 학부모 계정 수

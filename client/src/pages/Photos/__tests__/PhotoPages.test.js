@@ -270,3 +270,201 @@ describe('PhotoAlbum — 앨범 (docs/photo-menu FR-520~529)', () => {
     });
   });
 });
+
+// ───────── 사진 전용 폴더 관리: 이름·날짜 수정 · 폴더 삭제 (docs/photo-menu FR-519) ─────────
+describe('PhotoAlbum — 사진 폴더 관리 (FR-519)', () => {
+  const FOLDER = {
+    ...ALBUM, eventType: 'folder', eventTitle: '가을 소풍', eventDate: '2026-09-27', audience: 'all',
+    driveFolderName: '2026-09-27 가을 소풍', expectedFolderName: '2026-09-27 가을 소풍',
+    counts: { images: 10, videos: 2, hidden: 1, fromParents: 1, fromTeacher: 12 }
+  };
+
+  // PATCH · DELETE /api/albums/31 의 응답만 바꿔 끼운다
+  const renderFolder = async ({ album = FOLDER, patch, del } = {}) => {
+    await renderAlbum(album);
+    const base = fetchWithAuth.getMockImplementation();
+    fetchWithAuth.mockImplementation((url, options = {}) => {
+      if (url === '/api/albums/31' && options.method === 'PATCH') {
+        return patch ? patch() : ok({ eventId: 31, title: '가을 운동회', date: '2026-10-03', driveRenamed: true });
+      }
+      if (url === '/api/albums/31' && options.method === 'DELETE') {
+        return del ? del() : ok({ deleted: true, driveFolderKept: true, driveFolderName: '2026-09-27 가을 소풍' });
+      }
+      return base(url, options);
+    });
+  };
+
+  const openMenu = async () => {
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '폴더 관리' })); });
+  };
+  const openEdit = async () => {
+    await openMenu();
+    await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: /이름 · 날짜 수정/ })); });
+  };
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('사진 폴더에는 [폴더 관리] 메뉴가 있고, 이벤트 앨범에는 없다', async () => {
+    await renderFolder();
+    await openMenu();
+    expect(screen.getByRole('menuitem', { name: /이름 · 날짜 수정/ })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /폴더 삭제/ })).toBeInTheDocument();
+  });
+
+  it('이벤트 앨범에는 [폴더 관리] 가 없다 — 이벤트 관리에서 고치고 지운다', async () => {
+    await renderAlbum();
+    expect(screen.queryByRole('button', { name: '폴더 관리' })).not.toBeInTheDocument();
+  });
+
+  it('수정 창은 지금 이름·날짜로 시작하고, 고치면 바뀔 Drive 폴더 이름을 미리 보여 준다', async () => {
+    await renderFolder();
+    await openEdit();
+
+    const dialog = screen.getByRole('dialog', { name: '폴더 이름 · 날짜 수정' });
+    expect(within(dialog).getByLabelText(/이름/)).toHaveValue('가을 소풍');
+    expect(within(dialog).getByLabelText(/날짜/)).toHaveValue('2026-09-27');
+    // 바꾼 것이 없으면 저장할 것이 없다
+    expect(within(dialog).getByRole('button', { name: '저장' })).toBeDisabled();
+
+    await act(async () => { fireEvent.change(within(dialog).getByLabelText(/이름/), { target: { value: '가을: 운동회' } }); });
+    await act(async () => { fireEvent.change(within(dialog).getByLabelText(/날짜/), { target: { value: '2026-10-03' } }); });
+
+    expect(within(dialog).getByText('바뀔 Drive 폴더 이름')).toBeInTheDocument();
+    expect(within(dialog).getByText('2026-10-03 가을 운동회')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: '저장' })).toBeEnabled();
+  });
+
+  it('저장하면 PATCH /api/albums/:id 로 보내고, 앨범을 다시 읽고 알린다', async () => {
+    await renderFolder();
+    await openEdit();
+    const dialog = screen.getByRole('dialog', { name: '폴더 이름 · 날짜 수정' });
+    await act(async () => { fireEvent.change(within(dialog).getByLabelText(/이름/), { target: { value: '  가을 운동회 ' } }); });
+    await act(async () => { fireEvent.change(within(dialog).getByLabelText(/날짜/), { target: { value: '2026-10-03' } }); });
+    const reads = () => fetchWithAuth.mock.calls.filter(([url, options]) => url === '/api/events/31/album' && !options?.method).length;
+    const before = reads();
+
+    await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: '저장' })); });
+
+    expect(fetchWithAuth).toHaveBeenCalledWith('/api/albums/31', {
+      method: 'PATCH', body: JSON.stringify({ title: '가을 운동회', date: '2026-10-03' })
+    });
+    expect(reads()).toBe(before + 1);
+    expect(screen.queryByRole('dialog', { name: '폴더 이름 · 날짜 수정' })).not.toBeInTheDocument();
+    expect(screen.getByText('폴더 이름·날짜를 바꿨어요')).toBeInTheDocument();
+  });
+
+  it('Drive 폴더 이름을 바꾸지 못했으면 [폴더 이름 맞추기] 를 안내한다', async () => {
+    await renderFolder({ patch: () => ok({ eventId: 31, title: '가을 운동회', date: '2026-10-03', driveRenamed: false }) });
+    await openEdit();
+    const dialog = screen.getByRole('dialog', { name: '폴더 이름 · 날짜 수정' });
+    await act(async () => { fireEvent.change(within(dialog).getByLabelText(/이름/), { target: { value: '가을 운동회' } }); });
+
+    await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: '저장' })); });
+
+    expect(screen.getByText(/Drive 폴더 이름은 \[폴더 이름 맞추기\] 로 맞춰 주세요/)).toBeInTheDocument();
+  });
+
+  it('같은 이름·날짜의 폴더가 있으면 창을 닫지 않고 서버 안내를 보여 준다', async () => {
+    await renderFolder({ patch: () => ok({ error: '같은 이름·날짜의 사진 폴더가 이미 있어요.', reason: 'folder_exists' }, 409) });
+    await openEdit();
+    const dialog = screen.getByRole('dialog', { name: '폴더 이름 · 날짜 수정' });
+    await act(async () => { fireEvent.change(within(dialog).getByLabelText(/이름/), { target: { value: '봄 소풍' } }); });
+
+    await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: '저장' })); });
+
+    expect(within(screen.getByRole('dialog', { name: '폴더 이름 · 날짜 수정' })).getByText('같은 이름·날짜의 사진 폴더가 이미 있어요.')).toBeInTheDocument();
+  });
+
+  it('이름을 비우면 저장할 수 없다', async () => {
+    await renderFolder();
+    await openEdit();
+    const dialog = screen.getByRole('dialog', { name: '폴더 이름 · 날짜 수정' });
+
+    await act(async () => { fireEvent.change(within(dialog).getByLabelText(/이름/), { target: { value: '   ' } }); });
+
+    expect(within(dialog).getByRole('button', { name: '저장' })).toBeDisabled();
+  });
+
+  it('[폴더 삭제] 는 무엇이 사라지고 무엇이 남는지 알리고 묻는다 — 묻기만 해서는 지우지 않는다', async () => {
+    await renderFolder();
+    await openMenu();
+    await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: /폴더 삭제/ })); });
+
+    const dialog = screen.getByRole('dialog', { name: '‘가을 소풍’ 폴더를 지울까요?' });
+    expect(dialog).toHaveTextContent('폴더와 사진·영상 13개가 앱에서 사라지고, 되돌릴 수 없어요.');
+    expect(dialog).toHaveTextContent('Google Drive 의 폴더와 원본 파일은 그대로 남아요.');
+    expect(fetchWithAuth.mock.calls.some(([, options]) => options?.method === 'DELETE')).toBe(false);
+
+    await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: '취소' })); });
+    expect(fetchWithAuth.mock.calls.some(([, options]) => options?.method === 'DELETE')).toBe(false);
+  });
+
+  it('확인하면 DELETE /api/albums/:id 로 지우고, 사진 목록으로 가서 Drive 폴더는 남았다고 알린다', async () => {
+    await renderFolder();
+    await openMenu();
+    await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: /폴더 삭제/ })); });
+    const dialog = screen.getByRole('dialog', { name: '‘가을 소풍’ 폴더를 지울까요?' });
+
+    await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: '폴더 삭제' })); });
+
+    expect(fetchWithAuth).toHaveBeenCalledWith('/api/albums/31', { method: 'DELETE' });
+    expect(mockNavigate).toHaveBeenCalledWith('/photos', {
+      replace: true,
+      state: { toast: '폴더를 지웠어요 · Google Drive 의 폴더는 그대로 있어요' }
+    });
+  });
+
+  it('지우지 못하면 그 자리에 남아 알린다', async () => {
+    await renderFolder({ del: () => ok({ error: '사진 폴더를 찾을 수 없습니다.' }, 404) });
+    await openMenu();
+    await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: /폴더 삭제/ })); });
+
+    await act(async () => { fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '폴더 삭제' })); });
+
+    expect(mockNavigate).not.toHaveBeenCalledWith('/photos', expect.anything());
+    expect(screen.getByText('사진 폴더를 찾을 수 없습니다.')).toBeInTheDocument();
+  });
+
+  it('공개 중인 폴더를 지울 때는 학부모 화면에서도 사라진다고 알린다', async () => {
+    await renderFolder({ album: { ...FOLDER, published: true } });
+    await openMenu();
+    await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: /폴더 삭제/ })); });
+
+    expect(screen.getByRole('dialog')).toHaveTextContent('앱과 학부모 화면에서 사라지고');
+  });
+
+  it('아직 사진을 올리지 않은 폴더도 고치고 지울 수 있다 (Drive 폴더가 없는 상태)', async () => {
+    await renderFolder({ album: { ...FOLDER, driveFolderId: null, driveFolderName: null, albumStatus: 'none', counts: {} } });
+    await openMenu();
+    await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: /폴더 삭제/ })); });
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('폴더가 앱에서 사라지고, 되돌릴 수 없어요.');
+    expect(dialog).not.toHaveTextContent('Google Drive');
+  });
+});
+
+describe('PhotoAlbums — 폴더를 지우고 돌아왔을 때 (FR-519)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('알림을 한 번 보여 주고, 주소 상태에서 지운다(새로고침해도 다시 뜨지 않게)', async () => {
+    fetchWithAuth.mockImplementation(() => ok(LIST));
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={[{ pathname: '/photos', state: { toast: '폴더를 지웠어요 · Google Drive 의 폴더는 그대로 있어요' } }]}>
+          <PhotoAlbums />
+        </MemoryRouter>
+      );
+    });
+
+    expect(screen.getByText('폴더를 지웠어요 · Google Drive 의 폴더는 그대로 있어요')).toBeInTheDocument();
+    expect(mockNavigate).toHaveBeenCalledWith('/photos', { replace: true, state: null });
+  });
+
+  it('보통 들어왔을 때는 알림이 없다', async () => {
+    await renderList();
+
+    expect(screen.queryByText(/폴더를 지웠어요/)).not.toBeInTheDocument();
+    expect(mockNavigate).not.toHaveBeenCalledWith('/photos', { replace: true, state: null });
+  });
+});

@@ -108,6 +108,18 @@ const folderRow = await pool.query(
 );
 const folderEventId = folderRow.rows[0].id;
 
+// 지우기 테스트용 사진 폴더 (FR-519) — 사진이 한 장 들어 있다. 선생님 테스트가 화면에서 지운다.
+const doomedFolderTitle = `e2e지울폴더_${stamp}`;
+const doomedRow = await pool.query(
+  `INSERT INTO events ("userId", type, title, date, options, "isPublished", "registrationOpen",
+                       "driveFolderId", "driveFolderName", "albumStatus", "albumUploadOpen", "albumCreatedAt",
+                       "albumPublished", "albumAudience", "createdAt", "updatedAt")
+   VALUES ($1,'folder',$2,'2026-09-21','[]',TRUE,FALSE,$3,$4,'ready',TRUE,$5,FALSE,'all',$5,$5)
+   RETURNING id`,
+  [teacher.id, doomedFolderTitle, `e2e-doomed-folder-${stamp}`, `2026-09-21 ${doomedFolderTitle}`, now]
+);
+const doomedFolderEventId = doomedRow.rows[0].id;
+
 // 첫째 아이를 이 대회의 참가 학생으로 넣어 "확정" 상태를 만든다.
 await pool.query(
   `INSERT INTO competition_students ("competitionId","studentId","createdAt") VALUES ($1,$2,$3)`,
@@ -139,6 +151,8 @@ mediaIds.push(await mkMedia({ i: 4, kind: 'video', uploaderRole: 'teacher', uplo
 // 비공개 앨범에도 두 장 — 공개하면 학부모 이벤트 상세 사진 칸에 나타나야 한다
 await mkMedia({ i: 5, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: privateEventId });
 await mkMedia({ i: 6, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: privateEventId });
+// 지울 폴더에도 한 장 — 폴더를 지우면 이 기록도 함께 사라져야 한다
+await mkMedia({ i: 40, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: doomedFolderEventId });
 // 사진 전용 폴더에도 한 장
 await mkMedia({ i: 7, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: folderEventId });
 // 예전 방식(버전 기록 없음)으로 "얼굴 없음" 이 된 사진 두 장 — 선생님 [얼굴 찾기] 가 다시 찾아 저장하는지 본다
@@ -298,7 +312,7 @@ const tinv = await pool.query(
 );
 
 const sessions = {
-  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, faceScanEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
+  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, doomedFolderEventId, doomedFolderTitle, faceScanEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
   teacher: { token: sign(teacher), user: { id: teacher.id, username: teacher.username, role: 'user' } },
   teacher2Token: sign(teacher2),
   parent: { token: sign(parent), user: { id: parent.id, username: parent.username, role: 'parent' } },

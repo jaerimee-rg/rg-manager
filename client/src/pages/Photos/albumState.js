@@ -150,6 +150,22 @@ export const newFolderProblem = ({ title, date } = {}) => {
   return null;
 };
 
+/**
+ * 사진 전용 폴더를 지울 때 확인 문구 (FR-519) — 무엇이 사라지고 무엇이 남는지.
+ * 앱의 폴더와 사진 기록은 사라지고(학부모 화면에서도), Google Drive 의 폴더와 원본은 남는다.
+ */
+export const folderDeleteMessage = (album) => {
+  const counts = album?.counts || {};
+  // 숨긴 것도 함께 사라진다 (images · videos 는 보이는 것만 센 수다)
+  const total = (counts.images || 0) + (counts.videos || 0) + (counts.hidden || 0);
+  const what = total ? `폴더와 사진·영상 ${total}개가` : '폴더가';
+  const where = album?.published ? '앱과 학부모 화면에서' : '앱에서';
+  const drive = album?.driveFolderId
+    ? ' Google Drive 의 폴더와 원본 파일은 그대로 남아요.'
+    : '';
+  return `${what} ${where} 사라지고, 되돌릴 수 없어요.${drive}`;
+};
+
 /** 공개하면 학부모에게 보이는 곳 — 사진 전용 폴더는 이벤트 상세가 없다 (FR-515, 517) */
 export const publishPlaces = (type) => (isPhotoFolder(type) ? '사진 탭' : '사진 탭 · 이 이벤트 상세');
 
@@ -194,6 +210,7 @@ export default {
   PHOTO_FOLDER_TYPE,
   isPhotoFolder,
   publishPlaces,
+  folderDeleteMessage,
   folderNameFrom,
   newFolderProblem,
   uploadPublishNote,

@@ -1,7 +1,7 @@
 import {
   publishSummary, zeroAudienceWarning, driveNotice, canUploadWith, albumProblem, filterChips,
   targetState, uploadPublishNote, formatPublishedDate, formatEventDate, formatShortDate, toViewerItem, publishLocked,
-  folderNameFrom, newFolderProblem, typeLabel, isPhotoFolder, publishPlaces
+  folderNameFrom, newFolderProblem, typeLabel, isPhotoFolder, publishPlaces, folderDeleteMessage
 } from '../albumState';
 
 describe('publishSummary (docs/photo-menu FR-521)', () => {
@@ -122,5 +122,21 @@ describe('날짜 · 뷰어', () => {
   it('선생님 미디어는 뷰어에서 지울 수 있고 업로더 표기를 맞춘다', () => {
     expect(toViewerItem({ id: 1, uploaderRole: 'parent' })).toMatchObject({ uploader: 'parent', canDelete: true });
     expect(toViewerItem({ id: 2, uploaderRole: 'teacher' }).uploader).toBe('teacher');
+  });
+});
+
+describe('folderDeleteMessage — 사진 폴더를 지울 때 확인 문구 (FR-519)', () => {
+  it('숨긴 것까지 모두 세고, Drive 폴더는 남는다고 알린다', () => {
+    const message = folderDeleteMessage({ driveFolderId: 'f', published: false, counts: { images: 10, videos: 2, hidden: 1 } });
+    expect(message).toBe('폴더와 사진·영상 13개가 앱에서 사라지고, 되돌릴 수 없어요. Google Drive 의 폴더와 원본 파일은 그대로 남아요.');
+  });
+
+  it('공개 중이면 학부모 화면에서도 사라진다고 알린다', () => {
+    expect(folderDeleteMessage({ driveFolderId: 'f', published: true, counts: { images: 1 } })).toMatch(/^폴더와 사진·영상 1개가 앱과 학부모 화면에서 사라지고/);
+  });
+
+  it('사진이 없고 Drive 폴더도 없으면 폴더만 말한다', () => {
+    expect(folderDeleteMessage({ driveFolderId: null, counts: {} })).toBe('폴더가 앱에서 사라지고, 되돌릴 수 없어요.');
+    expect(folderDeleteMessage(null)).toBe('폴더가 앱에서 사라지고, 되돌릴 수 없어요.');
   });
 });

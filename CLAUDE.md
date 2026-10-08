@@ -52,8 +52,8 @@ Client and server have **separate** Jest setups and are run from their own direc
 there is no root `package.json`, so there is no one command that runs everything.
 
 ```bash
-cd client && npm test          # jest — 1206 tests / 87 suites
-cd server && npm test          # 1273 tests / 60 suites
+cd client && npm test          # jest — 1223 tests / 87 suites
+cd server && npm test          # 1296 tests / 60 suites
 ```
 
 - **The server suite is ESM** (`"type": "module"` + `transform: {}`, i.e. no Babel) and only
@@ -452,6 +452,13 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   `parentAwareDisplayNameSql('u','pa')` (parent name → `users.displayName` → username) and
   `mediaSerializer.uploaderNameOf` drops placeholder ids (falls back to 학부모/선생님). Parents still never get
   uploader names (`toParentMedia` whitelist).
+- **Photo folders are renamed and deleted from the 사진 menu only** (docs/photo-menu FR-519): `PATCH` /
+  `DELETE /api/albums/:id` (`updatePhotoFolder` / `deletePhotoFolder`) work on `type='folder'` rows and answer
+  400 `not_photo_folder` for a real event — an event has registrations and a competition row, so it is edited and
+  deleted in 이벤트 관리. Rename also renames the Drive folder via `syncFolderName` (a Drive failure never fails the
+  save; `driveRenamed:false`). **Delete removes the row and its media/tags/faces (CASCADE) but never touches
+  Drive** — same rule as deleting an event; the confirm dialog says so. `Menu` positions itself in CSS
+  (`.ui-menu[data-align]`), never inline, or the mobile bottom-sheet rule loses.
 - **Album share link** (docs/photo-menu FR-518) = the parent album URL **plus the album owner's parent-invite
   token**: `/parent/photos/<eventId>?invite=<token>`, built server-side by `services/albumShare.sharePathFor` and
   returned as `sharePath` to the teacher (`GET /api/events/:id/album`) **and to any parent who can view the album**
