@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, act } from '@testing-library/react';
 import MediaViewer from '../MediaViewer';
 
 const media = (overrides = {}) => ({
@@ -123,6 +123,113 @@ describe('MediaViewer — 영상', () => {
 
     expect(screen.queryByRole('button', { name: '다음 사진' })).toBeNull();
     expect(screen.queryByRole('button', { name: '이전 사진' })).toBeNull();
+  });
+});
+
+describe('MediaViewer — 누르는 즉시 재생 (휴대폰)', () => {
+  const TAP_KEY = 'rg.drivePlayer.tapSignal';
+  const setTouch = (matches) => { window.matchMedia = jest.fn(() => ({ matches })); };
+  // 플레이어 안을 누르면 브라우저는 포커스를 iframe 으로 옮기고 창에 blur 를 준다
+  const tapInside = (player) => {
+    Object.defineProperty(document, 'activeElement', { configurable: true, get: () => player });
+    fireEvent.blur(window);
+  };
+
+  beforeEach(() => { window.localStorage.clear(); });
+  afterEach(() => {
+    delete document.activeElement;
+    delete window.matchMedia;
+  });
+
+  it('신호를 본 적 없는 기기: 예전 그대로 — Drive 의 재생 버튼을 쓰고, 겹친 사진이 없다', () => {
+    setTouch(true);
+    render(<MediaViewer items={[video(1)]} startId={1} onClose={jest.fn()} />);
+
+    const player = screen.getByTitle('VID_1.mov');
+    expect(player).toHaveAttribute('src', 'https://drive.google.com/file/d/v1/preview');
+    expect(screen.queryByTestId('video-poster')).toBeNull();
+  });
+
+  it('플레이어 안을 누르면 그 기기가 신호를 준다는 것을 기억한다', () => {
+    setTouch(true);
+    render(<MediaViewer items={[video(1)]} startId={1} onClose={jest.fn()} />);
+    expect(window.localStorage.getItem(TAP_KEY)).toBeNull();
+
+    tapInside(screen.getByTitle('VID_1.mov'));
+    expect(window.localStorage.getItem(TAP_KEY)).toBe('1');
+  });
+
+  it('포커스가 다른 곳에 있는 blur(앱 전환 등)는 탭으로 치지 않는다', () => {
+    setTouch(true);
+    render(<MediaViewer items={[video(1)]} startId={1} onClose={jest.fn()} />);
+
+    fireEvent.blur(window);
+    expect(window.localStorage.getItem(TAP_KEY)).toBeNull();
+  });
+
+  it('신호를 본 터치 기기: 준비 상태로 띄우고 미리보기 사진을 겹친다 — 누르는 순간 사진을 치운다', () => {
+    setTouch(true);
+    window.localStorage.setItem(TAP_KEY, '1');
+    render(<MediaViewer items={[video(1)]} startId={1} onClose={jest.fn()} />);
+
+    const player = screen.getByTitle('VID_1.mov');
+    // 준비만 하고 기다리게: autoplay=1 을 붙이되 자동 재생 권한은 넘기지 않는다
+    expect(player).toHaveAttribute('src', 'https://drive.google.com/file/d/v1/preview?autoplay=1');
+    expect(player.getAttribute('allow')).toBe('fullscreen');
+
+    const poster = screen.getByTestId('video-poster');
+    expect(poster.parentElement).toBe(player.parentElement);
+    // 터치는 사진을 지나 플레이어로 간다
+    expect(poster.style.pointerEvents).toBe('none');
+    expect(poster.querySelector('img')).toHaveAttribute('src', 'https://drive.google.com/thumbnail?id=f1&sz=w1600');
+    expect(poster.querySelector('svg')).not.toBeNull();
+
+    tapInside(player);
+    expect(screen.queryByTestId('video-poster')).toBeNull();
+    // 같은 iframe 이 그대로 — 다시 불러오면 재생이 끊긴다
+    expect(screen.getByTitle('VID_1.mov')).toBe(player);
+    expect(player).toHaveAttribute('src', 'https://drive.google.com/file/d/v1/preview?autoplay=1');
+  });
+
+  it('blur 이벤트 없이 포커스만 옮겨져도 곧 알아챈다', () => {
+    jest.useFakeTimers();
+    try {
+      setTouch(true);
+      window.localStorage.setItem(TAP_KEY, '1');
+      render(<MediaViewer items={[video(1)]} startId={1} onClose={jest.fn()} />);
+      const player = screen.getByTitle('VID_1.mov');
+
+      Object.defineProperty(document, 'activeElement', { configurable: true, get: () => player });
+      act(() => { jest.advanceTimersByTime(150); });
+      expect(screen.queryByTestId('video-poster')).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('다음 영상으로 넘기면 그 영상도 준비 상태로, 사진을 다시 겹친다', () => {
+    setTouch(true);
+    window.localStorage.setItem(TAP_KEY, '1');
+    render(<MediaViewer items={[video(1), video(2)]} startId={1} onClose={jest.fn()} />);
+
+    tapInside(screen.getByTitle('VID_1.mov'));
+    expect(screen.queryByTestId('video-poster')).toBeNull();
+
+    delete document.activeElement;
+    fireEvent.click(screen.getByRole('button', { name: '다음 사진' }));
+    expect(screen.getByTitle('VID_2.mov')).toHaveAttribute('src', 'https://drive.google.com/file/d/v2/preview?autoplay=1');
+    expect(screen.getByTestId('video-poster')).toBeInTheDocument();
+  });
+
+  it('마우스를 쓰는 기기(PC)는 신호를 본 적이 있어도 예전 그대로', () => {
+    setTouch(false);
+    window.localStorage.setItem(TAP_KEY, '1');
+    render(<MediaViewer items={[video(1)]} startId={1} onClose={jest.fn()} />);
+
+    const player = screen.getByTitle('VID_1.mov');
+    expect(player).toHaveAttribute('src', 'https://drive.google.com/file/d/v1/preview');
+    expect(player.getAttribute('allow')).toContain('autoplay');
+    expect(screen.queryByTestId('video-poster')).toBeNull();
   });
 });
 
