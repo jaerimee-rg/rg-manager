@@ -324,7 +324,8 @@ export const completeUpload = async (req, res) => {
     const result = await albumService.completeUpload(ownerOf(event), event, media, {
       driveFileId,
       takenAt: req.body?.takenAt,
-      faces: req.body?.faces
+      faces: req.body?.faces,
+      analyzerVersion: req.body?.analyzerVersion
     });
 
     res.json({
@@ -443,21 +444,32 @@ export const removeTag = async (req, res) => {
   }
 };
 
-/** GET /api/events/:id/media/unanalyzed — 브라우저가 다시 분석할 대상 */
+/**
+ * 재분석용 사진 주소 — 긴 변 1920px(업로드 때 분석하는 축소본과 같은 크기), 회전이 적용된 JPEG.
+ * drive.google.com/thumbnail 은 이 주소로 302 를 보내는데 그 302 에 CORS 헤더가 없어 브라우저가
+ * 픽셀을 읽지 못한다(캔버스가 오염된다). 리다이렉트 끝인 이 주소는 Access-Control-Allow-Origin: * 다.
+ * 앨범 폴더가 링크 공유 중이어야 열린다(갤러리 썸네일과 같은 조건).
+ */
+export const analysisImageUrl = (driveFileId) => (
+  `https://lh3.googleusercontent.com/d/${encodeURIComponent(driveFileId)}=s1920`
+);
+
+/** GET /api/events/:id/media/unanalyzed?afterId= — 브라우저가 다시 분석할 대상 */
 export const listUnanalyzed = async (req, res) => {
   try {
     const event = await loadEvent(req);
     if (!event) return notFound(res);
 
     const batch = Math.min(parseInt(req.body?.batch ?? req.query.batch, 10) || 5, 20);
-    const rows = await EventMedia.listUnanalyzed(event.id, batch);
+    const afterId = Math.max(parseInt(req.query.afterId, 10) || 0, 0);
+    const rows = await EventMedia.listUnanalyzed(event.id, batch, afterId);
     const stats = await EventMedia.stats(event.id);
 
     res.json({
       items: rows.map((row) => ({
         id: row.id,
         driveFileId: row.driveFileId,
-        largeUrl: `https://drive.google.com/thumbnail?id=${encodeURIComponent(row.driveFileId)}&sz=w1600`
+        largeUrl: analysisImageUrl(row.driveFileId)
       })),
       remaining: stats.unanalyzed
     });
@@ -479,7 +491,9 @@ export const saveFaces = async (req, res) => {
     const manage = canManageAlbum({ isOwner: true, albumStatus: event.albumStatus });
     if (!manage.ok) return res.status(400).json({ error: reasonMessage(manage.reason), reason: manage.reason });
 
-    const result = await albumService.indexFaces(event, media, req.body?.faces);
+    const result = await albumService.indexFaces(event, media, req.body?.faces, {
+      analyzerVersion: req.body?.analyzerVersion
+    });
     res.json({ faceStatus: result.faceStatus, faceCount: result.faceCount });
   } catch (error) {
     console.error('얼굴 저장 오류:', error);

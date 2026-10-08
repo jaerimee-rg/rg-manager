@@ -10,9 +10,30 @@
 
 export const DESCRIPTOR_LENGTH = 128;
 
-/** 기본 임계값. 관리자가 app_settings 로 조정할 수 있다. */
-export const DEFAULT_MATCH_THRESHOLD = 0.5;
-export const DEFAULT_CANDIDATE_THRESHOLD = 0.6;
+/**
+ * 얼굴을 찾는 방식(브라우저 client/src/utils/faceClient.js)의 버전 — **두 파일의 값이 같아야 한다.**
+ * 찾는 방식이 바뀌어 예전 결과를 다시 봐야 하면 올린다. 이보다 낮은(또는 기록이 없는) 버전으로
+ * 분석한 사진은 "얼굴 없음" 이었어도 다시 찾을 목록에 들어간다.
+ *   1 — 1280px 축소본 · 검출 입력 512 (기록 없음 = 1)
+ *   2 — 1920px 축소본 · 검출 입력 512 + 1024 (작은 얼굴, 2026-10)
+ */
+export const FACE_ANALYZER_VERSION = 2;
+
+/** 브라우저가 보낸 버전 → 양의 정수, 아니면 null (기록 없음 = 예전 방식으로 취급된다) */
+export const parseAnalyzerVersion = (value) => {
+  const version = Number(value);
+  return Number.isInteger(version) && version > 0 && version < 1000 ? version : null;
+};
+
+/**
+ * 기본 임계값. 관리자가 app_settings 로 조정할 수 있다.
+ * 처음엔 0.50 / 0.60 이었다. 이 모델은 아이 얼굴끼리의 거리를 좁게 모아서(운영 2026-10 실측: 서로 다른
+ * 얼굴 6개와 기준 얼굴이 모두 0.32~0.52 안), 0.50 이면 거의 누구나 자동 태그됐다 — 틀린 자동 태그가
+ * 0.378~0.492 였다. 같은 사람의 다른 사진(기준 얼굴끼리)은 0.35~0.37 이라 임계값만으로 깨끗이 가를 수는
+ * 없어서, 자동 태그는 아주 가까울 때만 하고 그 다음은 학부모가 [맞아요/아니에요] 로 고르게 한다.
+ */
+export const DEFAULT_MATCH_THRESHOLD = 0.35;
+export const DEFAULT_CANDIDATE_THRESHOLD = 0.40;
 
 /**
  * 배열이 쓸 수 있는 얼굴 벡터인지 본다.
@@ -81,32 +102,39 @@ export const classifyDistance = (distance, thresholds = {}) => {
 };
 
 /**
- * 얼굴들 × 프로필들 → 학생별 최소 거리.
+ * 얼굴들 × 프로필들 → 학생별 가장 가까운 얼굴.
  *
  * faces:    [{ id, descriptor: Float32Array }]
  * profiles: [{ studentId, descriptor: Float32Array }]
  * → [{ studentId, distance, faceId }] (거리 오름차순)
  *
- * 한 학생에 기준 얼굴이 여러 장이면 그 중 가장 가까운 것만 남긴다.
+ * **한 얼굴은 가장 가까운 학생 한 명에게만 붙는다.** 예전에는 얼굴마다 모든 학생과 거리를 재서
+ * 같은 얼굴이 두 아이로 함께 태그됐다(운영 2026-10: 한 얼굴이 0.378 · 0.436 으로 두 아이에게 자동 태그).
+ * 한 학생에 기준 얼굴이 여러 장이면 그 중 가장 가까운 것으로 잰다.
  */
 export const bestPerStudent = (faces, profiles) => {
   const best = new Map();
   for (const face of faces || []) {
     if (!face?.descriptor) continue;
+    let nearest = null;
     for (const profile of profiles || []) {
       if (!profile?.descriptor) continue;
       const distance = euclideanDistance(face.descriptor, profile.descriptor);
       if (!Number.isFinite(distance)) continue;
-      const previous = best.get(profile.studentId);
-      if (!previous || distance < previous.distance) {
-        best.set(profile.studentId, { studentId: profile.studentId, distance, faceId: face.id ?? null });
+      if (!nearest || distance < nearest.distance) {
+        nearest = { studentId: profile.studentId, distance, faceId: face.id ?? null };
       }
     }
+    if (!nearest) continue;
+    const previous = best.get(nearest.studentId);
+    if (!previous || nearest.distance < previous.distance) best.set(nearest.studentId, nearest);
   }
   return [...best.values()].sort((a, b) => a.distance - b.distance);
 };
 
 export default {
+  FACE_ANALYZER_VERSION,
+  parseAnalyzerVersion,
   DESCRIPTOR_LENGTH,
   DEFAULT_MATCH_THRESHOLD,
   DEFAULT_CANDIDATE_THRESHOLD,

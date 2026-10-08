@@ -61,7 +61,7 @@ const albumService = (await import('../../services/albumService.js')).default;
 const { DriveError } = await import('../../utils/googleDrive.js');
 const {
   getAlbum, createAlbum, updateAlbum, listMedia, createUploads, completeUpload,
-  bulkAction, addTag, deleteMedia
+  bulkAction, addTag, deleteMedia, listUnanalyzed, saveFaces, analysisImageUrl
 } = await import('../albumController.js');
 
 const teacher = { id: 7, username: '이재림', role: 'user' };
@@ -595,5 +595,62 @@ describe('listMedia', () => {
     await listMedia(req, res);
 
     expect(res.json.mock.calls[0][0].nextCursor).toBeNull();
+  });
+});
+
+describe('얼굴 다시 찾기 (재분석)', () => {
+  it('완료 보고에 실린 분석 방식 버전을 서비스로 넘긴다', async () => {
+    Event.getById.mockResolvedValue(event());
+    EventMedia.getById.mockResolvedValue({ id: 5, eventId: 3, uploaderUserId: 7, kind: 'image' });
+    albumService.completeUpload.mockResolvedValue({ media: { id: 5, kind: 'image' }, faceStatus: 'none', faceCount: 0, tags: [] });
+    req.params.mediaId = '5';
+    req.body = { driveFileId: 'f1', faces: [], analyzerVersion: 2 };
+
+    await completeUpload(req, res);
+
+    expect(albumService.completeUpload).toHaveBeenCalledWith(7, expect.anything(), expect.anything(),
+      expect.objectContaining({ faces: [], analyzerVersion: 2 }));
+  });
+
+  it('대상 목록은 afterId 다음부터, 브라우저가 픽셀을 읽을 수 있는 긴 변 1920 주소로 준다', async () => {
+    Event.getById.mockResolvedValue(event());
+    EventMedia.listUnanalyzed.mockResolvedValue([{ id: 41, driveFileId: 'abc_1-2' }]);
+    EventMedia.stats.mockResolvedValue({ unanalyzed: 3 });
+    req.query = { batch: '5', afterId: '40' };
+
+    await listUnanalyzed(req, res);
+
+    expect(EventMedia.listUnanalyzed).toHaveBeenCalledWith(3, 5, 40);
+    expect(res.json.mock.calls[0][0]).toEqual({
+      items: [{ id: 41, driveFileId: 'abc_1-2', largeUrl: 'https://lh3.googleusercontent.com/d/abc_1-2=s1920' }],
+      remaining: 3
+    });
+  });
+
+  it('afterId 가 없거나 이상하면 처음부터', async () => {
+    Event.getById.mockResolvedValue(event());
+    req.query = { afterId: 'x' };
+
+    await listUnanalyzed(req, res);
+
+    expect(EventMedia.listUnanalyzed).toHaveBeenCalledWith(3, 5, 0);
+  });
+
+  it('analysisImageUrl — drive.google.com/thumbnail 이 아니다(그 302 에는 CORS 헤더가 없다)', () => {
+    expect(analysisImageUrl('f1')).toBe('https://lh3.googleusercontent.com/d/f1=s1920');
+  });
+
+  it('다시 찾은 결과를 저장할 때도 버전을 넘긴다', async () => {
+    Event.getById.mockResolvedValue(event());
+    EventMedia.getById.mockResolvedValue({ id: 5, eventId: 3, kind: 'image' });
+    albumService.indexFaces.mockResolvedValue({ faceStatus: 'done', faceCount: 1 });
+    req.params.mediaId = '5';
+    req.body = { faces: [{ descriptor: [] }], analyzerVersion: 2 };
+
+    await saveFaces(req, res);
+
+    expect(albumService.indexFaces).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: 5 }),
+      req.body.faces, { analyzerVersion: 2 });
+    expect(res.json).toHaveBeenCalledWith({ faceStatus: 'done', faceCount: 1 });
   });
 });

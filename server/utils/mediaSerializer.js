@@ -37,15 +37,15 @@ const uploaderLabel = (media, myUserId) => {
 
 /**
  * 학부모용 미디어 한 건.
- * tags 는 **내 자녀 것만** 남긴다.
+ * tags 는 **내 자녀 것만** 남기고, **이름은 싣지 않는다** — 얼굴 매칭이 틀릴 수 있어 사진 위에 아이 이름을
+ * 붙여 보여 주지 않는다(2026-10). "우리 아이 사진만 보기" 거르기와 [맞아요/아니에요] 에는 studentId 면 된다.
  */
-export const toParentMedia = (media, { myStudentIds = [], myUserId = null, studentNames = {} } = {}) => {
+export const toParentMedia = (media, { myStudentIds = [], myUserId = null } = {}) => {
   const mine = new Set(myStudentIds.map(Number));
   const myTags = (media.tags || [])
     .filter((tag) => mine.has(Number(tag.studentId)) && tag.source !== 'excluded')
     .map((tag) => ({
       studentId: Number(tag.studentId),
-      name: studentNames[tag.studentId] || null,
       source: tag.source
     }));
 

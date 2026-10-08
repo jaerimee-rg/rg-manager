@@ -124,7 +124,7 @@ CREATE EXTENSION IF NOT EXISTS vector;   -- Supabase 기본 제공(pgvector). �
 |---|---|---|---|---|---|
 | (없음) | face | candidate | manual | parent_confirmed | excluded |
 | `candidate` | face | candidate(거리 갱신) | manual | parent_confirmed | excluded |
-| `face` | face(거리 갱신) | **face 유지** | manual | parent_confirmed | excluded |
+| `face` | face(거리 갱신) | **candidate** (2026-10: 임계값을 좁히면 내려간다. 예전엔 face 유지) | manual | parent_confirmed | excluded |
 | `parent_confirmed` | 유지 | 유지 | manual | 유지 | excluded(본인 또는 선생님만) |
 | `manual` | 유지 | 유지 | 유지 | 유지 | excluded(선생님만) |
 | `excluded` | **유지** | **유지** | manual(선생님이 되살림) | parent_confirmed(학부모가 되살림) | 유지 |

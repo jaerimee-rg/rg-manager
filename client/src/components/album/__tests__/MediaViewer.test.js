@@ -186,7 +186,7 @@ describe('MediaViewer — 사진', () => {
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 
-  it('우리 아이 태그는 정보 줄에 함께 보인다', () => {
+  it('얼굴 매칭으로 붙은 아이 이름은 정보 줄에 보이지 않는다 — 매칭이 틀릴 수 있다', () => {
     render(
       <MediaViewer
         items={[media({ id: 1, uploader: 'me', myTags: [{ studentId: 5, name: '김하은', source: 'face' }, { studentId: 6, name: '후보', source: 'candidate' }] })]}
@@ -196,8 +196,9 @@ describe('MediaViewer — 사진', () => {
     );
 
     const info = screen.getByTestId('media-info');
-    expect(info).toHaveTextContent('김하은');
+    expect(info).not.toHaveTextContent('김하은');
     expect(info).not.toHaveTextContent('후보');
+    expect(info).not.toHaveTextContent('우리 아이');
   });
 });
 

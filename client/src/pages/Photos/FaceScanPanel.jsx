@@ -1,0 +1,65 @@
+import React, { useState } from 'react';
+import { reanalyzeAlbum } from '../../utils/faceReanalysis';
+import { Button, Callout, Progress } from '../../components/ui';
+
+/**
+ * 앨범 화면의 [얼굴 찾기] — 얼굴을 아직 찾지 않았거나 예전 방식으로 찾은 사진(count 장)을
+ * 이 브라우저에서 다시 본다. Google 연결이 끊겨도 된다(공유 링크로 읽고, 저장은 앱 DB). 자동으로 돌리지 않는다: 모델(약 6.5MB)을 받고 사진마다 계산하므로
+ * 선생님이 누를 때만 한다.
+ */
+function FaceScanPanel({ apiBase, count = 0, onDone, className }) {
+  const [phase, setPhase] = useState('idle');   // idle | running | done
+  const [progress, setProgress] = useState({ done: 0, total: count });
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+
+  const start = async () => {
+    setPhase('running');
+    setError('');
+    setProgress({ done: 0, total: count });
+    try {
+      const counts = await reanalyzeAlbum(apiBase, { onProgress: setProgress });
+      setResult(counts);
+      setPhase('done');
+      onDone?.(counts);
+    } catch (scanError) {
+      console.error('얼굴 다시 찾기 실패:', scanError);
+      setError(scanError.message || '얼굴을 찾지 못했어요. 잠시 뒤 다시 시도해 주세요.');
+      setPhase('idle');
+    }
+  };
+
+  if (phase === 'done' && result) {
+    return (
+      <Callout className={className} tone="success" onDismiss={() => setPhase('idle')}>
+        사진 {result.done}장을 다시 봤어요. {result.found}장에서 얼굴을 찾았어요.
+        {result.failed > 0 && <> {result.failed}장은 읽지 못했어요 — 잠시 뒤 다시 찾아 볼 수 있어요.</>}
+      </Callout>
+    );
+  }
+
+  if (phase === 'running') {
+    return (
+      <Callout className={className} tone="brand">
+        <div className="ui-stack" data-gap="2">
+          <span>얼굴 찾는 중… {progress.done} / {progress.total}장 · 이 화면을 닫지 말아 주세요</span>
+          <Progress value={progress.total ? Math.round((progress.done / progress.total) * 100) : 0} label="얼굴 찾기 진행률" />
+        </div>
+      </Callout>
+    );
+  }
+
+  if (!count) return null;
+
+  return (
+    <Callout className={className} tone="neutral">
+      얼굴을 찾아 볼 사진이 {count}장 있어요. 찾아 두면 학부모가 <b>우리 아이 사진만</b> 모아 볼 수 있어요.
+      {error && <div className="ui-text-danger ui-mt-2">{error}</div>}
+      <div className="ui-mt-2">
+        <Button size="sm" variant="primary" icon="search" onClick={start}>얼굴 찾기</Button>
+      </div>
+    </Callout>
+  );
+}
+
+export default FaceScanPanel;

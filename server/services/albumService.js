@@ -23,7 +23,7 @@ import {
 } from '../utils/googleDrive.js';
 import { runWithDrive, ensureRootFolder } from './driveAccess.js';
 import { encodeDescriptor, isValidDescriptor, decodeDescriptor, classifyDistance, bestPerStudent,
-  DEFAULT_MATCH_THRESHOLD, DEFAULT_CANDIDATE_THRESHOLD } from '../utils/faceVector.js';
+  parseAnalyzerVersion, DEFAULT_MATCH_THRESHOLD, DEFAULT_CANDIDATE_THRESHOLD } from '../utils/faceVector.js';
 import { mergeMatches } from '../utils/faceMatch.js';
 import { buildDriveName, validateUpload, kindFromMime, folderNameFromEvent } from '../utils/mediaValidation.js';
 import { APP_URL } from '../utils/appUrl.js';
@@ -244,7 +244,7 @@ export const createUploadSessions = async (userId, event, files, uploader) => {
  * 업로드 완료 보고 (FR-232 ④⑤).
  * Drive 에서 파일을 다시 읽어 **우리 앨범 폴더에 들어갔는지** 확인한 뒤 ready 로 바꾼다.
  */
-export const completeUpload = async (userId, event, media, { driveFileId, takenAt, faces }) => {
+export const completeUpload = async (userId, event, media, { driveFileId, takenAt, faces, analyzerVersion }) => {
   const file = await runWithDrive(userId, (accessToken) => getFile(accessToken, driveFileId));
 
   const parents = file?.parents || [];
@@ -268,7 +268,7 @@ export const completeUpload = async (userId, event, media, { driveFileId, takenA
     takenAt: takenAt || media.takenAt
   });
 
-  const indexed = await indexFaces(event, ready, faces);
+  const indexed = await indexFaces(event, ready, faces, { analyzerVersion });
   return {
     media: indexed.media || ready,
     faceStatus: indexed.faceStatus,
@@ -280,8 +280,9 @@ export const completeUpload = async (userId, event, media, { driveFileId, takenA
 /**
  * 브라우저가 뽑아 온 얼굴 특징값을 저장하고 바로 매칭한다 (FR-250, 254).
  * 벡터가 없으면(브라우저가 못 뽑았으면) skipped 로 두고 업로드는 성공으로 끝낸다.
+ * analyzerVersion — 브라우저가 어떤 방식으로 찾았는지. 예전 방식이면 나중에 다시 찾을 대상이 된다.
  */
-export const indexFaces = async (event, media, faces) => {
+export const indexFaces = async (event, media, faces, { analyzerVersion } = {}) => {
   if (media.kind !== 'image') {
     const updated = await EventMedia.setFaceStatus(media.id, { faceStatus: 'skipped', faceCount: 0 });
     return { media: updated, faceStatus: 'skipped', faceCount: 0, tags: [] };
@@ -308,7 +309,8 @@ export const indexFaces = async (event, media, faces) => {
     await MediaFace.replaceForMedia(media.id, usable, client);
     const updated = await EventMedia.setFaceStatus(media.id, {
       faceStatus: usable.length ? 'done' : 'none',
-      faceCount: usable.length
+      faceCount: usable.length,
+      analyzerVersion: parseAnalyzerVersion(analyzerVersion)
     }, client);
     await client.query('COMMIT');
 
@@ -391,13 +393,15 @@ export const rematchAlbum = async (event) => {
  * → { albums, photos } — 화면에 "앨범 4개에서 37장을 찾았어요" 로 보여준다.
  */
 export const matchStudentAcrossAlbums = async (teacherUserId, studentId) => {
+  // 그 아이 것만이 아니라 선생님의 기준 얼굴 전부 — 한 얼굴은 가장 가까운 아이에게만 붙기 때문에
+  // 다른 아이가 더 가까운지 알아야 한다(bestPerStudent).
   const [facesByMedia, profiles, thresholds] = await Promise.all([
     MediaFace.listVectorsByTeacher(teacherUserId),
-    ChildFaceProfile.listVectorsByTeacher(teacherUserId, { studentId }),
+    ChildFaceProfile.listVectorsByTeacher(teacherUserId),
     getThresholds()
   ]);
 
-  if (!profiles.length) return { albums: 0, photos: 0, candidates: 0 };
+  if (!profiles.some((profile) => profile.studentId === studentId)) return { albums: 0, photos: 0, candidates: 0 };
 
   const existing = await MediaTag.listByTeacherAndStudent(teacherUserId, studentId);
   const existingByMedia = new Map(existing.map((tag) => [tag.mediaId, tag]));
@@ -407,7 +411,7 @@ export const matchStudentAcrossAlbums = async (teacherUserId, studentId) => {
   const touched = [];
 
   for (const [mediaId, faces] of facesByMedia.entries()) {
-    const [match] = bestPerStudent(faces, profiles);
+    const match = bestPerStudent(faces, profiles).find((result) => result.studentId === studentId);
     const source = match ? classifyDistance(match.distance, thresholds) : null;
     if (!source) continue;
 

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'fs';
-import { loginAs, api, stubPortraitThumbnails } from './helpers.mjs';
+import { loginAs, api, stubPortraitThumbnails, FACELESS_PNG } from './helpers.mjs';
 import { FAKE_PLACE, stubKakaoMaps } from './kakao-fakes.mjs';
 
 const sessions = JSON.parse(readFileSync(new URL('./.sessions.json', import.meta.url)));
@@ -295,6 +295,32 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     await page.goto('/photos');
     await expect(page.getByText(/관리자에게 문의|Google 계정을 먼저 연결/).first()).toBeVisible();
     await expect(page.getByRole('button', { name: '사진 올리기' }).first()).toBeDisabled();
+  });
+
+  test('[얼굴 찾기] — 예전 방식으로 분석한 사진을 이 브라우저에서 다시 찾아 저장한다 (Google 연결 없이도)', async ({ page, request }) => {
+    test.setTimeout(120_000);
+    const id = sessions.album.faceScanEventId;
+    // Drive 사진(lh3, 긴 변 1920)을 얼굴 없는 그림으로 바꿔 끼운다. 진짜 lh3 처럼 CORS 를 허락해야 캔버스가 읽힌다.
+    const asked = [];
+    await page.route('https://lh3.googleusercontent.com/**', (route) => {
+      asked.push(route.request().url());
+      return route.fulfill({ contentType: 'image/png', body: FACELESS_PNG.buffer, headers: { 'Access-Control-Allow-Origin': '*' } });
+    });
+
+    await page.goto(`/photos/${id}`);
+    await expect(page.getByText('얼굴을 찾아 볼 사진이 2장 있어요', { exact: false })).toBeVisible();
+    await page.getByRole('button', { name: '얼굴 찾기' }).click();
+
+    // 모델을 받고 처음 계산할 때 셰이더를 만드느라 느리다
+    await expect(page.getByText(/사진 2장을 다시 봤어요\. 0장에서 얼굴을 찾았어요\./)).toBeVisible({ timeout: 90_000 });
+    expect(asked).toHaveLength(2);
+    expect(asked.every((url) => /\/d\/e2e-file-.+=s1920$/.test(url))).toBe(true);
+
+    // 새 방식으로 저장됐으니 더 찾을 사진이 없다
+    const album = await api(request, sessions.teacher, 'GET', `/api/events/${id}/album`);
+    expect(album.body.counts.unanalyzed).toBe(0);
+    await page.reload();
+    await expect(page.getByRole('button', { name: '얼굴 찾기' })).toHaveCount(0);
   });
 
   test('앨범에서 공개 범위를 고르고 공개했다가 비공개로 돌린다 — Google 이 없어도 공개 설정은 된다', async ({ page }) => {

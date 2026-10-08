@@ -96,7 +96,7 @@ beforeEach(() => {
 
 describe('getThresholds', () => {
   it('설정이 없으면 기본값을 쓴다', async () => {
-    await expect(albumService.getThresholds()).resolves.toEqual({ match: 0.5, candidate: 0.6 });
+    await expect(albumService.getThresholds()).resolves.toEqual({ match: 0.35, candidate: 0.4 });
   });
 
   it('관리자가 바꾼 값을 따른다', async () => {
@@ -108,7 +108,7 @@ describe('getThresholds', () => {
   it('설정 조회가 실패해도 기본값으로 계속 간다', async () => {
     AppSetting.getMany.mockRejectedValue(new Error('DB 오류'));
 
-    await expect(albumService.getThresholds()).resolves.toEqual({ match: 0.5, candidate: 0.6 });
+    await expect(albumService.getThresholds()).resolves.toEqual({ match: 0.35, candidate: 0.4 });
   });
 });
 
@@ -197,11 +197,14 @@ describe('completeUpload', () => {
 
     const result = await albumService.completeUpload(7, event(), media, {
       driveFileId: 'f1',
-      faces: [{ box: { x: 0.1, y: 0.2, w: 0.1, h: 0.12 }, score: 0.9, descriptor: arr(0.1) }]
+      faces: [{ box: { x: 0.1, y: 0.2, w: 0.1, h: 0.12 }, score: 0.9, descriptor: arr(0.1) }],
+      analyzerVersion: 2
     });
 
     expect(EventMedia.markReady).toHaveBeenCalledWith(55, expect.objectContaining({ driveFileId: 'f1', width: 4032 }));
     expect(MediaFace.replaceForMedia).toHaveBeenCalled();
+    expect(EventMedia.setFaceStatus).toHaveBeenCalledWith(55,
+      expect.objectContaining({ faceStatus: 'done', faceCount: 1, analyzerVersion: 2 }), expect.anything());
     expect(result.faceStatus).toBe('done');
     expect(result.faceCount).toBe(1);
   });
@@ -221,6 +224,21 @@ describe('indexFaces — 얼굴 특징값 저장', () => {
     const result = await albumService.indexFaces(event(), media, undefined);
 
     expect(result.faceStatus).toBe('skipped');
+  });
+
+  it('찾은 방식의 버전을 함께 저장한다 — 예전 버전이면 나중에 다시 찾을 대상이 된다', async () => {
+    await albumService.indexFaces(event(), media, [], { analyzerVersion: 2 });
+    expect(EventMedia.setFaceStatus).toHaveBeenLastCalledWith(55,
+      expect.objectContaining({ faceStatus: 'none', analyzerVersion: 2 }), expect.anything());
+
+    await albumService.indexFaces(event(), media, [], { analyzerVersion: 'garbage' });
+    expect(EventMedia.setFaceStatus).toHaveBeenLastCalledWith(55,
+      expect.objectContaining({ faceStatus: 'none', analyzerVersion: null }), expect.anything());
+
+    // 예전 브라우저(버전을 안 보냄)
+    await albumService.indexFaces(event(), media, []);
+    expect(EventMedia.setFaceStatus).toHaveBeenLastCalledWith(55,
+      expect.objectContaining({ analyzerVersion: null }), expect.anything());
   });
 
   it('얼굴이 없으면 none 이다', async () => {
@@ -269,9 +287,9 @@ describe('rematchMedia — 벡터에서 태그로', () => {
   });
 
   it('애매하면 후보로 남긴다', async () => {
-    // 128차원에서 각 항이 0.05 차이면 거리 = 0.05 * sqrt(128) ≈ 0.566 → 후보 구간
+    // 128차원에서 각 항이 0.033 차이면 거리 = 0.033 * sqrt(128) ≈ 0.373 → 후보 구간(0.35 < d ≤ 0.40)
     MediaFace.listVectorsByMedia.mockResolvedValue([{ id: 1, descriptor: D(0) }]);
-    ChildFaceProfile.listVectorsByTeacher.mockResolvedValue([{ studentId: 5, descriptor: D(0.05) }]);
+    ChildFaceProfile.listVectorsByTeacher.mockResolvedValue([{ studentId: 5, descriptor: D(0.033) }]);
 
     await albumService.rematchMedia(event(), 55);
 
@@ -321,6 +339,21 @@ describe('matchStudentAcrossAlbums — 자녀 얼굴 등록 직후', () => {
 
     expect(result.photos).toBe(2);
     expect(MediaTag.upsert).toHaveBeenCalledTimes(2);
+    // 다른 아이가 더 가까운지 보려고 선생님의 기준 얼굴 전부를 읽는다
+    expect(ChildFaceProfile.listVectorsByTeacher).toHaveBeenCalledWith(7);
+  });
+
+  it('다른 아이에게 더 가까운 얼굴은 이 아이로 태그하지 않는다 (한 얼굴은 한 아이)', async () => {
+    MediaFace.listVectorsByTeacher.mockResolvedValue(new Map([
+      [11, [{ id: 1, descriptor: D(0.01) }]]
+    ]));
+    ChildFaceProfile.listVectorsByTeacher.mockResolvedValue([
+      { studentId: 5, descriptor: D(0.02) },   // 등록한 아이 — 가깝지만
+      { studentId: 9, descriptor: D(0.01) }    // 다른 아이가 더 가깝다
+    ]);
+
+    await expect(albumService.matchStudentAcrossAlbums(7, 5)).resolves.toEqual({ albums: 0, photos: 0, candidates: 0 });
+    expect(MediaTag.upsert).not.toHaveBeenCalled();
   });
 
   it('기준 얼굴이 없으면 아무 것도 하지 않는다', async () => {

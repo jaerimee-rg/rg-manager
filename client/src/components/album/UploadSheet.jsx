@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { fetchWithAuth } from '../../utils/api';
 import { partitionFiles, readTakenAt, makePreview, MAX_FILES } from '../../utils/imagePrep';
 import { uploadToDrive } from '../../utils/driveUpload';
-import { detectFaces } from '../../utils/faceClient';
+import { ANALYSIS_LONG_SIDE, FACE_ANALYZER_VERSION, detectFaces } from '../../utils/faceClient';
 import { formatSize } from '../../utils/mediaUrls';
 import { todayString } from '../../utils/eventFormat';
 import {
@@ -168,7 +168,7 @@ function UploadSheet({
 
         let faces = null;
         if (entry.kind === 'image') {
-          const preview = await makePreview(entry.file);   // HEIC 처럼 브라우저가 못 읽으면 null
+          const preview = await makePreview(entry.file, ANALYSIS_LONG_SIDE);   // HEIC 처럼 브라우저가 못 읽으면 null
           if (preview) faces = await detectFaces(preview);  // 분석이 실패해도 null
           if (!faces) skipped += 1;
           else if (faces.length) analyzed += 1;
@@ -179,7 +179,8 @@ function UploadSheet({
           body: JSON.stringify({
             driveFileId: result.file?.id,
             takenAt: files[i].takenAt,
-            faces
+            faces,
+            analyzerVersion: FACE_ANALYZER_VERSION
           })
         });
 

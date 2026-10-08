@@ -29,8 +29,9 @@ const media = {
 describe('toParentMedia — 학부모에게 나가는 것만 나간다 (NFR-4)', () => {
   const view = toParentMedia(media, { myStudentIds: [5], myUserId: 42, studentNames: { 5: '김하은', 9: '박서연' } });
 
-  it('내 자녀 태그만 남기고 다른 아이는 지운다', () => {
-    expect(view.myTags).toEqual([{ studentId: 5, name: '김하은', source: 'face' }]);
+  it('내 자녀 태그만 남기고 다른 아이는 지운다 — 이름은 내 아이 것도 싣지 않는다(매칭이 틀릴 수 있다)', () => {
+    expect(view.myTags).toEqual([{ studentId: 5, source: 'face' }]);
+    expect(JSON.stringify(view)).not.toContain('김하은');
     expect(JSON.stringify(view)).not.toContain('박서연');
     expect(JSON.stringify(view)).not.toContain('"studentId":9');
   });

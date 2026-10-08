@@ -113,14 +113,8 @@ function Tile({ item, selectable, isSelected, onOpen, onToggleSelect, renderBadg
         }}>{isSelected ? '✓' : ''}</span>
       )}
 
-      {renderBadge ? renderBadge(item) : (
-        item.myTags?.length ? (
-          <span style={{
-            position: 'absolute', right: '4px', top: '4px', background: 'var(--star)', color: 'var(--ink)',
-            fontSize: '0.625rem', fontWeight: 800, padding: '2px 6px', borderRadius: 'var(--shape-tag)'
-          }}>{item.myTags.map((tag) => tag.name).filter(Boolean).join('·') || '우리 아이'}</span>
-        ) : null
-      )}
+      {/* 얼굴 매칭으로 붙은 아이 이름은 사진 위에 보이지 않는다 — 매칭이 틀릴 수 있다(2026-10) */}
+      {renderBadge ? renderBadge(item) : null}
 
       {item.uploader === 'me' && (
         <span style={{

@@ -768,6 +768,8 @@ const initDatabase = async () => {
       ON event_media ("eventId", status, "isHidden", "takenAt" DESC, id DESC)`);
     await client.query('CREATE INDEX IF NOT EXISTS idx_event_media_uploader ON event_media ("uploaderUserId")');
     await client.query('CREATE INDEX IF NOT EXISTS idx_event_media_face ON event_media ("eventId", "faceStatus")');
+    // 얼굴을 찾은 방식의 버전(utils/faceVector.js FACE_ANALYZER_VERSION). 낮거나 없으면 다시 찾을 대상이다.
+    await client.query('ALTER TABLE event_media ADD COLUMN IF NOT EXISTS "faceAnalyzerVersion" INTEGER');
 
     // 사진에서 찾은 얼굴. 이미지는 저장하지 않고 특징값(128차원)과 위치만 남긴다.
     // descriptor 는 base64(Float32Array) — pgvector 는 운영 DB 계정 권한으로 설치할 수 없어
@@ -997,11 +999,19 @@ const initDatabase = async () => {
       [process.env.AI_PROVIDER || 'gemini', new Date().toISOString()]
     );
 
-    // 얼굴 매칭 임계값. 관리자가 나중에 조정할 수 있도록 설정으로 둔다.
+    // 얼굴 매칭 임계값. 관리자가 나중에 조정할 수 있도록 설정으로 둔다 (기본값과 이유: utils/faceVector.js).
     await client.query(
       `INSERT INTO app_settings (key, value, "updatedAt")
-       VALUES ('face_match_threshold', '0.50', $1), ('face_candidate_threshold', '0.60', $1)
+       VALUES ('face_match_threshold', '0.35', $1), ('face_candidate_threshold', '0.40', $1)
        ON CONFLICT (key) DO NOTHING`,
+      [new Date().toISOString()]
+    );
+    // 예전 기본값(0.50 / 0.60, 잠깐 쓴 0.55 / 0.65)이 그대로 남은 행만 새 기본값으로 좁힌다(2026-10, 틀린 자동 태그).
+    // 관리자가 고른 다른 값은 두고, 다시 실행해도 바뀌는 것이 없다.
+    await client.query(
+      `UPDATE app_settings SET value = CASE key WHEN 'face_match_threshold' THEN '0.35' ELSE '0.40' END, "updatedAt" = $1
+        WHERE (key = 'face_match_threshold' AND value IN ('0.50', '0.55'))
+           OR (key = 'face_candidate_threshold' AND value IN ('0.60', '0.65'))`,
       [new Date().toISOString()]
     );
 
