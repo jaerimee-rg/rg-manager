@@ -382,7 +382,8 @@ Parents get their own accounts and a separate app under `/parent/*`. Design docs
   the `WHERE`, so another family's id is a 404. The teacher's student and existing
   `event_registrations` **stay** (same rule as a teacher's unlink). Face profiles **this parent**
   registered for that student go first (`ChildFaceProfile.deleteByParentAndStudent`; another guardian's
-  stay), then auto tags are cleaned as in a single face delete — that cleanup never fails the response.
+  stay), then auto tags are cleaned as in a single face delete (incl. `markAlbumsStale`) — that cleanup
+  never fails the response.
   Deleting the last child sends the parent back to onboarding (`ParentSettings onChildrenChanged` →
   `ParentApp.loadMe`); the confirm dialog says so beforehand (`deleteChildMessage`).
 - **내 아이 row = `생년월일 · ○○○ 선생님` only.** The linked student's name is deliberately **not** shown

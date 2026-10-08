@@ -30,8 +30,13 @@ jest.unstable_mockModule('../../models/Event.js', () => ({
   default: { listUpcomingForParent: jest.fn(), listPastForParent: jest.fn(), getPublishedForParent: jest.fn() }
 }));
 
+// 앨범을 열 때의 다시 매칭 + 아이를 지울 때 남은 기준 얼굴로 자동 태그를 다시 맞추는 일
 jest.unstable_mockModule('../../services/albumService.js', () => ({
-  default: { ensureAlbumsMatched: jest.fn().mockResolvedValue(0) }
+  default: {
+    ensureAlbumsMatched: jest.fn().mockResolvedValue(0),
+    matchStudentAcrossAlbums: jest.fn(),
+    markAlbumsStale: jest.fn()
+  }
 }));
 
 jest.unstable_mockModule('../../models/ChildFaceProfile.js', () => ({
@@ -61,10 +66,6 @@ jest.unstable_mockModule('../../models/EventMedia.js', () => ({
 jest.unstable_mockModule('../../models/MediaTag.js', () => ({
   default: { listByMediaIds: jest.fn(), removeAutoTagsForStudent: jest.fn() }
 }));
-// 아이를 지울 때 남은 기준 얼굴로 자동 태그를 다시 맞춘다
-jest.unstable_mockModule('../../services/albumService.js', () => ({
-  default: { matchStudentAcrossAlbums: jest.fn() }
-}));
 jest.unstable_mockModule('../../models/Competition.js', () => ({
   default: { getStudentIds: jest.fn() }
 }));
@@ -87,7 +88,6 @@ const albumService = (await import('../../services/albumService.js')).default;
 const MediaTag = (await import('../../models/MediaTag.js')).default;
 const Competition = (await import('../../models/Competition.js')).default;
 const ChildFaceProfile = (await import('../../models/ChildFaceProfile.js')).default;
-const albumService = (await import('../../services/albumService.js')).default;
 const { getMe, addChildren, deleteChild, updateName, getEvents, getEvent, registerChild, cancelChild, addTeacher } =
   await import('../parentController.js');
 
@@ -340,6 +340,16 @@ describe('parentController', () => {
       expect(albumService.matchStudentAcrossAlbums).not.toHaveBeenCalled();
     });
 
+    it('기준 얼굴이 빠졌으면 그 선생님의 앨범을 다음에 열 때 다시 매칭하게 한다', async () => {
+      req.params.childId = '1';
+      ChildFaceProfile.deleteByParentAndStudent.mockResolvedValue(1);
+
+      await deleteChild(req, res);
+
+      // 한 얼굴은 가장 가까운 아이에게만 붙으므로 다른 아이의 태그도 달라질 수 있다
+      expect(albumService.markAlbumsStale).toHaveBeenCalledWith(7);
+    });
+
     it('다른 학부모가 올린 얼굴이 남아 있으면 그 얼굴로 다시 맞춘다', async () => {
       req.params.childId = '1';
       ChildFaceProfile.deleteByParentAndStudent.mockResolvedValue(1);
@@ -359,6 +369,7 @@ describe('parentController', () => {
       expect(ChildFaceProfile.countByStudent).not.toHaveBeenCalled();
       expect(MediaTag.removeAutoTagsForStudent).not.toHaveBeenCalled();
       expect(albumService.matchStudentAcrossAlbums).not.toHaveBeenCalled();
+      expect(albumService.markAlbumsStale).not.toHaveBeenCalled();
     });
 
     it('태그 정리가 실패해도 삭제는 정상 응답한다', async () => {

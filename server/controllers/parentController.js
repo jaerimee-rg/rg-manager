@@ -17,7 +17,6 @@ import { teacherIdsOf, teachersOf, childBelongsToEvent } from '../services/paren
 import { extractInviteToken } from '../utils/oauthState.js';
 import { canRegister, todayKst } from '../services/eventService.js';
 import { sendEventRegistrationKakaoMessage } from '../utils/kakaoMessage.js';
-import albumService from '../services/albumService.js';
 
 /** 이벤트 상세에 바로 보여 줄 사진 수 (3×2) */
 export const ALBUM_PREVIEW_COUNT = 6;
@@ -242,6 +241,8 @@ export const deleteChild = async (req, res) => {
         } else {
           await albumService.matchStudentAcrossAlbums(child.teacherId, child.studentId);
         }
+        // 지운 얼굴에 붙어 있던 사진이 다른 아이에게 더 가까울 수 있다 — 앨범을 다음에 열 때 다시 매칭한다.
+        await albumService.markAlbumsStale(child.teacherId);
       } catch (error) {
         console.error('아이 삭제 뒤 자동 태그 정리 실패(생략하고 계속):', error?.message || error);
       }
