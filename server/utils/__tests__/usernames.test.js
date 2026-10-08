@@ -1,4 +1,7 @@
-import { uniqueUsername, USERNAME_MAX, isPlaceholderName, placeholderUsername, displayNameOf, displayNameSql } from '../usernames.js';
+import {
+  uniqueUsername, USERNAME_MAX, isPlaceholderName, placeholderUsername, displayNameOf, displayNameSql,
+  parentAwareDisplayNameSql
+} from '../usernames.js';
 
 const takenSet = (...names) => {
   const set = new Set(names);
@@ -75,5 +78,13 @@ describe('displayNameOf — 사람에게 보여줄 이름', () => {
 describe('displayNameSql', () => {
   it('SQL 에서도 같은 우선순위(표시 이름 → username)로 고른다', () => {
     expect(displayNameSql('u')).toBe(`COALESCE(NULLIF(u."displayName", ''), u.username)`);
+  });
+});
+
+describe('parentAwareDisplayNameSql — 학부모일 수 있는 사람의 이름', () => {
+  it('학부모가 정한 이름(parent_accounts) → 표시 이름 → username 순으로 고른다', () => {
+    expect(parentAwareDisplayNameSql('u', 'pa')).toBe(
+      `COALESCE(NULLIF(pa."displayName", ''), NULLIF(u."displayName", ''), u.username)`
+    );
   });
 });

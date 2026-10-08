@@ -200,3 +200,31 @@ describe('MediaViewer — 사진', () => {
     expect(info).not.toHaveTextContent('후보');
   });
 });
+
+describe('MediaViewer — 올린 사람', () => {
+  const infoOf = (item) => {
+    const { unmount } = render(<MediaViewer items={[media(item)]} startId={1} onClose={jest.fn()} />);
+    const text = screen.getByTestId('media-info').textContent;
+    unmount();
+    return text;
+  };
+
+  it('선생님 화면: 학부모가 올린 사진에는 그 학부모의 이름이 나온다', () => {
+    const text = infoOf({ uploader: 'parent', uploaderRole: 'parent', uploaderName: '예림엄마' });
+
+    expect(text).toContain('예림엄마');
+    expect(text).not.toContain('학부모');
+  });
+
+  it('선생님 화면: 선생님이 올린 사진은 그대로 "선생님"', () => {
+    const text = infoOf({ uploader: 'teacher', uploaderRole: 'teacher', uploaderName: '이재림' });
+
+    expect(text).toContain('선생님');
+    expect(text).not.toContain('이재림');
+  });
+
+  it('학부모 화면: 이름이 오지 않으므로 "학부모" · "내가 올림" 으로만 보인다', () => {
+    expect(infoOf({ uploader: 'parent' })).toContain('학부모');
+    expect(infoOf({ uploader: 'me' })).toContain('내가 올림');
+  });
+});

@@ -158,7 +158,8 @@ function MediaInfo({ item, overlay = false }) {
       </span>
       <span style={entry}>
         <Icon name="user" size={14} />
-        {uploaderLabel(item.uploader)}
+        {/* 선생님 화면은 학부모가 올린 사진에 그 학부모의 이름이 온다(uploaderName). 학부모 화면에는 이름이 오지 않는다 */}
+        {item.uploaderRole === 'parent' && item.uploaderName ? item.uploaderName : uploaderLabel(item.uploader)}
       </span>
       {duration && (
         <span style={entry}>

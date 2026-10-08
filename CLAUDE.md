@@ -52,8 +52,8 @@ Client and server have **separate** Jest setups and are run from their own direc
 there is no root `package.json`, so there is no one command that runs everything.
 
 ```bash
-cd client && npm test          # jest — 1116 tests / 82 suites
-cd server && npm test          # 1213 tests / 56 suites
+cd client && npm test          # jest — 1140 tests / 83 suites
+cd server && npm test          # 1217 tests / 57 suites
 ```
 
 - **The server suite is ESM** (`"type": "module"` + `transform: {}`, i.e. no Babel) and only
@@ -446,6 +446,12 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   with the same name is never reused. The folder name always comes from the event — `folderNameFromEvent` =
   `YYYY-MM-DD 제목`, Drive-forbidden characters become spaces (never rejected) — and **follows title/date
   edits** (`eventController.updateEvent` → `syncFolderName`, which never fails the event save).
+- **"Who uploaded" shown to the teacher is the parent's own name, not the Kakao identifier.** A parent's
+  `users.username` is the Kakao nickname or an auto id like `카카오_1788…`; the name they chose at onboarding
+  ("예림엄마") lives in `parent_accounts."displayName"`. `EventMedia.list` picks
+  `parentAwareDisplayNameSql('u','pa')` (parent name → `users.displayName` → username) and
+  `mediaSerializer.uploaderNameOf` drops placeholder ids (falls back to 학부모/선생님). Parents still never get
+  uploader names (`toParentMedia` whitelist).
 - **Albums start private** (`events."albumPublished"` default false). The teacher publishes from the album
   page's 공개 panel, choosing `albumAudience` = `participants` (confirmed parents, default) or `all` (every
   linked parent); `albumPublishedAt` keeps the first publish. A published album shows in the parent 사진 tab
