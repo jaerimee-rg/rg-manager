@@ -1,7 +1,9 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Icon } from '../ui';
 import { formatDuration } from '../../utils/mediaUrls';
-import { drivePlayerFrame } from '../../utils/drivePlayer';
+import {
+  drivePlayerFrame, hasSeenFrameTap, isTouchDevice, readyPreviewUrl, rememberFrameTap, shouldPrewarm
+} from '../../utils/drivePlayer';
 import { formatTime, formatDayLabel, dayKeyOf, uploaderLabel } from '../../utils/albumFilter';
 
 /**
@@ -103,7 +105,12 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
             data-testid="video-stage"
             style={{ alignSelf: 'stretch', width: '100%', maxWidth: '900px', display: 'flex', flexDirection: 'column' }}
           >
-            <DrivePlayer key={item.id} src={item.previewUrl} title={item.fileName || '영상'} />
+            <DrivePlayer
+              key={item.id}
+              src={item.previewUrl}
+              title={item.fileName || '영상'}
+              poster={item.largeUrl || item.thumbnailUrl}
+            />
             <MediaInfo item={item} />
           </div>
         ) : (
@@ -175,10 +182,17 @@ function MediaInfo({ item, overlay = false }) {
 /**
  * Drive 플레이어. 칸(남은 높이 전부)의 크기를 재서, 좁으면 iframe 을 넓게 그리고 줄여 보여 준다.
  * 줄인 결과는 칸과 같은 크기라 화면에서는 꽉 찬 플레이어로 보인다.
+ *
+ * 휴대폰에서는 플레이어를 준비 상태로 띄우고 그 위에 미리보기 사진을 겹쳐, 누르는 즉시 재생되게 한다
+ * (왜, 언제 켜는지는 utils/drivePlayer.js).
  */
-function DrivePlayer({ src, title }) {
+function DrivePlayer({ src, title, poster }) {
   const boxRef = useRef(null);
+  const frameRef = useRef(null);
   const [box, setBox] = useState({ width: 0, height: 0 });
+  // 띄울 때 한 번 정한다 — 도중에 바뀌면 iframe 주소가 바뀌어 재생이 끊긴다
+  const [prewarm] = useState(() => shouldPrewarm({ src, touch: isTouchDevice(), sawTap: hasSeenFrameTap() }));
+  const [tapped, setTapped] = useState(false);
 
   useLayoutEffect(() => {
     const element = boxRef.current;
@@ -197,6 +211,24 @@ function DrivePlayer({ src, title }) {
     return () => observer.disconnect();
   }, []);
 
+  // 플레이어 안을 누르면 포커스가 iframe 으로 넘어간다 — 그 순간 겹친 사진을 치우고, 이 기기가 신호를 준다는 것을 기억한다.
+  // blur 를 주지 않고 포커스만 옮기는 브라우저도 있어 짧게 되풀이해 본다.
+  useEffect(() => {
+    if (tapped) return undefined;
+
+    const check = () => {
+      if (!frameRef.current || document.activeElement !== frameRef.current) return;
+      rememberFrameTap();
+      setTapped(true);
+    };
+    window.addEventListener('blur', check);
+    const timer = setInterval(check, 120);
+    return () => {
+      window.removeEventListener('blur', check);
+      clearInterval(timer);
+    };
+  }, [tapped]);
+
   const frame = drivePlayerFrame(box.width, box.height);
   const scaled = frame.scale < 1;
 
@@ -204,9 +236,11 @@ function DrivePlayer({ src, title }) {
     <div ref={boxRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden', background: '#000' }}>
       {src ? (
         <iframe
+          ref={frameRef}
           title={title}
-          src={src}
-          allow="autoplay; fullscreen"
+          src={prewarm ? readyPreviewUrl(src) : src}
+          // 준비 상태로 세워 두려면 자동 재생 권한을 넘기지 않아야 한다 — 넘기면 뷰어를 열자마자 사진 뒤에서 재생된다
+          allow={prewarm ? 'fullscreen' : 'autoplay; fullscreen'}
           allowFullScreen
           style={{
             position: 'absolute', top: 0, left: 0, border: 'none', background: '#000',
@@ -217,6 +251,33 @@ function DrivePlayer({ src, title }) {
           }}
         />
       ) : null}
+
+      {prewarm && !tapped && (
+        <div
+          data-testid="video-poster"
+          aria-hidden="true"
+          style={{
+            position: 'absolute', inset: 0, pointerEvents: 'none', background: '#000',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}
+        >
+          {poster ? (
+            <img
+              src={poster}
+              alt=""
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }}
+              onError={(event) => { event.currentTarget.style.visibility = 'hidden'; }}
+            />
+          ) : null}
+          <span style={{
+            position: 'relative', width: '64px', height: '64px', borderRadius: '50%', paddingLeft: '4px',
+            background: 'rgba(0,0,0,.55)', color: '#fff',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <Icon name="play" size={28} />
+          </span>
+        </div>
+      )}
     </div>
   );
 }

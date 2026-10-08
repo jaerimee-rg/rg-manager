@@ -522,7 +522,10 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   filter and the 맞아요/아니에요 candidate box still use the tags.
 - **Parents**: 사진 tab (`/parent/photos`, published albums only), gallery (`/parent/photos/:eventId`) with the
   **우리 아이 사진만 보기** toggle and `?open=<mediaId>` to open one photo, a full-screen viewer whose 저장 button
-  opens the Drive download URL, child face registration in 내 정보, and a **6-photo grid on the event detail**
+  opens the Drive download URL, child face registration in 내 정보 (`ChildFaceCard`: registered photos are listed
+  by date — only the vector is stored, so there is no thumbnail — and a parent can **delete the ones they
+  registered**; deleting re-matches that child and `matchStudentAcrossAlbums` now also **removes auto tags that no
+  longer match**, while 맞아요/아니에요 answers stay), and a **6-photo grid on the event detail**
   (view only — uploads happen in the album). Parents upload only to published albums with 업로드 받기 on, and
   may delete only what they uploaded. A private album opened by URL shows "선생님이 아직 공개하지 않은 앨범이에요".
 - **Deletes go to the Drive trash** (`files.update {trashed:true}`), never permanent — 30 days to

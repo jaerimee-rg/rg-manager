@@ -508,6 +508,35 @@ test.describe('학부모 — 사진', () => {
     await expect(page.getByRole('button', { name: '사진 고르기' })).toBeDisabled();
   });
 
+  test('등록한 얼굴 사진을 지울 수 있다 — 확인을 거쳐 한 장을 지우면 목록과 개수가 준다', async ({ page, request }) => {
+    await page.goto('/parent/settings');
+
+    const list = page.getByRole('list', { name: `${childName} 등록한 얼굴 사진` });
+    await expect(list.getByRole('listitem')).toHaveCount(2);
+    await expect(page.getByText('얼굴 사진 2장 등록됨')).toBeVisible();
+
+    // 취소하면 그대로
+    await list.getByRole('button', { name: /얼굴 사진 1 삭제/ }).click();
+    const dialog = page.getByRole('dialog').filter({ hasText: '얼굴 사진을 지울까요?' });
+    await dialog.getByRole('button', { name: '취소' }).click();
+    await expect(list.getByRole('listitem')).toHaveCount(2);
+
+    await list.getByRole('button', { name: /얼굴 사진 1 삭제/ }).click();
+    await dialog.getByRole('button', { name: '지우기' }).click();
+
+    await expect(page.getByText(/얼굴 사진을 지웠어요/)).toBeVisible();
+    await expect(list.getByRole('listitem')).toHaveCount(1);
+    await expect(page.getByText('얼굴 사진 1장 등록됨')).toBeVisible();
+
+    // 서버에서도 지워졌고, 새로고침해도 한 장이다
+    const me = await api(request, sessions.parent, 'GET', '/api/parent/me');
+    const child = me.body.children.find((c) => c.childName === childName);
+    const faces = await api(request, sessions.parent, 'GET', `/api/parent/children/${child.id}/faces`);
+    expect(faces.body.items).toHaveLength(1);
+    await page.reload();
+    await expect(list.getByRole('listitem')).toHaveCount(1);
+  });
+
   const pickFacePhoto = async (page) => {
     await page.goto('/parent/settings');
     await page.getByRole('button', { name: /얼굴 사진 등록/ }).first().click();
@@ -536,6 +565,59 @@ test.describe('학부모 — 사진', () => {
     const status = page.getByRole('status');
     await expect(status).toContainText('얼굴이 보이지 않아요', { timeout: 45_000 });
     await expect(status).not.toContainText('분석하지 못했어요');
+  });
+});
+
+test.describe('학부모 — 휴대폰에서 영상을 누르는 즉시 재생 (터치 기기)', () => {
+  // 손가락만 쓰는 기기로 흉내 낸다 — (hover: none) and (pointer: coarse)
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  const TAP_KEY = 'rg.drivePlayer.tapSignal';
+
+  test('첫 영상은 예전 그대로, 플레이어 안을 한 번 누른 뒤부터는 준비 상태 + 미리보기 사진 — 누르면 사진이 바로 사라진다', async ({ page }) => {
+    await loginAs(page, sessions.parent);
+    await stubPortraitThumbnails(page);
+    // 진짜 Drive 플레이어 대신 빈 페이지 — 다른 출처의 iframe 이라는 점은 같다
+    await page.route('https://drive.google.com/file/d/**', (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<body style="margin:0;background:#222"></body>' }));
+    await page.goto(`/parent/photos/${sessions.album.eventId}`);
+    expect(await page.evaluate(() => matchMedia('(hover: none) and (pointer: coarse)').matches)).toBe(true);
+
+    const viewer = page.getByRole('dialog', { name: '사진 보기' });
+    const player = viewer.locator('iframe');
+    const poster = viewer.getByTestId('video-poster');
+    const tapPlayer = async () => {
+      const box = await player.boundingBox();
+      await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+    };
+
+    // ① 이 기기에서 신호를 본 적이 없다 → Drive 의 재생 버튼 그대로, 겹친 사진 없음
+    await page.getByRole('button', { name: '영상 열기' }).first().click();
+    await expect(player).toHaveAttribute('src', /\/preview$/);
+    await expect(poster).toHaveCount(0);
+
+    // 플레이어 안을 누르면 포커스가 iframe 으로 넘어가고, 그 신호를 기억한다
+    await tapPlayer();
+    await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), TAP_KEY)).toBe('1');
+    await viewer.getByRole('button', { name: '닫기' }).click();
+
+    // ② 다음부터: 준비 상태(autoplay=1, 자동 재생 권한은 넘기지 않음) + 미리보기 사진과 재생 표시
+    await page.getByRole('button', { name: '영상 열기' }).first().click();
+    await expect(player).toHaveAttribute('src', /\/preview\?autoplay=1$/);
+    await expect(player).toHaveAttribute('allow', 'fullscreen');
+    await expect(poster).toBeVisible();
+    await expect.poll(() => poster.locator('img').evaluate((img) => img.naturalHeight)).toBe(711);
+    // 사진은 플레이어 칸을 그대로 덮고, 터치는 지나간다
+    const posterBox = await poster.boundingBox();
+    const playerBox = await player.boundingBox();
+    expect(Math.abs(posterBox.width - playerBox.width)).toBeLessThan(1);
+    expect(Math.abs(posterBox.height - playerBox.height)).toBeLessThan(1);
+    expect(await poster.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe('none');
+
+    // ③ 누르는 순간 사진이 사라지고, 같은 플레이어가 그대로 남는다(다시 불러오지 않는다)
+    await tapPlayer();
+    await expect(poster).toHaveCount(0, { timeout: 1000 });
+    await expect(player).toHaveAttribute('src', /\/preview\?autoplay=1$/);
   });
 });
 

@@ -49,3 +49,59 @@ describe('drivePlayerFrame', () => {
     expect(drivePlayerFrame(300, 400, 600)).toEqual({ scale: 0.5, width: 600, height: 800 });
   });
 });
+
+describe('누르는 즉시 재생 — 준비 상태', () => {
+  const {
+    readyPreviewUrl, hasSeenFrameTap, rememberFrameTap, isTouchDevice, shouldPrewarm
+  } = require('../drivePlayer');
+
+  const fakeStorage = () => {
+    const data = {};
+    return { getItem: (key) => (key in data ? data[key] : null), setItem: (key, value) => { data[key] = String(value); } };
+  };
+  const brokenStorage = {
+    getItem: () => { throw new Error('SecurityError'); },
+    setItem: () => { throw new Error('QuotaExceededError'); }
+  };
+
+  it('준비용 주소는 autoplay=1 을 붙인다 — 이미 쿼리가 있으면 & 로 잇는다', () => {
+    expect(readyPreviewUrl('https://drive.google.com/file/d/abc/preview')).toBe('https://drive.google.com/file/d/abc/preview?autoplay=1');
+    expect(readyPreviewUrl('https://drive.google.com/file/d/abc/preview?usp=x')).toBe('https://drive.google.com/file/d/abc/preview?usp=x&autoplay=1');
+    expect(readyPreviewUrl(null)).toBeNull();
+    expect(readyPreviewUrl('')).toBe('');
+  });
+
+  it('탭 신호는 한 번 보면 기억한다', () => {
+    const storage = fakeStorage();
+    expect(hasSeenFrameTap(storage)).toBe(false);
+    rememberFrameTap(storage);
+    expect(hasSeenFrameTap(storage)).toBe(true);
+  });
+
+  it('저장소가 막혀 있거나 없으면 "본 적 없음" — 예전 방식으로 남는다', () => {
+    expect(hasSeenFrameTap(brokenStorage)).toBe(false);
+    expect(() => rememberFrameTap(brokenStorage)).not.toThrow();
+    expect(hasSeenFrameTap(null)).toBe(false);
+    expect(() => rememberFrameTap(null)).not.toThrow();
+  });
+
+  it('터치 기기 판별 — 손가락만 쓰는 기기(hover 없음 · 굵은 포인터)일 때만', () => {
+    const win = (matches) => ({ matchMedia: jest.fn(() => ({ matches })) });
+    const touch = win(true);
+    expect(isTouchDevice(touch)).toBe(true);
+    expect(touch.matchMedia).toHaveBeenCalledWith('(hover: none) and (pointer: coarse)');
+    expect(isTouchDevice(win(false))).toBe(false);
+    expect(isTouchDevice({})).toBe(false);
+    expect(isTouchDevice(null)).toBe(false);
+    expect(isTouchDevice({ matchMedia: () => { throw new Error('x'); } })).toBe(false);
+  });
+
+  it.each([
+    [{ src: 'u', touch: true, sawTap: true }, true],
+    [{ src: 'u', touch: true, sawTap: false }, false],   // 신호를 본 적 없는 기기 — 겹친 사진을 못 치울 수 있다
+    [{ src: 'u', touch: false, sawTap: true }, false],   // PC — 자동 재생이 허용돼 있으면 사진 뒤에서 재생된다
+    [{ src: null, touch: true, sawTap: true }, false]
+  ])('준비 상태로 띄울지 %j → %s', (input, expected) => {
+    expect(shouldPrewarm(input)).toBe(expected);
+  });
+});

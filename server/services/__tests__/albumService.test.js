@@ -89,6 +89,7 @@ beforeEach(() => {
   jest.spyOn(console, 'error').mockImplementation(() => {});
   AppSetting.getMany.mockResolvedValue({});
   MediaTag.listByMedia.mockResolvedValue([]);
+  MediaTag.listByTeacherAndStudent.mockResolvedValue([]);
   MediaFace.listVectorsByMedia.mockResolvedValue([]);
   ChildFaceProfile.listVectorsByTeacher.mockResolvedValue([]);
   EventMedia.setFaceStatus.mockImplementation(async (id, fields) => ({ id, ...fields }));
@@ -354,6 +355,27 @@ describe('matchStudentAcrossAlbums — 자녀 얼굴 등록 직후', () => {
 
     await expect(albumService.matchStudentAcrossAlbums(7, 5)).resolves.toEqual({ albums: 0, photos: 0, candidates: 0 });
     expect(MediaTag.upsert).not.toHaveBeenCalled();
+  });
+
+  it('기준 얼굴 한 장을 지운 뒤 — 더는 맞지 않는 자동 태그는 지우고, 사람이 정한 태그는 둔다', async () => {
+    MediaFace.listVectorsByTeacher.mockResolvedValue(new Map([
+      [11, [{ id: 1, descriptor: D(0) }]],       // 남은 기준 얼굴과 여전히 맞는다
+      [12, [{ id: 2, descriptor: D(0.5) }]],     // 지운 사진으로만 맞았다 → 자동 태그 삭제
+      [13, [{ id: 3, descriptor: D(0.5) }]],     // 학부모가 "맞아요" 한 사진 → 그대로
+      [14, [{ id: 4, descriptor: D(0.5) }]]      // 태그가 없던 사진 → 아무 일도 없다
+    ]));
+    ChildFaceProfile.listVectorsByTeacher.mockResolvedValue([{ studentId: 5, descriptor: D(0) }]);
+    MediaTag.listByTeacherAndStudent.mockResolvedValue([
+      { mediaId: 11, studentId: 5, source: 'face', distance: 0, faceId: 1 },
+      { mediaId: 12, studentId: 5, source: 'face', distance: 0.3, faceId: 2 },
+      { mediaId: 13, studentId: 5, source: 'parent_confirmed' }
+    ]);
+
+    await albumService.matchStudentAcrossAlbums(7, 5);
+
+    expect(MediaTag.removeStudents).toHaveBeenCalledTimes(1);
+    expect(MediaTag.removeStudents).toHaveBeenCalledWith(12, [5]);
+    expect(MediaTag.upsert).not.toHaveBeenCalled();   // 11 은 값이 그대로라 다시 쓰지 않는다
   });
 
   it('기준 얼굴이 없으면 아무 것도 하지 않는다', async () => {

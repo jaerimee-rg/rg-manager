@@ -413,11 +413,14 @@ export const matchStudentAcrossAlbums = async (teacherUserId, studentId) => {
   for (const [mediaId, faces] of facesByMedia.entries()) {
     const match = bestPerStudent(faces, profiles).find((result) => result.studentId === studentId);
     const source = match ? classifyDistance(match.distance, thresholds) : null;
-    if (!source) continue;
+    const current = existingByMedia.has(mediaId) ? [existingByMedia.get(mediaId)] : [];
+    if (!source && !current.length) continue;
 
+    // 더는 맞지 않는 자동 태그(face·candidate)는 지운다 — 기준 얼굴 한 장을 지웠을 때 그 사진으로만
+    // 맞던 태그가 남지 않게. 사람이 정한 태그(manual·parent_confirmed·excluded)는 mergeMatches 가 지킨다.
     const plan = mergeMatches(
-      existingByMedia.has(mediaId) ? [existingByMedia.get(mediaId)] : [],
-      [{ studentId, source, distance: match.distance, faceId: match.faceId }]
+      current,
+      source ? [{ studentId, source, distance: match.distance, faceId: match.faceId }] : []
     );
 
     for (const tag of plan.upsert) {
@@ -425,6 +428,7 @@ export const matchStudentAcrossAlbums = async (teacherUserId, studentId) => {
       if (tag.source === 'face') { photos += 1; touched.push(mediaId); }
       if (tag.source === 'candidate') candidates += 1;
     }
+    if (plan.remove.length) await MediaTag.removeStudents(mediaId, plan.remove);
   }
 
   const albums = touched.length ? await countAlbumsForMedia(touched) : 0;
