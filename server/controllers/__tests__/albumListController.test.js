@@ -1,7 +1,13 @@
 import { jest } from '@jest/globals';
 
 jest.unstable_mockModule('../../models/Event.js', () => ({
-  default: { listForPhotos: jest.fn(), createForPhotos: jest.fn() }
+  default: {
+    listForPhotos: jest.fn(), createForPhotos: jest.fn(),
+    getById: jest.fn(), updateFolder: jest.fn(), delete: jest.fn()
+  }
+}));
+jest.unstable_mockModule('../../services/albumService.js', () => ({
+  default: { syncFolderName: jest.fn() }
 }));
 jest.unstable_mockModule('../../models/EventMedia.js', () => ({
   default: { summariesForTeacher: jest.fn() }
@@ -20,7 +26,8 @@ const Event = (await import('../../models/Event.js')).default;
 const EventMedia = (await import('../../models/EventMedia.js')).default;
 const GoogleDriveAccount = (await import('../../models/GoogleDriveAccount.js')).default;
 const { isDriveConfigured } = await import('../../utils/googleDrive.js');
-const { listAlbums, createPhotoFolder } = await import('../albumListController.js');
+const albumService = (await import('../../services/albumService.js')).default;
+const { listAlbums, createPhotoFolder, updatePhotoFolder, deletePhotoFolder } = await import('../albumListController.js');
 
 const event = (overrides = {}) => ({
   id: 31, userId: 7, type: 'competition', title: '회장배 대회', date: '2026-10-12',
@@ -216,6 +223,217 @@ describe('POST /api/albums — 사진 전용 폴더 만들기 (docs/photo-menu F
     req.body = { title: '가을 소풍', date: '2026-09-27' };
 
     await createPhotoFolder(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+  });
+});
+
+// ───────── 사진 전용 폴더 고치기 · 지우기 (docs/photo-menu FR-519) ─────────
+
+const folder = (overrides = {}) => event({
+  id: 50, type: 'folder', title: '가을 소풍', date: '2026-09-27', albumAudience: 'all',
+  driveFolderId: 'f-50', driveFolderName: '2026-09-27 가을 소풍', albumStatus: 'ready',
+  ...overrides
+});
+
+describe('PATCH /api/albums/:id — 사진 폴더 이름·날짜 고치기 (FR-519)', () => {
+  beforeEach(() => {
+    req.params = { id: '50' };
+    req.body = { title: '가을 운동회', date: '2026-10-03' };
+    Event.getById.mockResolvedValue(folder());
+    Event.listForPhotos.mockResolvedValue([folder()]);
+    Event.updateFolder.mockImplementation(async (id, { title, date }) => folder({ id, title, date }));
+    albumService.syncFolderName.mockResolvedValue({ renamed: true, name: '2026-10-03 가을 운동회' });
+  });
+
+  it('이름·날짜를 고치고 Drive 폴더 이름도 따라 바꾼다', async () => {
+    await updatePhotoFolder(req, res);
+
+    expect(Event.getById).toHaveBeenCalledWith(50, 7, 'user');
+    expect(Event.updateFolder).toHaveBeenCalledWith(50, { title: '가을 운동회', date: '2026-10-03' });
+    // 바뀌기 전 · 후를 넘겨 폴더 이름이 달라졌을 때만 Drive 를 부르게 한다
+    expect(albumService.syncFolderName).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ title: '가을 소풍', date: '2026-09-27' }),
+      expect.objectContaining({ title: '가을 운동회', date: '2026-10-03', driveFolderId: 'f-50' })
+    );
+    expect(res.json).toHaveBeenCalledWith({
+      eventId: 50, title: '가을 운동회', date: '2026-10-03',
+      expectedFolderName: '2026-10-03 가을 운동회',
+      driveFolderName: '2026-10-03 가을 운동회',
+      driveRenamed: true
+    });
+  });
+
+  it('이름 앞뒤 공백은 떼고 저장한다', async () => {
+    req.body = { title: '  가을 운동회  ', date: '2026-10-03' };
+
+    await updatePhotoFolder(req, res);
+
+    expect(Event.updateFolder).toHaveBeenCalledWith(50, { title: '가을 운동회', date: '2026-10-03' });
+  });
+
+  it('Drive 이름 바꾸기가 실패해도 저장은 끝난 것이다 — driveRenamed:false 로 알린다', async () => {
+    albumService.syncFolderName.mockResolvedValue({ renamed: false, error: 'invalid_grant' });
+
+    await updatePhotoFolder(req, res);
+
+    expect(res.status).not.toHaveBeenCalled();
+    expect(res.json.mock.calls[0][0]).toMatchObject({
+      title: '가을 운동회', driveRenamed: false,
+      driveFolderName: '2026-09-27 가을 소풍', expectedFolderName: '2026-10-03 가을 운동회'
+    });
+  });
+
+  it('아직 Drive 폴더가 없는 폴더(첫 업로드 전)는 바꿀 것이 없다 — driveRenamed:true', async () => {
+    Event.getById.mockResolvedValue(folder({ driveFolderId: null, driveFolderName: null }));
+    Event.updateFolder.mockImplementation(async (id, { title, date }) => folder({ id, title, date, driveFolderId: null, driveFolderName: null }));
+    albumService.syncFolderName.mockResolvedValue({ renamed: false });
+
+    await updatePhotoFolder(req, res);
+
+    expect(res.json.mock.calls[0][0]).toMatchObject({ driveRenamed: true, driveFolderName: null });
+  });
+
+  it('같은 이름·날짜의 다른 폴더가 있으면 409 — 새 폴더 만들기가 헷갈리지 않게', async () => {
+    Event.listForPhotos.mockResolvedValue([folder(), folder({ id: 51, title: '가을 운동회', date: '2026-10-03' })]);
+
+    await updatePhotoFolder(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json.mock.calls[0][0].reason).toBe('folder_exists');
+    expect(Event.updateFolder).not.toHaveBeenCalled();
+  });
+
+  it('이름·날짜가 같은 **이벤트**가 있는 것은 괜찮다 — 폴더끼리만 겹침을 본다', async () => {
+    Event.listForPhotos.mockResolvedValue([folder(), event({ id: 31, title: '가을 운동회', date: '2026-10-03', type: 'special' })]);
+
+    await updatePhotoFolder(req, res);
+
+    expect(Event.updateFolder).toHaveBeenCalled();
+  });
+
+  it('자기 자신과 같은 값(바꾸지 않고 저장)은 겹침이 아니다', async () => {
+    req.body = { title: '가을 소풍', date: '2026-09-27' };
+
+    await updatePhotoFolder(req, res);
+
+    expect(res.status).not.toHaveBeenCalledWith(409);
+    expect(Event.updateFolder).toHaveBeenCalled();
+  });
+
+  it('이벤트 앨범은 고치지 않는다 — 이벤트 관리가 맡는다', async () => {
+    Event.getById.mockResolvedValue(event({ id: 31, type: 'competition' }));
+    req.params = { id: '31' };
+
+    await updatePhotoFolder(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0].reason).toBe('not_photo_folder');
+    expect(Event.updateFolder).not.toHaveBeenCalled();
+  });
+
+  it('남의 폴더·없는 폴더는 404', async () => {
+    Event.getById.mockResolvedValue(null);
+
+    await updatePhotoFolder(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(Event.updateFolder).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['이름 없음', { title: ' ', date: '2026-10-03' }],
+    ['101자 이름', { title: '가'.repeat(101), date: '2026-10-03' }],
+    ['없는 날짜', { title: '가을 운동회', date: '2026-02-31' }],
+    ['날짜 없음', { title: '가을 운동회' }]
+  ])('%s → 400', async (_label, body) => {
+    req.body = body;
+
+    await updatePhotoFolder(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(Event.updateFolder).not.toHaveBeenCalled();
+  });
+
+  it('숫자가 아닌 id 는 404', async () => {
+    req.params = { id: 'abc' };
+
+    await updatePhotoFolder(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(Event.getById).not.toHaveBeenCalled();
+  });
+
+  it('DB 오류는 500', async () => {
+    Event.updateFolder.mockRejectedValue(new Error('x'));
+
+    await updatePhotoFolder(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+  });
+});
+
+describe('DELETE /api/albums/:id — 사진 폴더 지우기 (FR-519)', () => {
+  beforeEach(() => {
+    req.params = { id: '50' };
+    Event.getById.mockResolvedValue(folder());
+    Event.delete.mockResolvedValue(folder());
+  });
+
+  it('폴더를 지우고, Drive 폴더는 그대로 남는다고 알려 준다', async () => {
+    await deletePhotoFolder(req, res);
+
+    expect(Event.delete).toHaveBeenCalledWith(50, 7, 'user');
+    expect(res.json).toHaveBeenCalledWith({
+      deleted: true, driveFolderKept: true, driveFolderName: '2026-09-27 가을 소풍'
+    });
+  });
+
+  it('Drive 폴더가 없던 폴더는 남는 것이 없다', async () => {
+    Event.getById.mockResolvedValue(folder({ driveFolderId: null, driveFolderName: null }));
+    Event.delete.mockResolvedValue(folder({ driveFolderId: null, driveFolderName: null }));
+
+    await deletePhotoFolder(req, res);
+
+    expect(res.json).toHaveBeenCalledWith({ deleted: true, driveFolderKept: false, driveFolderName: null });
+  });
+
+  it('이벤트 앨범은 여기서 지우지 않는다 — 신청·참가 학생이 함께 사라지면 안 된다', async () => {
+    Event.getById.mockResolvedValue(event({ id: 31, type: 'competition', driveFolderId: 'f-31' }));
+    req.params = { id: '31' };
+
+    await deletePhotoFolder(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0].reason).toBe('not_photo_folder');
+    expect(Event.delete).not.toHaveBeenCalled();
+  });
+
+  it('스페셜 · 휴관일도 마찬가지로 지우지 않는다', async () => {
+    for (const type of ['special', 'closure']) {
+      Event.delete.mockClear();
+      Event.getById.mockResolvedValue(event({ id: 31, type }));
+
+      await deletePhotoFolder(req, res);
+
+      expect(Event.delete).not.toHaveBeenCalled();
+    }
+  });
+
+  it('남의 폴더·없는 폴더는 404', async () => {
+    Event.getById.mockResolvedValue(null);
+
+    await deletePhotoFolder(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(Event.delete).not.toHaveBeenCalled();
+  });
+
+  it('DB 오류는 500', async () => {
+    Event.delete.mockRejectedValue(new Error('x'));
+
+    await deletePhotoFolder(req, res);
 
     expect(res.status).toHaveBeenCalledWith(500);
   });

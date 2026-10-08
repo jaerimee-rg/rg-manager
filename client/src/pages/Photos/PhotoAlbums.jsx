@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import UploadSheet from '../../components/album/UploadSheet';
 import {
-  Badge, Button, Callout, Card, EmptyState, Icon, PageHeader, SkeletonList
+  Badge, Button, Callout, Card, EmptyState, Icon, PageHeader, SkeletonList, Toast
 } from '../../components/ui';
 import { canUploadWith, driveNotice, formatEventDate, typeLabel, PROBLEM_MESSAGES } from './albumState';
 
@@ -17,6 +17,16 @@ import { canUploadWith, driveNotice, formatEventDate, typeLabel, PROBLEM_MESSAGE
  */
 function PhotoAlbums() {
   const navigate = useNavigate();
+  const location = useLocation();
+  // 앨범 화면에서 폴더를 지우고 돌아왔을 때의 알림 (FR-519) — 한 번만 보이게 주소 상태에서 지운다
+  const [toast, setToast] = useState(() => location.state?.toast || '');
+  useEffect(() => {
+    if (!location.state?.toast) return undefined;
+    navigate(location.pathname, { replace: true, state: null });
+    const timer = setTimeout(() => setToast(''), 3200);
+    return () => clearTimeout(timer);
+    // 처음 한 번만
+  }, []);
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -113,6 +123,8 @@ function PhotoAlbums() {
           onDone={(result) => { if (result?.eventId && result.uploaded > 0) setDoneEventId(result.eventId); }}
         />
       )}
+
+      <Toast>{toast}</Toast>
     </>
   );
 }

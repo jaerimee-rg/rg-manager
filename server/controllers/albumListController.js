@@ -6,6 +6,7 @@ import { folderNameFromEvent } from '../utils/mediaValidation.js';
 import { thumbnailUrl } from '../utils/mediaSerializer.js';
 import { todayKst } from '../services/eventService.js';
 import { isPhotoFolder } from '../utils/albumAccess.js';
+import albumService from '../services/albumService.js';
 
 /**
  * 선생님 사진 메뉴 목록 (docs/photo-menu 5.1).
@@ -93,13 +94,21 @@ const isRealDate = (date) => {
  * 이름이 같은 이벤트가 있어도 거기에 붙이지 않는다 — "새 폴더" 를 골랐으니 이벤트와는 따로다.
  * 응답의 target 은 GET 의 targets 한 줄과 같은 모양이라 업로드 시트가 그대로 쓴다.
  */
+/** 폴더 이름·날짜 입력 확인 (만들기 · 고치기 공용). → { title, date } | { error } */
+const parseFolderInput = (body) => {
+  const title = String(body?.title ?? '').trim();
+  const date = String(body?.date ?? '').trim();
+  if (!title) return { error: '폴더 이름을 입력해 주세요.' };
+  if (title.length > TITLE_MAX) return { error: `이름은 ${TITLE_MAX}자 이내로 입력해 주세요.` };
+  if (!isRealDate(date)) return { error: '날짜를 선택해 주세요.' };
+  return { title, date };
+};
+
 export const createPhotoFolder = async (req, res) => {
   try {
-    const title = String(req.body?.title ?? '').trim();
-    const date = String(req.body?.date ?? '').trim();
-    if (!title) return res.status(400).json({ error: '폴더 이름을 입력해 주세요.' });
-    if (title.length > TITLE_MAX) return res.status(400).json({ error: `이름은 ${TITLE_MAX}자 이내로 입력해 주세요.` });
-    if (!isRealDate(date)) return res.status(400).json({ error: '날짜를 선택해 주세요.' });
+    const input = parseFolderInput(req.body);
+    if (input.error) return res.status(400).json({ error: input.error });
+    const { title, date } = input;
 
     const today = todayKst();
     const mine = await Event.listForPhotos(req.user.id);
@@ -117,4 +126,92 @@ export const createPhotoFolder = async (req, res) => {
   }
 };
 
-export default { listAlbums, createPhotoFolder };
+const NOT_A_FOLDER = {
+  error: '이벤트 앨범이에요. 이름·날짜와 삭제는 이벤트 관리에서 해 주세요.',
+  reason: 'not_photo_folder'
+};
+
+/**
+ * 고치거나 지울 **사진 전용 폴더**를 읽는다. 앨범 화면과 같은 범위다(선생님 = 자기 것, 관리자 = 전부).
+ * 이벤트 앨범은 여기서 다루지 않는다 — 이름·날짜는 이벤트 폼이, 삭제는 이벤트 삭제가 맡는다
+ * (신청·참가 학생·대회 행이 걸려 있어서 사진 메뉴에서 지우면 안 된다).
+ * → { event } | { status, body }
+ */
+const loadFolder = async (req) => {
+  const id = parseInt(req.params.id, 10);
+  const event = Number.isNaN(id) ? null : await Event.getById(id, req.user.id, req.user.role);
+  if (!event) return { status: 404, body: { error: '사진 폴더를 찾을 수 없습니다.' } };
+  if (!isPhotoFolder(event)) return { status: 400, body: NOT_A_FOLDER };
+  return { event };
+};
+
+/**
+ * PATCH /api/albums/:id — 사진 전용 폴더의 이름·날짜를 고친다 (docs/photo-menu FR-519).
+ * Drive 폴더가 있으면 이름("날짜 이름")도 따라 바꾼다. Drive 쪽이 실패해도 저장은 끝난 것이다 —
+ * `driveRenamed:false` 로 알리고, 앨범 화면의 [폴더 이름 맞추기] 로 나중에 맞춘다.
+ * 같은 이름·날짜의 다른 폴더가 있으면 409 (새 폴더 만들기가 "같은 이름·날짜 = 같은 폴더" 로 찾기 때문에).
+ */
+export const updatePhotoFolder = async (req, res) => {
+  try {
+    const found = await loadFolder(req);
+    if (!found.event) return res.status(found.status).json(found.body);
+    const before = found.event;
+
+    const input = parseFolderInput(req.body);
+    if (input.error) return res.status(400).json({ error: input.error });
+    const { title, date } = input;
+
+    const siblings = await Event.listForPhotos(before.userId);
+    const clash = siblings.some((event) => event.id !== before.id && isPhotoFolder(event)
+      && event.title === title && event.date === date);
+    if (clash) {
+      return res.status(409).json({ error: '같은 이름·날짜의 사진 폴더가 이미 있어요.', reason: 'folder_exists' });
+    }
+
+    const updated = await Event.updateFolder(before.id, { title, date });
+    if (!updated) return res.status(404).json({ error: '사진 폴더를 찾을 수 없습니다.' });
+
+    const sync = await albumService.syncFolderName(before.userId, before, updated);
+    const expectedFolderName = folderNameFromEvent(updated);
+
+    res.json({
+      eventId: updated.id,
+      title: updated.title,
+      date: updated.date,
+      expectedFolderName,
+      driveFolderName: sync.renamed ? sync.name : (updated.driveFolderName || null),
+      // Drive 폴더가 아직 없거나(첫 업로드 전) 이름이 그대로면 바꿀 것이 없다 — 그것도 "맞음" 이다
+      driveRenamed: !updated.driveFolderId || sync.renamed || updated.driveFolderName === expectedFolderName
+    });
+  } catch (error) {
+    console.error('사진 폴더 수정 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/**
+ * DELETE /api/albums/:id — 사진 전용 폴더를 지운다 (docs/photo-menu FR-519).
+ * 앱의 폴더와 그 사진 기록(태그·얼굴 포함, CASCADE)이 사라져 학부모 화면에서도 바로 없어진다.
+ * **Google Drive 의 폴더와 원본 파일은 건드리지 않는다** — 이벤트를 지울 때와 같은 규칙이다.
+ */
+export const deletePhotoFolder = async (req, res) => {
+  try {
+    const found = await loadFolder(req);
+    if (!found.event) return res.status(found.status).json(found.body);
+
+    const deleted = await Event.delete(found.event.id, req.user.id, req.user.role);
+    if (!deleted) return res.status(404).json({ error: '사진 폴더를 찾을 수 없습니다.' });
+
+    res.json({
+      deleted: true,
+      // Drive 에 남는 폴더 — 화면이 "Drive 에는 그대로 있어요" 를 알려 준다
+      driveFolderKept: Boolean(deleted.driveFolderId),
+      driveFolderName: deleted.driveFolderName || null
+    });
+  } catch (error) {
+    console.error('사진 폴더 삭제 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+export default { listAlbums, createPhotoFolder, updatePhotoFolder, deletePhotoFolder };

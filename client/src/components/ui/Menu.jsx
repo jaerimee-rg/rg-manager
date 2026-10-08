@@ -55,7 +55,8 @@ export function Menu({ trigger, children, align = 'end', sheetOnMobile = true, l
           aria-label={label}
           className="ui-menu"
           data-sheet-mobile={sheetOnMobile || undefined}
-          style={{ position: 'absolute', top: 'calc(100% + 6px)', [align === 'end' ? 'right' : 'left']: 0 }}
+          // 위치는 CSS 가 정한다(data-align) — 인라인으로 박으면 모바일 시트 규칙이 지고 만다
+          data-align={align}
           onClick={close}
         >
           {children}

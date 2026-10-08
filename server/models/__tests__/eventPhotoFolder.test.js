@@ -27,6 +27,23 @@ describe('Event.createForPhotos — 사진 전용 폴더를 만든다', () => {
   });
 });
 
+describe('Event.updateFolder — 사진 폴더의 이름·날짜 (FR-519)', () => {
+  it("type='folder' 행만 고친다 — 같은 id 의 이벤트는 건드리지 못한다", async () => {
+    await Event.updateFolder(50, { title: '가을 운동회', date: '2026-10-03' });
+
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/UPDATE events SET title = \$1, date = \$2, "updatedAt" = \$3\s+WHERE id = \$4 AND type = 'folder'/);
+    expect(params.slice(0, 2)).toEqual(['가을 운동회', '2026-10-03']);
+    expect(params[3]).toBe(50);
+  });
+
+  it('고칠 행이 없으면 null', async () => {
+    pool.query.mockResolvedValue({ rows: [] });
+
+    expect(await Event.updateFolder(31, { title: 'x', date: '2026-10-03' })).toBeNull();
+  });
+});
+
 describe('사진 폴더는 이벤트 화면에 나오지 않는다', () => {
   it('선생님 이벤트 관리 목록(getAll)에서 뺀다 — 종류 필터가 있어도 없어도', async () => {
     await Event.getAll(7, 'user', { includePast: true });

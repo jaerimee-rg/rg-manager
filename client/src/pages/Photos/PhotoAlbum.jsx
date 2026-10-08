@@ -7,13 +7,16 @@ import { albumShareUrl, albumShareToast, canShareAlbum, ALBUM_SHARE_DISABLED_HIN
 import UploadSheet from '../../components/album/UploadSheet';
 import MediaViewer from '../../components/album/MediaViewer';
 import {
-  Button, Callout, Card, Chip, ConfirmDialog, EmptyState, Icon, PageHeader, SkeletonList, StickyActions, Toast, Toolbar
+  Button, Callout, Card, Chip, ConfirmDialog, EmptyState, Icon, IconButton, Menu, MenuItem, PageHeader, SkeletonList,
+  StickyActions, Toast, Toolbar
 } from '../../components/ui';
 import PublishPanel from './PublishPanel';
+import FolderEditDialog from './FolderEditDialog';
 import FaceScanPanel from './FaceScanPanel';
 import PhotoGrid from './PhotoGrid';
 import {
-  albumProblem, filterChips, formatEventDate, publishLocked, typeLabel, toViewerItem, PROBLEM_MESSAGES
+  albumProblem, filterChips, folderDeleteMessage, formatEventDate, isPhotoFolder, publishLocked, typeLabel, toViewerItem,
+  PROBLEM_MESSAGES
 } from './albumState';
 
 const PAGE = 60;
@@ -39,6 +42,10 @@ function PhotoAlbum() {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState([]);
   const [confirmDelete, setConfirmDelete] = useState(null);   // 지울 id 배열
+  // 사진 전용 폴더 관리 (FR-519): 이름·날짜 수정 창 · 폴더 삭제 확인
+  const [editingFolder, setEditingFolder] = useState(false);
+  const [confirmFolderDelete, setConfirmFolderDelete] = useState(false);
+  const [deletingFolder, setDeletingFolder] = useState(false);
   const [viewerId, setViewerId] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState('');
@@ -173,8 +180,51 @@ function PhotoAlbum() {
     const ok = await copyToClipboard(url);
     showToast(ok ? albumShareToast(album) : url);
   };
+  /* 사진 전용 폴더는 여기서 이름·날짜를 고치고 지운다 (FR-519). 이벤트 앨범은 이벤트 관리가 맡는다 —
+     신청·참가 학생이 걸린 이벤트를 사진 메뉴에서 지우면 안 된다. */
+  const folder = isPhotoFolder(album.eventType);
+
+  const folderSaved = async (result) => {
+    setEditingFolder(false);
+    await loadAlbum();
+    showToast(result?.driveRenamed === false
+      ? '이름·날짜를 바꿨어요 · Drive 폴더 이름은 [폴더 이름 맞추기] 로 맞춰 주세요'
+      : '폴더 이름·날짜를 바꿨어요');
+  };
+
+  const deleteFolder = async () => {
+    setDeletingFolder(true);
+    try {
+      const response = await fetchWithAuth(`/api/albums/${eventId}`, { method: 'DELETE' });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setConfirmFolderDelete(false);
+        showToast(payload.error || '폴더를 지우지 못했어요.');
+        return;
+      }
+      navigate('/photos', {
+        replace: true,
+        state: { toast: payload.driveFolderKept ? '폴더를 지웠어요 · Google Drive 의 폴더는 그대로 있어요' : '폴더를 지웠어요' }
+      });
+    } catch (deleteError) {
+      console.error('사진 폴더 삭제 실패:', deleteError);
+      setConfirmFolderDelete(false);
+      showToast('폴더를 지우지 못했어요.');
+    } finally {
+      setDeletingFolder(false);
+    }
+  };
+
   const headerActions = (
     <>
+      {folder && (
+        <span className="ui-page-header__icon-action">
+          <Menu label="폴더 관리" trigger={(props) => <IconButton icon="more" label="폴더 관리" {...props} />}>
+            <MenuItem icon="edit" onClick={() => setEditingFolder(true)}>이름 · 날짜 수정</MenuItem>
+            <MenuItem icon="trash" tone="danger" onClick={() => setConfirmFolderDelete(true)}>폴더 삭제</MenuItem>
+          </Menu>
+        </span>
+      )}
       <Button
         icon="link"
         disabled={!shareable}
@@ -356,6 +406,21 @@ function PhotoAlbum() {
         busy={busy}
         onCancel={() => setConfirmDelete(null)}
         onConfirm={async () => { const ids = confirmDelete; setConfirmDelete(null); await bulk('delete', ids); }}
+      />
+
+      {editingFolder && (
+        <FolderEditDialog album={album} onClose={() => setEditingFolder(false)} onSaved={folderSaved} />
+      )}
+
+      <ConfirmDialog
+        open={confirmFolderDelete}
+        title={`‘${album.eventTitle}’ 폴더를 지울까요?`}
+        message={folderDeleteMessage(album)}
+        confirmLabel="폴더 삭제"
+        tone="danger"
+        busy={deletingFolder}
+        onCancel={() => setConfirmFolderDelete(false)}
+        onConfirm={deleteFolder}
       />
 
       {viewerId && (
