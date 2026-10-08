@@ -175,13 +175,24 @@ describe('PhotoAlbum — 앨범 (docs/photo-menu FR-520~529)', () => {
     });
   });
 
-  it('Google 연결이 끊기면 안내하고 쓰기 버튼을 막는다 (읽기는 계속)', async () => {
-    await renderAlbum({ ...ALBUM, drive: { ...DRIVE, status: 'error' } });
+  it('Google 연결이 끊기면 올리기·지우기만 막고, 공개 설정과 숨기기는 열어 둔다 (읽기는 계속)', async () => {
+    await renderAlbum({ ...ALBUM, published: true, drive: { ...DRIVE, status: 'error' } });
 
     expect(screen.getByText(/Google 계정 연결이 끊어졌어요/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '사진 올리기' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '학부모에게 공개' })).toBeDisabled();
+    // 급히 내려야 할 때 막히면 안 된다
+    expect(screen.getByRole('button', { name: '비공개로 전환' })).toBeEnabled();
     expect(screen.getByText('하은엄마')).toBeInTheDocument();
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '고르기' })); });
+    await act(async () => { fireEvent.click(document.querySelectorAll('.ui-media-tile')[0]); });
+    expect(screen.getByRole('button', { name: '숨기기' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '지우기' })).toBeDisabled();
+  });
+
+  it('Drive 에서 폴더가 사라진 비공개 앨범은 공개 버튼이 잠긴다', async () => {
+    await renderAlbum({ ...ALBUM, albumStatus: 'missing' });
+    expect(screen.getByRole('button', { name: '학부모에게 공개' })).toBeDisabled();
   });
 
   it('아직 앨범이 없는 이벤트는 올리면 생길 폴더를 알려 준다', async () => {

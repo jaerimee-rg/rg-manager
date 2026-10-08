@@ -10,7 +10,7 @@ import {
 import PublishPanel from './PublishPanel';
 import PhotoGrid from './PhotoGrid';
 import {
-  albumProblem, filterChips, formatEventDate, typeLabel, toViewerItem, PROBLEM_MESSAGES
+  albumProblem, filterChips, formatEventDate, publishLocked, typeLabel, toViewerItem, PROBLEM_MESSAGES
 } from './albumState';
 
 const PAGE = 60;
@@ -149,6 +149,7 @@ function PhotoAlbum() {
   }
 
   const problem = albumProblem(album);
+  // locked = Drive 를 거치는 올리기 · 지우기만 막는다. 공개 · 범위 · 숨기기는 앱 안의 일이라 열어 둔다.
   const locked = Boolean(problem);
   const hasAlbum = Boolean(album.driveFolderId);
   const counts = album.counts || {};
@@ -212,7 +213,7 @@ function PhotoAlbum() {
           <div className="ui-album-top">
             <PublishPanel
               album={album}
-              locked={locked}
+              locked={publishLocked(album)}
               busy={busy}
               onPublish={(on) => patchAlbum({ published: on }, on ? '학부모에게 공개했어요' : '비공개로 돌렸어요')}
               onAudience={(value) => patchAlbum({ audience: value }, '공개 범위를 바꿨어요')}
@@ -275,7 +276,7 @@ function PhotoAlbum() {
                     </Chip>
                   ))}
                 </Toolbar>
-                <Button size="sm" icon="check" disabled={locked || !items.length} onClick={() => setSelecting(true)}>고르기</Button>
+                <Button size="sm" icon="check" disabled={!items.length} onClick={() => setSelecting(true)}>고르기</Button>
               </>
             )}
           </div>
@@ -311,7 +312,7 @@ function PhotoAlbum() {
             <StickyActions>
               <Button icon="eyeOff" disabled={busy || !anyVisible} onClick={() => bulk('hide', selected)}>숨기기</Button>
               <Button icon="eye" disabled={busy || !anyHidden} onClick={() => bulk('show', selected)}>다시 보이기</Button>
-              <Button variant="danger-quiet" icon="trash" disabled={busy || !selected.length} onClick={() => setConfirmDelete(selected)}>지우기</Button>
+              <Button variant="danger-quiet" icon="trash" disabled={busy || locked || !selected.length} onClick={() => setConfirmDelete(selected)}>지우기</Button>
             </StickyActions>
           )}
         </>

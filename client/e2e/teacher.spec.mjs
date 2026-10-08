@@ -244,29 +244,85 @@ test.describe('선생님 — 이벤트 관리', () => {
   });
 });
 
-test.describe('선생님 — 앨범', () => {
+test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
   test.beforeEach(async ({ page }) => {
     await loginAs(page, sessions.teacher);
   });
 
-  test('설정에 Google Drive 카드가 보이고, 설정 전에는 안내만 나온다', async ({ page }) => {
+  test('설정에 Google 계정 카드가 보이고, 연동 설정 전에는 안내만 나온다', async ({ page }) => {
     await page.goto('/settings');
 
-    await expect(page.getByRole('heading', { name: /Google Drive/ })).toBeVisible();
-    // 환경변수가 없으면 연결 버튼 대신 안내가 나온다 (이번 배포의 기본 상태)
+    await expect(page.getByRole('heading', { name: /Google 계정 \(사진 저장\)/ })).toBeVisible();
+    // e2e 서버에는 Google 키가 없다 → 연결 버튼 대신 안내 (키가 있으면 연결 버튼)
     const guide = page.getByText(/연동이 아직 설정되지 않았습니다/);
     const connect = page.getByRole('button', { name: /Google 계정 연결/ });
     await expect(guide.or(connect).first()).toBeVisible();
   });
 
-  // 이벤트 등록·수정 화면의 사진·영상 섹션은 걷어냈다. 앨범을 다루는 화면이 다시
-  // 생기면 그때 그 화면을 대상으로 테스트를 붙인다 — API 는 아래에서 계속 지킨다.
-  test('이벤트 수정 화면에는 사진·영상 섹션이 없다', async ({ page }) => {
-    await page.goto('/events');
-    await page.locator('tr', { hasText: 'e2e확정대회' }).first().getByRole('button', { name: '수정' }).click();
+  test('이벤트 관리 아래에 사진 메뉴가 있고, 앨범 카드에 공개 상태가 보인다', async ({ page }) => {
+    await page.goto('/');
+    const nav = page.locator('.desktop-nav');
+    const labels = await nav.locator('a').allTextContents();
+    expect(labels.indexOf('사진')).toBe(labels.indexOf('이벤트 관리') + 1);
 
+    await nav.getByRole('link', { name: '사진', exact: true }).click();
+    await expect(page).toHaveURL(/\/photos$/);
+    await expect(page.getByRole('heading', { name: '사진', exact: true })).toBeVisible();
+
+    const published = page.getByRole('button', { name: new RegExp(`e2e확정대회_`) }).first();
+    await expect(published.getByText('공개', { exact: true })).toBeVisible();
+    const privateCard = page.getByRole('button', { name: new RegExp(sessions.album.privateTitle) });
+    await expect(privateCard.getByText('비공개', { exact: true })).toBeVisible();
+  });
+
+  test('Google 이 준비되지 않으면 [사진 올리기] 가 잠기고 안내가 나온다', async ({ page }) => {
+    await page.goto('/photos');
+    await expect(page.getByText(/관리자에게 문의|Google 계정을 먼저 연결/).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: '사진 올리기' }).first()).toBeDisabled();
+  });
+
+  test('앨범에서 공개 범위를 고르고 공개했다가 비공개로 돌린다 — Google 이 없어도 공개 설정은 된다', async ({ page }) => {
+    await page.goto(`/photos/${sessions.album.privateEventId}`);
+
+    const panel = page.getByLabel('학부모 공개');
+    await expect(panel.locator('.ui-publish__state')).toHaveText('비공개');
+    await expect(panel.getByText(/이벤트 상세/)).toBeVisible();
+    // 사진 두 장이 사진 칸에 있다
+    await expect(page.locator('.ui-media-tile')).toHaveCount(2);
+
+    await panel.getByRole('button', { name: /모든 학부모/ }).click();
+    await expect(panel.getByRole('button', { name: /모든 학부모/ })).toHaveAttribute('aria-pressed', 'true');
+
+    await panel.getByRole('button', { name: '학부모에게 공개' }).click();
+    await expect(panel.locator('.ui-publish__state')).toHaveText('공개 중');
+    await expect(panel.getByText(/모든 학부모 \d+명이 볼 수 있어요/)).toBeVisible();
+
+    // 다른 테스트(학부모 쪽)가 기대하는 처음 상태로 되돌린다
+    await panel.getByRole('button', { name: '비공개로 전환' }).click();
+    await expect(panel.locator('.ui-publish__state')).toHaveText('비공개');
+    await panel.getByRole('button', { name: /참가 확정 학부모/ }).click();
+    await expect(panel.getByRole('button', { name: /참가 확정 학부모/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  // 요청 ③ — 사진은 사진 메뉴에서만. 이벤트 관리 · 이벤트 폼에는 사진 입구가 없다.
+  test('이벤트 관리와 이벤트 수정 화면에는 사진 입구가 없다', async ({ page }) => {
+    await page.goto('/events');
+    // 다가오는 일정이 있으면 체크박스("지난 일정 보기 (n)"), 없으면 빈 화면의 버튼("지난 일정 n건 보기")이다
+    await page.getByRole('checkbox', { name: /지난 일정 보기/ })
+      .or(page.getByRole('button', { name: /지난 일정 \d+건 보기/ })).first().click();
+    const row = page.locator('tr', { hasText: 'e2e확정대회' }).first();
+    await expect(row.getByRole('button', { name: /사진/ })).toHaveCount(0);
+
+    await row.getByRole('button', { name: '수정' }).click();
     await expect(page.getByRole('heading', { name: '이벤트 수정' })).toBeVisible();
     await expect(page.getByText(/사진 · 영상/)).toHaveCount(0);
+  });
+
+  test('사진 목록 API 는 학부모에게 막혀 있다', async ({ request }) => {
+    const asParent = await api(request, sessions.parent, 'GET', '/api/albums');
+    expect(asParent.status).toBe(403);
+    const asTeacher = await api(request, sessions.teacher, 'GET', '/api/albums');
+    expect(asTeacher.status).toBe(200);
   });
 
   test('앨범 API 는 남의 이벤트를 열어 주지 않는다', async ({ request }) => {

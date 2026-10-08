@@ -1,6 +1,6 @@
 import {
   publishSummary, zeroAudienceWarning, driveNotice, canUploadWith, albumProblem, filterChips,
-  targetState, uploadPublishNote, formatPublishedDate, formatEventDate, formatShortDate, toViewerItem
+  targetState, uploadPublishNote, formatPublishedDate, formatEventDate, formatShortDate, toViewerItem, publishLocked
 } from '../albumState';
 
 describe('publishSummary (docs/photo-menu FR-521)', () => {
@@ -47,6 +47,14 @@ describe('albumProblem (FR-527) — 쓰기만 막을 사유', () => {
   it('연결 끊김', () => expect(albumProblem({ ...ok, drive: { ...ok.drive, status: 'error' } }).reason).toBe('drive_error'));
   it('이전 계정 앨범', () => expect(albumProblem({ ...ok, foreignAccount: true }).reason).toBe('foreign_account'));
   it('폴더 사라짐', () => expect(albumProblem({ ...ok, albumStatus: 'missing' }).reason).toBe('album_missing'));
+});
+
+describe('publishLocked', () => {
+  it('폴더가 사라진 비공개 앨범만 잠근다 — 비공개로 돌리기는 언제나 된다', () => {
+    expect(publishLocked({ albumStatus: 'missing', published: false })).toBe(true);
+    expect(publishLocked({ albumStatus: 'missing', published: true })).toBe(false);
+    expect(publishLocked({ albumStatus: 'ready', published: false })).toBe(false);
+  });
 });
 
 describe('filterChips (FR-524)', () => {

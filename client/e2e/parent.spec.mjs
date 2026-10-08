@@ -282,6 +282,46 @@ test.describe('학부모 — 사진', () => {
     await expect(viewer.getByRole('button', { name: '삭제' })).toBeVisible();
   });
 
+  test('선생님이 공개하면 사진 탭과 이벤트 상세에 보이고, 비공개로 돌리면 사라진다 (docs/photo-menu)', async ({ page, request }) => {
+    const id = sessions.album.privateEventId;
+    const title = sessions.album.privateTitle;
+    const setAlbum = async (body) => {
+      const res = await api(request, sessions.teacher, 'PATCH', `/api/events/${id}/album`, body);
+      expect(res.status).toBe(200);
+    };
+
+    try {
+      // 비공개일 때: 사진 탭에도 없고, 주소로 들어가면 기다려 달라는 안내
+      await page.goto('/parent/photos');
+      await expect(page.getByText(/e2e확정대회/)).toBeVisible();
+      await expect(page.getByText(title)).toHaveCount(0);
+      await page.goto(`/parent/photos/${id}`);
+      await expect(page.getByText('선생님이 아직 공개하지 않은 앨범이에요')).toBeVisible();
+
+      // 모든 학부모에게 공개 — 이 학부모의 아이는 신청하지 않았지만 보인다
+      await setAlbum({ audience: 'all', published: true });
+
+      await page.goto('/parent/photos');
+      await expect(page.getByText(title)).toBeVisible();
+
+      await page.goto(`/parent/events/${id}`);
+      await expect(page.getByRole('heading', { name: '사진 · 영상' })).toBeVisible();
+      await expect(page.locator('.ui-media-tile')).toHaveCount(2);
+      await expect(page.getByRole('button', { name: /올리기/ })).toHaveCount(0);
+      await page.locator('.ui-media-tile').first().click();
+      await expect(page).toHaveURL(new RegExp(`/parent/photos/${id}\\?open=`));
+      await expect(page.getByRole('dialog', { name: '사진 보기' })).toBeVisible();
+
+      // 비공개로 돌리면 바로 사라진다
+      await setAlbum({ published: false });
+      await page.goto(`/parent/events/${id}`);
+      await expect(page.getByRole('heading', { name: title })).toBeVisible();
+      await expect(page.getByRole('heading', { name: '사진 · 영상' })).toHaveCount(0);
+    } finally {
+      await setAlbum({ published: false, audience: 'participants' });
+    }
+  });
+
   test('확정되지 않은 이벤트의 앨범은 열리지 않는다', async ({ page }) => {
     await page.goto(`/parent/photos/${sessions.album.lockedEventId}`);
 

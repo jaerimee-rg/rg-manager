@@ -70,8 +70,9 @@ export const zeroAudienceWarning = ({ audience = 'participants', viewerCounts = 
   audience === 'participants' && !viewerCounts.participants;
 
 /**
- * 앨범 화면에서 쓰기(올리기·고르기·공개 바꾸기)를 막을 사유 (FR-527).
- * 읽기는 언제나 된다. → null | { tone, reason }
+ * 앨범 화면에서 Drive 를 거치는 동작(올리기 · 지우기)을 막을 사유 (FR-527).
+ * 읽기는 언제나 된다. 공개 · 공개 범위 · 숨기기는 앱 안의 일이라 Google 이 끊겨도 된다 —
+ * 급히 비공개로 돌려야 할 때 막히면 안 된다. → null | { tone, reason }
  */
 export const albumProblem = (album) => {
   if (!album) return null;
@@ -87,7 +88,7 @@ export const albumProblem = (album) => {
 export const PROBLEM_MESSAGES = {
   not_configured: 'Google Drive 연동이 아직 설정되지 않았어요. 관리자에게 문의해 주세요.',
   not_connected: '사진은 선생님 Google Drive 에 저장돼요. 설정에서 Google 계정을 먼저 연결해 주세요.',
-  drive_error: 'Google 계정 연결이 끊어졌어요. 사진은 계속 보이지만 올리기 · 지우기 · 공개 설정 바꾸기는 멈춰요.',
+  drive_error: 'Google 계정 연결이 끊어졌어요. 사진은 계속 보이지만 올리기 · 지우기는 멈춰요. 공개 설정과 숨기기는 그대로 할 수 있어요.',
   foreign_account: '이전 Google 계정으로 만든 앨범이라 볼 수만 있어요.',
   album_missing: 'Google Drive 에서 이 앨범 폴더를 찾을 수 없어요. Drive 휴지통을 확인하거나 [새로고침] 해 주세요.'
 };
@@ -118,6 +119,9 @@ export const uploadPublishNote = (target) => {
   return { kind: 'option', text: '다 올리면 바로 학부모에게 공개' };
 };
 
+/** 공개 패널을 잠글지 — Drive 에서 폴더가 사라진 비공개 앨범은 서버가 공개를 거절한다(비공개로 돌리기는 언제나 된다) */
+export const publishLocked = (album) => Boolean(album && album.albumStatus === 'missing' && !album.published);
+
 /** 서버의 선생님용 미디어 → MediaViewer 가 읽는 모양 */
 export const toViewerItem = (item) => ({
   ...item,
@@ -136,6 +140,7 @@ export default {
   publishSummary,
   zeroAudienceWarning,
   albumProblem,
+  publishLocked,
   PROBLEM_MESSAGES,
   filterChips,
   targetState,
