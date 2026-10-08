@@ -437,6 +437,46 @@ test.describe('학부모 — 사진', () => {
     await page.getByRole('checkbox').first().uncheck();
     await expect(page.getByRole('button', { name: '사진 고르기' })).toBeDisabled();
   });
+
+  // 얼굴이 없는 64×64 PNG — 브라우저가 읽을 수는 있는 사진
+  const FACELESS_PNG = {
+    name: 'no-face.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAu0lEQVR42u3PBUEYAAAAQWLj7u6y4bLh+kCFj0UECvw1uAEZlCEZlhEZlTEZlwmZlCmZlhmZlTmZlwVZlCVZlhVZlTVZlw3ZlC3Zlh3ZlT3ZlwM5lCP5I3/lWE7kVM7kXC7kUq7kWm7kn/yXW7mTe3mQR3mSZ3mRV3mTd/kQ5FO+5HugQIECBQoUKFCgQIECBQoUKFCgQIECBQoUKFCgQIECBQoUKFCgQIECBQoUKFCgQIECBQoUKPBb4Acwdznwjg4iTgAAAABJRU5ErkJggg==',
+      'base64'
+    )
+  };
+
+  const pickFacePhoto = async (page) => {
+    await page.goto('/parent/settings');
+    await page.getByRole('button', { name: /얼굴 사진 등록/ }).first().click();
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser'),
+      page.getByRole('button', { name: '사진 고르기' }).click()
+    ]);
+    await chooser.setFiles(FACELESS_PNG);
+  };
+
+  test('얼굴 분석 모델을 못 받으면 "얼굴이 없다" 가 아니라 분석하지 못했다고 알린다', async ({ page }) => {
+    await page.route('**/models/**', (route) => route.abort());
+
+    await pickFacePhoto(page);
+
+    const status = page.getByRole('status');
+    await expect(status).toContainText('얼굴을 분석하지 못했어요', { timeout: 20_000 });
+    await expect(status).not.toContainText('얼굴이 보이지 않아요');
+  });
+
+  test('얼굴이 없는 사진은 실제 모델로 분석한 뒤 정면 사진을 달라고 한다', async ({ page }) => {
+    test.setTimeout(90_000);   // 첫 계산은 WebGL 셰이더를 데우느라 오래 걸린다
+
+    await pickFacePhoto(page);
+
+    const status = page.getByRole('status');
+    await expect(status).toContainText('얼굴이 보이지 않아요', { timeout: 45_000 });
+    await expect(status).not.toContainText('분석하지 못했어요');
+  });
 });
 
 test.describe('학부모 — 선생님이 보낸 이벤트 공유 링크', () => {

@@ -22,7 +22,8 @@ const NEW_FOLDER = 'new';
  * 흐름: (이벤트 고르기) → 파일 선택 → (형식·크기로 거르기) → 서버에서 세션 발급
  *      → 브라우저가 Drive 로 직접 전송(진행률) → 사진이면 얼굴 특징값 계산
  *      → 완료 보고 → (선생님: "다 올리면 바로 공개" 를 골랐으면 공개).
- *      얼굴 계산이 실패해도 업로드는 성공으로 끝난다.
+ *      얼굴 계산이 실패해도 업로드는 성공으로 끝난다 — faces 를 null 로 보내면 서버가
+ *      '분석 안 됨'(skipped)으로 남긴다. [] 는 "얼굴 없음" 이라 실패에 쓰면 안 된다.
  *
  * apiBase 예) '/api/events/3'  또는  '/api/parent/events/3'
  *
@@ -167,13 +168,10 @@ function UploadSheet({
 
         let faces = null;
         if (entry.kind === 'image') {
-          const preview = await makePreview(entry.file);
-          if (preview) {
-            faces = await detectFaces(preview);
-            if (faces.length) analyzed += 1;
-          } else {
-            skipped += 1;   // HEIC 처럼 브라우저가 못 읽는 형식
-          }
+          const preview = await makePreview(entry.file);   // HEIC 처럼 브라우저가 못 읽으면 null
+          if (preview) faces = await detectFaces(preview);  // 분석이 실패해도 null
+          if (!faces) skipped += 1;
+          else if (faces.length) analyzed += 1;
         }
 
         const completed = await fetchWithAuth(`${base}/media/${session.mediaId}/complete`, {
