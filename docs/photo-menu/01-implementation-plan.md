@@ -57,10 +57,16 @@ events (비교)          false  (없음)  ← 앱이 직접 만든 표의 정상
 지금은 비어 있지만, 선생님이 연결하는 순간 `google_drive_accounts.refreshToken` 이 들어간다. 그 토큰으로 그 선생님 Drive 의 앱 파일을 읽고 쓸 수 있다.
 → **S0 에서 회수한다.** 2026-10-04 에 보고했고 회수 승인을 기다리는 중이다.
 
-### 1.4 Google 설정 상태
+### 1.4 Google 설정 상태 (2026-10-08 사용자 확인으로 갱신)
 
-운영 Vercel 에 `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` 가 있는지는 **확인하지 못했다**(Vercel API 403).
-선생님 계정으로 `GET /api/drive/account` 를 불러 `configured` 를 보면 알 수 있다 → S0.
+선생님이 설정에서 연결을 눌렀더니 Google 이 `Error 403: access_denied`(**"has not completed the Google verification process … can only be accessed by developer-approved testers"**)를 냈다.
+여기서 두 가지를 알 수 있다.
+
+- 운영 Vercel 에 `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` 와 리디렉션 URI 는 **이미 들어가 있다.** 키가 없었다면 Google 로 넘어가지 않는다.
+- OAuth 동의 화면이 **테스트(Testing)** 상태다. 테스트 사용자로 등록한 계정만 연결할 수 있다.
+
+선생님이 1명이므로 **당장은 테스트 사용자 등록으로 진행한다**(7일마다 다시 연결). 절차와 나중에 앱을 게시하는 방법은 [02-google-setup.md](./02-google-setup.md) 에 정리했다.
+OAuth 클라이언트를 만든 Google 계정은 기록에 없다. 찾는 방법은 02 §0 에 있다.
 
 ---
 
@@ -364,7 +370,7 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumPublishedAt" TEXT;   -- ISO �
 
 | 단계 | 내용 | 완료 기준 |
 |---|---|---|
-| **S0 선행** | (a) **운영 앨범 표 5개 권한 회수**: `REVOKE ALL ON TABLE … FROM anon, authenticated, service_role` 를 표와 `_id_seq` 모두에 적용한다. **사용자 승인을 받고 MCP 로 실행한다.** (b) Google Cloud 준비(§12, 사용자). (c) 운영 `GET /api/drive/account` 의 `configured:true` 확인 | (a) `api_grants` 가 비었는지 다시 조회. (c) `true` |
+| **S0 선행** | (a) **운영 앨범 표 5개 권한 회수**: `REVOKE ALL ON TABLE … FROM anon, authenticated, service_role` 를 표와 `_id_seq` 모두에 적용한다. **사용자 승인을 받고 MCP 로 실행한다.** (b) 선생님 Google 계정을 **테스트 사용자로 등록**한다([02 A](./02-google-setup.md#a-테스트-사용자로-등록하기-지금-할-것), 사용자 작업) | (a) `api_grants` 가 비었는지 다시 조회. (b) 설정에서 연결되고 내 드라이브에 `RG Manager` 폴더가 생김 |
 | S1 규칙 | 스키마 3칸, `albumAccess` 공개·범위, `folderNameFromEvent` | §3.4 표 전체가 단위 테스트로 고정됨 |
 | S2 서버 | `GET /api/albums`, POST/PATCH/GET 변경, 이벤트 수정 동기화, 학부모 판정 | 컨트롤러 테스트 통과(Drive 는 목) |
 | S3 설정 카드 | `DriveAccountCard` 디자인 시스템 이전 | 기존 연결 흐름이 바뀌지 않음 |
@@ -441,7 +447,7 @@ prod 테스트 선생님 계정(12번)으로 한다.
 |---|---|---|
 | R-1 | Drive 폴더가 "링크가 있는 모든 사용자 보기" 상태라, 링크가 새면 비공개 앨범도 열린다 | id 는 추측할 수 없고 비공개 동안 학부모 응답에 실리지 않는다. 더 막으려면 썸네일 프록시를 붙이고 "공개 시에만 공유" 로 바꾼다(2차) |
 | R-2 | refresh token 이 평문이고, 지금은 공개 API 권한도 붙어 있다 | **S0 권한 회수는 필수다.** 평문 저장 자체는 2차에서 `GOOGLE_TOKEN_KEY` 로 AES-GCM 암호화 |
-| R-3 | OAuth 동의 화면을 **테스트 모드**로 두면 refresh token 이 **7일 뒤 만료**되어 매주 끊긴다 | §12 에서 **게시(프로덕션)** 를 필수로 둔다. `drive.file` 만 쓰므로 검수가 필요 없다 |
+| R-3 | 지금 동의 화면이 **테스트 상태**라 refresh token 이 **7일 뒤 만료**되어 매주 끊긴다(선생님 1명이라 일부러 이렇게 시작한다) | 끊기면 읽기는 계속되고 쓰기만 멈추며, 설정의 [다시 연결]로 복구된다(기존 `status='error'` 처리). 번거로우면 **앱 게시**로 바꾼다. `drive.file`·`openid`·`email` 만 쓰므로 검수가 필요 없다([02 B](./02-google-setup.md#b-앱-게시하기-나중에--7일-만료를-없앨-때)) |
 | R-4 | 학부모 업로드도 **선생님 Drive 15GB** 를 쓴다. 영상 하나가 최대 500MB 다 | 앨범 화면에 남은 용량을 보여 준다(기존 quota). 부족하면 `quota` 오류 문구(기존). 업로드 받기 토글로 끌 수 있다 |
 | R-5 | `drive.file` 범위라 선생님이 **Drive 에서 직접 넣은 사진은 앱에 안 보인다** | 앨범 화면 도움말에 적는다. 2차에서 Google Picker 로 "Drive 에서 가져오기"(선택한 파일만 권한을 받으므로 역시 검수가 필요 없다) |
 | R-6 | 한 사람이 관리자 행과 선생님 행을 함께 가진다. 관리자 행으로 연결하면 소용이 없다 | 앨범은 이벤트 주인(선생님 행)의 연결을 쓴다. 설정 카드는 선생님 화면에만 있다. 관리자 설정에는 넣지 않는다 |
@@ -452,13 +458,14 @@ prod 테스트 선생님 계정(12번)으로 한다.
 
 ## 12. Google 연동에 필요한 것 (사용자 준비물)
 
-photo-sharing 03 §12 와 같다. **7일 만료 함정**을 더했다.
+1~4 는 **이미 되어 있다**(§1.4). 남은 것은 3번의 게시 상태 하나다. 지금은 테스트 상태에 테스트 사용자를 등록해 쓰고,
+게시는 나중에 한다 → [02-google-setup.md](./02-google-setup.md). 아래는 처음부터 다시 만들 때를 위한 전체 목록이다.
 
 1. Google Cloud Console → 프로젝트 → **Google Drive API 사용 설정**
 2. **OAuth 클라이언트 ID**(유형: 웹 애플리케이션)
    - 승인된 리디렉션 URI: `https://rg-manager.vercel.app/api/drive/callback`, 로컬은 `http://localhost:5001/api/drive/callback`
    - 결과값 → `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`
-3. **OAuth 동의 화면**: 사용자 유형 **외부**, 범위는 `drive.file`, `openid`, `email`. 상태를 반드시 **프로덕션으로 게시**한다. 테스트 모드면 토큰이 7일마다 끊긴다(R-3)
+3. **OAuth 동의 화면**: 사용자 유형 **외부**, 범위는 `drive.file`, `openid`, `email`. **테스트 상태**면 테스트 사용자만 연결되고 토큰이 7일마다 끊긴다. **프로덕션으로 게시**하면 둘 다 풀린다(R-3)
 4. Vercel 운영 환경변수에 2번의 두 값을 넣고 재배포한다(`GOOGLE_OAUTH_REDIRECT_URI` 는 기본값이 `APP_URL` 기준이라 보통 필요 없다)
 5. 선생님 계정 → 설정 → **Google 계정 연결** → 본인 Google 계정으로 동의
 

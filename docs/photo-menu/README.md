@@ -18,8 +18,21 @@
 
 | 문서 | 내용 |
 |---|---|
+| [mockups/teacher-desktop.html](./mockups/teacher-desktop.html) · [teacher-mobile.html](./mockups/teacher-mobile.html) · [parent-mobile.html](./mockups/parent-mobile.html) | **HTML 목업.** 앱의 실제 CSS 로 그려서 **저장소 안에서 열어야 한다**(아래 "목업 보는 법") |
 | [01-implementation-plan.md](./01-implementation-plan.md) | 현재 상태(코드·운영 데이터·보안), 요구사항 FR-500~544, 설계 결정(Drive 와 Google 포토 비교, 폴더 이름, 공개 모델), 데이터 모델·API·화면, 파일 영향, 단계별 구현 순서, 테스트·배포, 리스크, Google 준비물 |
+| [02-google-setup.md](./02-google-setup.md) | **Google 연동 설정.** 연결할 때 나는 "Access blocked" 오류 해결: 테스트 사용자 등록(지금), 앱 게시(나중), 어느 계정으로 들어가는지 |
 | [../photo-sharing/](../photo-sharing/README.md) | **바탕 설계** (2026-09). Drive 연결·업로드 세션·얼굴 인덱싱·학부모 갤러리는 이 문서대로 이미 구현돼 있다. 이 계획은 그 위에 **선생님 화면과 공개 단계**를 얹는다 |
+
+## 목업 보는 법
+
+목업은 앱의 실제 스타일(`client/src/styles/*.css`)과 로고를 상대 경로로 불러온다. 그래서 **저장소 루트에서 정적 서버를 띄워** 연다.
+
+```bash
+python3 -m http.server 8765        # 저장소 루트에서
+open http://localhost:8765/docs/photo-menu/mockups/teacher-desktop.html
+```
+
+파일을 더블클릭해 `file://` 로 열어도 대부분 보이지만, 브라우저에 따라 iframe 높이 맞춤이 안 될 수 있다.
 
 ## 지금 있는 것과 이번에 하는 것
 
@@ -70,5 +83,6 @@ flowchart LR
    **RLS 가 꺼져 있고 `anon` · `authenticated` · `service_role` 권한이 붙어 있다** (2026-10-08 확인). `google_drive_accounts` 에는 선생님 Google
    **refresh token** 이 들어가고, `child_face_profiles` 에는 아이 얼굴 벡터가 들어간다. **선생님이 처음 연결하기 전에** 권한을 회수해야 한다
    → [01 §8 S0](./01-implementation-plan.md#8-구현-순서).
-2. **Google Cloud 설정 (사용자 작업):** OAuth 클라이언트, 리디렉션 URI, 동의 화면 **게시(프로덕션)**, Vercel 환경변수
-   → [01 §12](./01-implementation-plan.md#12-google-연동에-필요한-것-사용자-준비물). 운영에 이미 들어가 있는지는 확인하지 못했다(Vercel 환경변수 조회 권한 없음).
+2. **Google 계정 연동 (사용자 작업):** OAuth 키와 리디렉션 URI 는 운영에 이미 들어가 있다. 다만 동의 화면이 **테스트 상태**라서
+   연결하면 `Error 403: access_denied` 가 난다. 선생님이 1명이므로 **선생님 Google 계정을 테스트 사용자로 등록**해서 쓴다(7일마다 다시 연결).
+   → [02-google-setup.md](./02-google-setup.md). 어느 계정으로 Google Cloud 에 들어가는지, 나중에 앱을 게시하는 방법도 거기에 있다.
