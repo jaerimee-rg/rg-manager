@@ -20,7 +20,7 @@ const Event = (await import('../../models/Event.js')).default;
 const EventMedia = (await import('../../models/EventMedia.js')).default;
 const GoogleDriveAccount = (await import('../../models/GoogleDriveAccount.js')).default;
 const { isDriveConfigured } = await import('../../utils/googleDrive.js');
-const { listAlbums, createAlbumEvent } = await import('../albumListController.js');
+const { listAlbums, createPhotoFolder } = await import('../albumListController.js');
 
 const event = (overrides = {}) => ({
   id: 31, userId: 7, type: 'competition', title: '회장배 대회', date: '2026-10-12',
@@ -123,59 +123,69 @@ describe('GET /api/albums — 선생님 사진 목록 (docs/photo-menu 5.1)', ()
   });
 });
 
-describe('POST /api/albums — 새 폴더(이벤트) 만들기 (docs/photo-menu FR-517)', () => {
+describe('POST /api/albums — 사진 전용 폴더 만들기 (docs/photo-menu FR-517)', () => {
   beforeEach(() => {
     Event.listForPhotos.mockResolvedValue([]);
     Event.createForPhotos.mockImplementation(async ({ userId, title, date }) => event({
-      id: 50, userId, title, date, type: 'special', albumAudience: 'all'
+      id: 50, userId, title, date, type: 'folder', albumAudience: 'all'
     }));
   });
 
-  it('이름과 날짜로 내 스페셜 이벤트를 만들고, 업로드 시트가 쓸 target 한 줄을 201 로 준다', async () => {
+  it('이름과 날짜로 사진 폴더를 만들고, 업로드 시트가 쓸 target 한 줄을 201 로 준다', async () => {
     req.body = { title: '  가을 소풍  ', date: '2026-09-27' };
 
-    await createAlbumEvent(req, res);
+    await createPhotoFolder(req, res);
 
     expect(Event.createForPhotos).toHaveBeenCalledWith({ userId: 7, title: '가을 소풍', date: '2026-09-27' });
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({
       created: true,
       target: expect.objectContaining({
-        eventId: 50, title: '가을 소풍', date: '2026-09-27', type: 'special',
+        eventId: 50, title: '가을 소풍', date: '2026-09-27', type: 'folder',
         hasAlbum: false, published: false, count: 0, upcoming: false, folderName: '2026-09-27 가을 소풍'
       })
     });
   });
 
-  it('같은 이름·날짜의 내 이벤트가 이미 있으면 새로 만들지 않고 그것을 준다 (두 번 눌러도 하나)', async () => {
+  it('같은 이름·날짜의 내 사진 폴더가 이미 있으면 새로 만들지 않고 그것을 준다 (두 번 눌러도 하나)', async () => {
     Event.listForPhotos.mockResolvedValue([
-      event({ id: 31, title: '회장배 대회', date: '2026-10-12', driveFolderId: 'f-31', driveFolderName: '2026-10-12 회장배 대회', albumPublished: true })
+      event({ id: 51, type: 'folder', title: '가을 소풍', date: '2026-09-27', driveFolderId: 'f-51', driveFolderName: '2026-09-27 가을 소풍', albumPublished: true, albumAudience: 'all' })
     ]);
-    EventMedia.summariesForTeacher.mockResolvedValue({ 31: { images: 40, videos: 5 } });
-    req.body = { title: '회장배 대회', date: '2026-10-12' };
+    EventMedia.summariesForTeacher.mockResolvedValue({ 51: { images: 12, videos: 1 } });
+    req.body = { title: '가을 소풍', date: '2026-09-27' };
 
-    await createAlbumEvent(req, res);
+    await createPhotoFolder(req, res);
 
     expect(Event.createForPhotos).not.toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith({
       created: false,
-      target: expect.objectContaining({ eventId: 31, hasAlbum: true, published: true, count: 45 })
+      target: expect.objectContaining({ eventId: 51, type: 'folder', hasAlbum: true, published: true, count: 13 })
     });
   });
 
-  it('날짜가 같아도 이름이 다르면 새로 만든다', async () => {
-    Event.listForPhotos.mockResolvedValue([event({ title: '회장배 대회', date: '2026-10-12' })]);
-    req.body = { title: '회장배 대회 뒤풀이', date: '2026-10-12' };
+  it('이름·날짜가 같은 **이벤트**에는 붙이지 않는다 — 새 폴더는 이벤트와 따로다', async () => {
+    Event.listForPhotos.mockResolvedValue([event({ id: 31, title: '회장배 대회', date: '2026-10-12', type: 'competition' })]);
+    req.body = { title: '회장배 대회', date: '2026-10-12' };
 
-    await createAlbumEvent(req, res);
+    await createPhotoFolder(req, res);
+
+    expect(Event.createForPhotos).toHaveBeenCalledWith({ userId: 7, title: '회장배 대회', date: '2026-10-12' });
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('날짜가 같아도 이름이 다르면 새로 만든다', async () => {
+    Event.listForPhotos.mockResolvedValue([event({ type: 'folder', title: '가을 소풍', date: '2026-09-27' })]);
+    req.body = { title: '가을 소풍 2부', date: '2026-09-27' };
+
+    await createPhotoFolder(req, res);
 
     expect(Event.createForPhotos).toHaveBeenCalled();
   });
 
   it.each([
-    ['이름 없음', { date: '2026-09-27' }, '폴더(이벤트) 이름을 입력해 주세요.'],
-    ['공백 이름', { title: '   ', date: '2026-09-27' }, '폴더(이벤트) 이름을 입력해 주세요.'],
+    ['이름 없음', { date: '2026-09-27' }, '폴더 이름을 입력해 주세요.'],
+    ['공백 이름', { title: '   ', date: '2026-09-27' }, '폴더 이름을 입력해 주세요.'],
     ['101자 이름', { title: '가'.repeat(101), date: '2026-09-27' }, '이름은 100자 이내로 입력해 주세요.'],
     ['날짜 없음', { title: '가을 소풍' }, '날짜를 선택해 주세요.'],
     ['형식이 다른 날짜', { title: '가을 소풍', date: '2026/09/27' }, '날짜를 선택해 주세요.'],
@@ -186,7 +196,7 @@ describe('POST /api/albums — 새 폴더(이벤트) 만들기 (docs/photo-menu 
   ])('%s → 400', async (_label, body, message) => {
     req.body = body;
 
-    await createAlbumEvent(req, res);
+    await createPhotoFolder(req, res);
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ error: message });
@@ -196,7 +206,7 @@ describe('POST /api/albums — 새 폴더(이벤트) 만들기 (docs/photo-menu 
   it('body 가 없어도 400 (500 이 아니다)', async () => {
     req.body = undefined;
 
-    await createAlbumEvent(req, res);
+    await createPhotoFolder(req, res);
 
     expect(res.status).toHaveBeenCalledWith(400);
   });
@@ -205,7 +215,7 @@ describe('POST /api/albums — 새 폴더(이벤트) 만들기 (docs/photo-menu 
     Event.createForPhotos.mockRejectedValue(new Error('x'));
     req.body = { title: '가을 소풍', date: '2026-09-27' };
 
-    await createAlbumEvent(req, res);
+    await createPhotoFolder(req, res);
 
     expect(res.status).toHaveBeenCalledWith(500);
   });

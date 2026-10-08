@@ -344,6 +344,7 @@ function PhotoAlbum() {
           eventTitle={album.eventTitle}
           allowPublish
           published={album.published}
+          photoFolder={album.eventType === 'folder'}
           audienceHint="공개하면 학부모도 볼 수 있어요"
           onClose={() => setUploading(false)}
           onDone={() => reloadAll()}

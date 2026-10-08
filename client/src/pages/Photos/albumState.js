@@ -32,7 +32,16 @@ export const formatShortDate = (date) => {
   return `${Number(m)}.${Number(d)} (${day})`;
 };
 
-export const typeLabel = (type) => (type === 'competition' ? '대회' : type === 'special' ? '스페셜' : '');
+/**
+ * 사진 전용 폴더 — 이벤트 없이 사진 메뉴에서 만든 앨범 (FR-517). 서버가 events 행 type='folder' 로 둔다.
+ * 이벤트 상세가 없어서 공개하면 학부모 사진 탭에만 보이고, 공개 범위는 언제나 모든 학부모다.
+ */
+export const PHOTO_FOLDER_TYPE = 'folder';
+export const isPhotoFolder = (type) => type === PHOTO_FOLDER_TYPE;
+
+export const typeLabel = (type) => (
+  type === 'competition' ? '대회' : type === 'special' ? '스페셜' : isPhotoFolder(type) ? '사진 폴더' : ''
+);
 
 /**
  * Google 연결 상태 → 사진 메뉴 안내 (FR-512).
@@ -108,7 +117,7 @@ export const filterChips = (counts = {}) => {
 /**
  * 이벤트 고르기 한 줄의 오른쪽 표시 (FR-513).
  * 앨범이 없는 이벤트는 "사진 없음" — 폴더는 고르면 아래에 "Drive 에 새로 만들 폴더" 로 보여 준다.
- * ("새 폴더" 라고 쓰면 맨 위의 "새 폴더(이벤트) 만들기" 와 헷갈린다, FR-517)
+ * ("새 폴더" 라고 쓰면 맨 위의 "새 폴더 만들기" 와 헷갈린다, FR-517)
  */
 export const targetState = (target) => {
   if (!target?.hasAlbum) return { text: '사진 없음', badge: null };
@@ -117,7 +126,7 @@ export const targetState = (target) => {
 
 /**
  * 서버 folderNameFromEvent 와 같은 규칙 — "2026-10-12 회장배 대회".
- * 새 폴더(이벤트)를 만들 때 Drive 에 생길 이름을 미리 보여 준다 (FR-517).
+ * 새 폴더를 만들 때 Drive 에 생길 이름을 미리 보여 준다 (FR-517).
  */
 export const FOLDER_NAME_MAX = 100;
 export const folderNameFrom = ({ date, title } = {}) => {
@@ -131,7 +140,7 @@ export const folderNameFrom = ({ date, title } = {}) => {
   return name || '앨범';
 };
 
-/** 새 폴더(이벤트) 입력 확인 — 서버 POST /api/albums 와 같은 규칙. → null | 안내 문구 */
+/** 새 폴더 입력 확인 — 서버 POST /api/albums 와 같은 규칙. → null | 안내 문구 */
 export const NEW_FOLDER_TITLE_MAX = 100;
 export const newFolderProblem = ({ title, date } = {}) => {
   const name = String(title || '').trim();
@@ -141,10 +150,18 @@ export const newFolderProblem = ({ title, date } = {}) => {
   return null;
 };
 
-/** 고른 이벤트의 앨범으로 올렸을 때 학부모에게 바로 보이는지 (FR-515) */
+/** 공개하면 학부모에게 보이는 곳 — 사진 전용 폴더는 이벤트 상세가 없다 (FR-515, 517) */
+export const publishPlaces = (type) => (isPhotoFolder(type) ? '사진 탭' : '사진 탭 · 이 이벤트 상세');
+
+/** 고른 이벤트(폴더)의 앨범으로 올렸을 때 학부모에게 바로 보이는지 (FR-515) */
 export const uploadPublishNote = (target) => {
   if (target?.hasAlbum && target.published) {
-    return { kind: 'already', text: '공개 중인 앨범이라 올리면 바로 학부모에게 보여요 — 사진 탭과 이 이벤트 상세.' };
+    return {
+      kind: 'already',
+      text: isPhotoFolder(target.type)
+        ? '공개 중인 폴더라 올리면 바로 학부모 사진 탭에 보여요.'
+        : '공개 중인 앨범이라 올리면 바로 학부모에게 보여요 — 사진 탭과 이 이벤트 상세.'
+    };
   }
   return { kind: 'option', text: '다 올리면 바로 학부모에게 공개' };
 };
@@ -174,6 +191,9 @@ export default {
   PROBLEM_MESSAGES,
   filterChips,
   targetState,
+  PHOTO_FOLDER_TYPE,
+  isPhotoFolder,
+  publishPlaces,
   folderNameFrom,
   newFolderProblem,
   uploadPublishNote,

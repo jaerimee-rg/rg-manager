@@ -3,6 +3,7 @@ import Event from '../models/Event.js';
 import EventRegistration from '../models/EventRegistration.js';
 import Competition from '../models/Competition.js';
 import albumService from '../services/albumService.js';
+import { isPhotoFolder } from '../utils/albumAccess.js';
 import {
   isKnownType,
   normalizeOptions,
@@ -157,6 +158,11 @@ export const updateEvent = async (req, res) => {
     const { id: userId, role } = req.user;
     const existing = await Event.getById(req.params.id, userId, role);
     if (!existing) return notFound(res);
+
+    // 사진 전용 폴더는 이벤트가 아니다 — 이벤트 폼(장소 필수 등)으로 고치지 않는다 (photo-menu FR-517)
+    if (isPhotoFolder(existing)) {
+      return res.status(400).json({ error: '사진 폴더는 사진 메뉴에서 관리해요.', reason: 'photo_folder' });
+    }
 
     // 종류는 바꿀 수 없다 — 대회형만 competitions 행을 갖기 때문에
     // 종류를 바꾸면 참가 학생·참가비 데이터가 갈 곳을 잃는다.

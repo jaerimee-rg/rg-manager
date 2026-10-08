@@ -95,6 +95,19 @@ const lockedEventId = await mkEvent(`e2e미확정대회_${stamp}`, null, true);
 const privateTitle = `e2e비공개앨범_${stamp}`;
 const privateEventId = await mkEvent(privateTitle, null, true, { type: 'special', published: false });
 
+// 이벤트 없이 만든 사진 전용 폴더(type='folder', photo-menu FR-517) — 비공개로 두고, 테스트가 공개했다가 되돌린다.
+// 이벤트가 아니라서 장소·신청이 없고, 공개 범위는 모든 학부모다.
+const folderTitle = `e2e사진폴더_${stamp}`;
+const folderRow = await pool.query(
+  `INSERT INTO events ("userId", type, title, date, options, "isPublished", "registrationOpen",
+                       "driveFolderId", "driveFolderName", "albumStatus", "albumUploadOpen", "albumCreatedAt",
+                       "albumPublished", "albumAudience", "createdAt", "updatedAt")
+   VALUES ($1,'folder',$2,'2026-09-20','[]',TRUE,FALSE,$3,$4,'ready',TRUE,$5,FALSE,'all',$5,$5)
+   RETURNING id`,
+  [teacher.id, folderTitle, `e2e-photo-folder-${stamp}`, `2026-09-20 ${folderTitle}`, now]
+);
+const folderEventId = folderRow.rows[0].id;
+
 // 첫째 아이를 이 대회의 참가 학생으로 넣어 "확정" 상태를 만든다.
 await pool.query(
   `INSERT INTO competition_students ("competitionId","studentId","createdAt") VALUES ($1,$2,$3)`,
@@ -125,6 +138,8 @@ mediaIds.push(await mkMedia({ i: 4, kind: 'video', uploaderRole: 'teacher', uplo
 // 비공개 앨범에도 두 장 — 공개하면 학부모 이벤트 상세 사진 칸에 나타나야 한다
 await mkMedia({ i: 5, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: privateEventId });
 await mkMedia({ i: 6, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: privateEventId });
+// 사진 전용 폴더에도 한 장
+await mkMedia({ i: 7, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: folderEventId });
 
 // 첫째 아이 태그를 두 장에 붙인다 → "우리 아이만" 토글로 걸러지는지 확인한다.
 for (const mediaId of mediaIds.slice(0, 2)) {
@@ -230,7 +245,7 @@ const tinv = await pool.query(
 );
 
 const sessions = {
-  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, mediaIds, taggedCount: 2, totalCount: 4 },
+  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, mediaIds, taggedCount: 2, totalCount: 4 },
   teacher: { token: sign(teacher), user: { id: teacher.id, username: teacher.username, role: 'user' } },
   teacher2Token: sign(teacher2),
   parent: { token: sign(parent), user: { id: parent.id, username: parent.username, role: 'parent' } },

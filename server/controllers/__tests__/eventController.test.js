@@ -251,6 +251,18 @@ describe('eventController', () => {
       expect(res.status).toHaveBeenCalledWith(404);
     });
 
+    it('사진 전용 폴더는 이벤트 폼으로 고치지 않는다 (photo-menu FR-517)', async () => {
+      Event.getById.mockResolvedValue({ id: 50, type: 'folder', userId: 7, options: [] });
+      req.params.id = '50';
+      req.body = { title: '가을 소풍', date: '2026-09-27', location: 'y' };
+
+      await updateEvent(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json.mock.calls[0][0].reason).toBe('photo_folder');
+      expect(Event.update).not.toHaveBeenCalled();
+    });
+
     it('종류 변경은 거부한다', async () => {
       Event.getById.mockResolvedValue(existing);
       req.params.id = '5';

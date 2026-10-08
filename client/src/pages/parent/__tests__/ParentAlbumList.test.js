@@ -60,6 +60,14 @@ describe('ParentAlbumList — 앨범 카드', () => {
     expect(within(card).getByText('우리 아이 사진 없음')).toBeInTheDocument();
   });
 
+  it('이벤트 없이 만든 사진 폴더는 "사진" 배지로 보인다 — 스페셜로 보이지 않는다 (photo-menu FR-517)', async () => {
+    await renderList([album({ type: 'folder', title: '가을 소풍', location: null })]);
+
+    const card = screen.getByRole('button', { name: /가을 소풍/ });
+    expect(within(card).getByText('📁 사진')).toBeInTheDocument();
+    expect(within(card).queryByText('⭐ 스페셜')).not.toBeInTheDocument();
+  });
+
   it('미리보기가 없어도 줄 자리는 남고, 카드를 누르면 그 앨범으로 간다', async () => {
     await renderList([album({ previews: [] })]);
 
