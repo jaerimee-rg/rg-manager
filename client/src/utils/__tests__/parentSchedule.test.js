@@ -1,5 +1,6 @@
 import {
-  filterRemainingThisYear, groupByMonth, dDay, formatCardDate, dayLabel, childBadge, reasonText, daysBetween
+  filterRemainingThisYear, filterPast, groupByMonth, dDay, formatCardDate, dayLabel, childBadge, reasonText, daysBetween,
+  scheduleBackPath, SCHEDULE_PATH, PAST_SCHEDULE_PATH
 } from '../parentSchedule';
 
 const TODAY = '2026-08-23';
@@ -42,6 +43,58 @@ describe('filterRemainingThisYear', () => {
   });
 });
 
+describe('filterPast (지난 일정 보기)', () => {
+  it('끝난 이벤트만 최근 것부터 — 올해가 아니어도 남긴다', () => {
+    const out = filterPast([
+      { id: 1, date: '2025-11-02' },
+      { id: 2, date: '2026-08-10' },
+      { id: 3, date: '2026-08-29' },
+      { id: 4, date: '2026-07-01' }
+    ], TODAY).map((e) => e.id);
+    expect(out).toEqual([2, 4, 1]);
+  });
+
+  it('오늘 일정과 아직 진행 중인 기간 이벤트는 지난 일정이 아니다', () => {
+    const out = filterPast([
+      { id: 1, date: TODAY },
+      { id: 2, date: '2026-08-20', endDate: '2026-08-25' },
+      { id: 3, date: '2026-08-18', endDate: '2026-08-22' }
+    ], TODAY).map((e) => e.id);
+    expect(out).toEqual([3]);
+  });
+
+  it('남은 일정과 겹치지도 빠지지도 않는다 (올해 안의 이벤트 기준)', () => {
+    const thisYear = events.filter((e) => e.date.startsWith('2026'));
+    const remaining = filterRemainingThisYear(thisYear, TODAY).map((e) => e.id);
+    const past = filterPast(thisYear, TODAY).map((e) => e.id);
+    expect([...past, ...remaining].sort()).toEqual(thisYear.map((e) => e.id).sort());
+  });
+
+  it('같은 날은 늦은 시간이 먼저다', () => {
+    const out = filterPast([
+      { id: 1, date: '2026-08-01', startTime: '09:00' },
+      { id: 2, date: '2026-08-01', startTime: '14:00' }
+    ], TODAY);
+    expect(out.map((e) => e.id)).toEqual([2, 1]);
+  });
+
+  it('빈 입력에도 터지지 않는다', () => {
+    expect(filterPast(null, TODAY)).toEqual([]);
+  });
+});
+
+describe('scheduleBackPath (상세의 뒤로 가기)', () => {
+  it('지난 일정에서 들어왔으면 지난 일정으로 돌아간다', () => {
+    expect(scheduleBackPath({ back: PAST_SCHEDULE_PATH })).toBe('/parent/schedule?view=past');
+  });
+
+  it('공유 링크처럼 state 가 없거나 모르는 값이면 일정 첫 화면', () => {
+    expect(scheduleBackPath(null)).toBe(SCHEDULE_PATH);
+    expect(scheduleBackPath(undefined)).toBe(SCHEDULE_PATH);
+    expect(scheduleBackPath({ back: 'https://evil.example' })).toBe(SCHEDULE_PATH);
+  });
+});
+
 describe('groupByMonth', () => {
   it('월별로 묶고 라벨을 붙인다', () => {
     const groups = groupByMonth(filterRemainingThisYear(events, TODAY));
@@ -66,6 +119,13 @@ describe('dDay', () => {
 
   it('기간 이벤트가 이미 시작했으면 진행 중', () => {
     expect(dDay({ date: '2026-08-20', endDate: '2026-08-27' }, TODAY).text).toBe('진행 중');
+  });
+
+  it('끝난 일정은 종료 — 진행 중이라고 하지 않는다', () => {
+    expect(dDay({ date: '2026-08-10' }, TODAY)).toEqual({ text: '종료', urgent: false });
+    expect(dDay({ date: '2026-08-18', endDate: '2026-08-22' }, TODAY).text).toBe('종료');
+    // 종료일이 오늘이면 아직 진행 중
+    expect(dDay({ date: '2026-08-20', endDate: TODAY }, TODAY).text).toBe('진행 중');
   });
 });
 
@@ -103,6 +163,13 @@ describe('childBadge', () => {
 
   it('자녀 정보가 없으면 배지도 없다', () => {
     expect(childBadge(null)).toBeNull();
+  });
+
+  it('지난 일정에는 신청했던 것만 배지로 남긴다', () => {
+    expect(childBadge({ status: 'confirmed' }, { past: true }).label).toContain('확정');
+    expect(childBadge({ status: 'registered' }, { past: true }).label).toBe('신청 완료');
+    expect(childBadge({ status: null, canRegister: false, reason: 'started' }, { past: true })).toBeNull();
+    expect(childBadge({ status: null, canRegister: false, reason: 'child_pending' }, { past: true })).toBeNull();
   });
 });
 

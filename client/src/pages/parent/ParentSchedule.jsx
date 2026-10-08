@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import ParentLayout from '../../components/parent/ParentLayout';
 import { Spinner } from '../../components/ui';
 import { typeOf } from '../../utils/eventFormat';
 import {
-  filterRemainingThisYear, groupByMonth, dDay, formatCardDate, dayLabel, childBadge
+  filterRemainingThisYear, filterPast, groupByMonth, dDay, formatCardDate, dayLabel, childBadge,
+  SCHEDULE_PATH, PAST_SCHEDULE_PATH
 } from '../../utils/parentSchedule';
 
 const TONE_CLASS = {
@@ -27,9 +28,15 @@ const FILTERS = [
  * 한 번의 조회로 이벤트와 자녀별 신청 상태를 함께 받는다.
  * 카드를 누르면 전체 화면 상세(`/parent/events/:eventId`, ParentEventDetail)로 간다 —
  * 선생님이 공유한 링크가 여는 화면과 같은 곳이다.
+ *
+ * 제목 줄의 "지난 일정 보기" 링크는 끝난 일정을 최근 것부터 보여주는 보기(`?view=past`)로 바꾼다.
+ * 보기를 주소에 담아 두어서 상세에 갔다 와도, 브라우저 뒤로 가기를 눌러도 보던 목록이 그대로다.
  */
 function ParentSchedule() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const view = searchParams.get('view') === 'past' ? 'past' : 'upcoming';
+  const past = view === 'past';
 
   const [data, setData] = useState(null);
   const [currentChild, setCurrentChild] = useState(null);
@@ -38,30 +45,49 @@ function ParentSchedule() {
   const [teacherFilter, setTeacherFilter] = useState('all');
   const [loading, setLoading] = useState(true);
 
-  const load = async (teacherId = 'all') => {
+  // isStale: 보기·선생님을 연달아 바꿨을 때 늦게 도착한 이전 응답이 화면을 덮지 않게 한다
+  const load = async (teacherId, which, isStale) => {
     try {
       // 연결된 선생님이 여럿이면 서버가 전부 모아 주고, 칩을 고르면 그 선생님 것만 받는다
-      const query = teacherId && teacherId !== 'all' ? `?teacherId=${teacherId}` : '';
+      const params = new URLSearchParams();
+      if (teacherId && teacherId !== 'all') params.set('teacherId', teacherId);
+      if (which === 'past') params.set('view', 'past');
+      const query = params.toString() ? `?${params}` : '';
       const response = await fetchWithAuth(`/api/parent/events${query}`);
-      if (!response.ok) return;
+      if (!response.ok || isStale()) return;
 
       const payload = await response.json();
-      setData(payload);
+      if (isStale()) return;
+      setData({ ...payload, view: which });
       setCurrentChild((prev) => prev ?? payload.children[0]?.id ?? null);
     } catch (error) {
       console.error('일정 조회 실패:', error);
     } finally {
-      setLoading(false);
+      if (!isStale()) {
+        // 실패했는데 다른 보기의 데이터가 남아 있으면 비운다 — 끝나지 않는 로딩보다 빈 목록이 낫다
+        setData((prev) => (prev && prev.view !== which ? null : prev));
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    load(teacherFilter);
-  }, [teacherFilter]);
+    let stale = false;
+    load(teacherFilter, view, () => stale);
+    return () => { stale = true; };
+  }, [teacherFilter, view]);
 
-  if (loading) {
+  // 링크처럼 생긴 글자 버튼 — 채운 버튼이면 신청 같은 주요 동작처럼 보인다
+  const viewToggle = (
+    <button type="button" className="ui-link" onClick={() => navigate(past ? SCHEDULE_PATH : PAST_SCHEDULE_PATH)}>
+      {past ? '남은 일정 보기' : '지난 일정 보기'}
+    </button>
+  );
+
+  // 보기를 막 바꾼 참이면 남아 있는 건 이전 보기의 목록이다 — 새 목록이 올 때까지 기다린다
+  if (loading || (data && data.view !== view)) {
     return (
-      <ParentLayout title="일정">
+      <ParentLayout title="일정" action={viewToggle}>
         <Spinner />
       </ParentLayout>
     );
@@ -72,13 +98,17 @@ function ParentSchedule() {
   const teachers = data?.teachers || [];
   // 선생님이 한 명이면 칩도 배지도 군더더기라 숨긴다
   const manyTeachers = teachers.length > 1;
-  const visible = filterRemainingThisYear(data?.events || [], today)
+  const visible = (past ? filterPast : filterRemainingThisYear)(data?.events || [], today)
     .filter((e) => filter === 'all' || e.type === filter);
   const groups = groupByMonth(visible);
   const year = today.slice(0, 4);
 
+  // 지난 일정에서 연 상세는 뒤로 가기가 지난 일정으로 돌아오게 한다 (ParentEventDetail)
+  const openEvent = (id) =>
+    past ? navigate(`/parent/events/${id}`, { state: { back: PAST_SCHEDULE_PATH } }) : navigate(`/parent/events/${id}`);
+
   return (
-    <ParentLayout title="일정" subtitle={`${year}년 남은 일정`}>
+    <ParentLayout title="일정" subtitle={past ? '지난 일정' : `${year}년 남은 일정`} action={viewToggle}>
       {manyTeachers && (
         <div className="teacher-filter" role="group" aria-label="선생님 필터">
           <button
@@ -165,10 +195,10 @@ function ParentSchedule() {
         <div style={{ textAlign: 'center', padding: '50px 20px' }}>
           <div style={{ fontSize: '2.5rem' }}>🗓️</div>
           <div style={{ fontSize: '1rem', fontWeight: 700, marginTop: '8px' }}>
-            {filter === 'all' ? `${year}년 남은 일정이 없어요` : '해당하는 일정이 없어요'}
+            {filter !== 'all' ? '해당하는 일정이 없어요' : past ? '지난 일정이 없어요' : `${year}년 남은 일정이 없어요`}
           </div>
           <div style={{ fontSize: '0.8125rem', color: 'var(--color-gray-500)', lineHeight: 1.6, marginTop: '6px' }}>
-            선생님이 새 일정을 올리면 여기에 보여요.
+            {past ? '끝난 일정이 여기에 모여요.' : '선생님이 새 일정을 올리면 여기에 보여요.'}
           </div>
         </div>
       ) : (
@@ -186,13 +216,13 @@ function ParentSchedule() {
               const { day, dow, weekend } = dayLabel(event.date);
               const dd = dDay(event, today);
               const childState = event.children.find((c) => c.childId === currentChild);
-              const badge = event.type === 'closure' ? null : childBadge(childState);
+              const badge = event.type === 'closure' ? null : childBadge(childState, { past });
               const dowColor = weekend === 'sun' ? 'var(--color-danger)' : weekend === 'sat' ? 'var(--color-primary)' : 'inherit';
 
               return (
                 <button
                   key={event.id}
-                  onClick={() => navigate(`/parent/events/${event.id}`)}
+                  onClick={() => openEvent(event.id)}
                   style={{
                     width: '100%', textAlign: 'left', background: 'var(--surface)', border: 'var(--stroke)',
                     borderRadius: 'var(--shape-panel)', padding: '14px', marginBottom: '10px',

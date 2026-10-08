@@ -27,7 +27,7 @@ jest.unstable_mockModule('../../models/Student.js', () => ({
 }));
 
 jest.unstable_mockModule('../../models/Event.js', () => ({
-  default: { listUpcomingForParent: jest.fn(), getPublishedForParent: jest.fn() }
+  default: { listUpcomingForParent: jest.fn(), listPastForParent: jest.fn(), getPublishedForParent: jest.fn() }
 }));
 
 jest.unstable_mockModule('../../models/ChildFaceProfile.js', () => ({
@@ -350,6 +350,64 @@ describe('parentController', () => {
       const [withCount, without] = res.json.mock.calls[0][0].events;
       expect(withCount.registrationCount).toBe(3);
       expect(without.registrationCount).toBe(0);
+    });
+
+    describe('?view=past (지난 일정 보기)', () => {
+      const pastEvent = { ...openEvent, id: 9, date: '2025-11-02', registrationCount: 4 };
+
+      it('끝난 일정을 오늘 기준으로 따로 조회하고, 남은 일정은 묻지 않는다', async () => {
+        Event.listPastForParent.mockResolvedValue([]);
+        req.query = { view: 'past' };
+
+        await getEvents(req, res);
+
+        expect(Event.listUpcomingForParent).not.toHaveBeenCalled();
+        const [teacherIds, today] = Event.listPastForParent.mock.calls[0];
+        expect(teacherIds).toEqual([7]);
+        expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(res.json.mock.calls[0][0].today).toBe(today);
+      });
+
+      it('카드 모양은 남은 일정과 같다 — 신청 인원과 내 아이의 신청 상태가 실린다', async () => {
+        Event.listPastForParent.mockResolvedValue([pastEvent]);
+        EventRegistration.listForStudents.mockResolvedValue([
+          { eventId: 9, studentId: 100, status: 'confirmed', optionIds: [] }
+        ]);
+        req.query = { view: 'past' };
+
+        await getEvents(req, res);
+
+        const event = res.json.mock.calls[0][0].events[0];
+        expect(event.id).toBe(9);
+        expect(event.registrationCount).toBe(4);
+        const mine = event.children.find((c) => c.childId === 1);
+        expect(mine.status).toBe('confirmed');
+        // 끝난 일정에는 신청할 수 없다
+        expect(mine.canRegister).toBe(false);
+      });
+
+      it('선생님 필터는 지난 일정에도 그대로 걸리고, 연결 안 된 선생님은 무시한다', async () => {
+        ParentTeacher.listTeachers.mockResolvedValue([teacherA, teacherB]);
+        Event.listPastForParent.mockResolvedValue([]);
+
+        req.query = { view: 'past', teacherId: '8' };
+        await getEvents(req, res);
+        expect(Event.listPastForParent.mock.calls[0][0]).toEqual([8]);
+
+        req.query = { view: 'past', teacherId: '99' };
+        await getEvents(req, res);
+        expect(Event.listPastForParent.mock.calls[1][0]).toEqual([7, 8]);
+      });
+
+      it('모르는 view 값이면 지금까지처럼 남은 일정을 준다', async () => {
+        Event.listUpcomingForParent.mockResolvedValue([]);
+        req.query = { view: 'everything' };
+
+        await getEvents(req, res);
+
+        expect(Event.listUpcomingForParent).toHaveBeenCalled();
+        expect(Event.listPastForParent).not.toHaveBeenCalled();
+      });
     });
   });
 

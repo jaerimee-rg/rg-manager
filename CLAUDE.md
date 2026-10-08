@@ -320,8 +320,8 @@ accounts one person has**, and **which teacher(s) a parent belongs to**.
   is kept as the **대표 선생님** for backward compatibility and is not read by new code.
   `parent_children.teacherId` was added because with several teachers a join through
   `parent_accounts` can no longer tell which teacher a child belongs to. **All parent scoping goes
-  through `services/parentScope.js`** — `Event.listUpcomingForParent` / `getPublishedForParent` /
-  `listWithAlbumsForParent` take an **array** of teacher ids. A parent sees only linked teachers'
+  through `services/parentScope.js`** — `Event.listUpcomingForParent` / `listPastForParent` /
+  `getPublishedForParent` / `listWithAlbumsForParent` take an **array** of teacher ids. A parent sees only linked teachers'
   events; an unlinked teacher's event id returns **404**, not 403.
 - **A child can only register for its own teacher's event** (`childBelongsToEvent`). Registration
   notifications go to **`event.userId`** (the event's owner), not the parent's teacher — with
@@ -487,6 +487,12 @@ the rest of the app is unaffected.
   같은 응답에 `today` (KST) 가 실려 D-day 를 계산한다.
 - **일정 카드의 "신청 N명"** 은 `GET /api/parent/events` 의 `registrationCount` — `Event.listUpcomingForParent`
   가 선생님 목록(`getAll`)과 같은 서브쿼리로 세며 **취소는 뺀다**. 휴관일 카드에는 붙지 않는다.
+- **지난 일정 보기** — 일정 제목 줄 오른쪽의 링크 모양 글자 버튼(`.ui-link`, `ParentLayout` 의 `action` prop)이
+  `/parent/schedule?view=past` 로 바꾼다(보기가 주소에 있어 새로고침·브라우저 뒤로 가기에도 남는다).
+  `GET /api/parent/events?view=past` → `Event.listPastForParent`: 끝난 공개 이벤트를 **연도 제한 없이 최근 것부터** —
+  종료일 조건이 남은 일정(`COALESCE(endDate, date) >= today`)의 반대라 진행 중인 기간 이벤트는 남은 쪽에만 있다.
+  카드는 D-day 대신 "종료"(`dDay`), 배지는 신청했던 것만(`childBadge(…, { past: true })`). 지난 카드에서 연 상세는
+  라우터 state `back` 으로 지난 일정에 돌아온다(`utils/parentSchedule.js:scheduleBackPath` — 아는 두 주소만 받는다).
 - **로그인 전 딥링크는 `utils/returnTo.js` 가 잇는다.** 카카오 인가는 다른 도메인을 거치므로 라우터
   state 는 살아남지 못한다 — 로그인 안 된 `*` 라우트(`RememberReturnTo`)가 주소를 **localStorage 에
   1시간** 남기고 `/login` 으로 보내며, `KakaoCallback` 이 로그인 뒤 `returnPathFor(role, path)` 로

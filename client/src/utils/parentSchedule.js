@@ -4,6 +4,17 @@ const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 
 const toDate = (value) => new Date(`${value}T00:00:00`);
 
+/** 일정 화면 주소 — 지난 일정 보기는 `?view=past` 라서 상세에서 돌아와도, 새로고침해도 그대로다 */
+export const SCHEDULE_PATH = '/parent/schedule';
+export const PAST_SCHEDULE_PATH = `${SCHEDULE_PATH}?view=past`;
+
+/**
+ * 상세 화면의 뒤로 가기 주소. 지난 일정에서 들어왔으면 지난 일정으로 돌아간다.
+ * 라우터 state 는 우리가 넣은 값이지만, 아는 두 주소 말고는 받지 않는다.
+ */
+export const scheduleBackPath = (state) =>
+  state?.back === PAST_SCHEDULE_PATH ? PAST_SCHEDULE_PATH : SCHEDULE_PATH;
+
 /** 두 날짜(YYYY-MM-DD) 사이의 일수 */
 export const daysBetween = (from, to) =>
   Math.round((toDate(to) - toDate(from)) / 86400000);
@@ -18,6 +29,15 @@ export const filterRemainingThisYear = (events, today) => {
     .filter((e) => (e.endDate || e.date) >= today && e.date <= `${year}-12-31`)
     .sort((a, b) => (a.date === b.date ? (a.startTime || '').localeCompare(b.startTime || '') : a.date.localeCompare(b.date)));
 };
+
+/**
+ * 끝난 이벤트(종료일이 오늘 전)만 최근 것부터. 종료일 조건이 filterRemainingThisYear 의 반대라
+ * 진행 중인 기간 이벤트는 여기에 없다. 지난 일정은 연도 제한 없이 모두 보여준다.
+ */
+export const filterPast = (events, today) =>
+  (events || [])
+    .filter((e) => (e.endDate || e.date) < today)
+    .sort((a, b) => (a.date === b.date ? (b.startTime || '').localeCompare(a.startTime || '') : b.date.localeCompare(a.date)));
 
 /** 월 구분 헤더로 묶는다 — [{ key, label, events }] */
 export const groupByMonth = (events) => {
@@ -36,8 +56,11 @@ export const groupByMonth = (events) => {
   return groups;
 };
 
-/** 'D-3' · '오늘' · '진행 중' */
+/** 'D-3' · '오늘' · '진행 중' · '종료' */
 export const dDay = (event, today) => {
+  // 끝난 일정 (지난 일정 보기, 지난 이벤트의 상세)
+  if (daysBetween(today, event.endDate || event.date) < 0) return { text: '종료', urgent: false };
+
   const start = daysBetween(today, event.date);
 
   if (event.endDate && start <= 0 && daysBetween(today, event.endDate) >= 0 && start !== 0) {
@@ -72,11 +95,15 @@ export const reasonText = (reason, childName = '') => ({
   hidden: '지금은 신청할 수 없어요.'
 }[reason] || '');
 
-/** 카드에 붙일 상태 배지 (해당 자녀 기준) */
-export const childBadge = (childState) => {
+/**
+ * 카드에 붙일 상태 배지 (해당 자녀 기준).
+ * 지난 일정(`past`)에는 신청했던 것만 남긴다 — 끝난 일정에 "접수 마감" 은 군더더기다.
+ */
+export const childBadge = (childState, { past = false } = {}) => {
   if (!childState) return null;
   if (childState.status === 'confirmed') return { label: '신청 완료 · 확정', tone: 'success' };
   if (childState.status === 'registered') return { label: '신청 완료', tone: 'success' };
+  if (past) return null;
   if (childState.canRegister) return { label: '신청 가능', tone: 'primary' };
   if (childState.reason === 'child_pending') return { label: '선생님 확인 후 신청', tone: 'warning' };
   return { label: '접수 마감', tone: 'gray' };

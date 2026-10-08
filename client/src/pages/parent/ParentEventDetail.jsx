@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import ParentLayout from '../../components/parent/ParentLayout';
-import { formatCardDate, dDay, reasonText } from '../../utils/parentSchedule';
+import { formatCardDate, dDay, reasonText, scheduleBackPath } from '../../utils/parentSchedule';
 import { typeOf } from '../../utils/eventFormat';
 import { hasCoordinates, kakaoMapLinks } from '../../utils/kakaoMap';
 import PlaceMap from '../../components/common/PlaceMap';
 import { Badge, Button, Callout, Choice, Icon, List, ListRow, Row, Section, Spinner, Stack } from '../../components/ui';
-
-const SCHEDULE_PATH = '/parent/schedule';
 
 /**
  * 이벤트 상세 + 신청 — 전체 화면 페이지 (`/parent/events/:eventId`).
@@ -22,6 +20,8 @@ const SCHEDULE_PATH = '/parent/schedule';
 function ParentEventDetail() {
   const { eventId } = useParams();
   const navigate = useNavigate();
+  // 지난 일정 목록에서 들어왔으면 그 목록으로 돌아간다 (공유 링크로 열면 일정 첫 화면)
+  const backPath = scheduleBackPath(useLocation().state);
 
   const [event, setEvent] = useState(null);
   // loading | ready | missing(비공개·연결 안 된 선생님·지워짐) | error
@@ -60,11 +60,11 @@ function ParentEventDetail() {
     load();
   }, [eventId]);
 
-  const goSchedule = () => navigate(SCHEDULE_PATH);
+  const goSchedule = () => navigate(backPath);
 
   if (state === 'loading') {
     return (
-      <ParentLayout title="일정" back={SCHEDULE_PATH}>
+      <ParentLayout title="일정" back={backPath}>
         <Spinner />
       </ParentLayout>
     );
@@ -73,7 +73,7 @@ function ParentEventDetail() {
   if (state !== 'ready') {
     const missing = state === 'missing';
     return (
-      <ParentLayout title="일정" back={SCHEDULE_PATH}>
+      <ParentLayout title="일정" back={backPath}>
         <div style={{ textAlign: 'center', padding: '50px 20px' }}>
           <div style={{ fontSize: '2.5rem' }}>{missing ? '🔗' : '⚠️'}</div>
           <div style={{ fontSize: '1rem', fontWeight: 700, marginTop: '8px' }}>
@@ -194,7 +194,7 @@ function ParentEventDetail() {
   })();
 
   return (
-    <ParentLayout title={event.title} back={SCHEDULE_PATH}>
+    <ParentLayout title={event.title} back={backPath}>
       <Stack gap={5}>
         {/* 일시 · 장소 */}
         <Stack gap={2}>

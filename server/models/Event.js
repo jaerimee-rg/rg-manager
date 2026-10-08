@@ -152,6 +152,30 @@ class Event {
     return result.rows.map(hydrate);
   }
 
+  /**
+   * 학부모 일정의 "지난 일정 보기": 끝난 공개 이벤트를 최근 것부터.
+   * 종료일 조건이 listUpcomingForParent 의 반대라 진행 중인 기간 이벤트는 여기에 없다.
+   * 연도 제한은 두지 않는다 — 작년 대회도 찾아볼 수 있어야 한다.
+   */
+  static async listPastForParent(teacherIds, today) {
+    const ids = toIdArray(teacherIds);
+    if (!ids.length) return [];
+
+    const result = await pool.query(
+      `SELECT e.*, ${displayNameSql('u')} AS "teacherName",
+              (SELECT COUNT(*)::int FROM event_registrations r
+                WHERE r."eventId" = e.id AND r.status <> 'cancelled') AS "registrationCount"
+         FROM events e
+         JOIN users u ON u.id = e."userId"
+        WHERE e."userId" = ANY($1)
+          AND e."isPublished" IS NOT FALSE
+          AND COALESCE(e."endDate", e.date) < $2
+        ORDER BY e.date DESC, e."startTime" DESC NULLS LAST, e.id DESC`,
+      [ids, today]
+    );
+    return result.rows.map(hydrate);
+  }
+
   // 학부모용 단건 조회 (공개된 것만, **연결된 선생님** 것만)
   static async getPublishedForParent(id, teacherIds) {
     const ids = toIdArray(teacherIds);
