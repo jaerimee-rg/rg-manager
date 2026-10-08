@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { formatDuration } from '../../utils/mediaUrls';
+import { drivePlayerFrame } from '../../utils/drivePlayer';
 import { formatTime, formatDayLabel, dayKeyOf, uploaderLabel } from '../../utils/albumFilter';
 
 /**
@@ -13,6 +14,9 @@ import { formatTime, formatDayLabel, dayKeyOf, uploaderLabel } from '../../utils
  * 재생 버튼이 잘린다(세로 영상은 더 작아진다). 플레이어 위에 우리 버튼을 얹으면 Drive
  * 컨트롤을 가리므로, 영상일 때 이전/다음은 위쪽 막대로 옮긴다.
  * (Drive 파일 주소를 <video> 로 직접 틀면 Drive 가 다른 사이트 요청을 403 으로 막는다.)
+ *
+ * 좁은 화면에서는 플레이어를 넓게 그린 뒤 줄여 보여 준다(DrivePlayer, utils/drivePlayer.js) —
+ * 그래야 Drive 가 컨트롤을 영상 한가운데가 아니라 맨 아래 막대로 그린다.
  */
 function MediaViewer({ items = [], startId, onClose, onDelete }) {
   const [index, setIndex] = useState(() => {
@@ -80,18 +84,9 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
             data-testid="video-stage"
             style={{ alignSelf: 'stretch', width: '100%', maxWidth: '900px', display: 'flex', flexDirection: 'column' }}
           >
-            {item.previewUrl ? (
-              <iframe
-                key={item.id}
-                title={item.fileName || '영상'}
-                src={item.previewUrl}
-                allow="autoplay; fullscreen"
-                allowFullScreen
-                style={{ flex: 1, minHeight: 0, width: '100%', border: 'none', background: '#000' }}
-              />
-            ) : null}
+            <DrivePlayer key={item.id} src={item.previewUrl} title={item.fileName || '영상'} />
             <div style={{ color: 'rgba(255,255,255,.7)', fontSize: '0.75rem', textAlign: 'center', padding: '8px 16px 0' }}>
-              Google Drive 플레이어로 재생{duration ? ` · ${duration}` : ''} · 안 되면 ‘원본 보기’
+              Google Drive 플레이어로 재생{duration ? ` · ${duration}` : ''}
             </div>
           </div>
         ) : (
@@ -141,16 +136,6 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
               fontSize: '0.875rem', textDecoration: 'none'
             }}
           >⬇ 저장</a>
-          <a
-            className="btn"
-            href={item.originalUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              flex: 1, background: 'rgba(255,255,255,.16)', color: '#fff', minHeight: '42px',
-              fontSize: '0.875rem', textDecoration: 'none'
-            }}
-          >원본 보기</a>
           {item.canDelete && onDelete && (
             <button
               type="button"
@@ -164,6 +149,55 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Drive 플레이어. 칸(남은 높이 전부)의 크기를 재서, 좁으면 iframe 을 넓게 그리고 줄여 보여 준다.
+ * 줄인 결과는 칸과 같은 크기라 화면에서는 꽉 찬 플레이어로 보인다.
+ */
+function DrivePlayer({ src, title }) {
+  const boxRef = useRef(null);
+  const [box, setBox] = useState({ width: 0, height: 0 });
+
+  useLayoutEffect(() => {
+    const element = boxRef.current;
+    if (!element) return undefined;
+
+    const measure = () => {
+      const next = { width: element.clientWidth, height: element.clientHeight };
+      setBox((prev) => (prev.width === next.width && prev.height === next.height ? prev : next));
+    };
+    measure();
+
+    // 휴대폰을 돌리거나 창 크기가 바뀌면 다시 잰다
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  const frame = drivePlayerFrame(box.width, box.height);
+  const scaled = frame.scale < 1;
+
+  return (
+    <div ref={boxRef} style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden', background: '#000' }}>
+      {src ? (
+        <iframe
+          title={title}
+          src={src}
+          allow="autoplay; fullscreen"
+          allowFullScreen
+          style={{
+            position: 'absolute', top: 0, left: 0, border: 'none', background: '#000',
+            width: scaled ? `${frame.width}px` : '100%',
+            height: scaled ? `${frame.height}px` : '100%',
+            transform: scaled ? `scale(${frame.scale})` : 'none',
+            transformOrigin: 'top left'
+          }}
+        />
+      ) : null}
     </div>
   );
 }

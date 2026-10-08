@@ -295,7 +295,7 @@ test.describe('학부모 — 사진', () => {
     await expect(viewer).toHaveCount(0);
   });
 
-  test('휴대폰에서 영상을 누르면 Drive 플레이어가 화면을 채우고, 이전/다음 버튼이 플레이어를 가리지 않는다', async ({ page }) => {
+  test('휴대폰에서 영상을 누르면 Drive 플레이어가 화면을 채우고, 컨트롤이 아래 막대로 가는 폭으로 그려진다', async ({ page }) => {
     // 진짜 Drive 플레이어 대신 빈 페이지 — 픽스처 파일 id 는 Drive 에 없다
     await page.route('https://drive.google.com/file/d/**', (route) =>
       route.fulfill({ contentType: 'text/html', body: '<body style="margin:0;background:#222"></body>' }));
@@ -307,16 +307,33 @@ test.describe('학부모 — 사진', () => {
     const player = viewer.locator('iframe');
     await expect(player).toHaveAttribute('src', /drive\.google\.com\/file\/d\/.+\/preview/);
 
-    // 16:9 상자였을 때는 높이가 206px 이었다 — 그 높이에서 Drive 컨트롤이 영상을 덮었다
+    // 화면에 보이는 크기 — 16:9 상자였을 때는 높이가 206px 이었다
     const box = await player.boundingBox();
     expect(box.width).toBeGreaterThan(360);
+    expect(box.width).toBeLessThanOrEqual(390);
     expect(box.height).toBeGreaterThan(400);
+
+    // 플레이어가 보는 자기 폭 — Drive 는 480px 이하에서 컨트롤을 영상 한가운데에 띄우고, 500px 부터 아래 막대로 그린다.
+    // 그래서 좁은 화면에서는 넓게 그린 뒤 줄여 보여 준다.
+    const frame = await (await player.elementHandle()).contentFrame();
+    await expect.poll(() => frame.evaluate(() => window.innerWidth)).toBeGreaterThanOrEqual(500);
 
     const overlaps = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
     for (const name of ['이전 사진', '다음 사진']) {
       const button = await viewer.getByRole('button', { name }).boundingBox();
       expect(overlaps(button, box)).toBe(false);
     }
+
+    // 원본 보기 버튼은 없다 — 아래에는 저장만
+    await expect(viewer.getByRole('link', { name: /저장/ })).toBeVisible();
+    await expect(viewer.getByText('원본 보기')).toHaveCount(0);
+
+    // 넓은 화면으로 바뀌면(휴대폰을 돌리거나 태블릿) 줄이지 않고 그대로 채운다
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await expect.poll(async () => {
+      const wide = await player.boundingBox();
+      return Math.abs((await frame.evaluate(() => window.innerWidth)) - wide.width);
+    }).toBeLessThan(1);
 
     // 다음으로 넘기면 플레이어가 사라지고 사진이 뜬다
     await viewer.getByRole('button', { name: '다음 사진' }).click();
