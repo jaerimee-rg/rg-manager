@@ -3,9 +3,13 @@
  *
  * 서버(Vercel)에 tfjs 를 올리지 않는 이유와 배경은
  * docs/photo-sharing/03-implementation-plan.md C-2 에 있다. 여기서 중요한 것은
- * **실패해도 업로드를 막지 않는다**는 것 — 못 뽑으면 빈 배열을 돌려주고
- * 서버는 그 사진을 '분석 안 됨'으로 남긴다. 나중에 다시 분석하거나
+ * **실패해도 업로드를 막지 않는다**는 것 — 못 뽑으면 null 을 돌려주고
+ * 서버는 그 사진을 '분석 안 됨'(skipped)으로 남긴다. 나중에 다시 분석하거나
  * 선생님이 직접 이름을 붙일 수 있다.
+ *
+ * **null(실패)과 빈 배열(얼굴 없음)은 다른 뜻이다.** 빈 배열을 보내면 서버는 'none' 으로
+ * 적고 다시 분석할 목록에서 뺀다 — 실패를 빈 배열로 돌려주면 모델을 못 받은 사진이
+ * "얼굴 없는 사진" 으로 영영 묻힌다.
  *
  * 모델은 업로드·얼굴 등록 화면에서 처음 쓸 때 한 번만 내려받는다(약 6.5MB, 이후 캐시).
  */
@@ -53,15 +57,16 @@ const MIN_FACE_RATIO = 0.04;
 
 /**
  * 이미지에서 얼굴을 찾아 특징값을 뽑는다.
- * → [{ box: {x,y,w,h} 0~1, score, descriptor: number[128] }]
+ * → [{ box: {x,y,w,h} 0~1, score, descriptor: number[128] }]  — 얼굴이 없으면 []
  *
- * 실패하면 빈 배열을 돌려준다 (호출한 쪽은 그대로 업로드를 이어 간다).
+ * 분석하지 못하면(모델을 못 받음, 이미지를 못 읽음, 계산 오류) **null** 을 돌려준다.
+ * 던지지 않으므로 호출한 쪽은 그대로 업로드를 이어 간다.
  */
 export const detectFaces = async (source) => {
   try {
     const api = await loadFaceApi();
     const element = await toElement(source);
-    if (!element) return [];
+    if (!element) return null;
 
     const width = element.width || element.naturalWidth || element.videoWidth || 1;
     const height = element.height || element.naturalHeight || element.videoHeight || 1;
@@ -91,7 +96,7 @@ export const detectFaces = async (source) => {
       .slice(0, 50);
   } catch (error) {
     console.error('얼굴 분석 실패(건너뜁니다):', error?.message || error);
-    return [];
+    return null;
   }
 };
 
@@ -106,6 +111,7 @@ export const detectSingleFace = async (source) => {
   } catch {
     return { ok: false, reason: 'failed' };
   }
+  if (!faces) return { ok: false, reason: 'failed' };
   if (!faces.length) return { ok: false, reason: 'none' };
   if (faces.length > 1) return { ok: false, reason: 'multiple' };
   return { ok: true, descriptor: faces[0].descriptor, box: faces[0].box };
