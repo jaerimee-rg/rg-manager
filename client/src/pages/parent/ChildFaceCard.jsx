@@ -2,29 +2,74 @@ import React, { useEffect, useRef, useState } from 'react';
 import { fetchWithAuth } from '../../utils/api';
 import { detectSingleFace } from '../../utils/faceClient';
 import { makePreview } from '../../utils/imagePrep';
+import { formatDate } from '../../utils/dateHelpers';
+import { Button, ConfirmDialog } from '../../components/ui';
 
 /**
  * 자녀 얼굴 등록 카드 (내 정보 화면).
  *
  * 사진은 브라우저 안에서만 다루고, 서버로는 **얼굴 특징값만** 보낸다.
  * 얼굴이 없거나 두 명 이상이면 여기서 막는다.
+ *
+ * 등록한 사진은 아이마다 목록으로 보이고 **내가 등록한 것은 지울 수 있다**. 사진 자체는 저장하지 않으므로
+ * 목록에는 등록한 날짜만 나온다. 지우면 서버가 그 사진으로만 맞던 "우리 아이" 표시를 함께 정리한다.
  */
 function ChildFaceCard({ children = [], onChanged }) {
   const linked = children.filter((child) => child.status === 'linked' && child.studentId);
   const [counts, setCounts] = useState({});
+  const [faces, setFaces] = useState({});               // childId → [{ id, createdAt, mine }]
   const [busyChildId, setBusyChildId] = useState(null);
   const [consentChildId, setConsentChildId] = useState(null);
   const [consent, setConsent] = useState(true);
   const [message, setMessage] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(null);   // { child, face, order }
+  const [deleting, setDeleting] = useState(false);
   const inputRef = useRef(null);
   const pendingChild = useRef(null);
 
+  const loadFaces = async (child) => {
+    try {
+      const response = await fetchWithAuth(`/api/parent/children/${child.id}/faces`);
+      if (!response?.ok) return;
+      const data = await response.json().catch(() => ({}));
+      setFaces((prev) => ({ ...prev, [child.id]: data.items || [] }));
+    } catch (error) {
+      console.error('등록한 얼굴 사진 조회 실패:', error);
+    }
+  };
+
   useEffect(() => {
     setCounts(Object.fromEntries(linked.map((child) => [child.id, child.faceProfileCount || 0])));
-    // children 이 새로 들어오면 개수를 맞춘다.
+    // children 이 새로 들어오면 개수를 맞추고, 등록한 사진이 있는 아이는 목록을 읽는다.
+    linked.filter((child) => child.faceProfileCount > 0).forEach(loadFaces);
   }, [children]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!linked.length) return null;
+
+  const removeFace = async () => {
+    const { child, face } = confirmDelete;
+    setDeleting(true);
+    try {
+      const response = await fetchWithAuth(`/api/parent/children/${child.id}/faces/${face.id}`, { method: 'DELETE' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage(data.error || '지우지 못했어요.');
+        return;
+      }
+      setFaces((prev) => ({ ...prev, [child.id]: (prev[child.id] || []).filter((item) => item.id !== face.id) }));
+      setCounts((prev) => ({ ...prev, [child.id]: Math.max((prev[child.id] || 1) - 1, 0) }));
+      setMessage(data.remaining > 0
+        ? '얼굴 사진을 지웠어요. 남은 사진으로 다시 찾아 둘게요.'
+        : `얼굴 사진을 지웠어요. ${child.childName} 사진 찾기를 멈췄어요.`);
+      onChanged?.();
+    } catch (error) {
+      console.error('자녀 얼굴 삭제 실패:', error);
+      setMessage('지우지 못했어요. 잠시 뒤 다시 시도해 주세요.');
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(null);
+    }
+  };
 
   const openConsent = (child) => {
     setConsentChildId(child.id);
@@ -76,6 +121,7 @@ function ChildFaceCard({ children = [], onChanged }) {
       }
 
       setCounts((prev) => ({ ...prev, [child.id]: (prev[child.id] || 0) + 1 }));
+      if (data.profile) setFaces((prev) => ({ ...prev, [child.id]: [...(prev[child.id] || []), data.profile] }));
       setConsentChildId(null);
       setMessage(data.matched?.photos
         ? `앨범 ${data.matched.albums}개에서 ${child.childName} 사진 ${data.matched.photos}장을 찾았어요`
@@ -122,6 +168,36 @@ function ChildFaceCard({ children = [], onChanged }) {
 
               <span className={`badge ${count ? 'badge-success' : 'badge-gray'}`}>{count ? '찾는 중' : '미등록'}</span>
             </div>
+
+            {(faces[child.id] || []).length > 0 && (
+              <ul
+                aria-label={`${child.childName} 등록한 얼굴 사진`}
+                style={{ listStyle: 'none', padding: 0, margin: '0 0 10px', display: 'grid', gap: '6px' }}
+              >
+                {faces[child.id].map((face, index) => (
+                  <li key={face.id} style={{
+                    display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px',
+                    border: 'var(--stroke-thin)', borderRadius: 'var(--shape-box)', fontSize: '0.8125rem'
+                  }}>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <b>얼굴 사진 {index + 1}</b>
+                      <span style={{ color: 'var(--color-gray-500)' }}> · {formatDate(face.createdAt)} 등록</span>
+                    </span>
+                    {face.mine ? (
+                      <Button
+                        size="sm"
+                        variant="danger-quiet"
+                        icon="trash"
+                        aria-label={`${child.childName} 얼굴 사진 ${index + 1} 삭제`}
+                        onClick={() => setConfirmDelete({ child, face, order: index + 1 })}
+                      >삭제</Button>
+                    ) : (
+                      <span style={{ color: 'var(--color-gray-500)', fontSize: '0.75rem' }}>다른 보호자가 등록</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
 
             {consentChildId === child.id ? (
               <div style={{
@@ -199,7 +275,21 @@ function ChildFaceCard({ children = [], onChanged }) {
         padding: '11px 12px', borderRadius: 'var(--shape-box)', lineHeight: 1.55, marginTop: '12px'
       }}>
         아이당 최대 3장까지 등록할 수 있어요. 등록하면 지난 앨범에서도 바로 찾아드려요.
+        잘못 등록한 사진은 [삭제] 로 지울 수 있어요.
       </div>
+
+      <ConfirmDialog
+        open={Boolean(confirmDelete)}
+        title="얼굴 사진을 지울까요?"
+        message={confirmDelete
+          ? `${confirmDelete.child.childName}의 얼굴 사진 ${confirmDelete.order}번을 지워요. 이 사진으로 찾은 ‘우리 아이’ 표시도 함께 정리돼요. 직접 [맞아요] 한 사진은 그대로예요.`
+          : ''}
+        confirmLabel="지우기"
+        tone="danger"
+        busy={deleting}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={removeFace}
+      />
     </div>
   );
 }
