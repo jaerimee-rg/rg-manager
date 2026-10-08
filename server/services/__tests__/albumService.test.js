@@ -8,6 +8,8 @@ jest.unstable_mockModule('../../database.js', () => ({
 jest.unstable_mockModule('../../models/Event.js', () => ({
   default: {
     updateAlbum: jest.fn(async (id, fields) => ({ id, ...fields })),
+    setAlbumMatchRules: jest.fn(),
+    invalidateAlbumMatches: jest.fn().mockResolvedValue(0),
     countAlbumViewers: jest.fn().mockResolvedValue({ participants: 7, all: 33 })
   }
 }));
@@ -33,6 +35,7 @@ jest.unstable_mockModule('../../models/MediaFace.js', () => ({
 jest.unstable_mockModule('../../models/MediaTag.js', () => ({
   default: {
     listByMedia: jest.fn().mockResolvedValue([]),
+    listByMediaIds: jest.fn().mockResolvedValue({}),
     listByTeacherAndStudent: jest.fn().mockResolvedValue([]),
     upsert: jest.fn(),
     removeStudents: jest.fn().mockResolvedValue(0)
@@ -90,6 +93,8 @@ beforeEach(() => {
   AppSetting.getMany.mockResolvedValue({});
   MediaTag.listByMedia.mockResolvedValue([]);
   MediaTag.listByTeacherAndStudent.mockResolvedValue([]);
+  MediaTag.listByMediaIds.mockResolvedValue({});
+  MediaFace.listVectorsByTeacher.mockResolvedValue(new Map());
   MediaFace.listVectorsByMedia.mockResolvedValue([]);
   ChildFaceProfile.listVectorsByTeacher.mockResolvedValue([]);
   EventMedia.setFaceStatus.mockImplementation(async (id, fields) => ({ id, ...fields }));
@@ -324,6 +329,87 @@ describe('rematchMedia — 벡터에서 태그로', () => {
     await albumService.rematchMedia(event(), 55);
 
     expect(MediaTag.removeStudents).toHaveBeenCalledWith(55, [5]);
+  });
+});
+
+describe('rematchAlbum — 앨범 전체 다시 매칭', () => {
+  it('지금 규칙으로 다시 붙이고, 더는 맞지 않는 자동 태그는 지운다 — 태그는 한 번에 읽는다', async () => {
+    MediaFace.listVectorsByTeacher.mockResolvedValue(new Map([
+      [11, [{ id: 1, descriptor: D(0) }]],       // 여전히 맞는다
+      [12, [{ id: 2, descriptor: D(0.5) }]]      // 예전 임계값에서 붙었던 사진
+    ]));
+    ChildFaceProfile.listVectorsByTeacher.mockResolvedValue([{ studentId: 5, descriptor: D(0) }]);
+    MediaTag.listByMediaIds.mockResolvedValue({
+      12: [{ mediaId: 12, studentId: 5, source: 'face', distance: 0.45, faceId: 2 }, { mediaId: 12, studentId: 9, source: 'excluded' }]
+    });
+    MediaTag.removeStudents.mockResolvedValue(1);
+
+    const result = await albumService.rematchAlbum(event());
+
+    expect(MediaTag.listByMediaIds).toHaveBeenCalledWith([11, 12]);
+    expect(MediaTag.listByMedia).not.toHaveBeenCalled();
+    expect(MediaTag.upsert).toHaveBeenCalledWith(expect.objectContaining({ mediaId: 11, studentId: 5, source: 'face' }));
+    expect(MediaTag.removeStudents).toHaveBeenCalledWith(12, [5]);   // excluded(9) 는 남는다
+    expect(result).toEqual({ added: 1, candidates: 0, removed: 1 });
+  });
+});
+
+describe('ensureAlbumsMatched — 규칙이 바뀌면 앨범을 열 때 다시 매칭', () => {
+  const CURRENT = 'r2:0.35:0.4';
+
+  it('지금 규칙으로 계산해 둔 앨범은 건드리지 않는다', async () => {
+    const count = await albumService.ensureAlbumsMatched(event({ albumMatchRules: CURRENT }));
+
+    expect(count).toBe(0);
+    expect(MediaFace.listVectorsByTeacher).not.toHaveBeenCalled();
+    expect(Event.setAlbumMatchRules).not.toHaveBeenCalled();
+  });
+
+  it('예전 임계값으로 계산했거나 기록이 없으면 다시 매칭하고 지금 규칙을 적는다', async () => {
+    const old = event({ id: 3, albumMatchRules: 'r2:0.5:0.6' });
+    const never = event({ id: 4, albumMatchRules: null });
+
+    const count = await albumService.ensureAlbumsMatched([old, never, event({ id: 5, albumMatchRules: CURRENT })]);
+
+    expect(count).toBe(2);
+    expect(MediaFace.listVectorsByTeacher).toHaveBeenCalledTimes(2);
+    expect(Event.setAlbumMatchRules).toHaveBeenCalledWith(3, CURRENT);
+    expect(Event.setAlbumMatchRules).toHaveBeenCalledWith(4, CURRENT);
+    expect(old.albumMatchRules).toBe(CURRENT);
+  });
+
+  it('관리자가 임계값을 바꾸면 서명이 달라져 다시 매칭한다', async () => {
+    AppSetting.getMany.mockResolvedValue({ face_match_threshold: '0.3', face_candidate_threshold: '0.38' });
+
+    await albumService.ensureAlbumsMatched(event({ albumMatchRules: CURRENT }));
+
+    expect(Event.setAlbumMatchRules).toHaveBeenCalledWith(3, 'r2:0.3:0.38');
+  });
+
+  it('앨범(폴더)이 없는 이벤트는 건너뛴다', async () => {
+    await expect(albumService.ensureAlbumsMatched(event({ driveFolderId: null }))).resolves.toBe(0);
+    expect(Event.setAlbumMatchRules).not.toHaveBeenCalled();
+  });
+
+  it('실패해도 던지지 않는다 — 앨범은 떠야 한다', async () => {
+    MediaFace.listVectorsByTeacher.mockRejectedValue(new Error('DB 오류'));
+
+    await expect(albumService.ensureAlbumsMatched(event({ albumMatchRules: null }))).resolves.toBe(0);
+    expect(Event.setAlbumMatchRules).not.toHaveBeenCalled();
+  });
+});
+
+describe('markAlbumsStale — 기준 얼굴이 바뀐 뒤', () => {
+  it('그 선생님의 앨범을 다시 매칭해야 함으로 돌린다', async () => {
+    await albumService.markAlbumsStale(7);
+
+    expect(Event.invalidateAlbumMatches).toHaveBeenCalledWith(7);
+  });
+
+  it('실패해도 던지지 않는다 — 등록·삭제는 이미 끝났다', async () => {
+    Event.invalidateAlbumMatches.mockRejectedValueOnce(new Error('column "albumMatchRules" does not exist'));
+
+    await expect(albumService.markAlbumsStale(7)).resolves.toBeUndefined();
   });
 });
 

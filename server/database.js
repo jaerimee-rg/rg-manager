@@ -730,6 +730,9 @@ const initDatabase = async () => {
     await client.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumPublished" BOOLEAN NOT NULL DEFAULT FALSE');
     await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumAudience" TEXT NOT NULL DEFAULT 'participants'`);
     await client.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumPublishedAt" TEXT');
+    // 이 앨범의 자동 태그(face·candidate)를 어떤 매칭 규칙으로 계산했는지 (utils/faceVector.js matchRulesSignature).
+    // 지금 규칙과 다르거나 비어 있으면 앨범을 열 때 다시 매칭한다(services/albumService.js ensureAlbumMatched).
+    await client.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumMatchRules" TEXT');
 
     // 사진·영상 1개. 바이트는 Drive 에 있고 여기에는 파일 id 와 메타만 둔다.
     await client.query(`

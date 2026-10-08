@@ -60,6 +60,9 @@ export const getAlbum = async (req, res) => {
     const event = await loadEvent(req);
     if (!event) return notFound(res);
 
+    // 자동 태그가 예전 규칙으로 계산된 앨범이면 여기서 다시 매칭한다 (개수·후보 수가 맞게)
+    await albumService.ensureAlbumsMatched(event);
+
     const { account, driveStatus, foreignAccount } = await driveStatusOf(event);
     const payload = {
       eventId: event.id,
@@ -233,6 +236,7 @@ export const listMedia = async (req, res) => {
   try {
     const event = await loadEvent(req);
     if (!event) return notFound(res);
+    await albumService.ensureAlbumsMatched(event);
 
     const filter = String(req.query.filter || 'all');
     const limit = Math.min(parseInt(req.query.limit, 10) || 60, 200);

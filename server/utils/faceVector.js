@@ -36,6 +36,24 @@ export const DEFAULT_MATCH_THRESHOLD = 0.35;
 export const DEFAULT_CANDIDATE_THRESHOLD = 0.40;
 
 /**
+ * 태그를 붙이는 **방식**의 버전 — 임계값 말고 규칙 자체가 바뀌면 올린다.
+ *   1 — 얼굴마다 모든 학생과 비교 (한 얼굴이 여러 아이로 태그될 수 있었다)
+ *   2 — 한 얼굴은 가장 가까운 아이 한 명에게만 (bestPerStudent)
+ */
+export const FACE_MATCH_RULES_VERSION = 2;
+
+/**
+ * 지금의 매칭 규칙을 한 줄로 — 방식 버전 + 두 임계값. 앨범마다 "이 규칙으로 계산했다" 를 적어 두고
+ * (events."albumMatchRules"), 다르면 다시 매칭한다. 임계값을 바꾸거나 규칙을 고쳐도 예전 자동 태그가 남던 것을 막는다
+ * (운영 2026-10: 0.50 에서 붙은 태그가 0.35 로 좁힌 뒤에도 남아 "우리 아이만 보기" 에 다른 아이가 나왔다).
+ */
+export const matchRulesSignature = (thresholds = {}) => {
+  const match = Number.isFinite(thresholds.match) ? thresholds.match : DEFAULT_MATCH_THRESHOLD;
+  const candidate = Number.isFinite(thresholds.candidate) ? thresholds.candidate : DEFAULT_CANDIDATE_THRESHOLD;
+  return `r${FACE_MATCH_RULES_VERSION}:${match}:${candidate}`;
+};
+
+/**
  * 배열이 쓸 수 있는 얼굴 벡터인지 본다.
  * 길이가 맞고 모든 값이 유한한 수여야 한다 (NaN·Infinity 는 거리 계산을 오염시킨다).
  */
@@ -133,6 +151,8 @@ export const bestPerStudent = (faces, profiles) => {
 };
 
 export default {
+  FACE_MATCH_RULES_VERSION,
+  matchRulesSignature,
   FACE_ANALYZER_VERSION,
   parseAnalyzerVersion,
   DESCRIPTOR_LENGTH,

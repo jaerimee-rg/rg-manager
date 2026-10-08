@@ -35,6 +35,7 @@ jest.unstable_mockModule('../../services/albumService.js', () => ({
     completeUpload: jest.fn(),
     indexFaces: jest.fn(),
     rematchAlbum: jest.fn(),
+    ensureAlbumsMatched: jest.fn().mockResolvedValue(0),
     deleteMedia: jest.fn()
   }
 }));
@@ -652,5 +653,28 @@ describe('얼굴 다시 찾기 (재분석)', () => {
     expect(albumService.indexFaces).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: 5 }),
       req.body.faces, { analyzerVersion: 2 });
     expect(res.json).toHaveBeenCalledWith({ faceStatus: 'done', faceCount: 1 });
+  });
+});
+
+describe('앨범을 열 때 자동 태그를 지금 규칙으로 맞춘다', () => {
+  it('getAlbum — 개수(미분류·후보)를 세기 전에', async () => {
+    Event.getById.mockResolvedValue(event());
+
+    await getAlbum(req, res);
+
+    expect(albumService.ensureAlbumsMatched).toHaveBeenCalledWith(expect.objectContaining({ id: 3 }));
+    expect(albumService.ensureAlbumsMatched.mock.invocationCallOrder[0])
+      .toBeLessThan(EventMedia.stats.mock.invocationCallOrder[0]);
+  });
+
+  it('listMedia — 사진을 읽기 전에', async () => {
+    Event.getById.mockResolvedValue(event());
+    EventMedia.list.mockResolvedValue([]);
+
+    await listMedia(req, res);
+
+    expect(albumService.ensureAlbumsMatched).toHaveBeenCalledWith(expect.objectContaining({ id: 3 }));
+    expect(albumService.ensureAlbumsMatched.mock.invocationCallOrder[0])
+      .toBeLessThan(EventMedia.list.mock.invocationCallOrder[0]);
   });
 });

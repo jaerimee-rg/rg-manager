@@ -51,7 +51,9 @@ jest.unstable_mockModule('../../services/albumService.js', () => ({
     createUploadSessions: jest.fn().mockResolvedValue([]),
     completeUpload: jest.fn(),
     deleteMedia: jest.fn(),
-    matchStudentAcrossAlbums: jest.fn().mockResolvedValue({ albums: 2, photos: 11, candidates: 3 })
+    matchStudentAcrossAlbums: jest.fn().mockResolvedValue({ albums: 2, photos: 11, candidates: 3 }),
+    ensureAlbumsMatched: jest.fn().mockResolvedValue(0),
+    markAlbumsStale: jest.fn().mockResolvedValue(undefined)
   }
 }));
 jest.unstable_mockModule('../../utils/googleDrive.js', () => {
@@ -131,6 +133,10 @@ describe('listAlbums — 확정된 이벤트만 보인다', () => {
     const items = res.json.mock.calls[0][0].items;
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ eventId: 3, counts: { images: 27, mine: 11 } });
+    // "우리 아이 N장" 을 세기 전에, 보이는 앨범만 지금 규칙으로 맞춰 둔다
+    expect(albumService.ensureAlbumsMatched).toHaveBeenCalledWith([expect.objectContaining({ id: 3 })]);
+    expect(albumService.ensureAlbumsMatched.mock.invocationCallOrder[0])
+      .toBeLessThan(EventMedia.summaries.mock.invocationCallOrder[0]);
   });
 
   it('선생님이 참가 학생으로 직접 넣은 경우도 확정으로 본다', async () => {
@@ -206,6 +212,18 @@ describe('listMedia', () => {
 
     expect(res.status).toHaveBeenCalledWith(403);
     expect(res.json.mock.calls[0][0].reason).toBe('not_confirmed');
+    expect(albumService.ensureAlbumsMatched).not.toHaveBeenCalled();
+  });
+
+  it('사진을 읽기 전에 앨범의 자동 태그를 지금 규칙으로 맞춘다 — "우리 아이만 보기" 에 낡은 태그가 나오지 않게', async () => {
+    makeConfirmed();
+    EventMedia.list.mockResolvedValue([]);
+
+    await listMedia(req, res);
+
+    expect(albumService.ensureAlbumsMatched).toHaveBeenCalledWith(expect.objectContaining({ id: 3 }));
+    expect(albumService.ensureAlbumsMatched.mock.invocationCallOrder[0])
+      .toBeLessThan(EventMedia.list.mock.invocationCallOrder[0]);
   });
 
   it('비공개 이벤트는 확정이어도 볼 수 없다', async () => {
@@ -466,6 +484,8 @@ describe('addFace — 자녀 기준 얼굴', () => {
     expect(ChildFaceProfile.create).toHaveBeenCalledWith(expect.objectContaining({ studentId: 5, teacherUserId: 7 }));
     expect(albumService.matchStudentAcrossAlbums).toHaveBeenCalledWith(7, 5);
     expect(res.json.mock.calls[0][0].matched).toEqual({ albums: 2, photos: 11, candidates: 3 });
+    // 새 기준 얼굴로 다른 아이의 태그도 달라질 수 있다 — 앨범은 다음에 열 때 전부 다시 매칭한다
+    expect(albumService.markAlbumsStale).toHaveBeenCalledWith(7);
   });
 
   it('3장을 넘기면 막는다', async () => {
@@ -518,6 +538,15 @@ describe('deleteFace', () => {
 
     expect(MediaTag.removeAutoTagsForStudent).not.toHaveBeenCalled();
     expect(albumService.matchStudentAcrossAlbums).toHaveBeenCalled();
+  });
+
+  it('지우면 그 선생님의 앨범을 다음에 열 때 전부 다시 매칭하게 한다 (다른 아이 태그도 달라질 수 있다)', async () => {
+    ChildFaceProfile.getById.mockResolvedValue({ id: 9, studentId: 5, parentUserId: 42 });
+    ChildFaceProfile.countByStudent.mockResolvedValue(1);
+
+    await deleteFace(req, res);
+
+    expect(albumService.markAlbumsStale).toHaveBeenCalledWith(7);
   });
 
   it('내가 올린 것만 지울 수 있다', async () => {
