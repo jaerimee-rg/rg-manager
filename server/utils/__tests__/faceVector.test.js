@@ -93,23 +93,24 @@ describe('euclideanDistance', () => {
 });
 
 describe('classifyDistance', () => {
-  it('기본값은 0.55 / 0.65 — 어느 정도만 비슷해도 보이게 넓혔다', () => {
-    expect(DEFAULT_MATCH_THRESHOLD).toBe(0.55);
-    expect(DEFAULT_CANDIDATE_THRESHOLD).toBe(0.65);
+  it('기본값은 0.35 / 0.40 — 아이 얼굴은 서로 가깝게 모여 0.50 이면 거의 누구나 맞았다', () => {
+    expect(DEFAULT_MATCH_THRESHOLD).toBe(0.35);
+    expect(DEFAULT_CANDIDATE_THRESHOLD).toBe(0.40);
   });
 
   it('임계값 이하는 자동 태그다', () => {
     expect(classifyDistance(0.3)).toBe('face');
-    expect(classifyDistance(0.55)).toBe('face');
+    expect(classifyDistance(0.35)).toBe('face');
   });
 
   it('그 사이는 후보다', () => {
-    expect(classifyDistance(0.56)).toBe('candidate');
-    expect(classifyDistance(0.65)).toBe('candidate');
+    expect(classifyDistance(0.378)).toBe('candidate');
+    expect(classifyDistance(0.40)).toBe('candidate');
   });
 
-  it('멀면 태그하지 않는다', () => {
-    expect(classifyDistance(0.66)).toBeNull();
+  it('멀면 태그하지 않는다 — 운영에서 틀렸던 자동 태그(0.41~0.49)도', () => {
+    expect(classifyDistance(0.41)).toBeNull();
+    expect(classifyDistance(0.492)).toBeNull();
     expect(classifyDistance(Infinity)).toBeNull();
   });
 
@@ -147,13 +148,40 @@ describe('bestPerStudent', () => {
   });
 
   it('거리 오름차순으로 돌려준다', () => {
-    const faces = [{ id: 1, descriptor: Float32Array.from(zeros()) }];
+    const faces = [
+      { id: 1, descriptor: Float32Array.from(filled(0.05)) },
+      { id: 2, descriptor: Float32Array.from(filled(0.01)) }
+    ];
     const profiles = [
       { studentId: 1, descriptor: Float32Array.from(filled(0.05)) },
-      { studentId: 2, descriptor: Float32Array.from(filled(0.01)) }
+      { studentId: 2, descriptor: Float32Array.from(filled(0.012)) }
     ];
 
-    expect(bestPerStudent(faces, profiles).map((r) => r.studentId)).toEqual([2, 1]);
+    expect(bestPerStudent(faces, profiles).map((r) => r.studentId)).toEqual([1, 2]);
+  });
+
+  it('한 얼굴은 가장 가까운 아이 한 명에게만 붙는다 — 같은 얼굴이 두 아이로 태그되지 않는다', () => {
+    const faces = [{ id: 1, descriptor: Float32Array.from(zeros()) }];
+    const profiles = [
+      { studentId: 41, descriptor: Float32Array.from(filled(0.01)) },
+      { studentId: 15, descriptor: Float32Array.from(filled(0.02)) }
+    ];
+
+    expect(bestPerStudent(faces, profiles)).toEqual([{ studentId: 41, distance: expect.any(Number), faceId: 1 }]);
+  });
+
+  it('두 얼굴이면 각자 가장 가까운 아이에게 간다', () => {
+    const faces = [
+      { id: 1, descriptor: Float32Array.from(filled(0.01)) },
+      { id: 2, descriptor: Float32Array.from(filled(0.05)) }
+    ];
+    const profiles = [
+      { studentId: 41, descriptor: Float32Array.from(filled(0.01)) },
+      { studentId: 15, descriptor: Float32Array.from(filled(0.05)) }
+    ];
+
+    const result = bestPerStudent(faces, profiles);
+    expect(result.map((r) => [r.studentId, r.faceId])).toEqual([[41, 1], [15, 2]]);
   });
 
   it('빈 입력에도 터지지 않는다', () => {

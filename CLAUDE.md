@@ -500,9 +500,15 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   changing the column type only.
 - **Tag precedence** `manual > parent_confirmed > face > candidate`, and `excluded` is never
   resurrected by re-matching (`utils/faceMatch.js:nextTagSource`, the whole table is unit-tested).
-  Distance ≤ `face_match_threshold` (0.55) auto-tags, ≤ `face_candidate_threshold` (0.65) becomes a
-  "혹시 우리 아이?" candidate; both are `app_settings` keys. They were 0.50 / 0.60 until 2026-10 (widened so
-  "somewhat similar" shows); boot moves rows still holding the old defaults and leaves any other value alone.
+  Distance ≤ `face_match_threshold` (**0.35**) auto-tags, ≤ `face_candidate_threshold` (**0.40**) becomes a
+  "혹시 우리 아이?" candidate; both are `app_settings` keys. They were 0.50 / 0.60 until 2026-10: this model packs
+  children's faces close together (six different faces and a profile all sat within 0.32–0.52), so 0.50 auto-tagged
+  almost anyone (wrong tags measured 0.378–0.492). Boot moves rows still holding an old default (0.50/0.55,
+  0.60/0.65) and leaves any other value alone. **One face → at most one child** (`faceVector.js:bestPerStudent`
+  assigns each face to its nearest student), so one face can no longer tag two children.
+- **Matched names are never shown on photos.** `toParentMedia` sends `myTags` as `{studentId, source}` only (no
+  name), and `MediaGrid` / `MediaViewer` draw no name badge — matching can be wrong. The "우리 아이 사진만 보기"
+  filter and the 맞아요/아니에요 candidate box still use the tags.
 - **Parents**: 사진 tab (`/parent/photos`, published albums only), gallery (`/parent/photos/:eventId`) with the
   **우리 아이 사진만 보기** toggle and `?open=<mediaId>` to open one photo, a full-screen viewer whose 저장 button
   opens the Drive download URL, child face registration in 내 정보, and a **6-photo grid on the event detail**

@@ -167,15 +167,7 @@ function MediaInfo({ item, overlay = false }) {
           {duration}
         </span>
       )}
-      {(item.myTags || []).filter((tag) => tag.source !== 'candidate').map((tag) => (
-        <span
-          key={tag.studentId}
-          style={{
-            background: 'var(--star)', color: 'var(--ink)', fontSize: '0.6875rem', fontWeight: 800,
-            padding: '3px 9px', borderRadius: 'var(--shape-tag)', textShadow: 'none'
-          }}
-        >{tag.name || '우리 아이'}</span>
-      ))}
+      {/* 얼굴 매칭으로 붙은 아이 이름은 보이지 않는다 — 매칭이 틀릴 수 있다(2026-10) */}
     </div>
   );
 }

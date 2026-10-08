@@ -999,19 +999,19 @@ const initDatabase = async () => {
       [process.env.AI_PROVIDER || 'gemini', new Date().toISOString()]
     );
 
-    // 얼굴 매칭 임계값. 관리자가 나중에 조정할 수 있도록 설정으로 둔다 (기본값: utils/faceVector.js).
+    // 얼굴 매칭 임계값. 관리자가 나중에 조정할 수 있도록 설정으로 둔다 (기본값과 이유: utils/faceVector.js).
     await client.query(
       `INSERT INTO app_settings (key, value, "updatedAt")
-       VALUES ('face_match_threshold', '0.55', $1), ('face_candidate_threshold', '0.65', $1)
+       VALUES ('face_match_threshold', '0.35', $1), ('face_candidate_threshold', '0.40', $1)
        ON CONFLICT (key) DO NOTHING`,
       [new Date().toISOString()]
     );
-    // 처음 기본값(0.50 / 0.60)이 그대로 남아 있는 행만 새 기본값으로 넓힌다(2026-10). 관리자가 바꾼 값은 두고,
-    // 다시 실행해도 바뀌는 것이 없다.
+    // 예전 기본값(0.50 / 0.60, 잠깐 쓴 0.55 / 0.65)이 그대로 남은 행만 새 기본값으로 좁힌다(2026-10, 틀린 자동 태그).
+    // 관리자가 고른 다른 값은 두고, 다시 실행해도 바뀌는 것이 없다.
     await client.query(
-      `UPDATE app_settings SET value = CASE key WHEN 'face_match_threshold' THEN '0.55' ELSE '0.65' END, "updatedAt" = $1
-        WHERE (key = 'face_match_threshold' AND value = '0.50')
-           OR (key = 'face_candidate_threshold' AND value = '0.60')`,
+      `UPDATE app_settings SET value = CASE key WHEN 'face_match_threshold' THEN '0.35' ELSE '0.40' END, "updatedAt" = $1
+        WHERE (key = 'face_match_threshold' AND value IN ('0.50', '0.55'))
+           OR (key = 'face_candidate_threshold' AND value IN ('0.60', '0.65'))`,
       [new Date().toISOString()]
     );
 

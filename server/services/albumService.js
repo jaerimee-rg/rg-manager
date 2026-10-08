@@ -393,13 +393,15 @@ export const rematchAlbum = async (event) => {
  * → { albums, photos } — 화면에 "앨범 4개에서 37장을 찾았어요" 로 보여준다.
  */
 export const matchStudentAcrossAlbums = async (teacherUserId, studentId) => {
+  // 그 아이 것만이 아니라 선생님의 기준 얼굴 전부 — 한 얼굴은 가장 가까운 아이에게만 붙기 때문에
+  // 다른 아이가 더 가까운지 알아야 한다(bestPerStudent).
   const [facesByMedia, profiles, thresholds] = await Promise.all([
     MediaFace.listVectorsByTeacher(teacherUserId),
-    ChildFaceProfile.listVectorsByTeacher(teacherUserId, { studentId }),
+    ChildFaceProfile.listVectorsByTeacher(teacherUserId),
     getThresholds()
   ]);
 
-  if (!profiles.length) return { albums: 0, photos: 0, candidates: 0 };
+  if (!profiles.some((profile) => profile.studentId === studentId)) return { albums: 0, photos: 0, candidates: 0 };
 
   const existing = await MediaTag.listByTeacherAndStudent(teacherUserId, studentId);
   const existingByMedia = new Map(existing.map((tag) => [tag.mediaId, tag]));
@@ -409,7 +411,7 @@ export const matchStudentAcrossAlbums = async (teacherUserId, studentId) => {
   const touched = [];
 
   for (const [mediaId, faces] of facesByMedia.entries()) {
-    const [match] = bestPerStudent(faces, profiles);
+    const match = bestPerStudent(faces, profiles).find((result) => result.studentId === studentId);
     const source = match ? classifyDistance(match.distance, thresholds) : null;
     if (!source) continue;
 

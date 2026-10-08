@@ -99,9 +99,6 @@ export const uploadLabelChild = (children, confirmedIds, teacherId) =>
   || children.find((child) => Number(child.teacherId) === Number(teacherId))
   || null;
 
-const studentNamesOf = (children) =>
-  Object.fromEntries(children.map((child) => [child.studentId, child.studentName || child.childName]));
-
 /** GET /api/parent/albums — 사진 탭 */
 export const listAlbums = async (req, res) => {
   try {
@@ -159,10 +156,9 @@ export const listMedia = async (req, res) => {
     });
 
     const tagsByMedia = await MediaTag.listByMediaIds(rows.map((row) => row.id));
-    const studentNames = studentNamesOf(children);
     const items = rows.map((row) => toParentMedia(
       { ...row, tags: tagsByMedia[row.id] || [] },
-      { myStudentIds: studentIds, myUserId: req.user.id, studentNames }
+      { myStudentIds: studentIds, myUserId: req.user.id }
     ));
 
     // "혹시 우리 아이?" 묶음은 우리 아이만 볼 때만 따로 모아 준다.
@@ -175,7 +171,7 @@ export const listMedia = async (req, res) => {
         .filter((row) => (candidateTags[row.id] || []).some((tag) => tag.source === 'candidate' && wanted.includes(tag.studentId)))
         .map((row) => toParentMedia(
           { ...row, tags: candidateTags[row.id] || [] },
-          { myStudentIds: studentIds, myUserId: req.user.id, studentNames }
+          { myStudentIds: studentIds, myUserId: req.user.id }
         ));
     }
 
@@ -259,7 +255,7 @@ export const completeUpload = async (req, res) => {
     const context = await loadAlbumContext(req);
     if (context.error) return context.error(res);
 
-    const { event, children, studentIds } = context;
+    const { event, studentIds } = context;
     const media = await EventMedia.getById(parseInt(req.params.mediaId, 10));
     if (!media || media.eventId !== event.id) return res.status(404).json({ error: '업로드 정보를 찾을 수 없어요.' });
     if (Number(media.uploaderUserId) !== Number(req.user.id)) {
@@ -279,7 +275,7 @@ export const completeUpload = async (req, res) => {
     res.json({
       media: toParentMedia(
         { ...result.media, tags: result.tags || [] },
-        { myStudentIds: studentIds, myUserId: req.user.id, studentNames: studentNamesOf(children) }
+        { myStudentIds: studentIds, myUserId: req.user.id }
       ),
       faceStatus: result.faceStatus,
       faceCount: result.faceCount

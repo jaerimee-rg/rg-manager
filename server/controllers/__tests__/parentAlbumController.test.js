@@ -269,7 +269,8 @@ describe('listMedia', () => {
     await listMedia(req, res);
 
     const item = res.json.mock.calls[0][0].items[0];
-    expect(item.myTags).toEqual([{ studentId: 5, name: '김하은', source: 'face' }]);
+    expect(item.myTags).toEqual([{ studentId: 5, source: 'face' }]);
+    expect(JSON.stringify(item)).not.toContain('김하은');
     expect(JSON.stringify(item)).not.toContain('"studentId":8');
   });
 });
