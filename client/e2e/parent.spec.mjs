@@ -508,6 +508,35 @@ test.describe('학부모 — 사진', () => {
     await expect(page.getByRole('button', { name: '사진 고르기' })).toBeDisabled();
   });
 
+  test('등록한 얼굴 사진을 지울 수 있다 — 확인을 거쳐 한 장을 지우면 목록과 개수가 준다', async ({ page, request }) => {
+    await page.goto('/parent/settings');
+
+    const list = page.getByRole('list', { name: `${childName} 등록한 얼굴 사진` });
+    await expect(list.getByRole('listitem')).toHaveCount(2);
+    await expect(page.getByText('얼굴 사진 2장 등록됨')).toBeVisible();
+
+    // 취소하면 그대로
+    await list.getByRole('button', { name: /얼굴 사진 1 삭제/ }).click();
+    const dialog = page.getByRole('dialog').filter({ hasText: '얼굴 사진을 지울까요?' });
+    await dialog.getByRole('button', { name: '취소' }).click();
+    await expect(list.getByRole('listitem')).toHaveCount(2);
+
+    await list.getByRole('button', { name: /얼굴 사진 1 삭제/ }).click();
+    await dialog.getByRole('button', { name: '지우기' }).click();
+
+    await expect(page.getByText(/얼굴 사진을 지웠어요/)).toBeVisible();
+    await expect(list.getByRole('listitem')).toHaveCount(1);
+    await expect(page.getByText('얼굴 사진 1장 등록됨')).toBeVisible();
+
+    // 서버에서도 지워졌고, 새로고침해도 한 장이다
+    const me = await api(request, sessions.parent, 'GET', '/api/parent/me');
+    const child = me.body.children.find((c) => c.childName === childName);
+    const faces = await api(request, sessions.parent, 'GET', `/api/parent/children/${child.id}/faces`);
+    expect(faces.body.items).toHaveLength(1);
+    await page.reload();
+    await expect(list.getByRole('listitem')).toHaveCount(1);
+  });
+
   const pickFacePhoto = async (page) => {
     await page.goto('/parent/settings');
     await page.getByRole('button', { name: /얼굴 사진 등록/ }).first().click();

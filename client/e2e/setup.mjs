@@ -146,6 +146,17 @@ const faceScanEventId = await mkEvent(`e2e얼굴찾기_${stamp}`, null, true, { 
 await mkMedia({ i: 8, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: faceScanEventId, faceStatus: 'none' });
 await mkMedia({ i: 9, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: faceScanEventId, faceStatus: 'none' });
 
+// 학부모가 첫째 아이에 등록해 둔 얼굴 사진 두 장(특징값만) → 내 정보에서 한 장을 지우는 흐름을 본다.
+// 픽스처 사진에는 media_faces 가 없어 지운 뒤의 다시 매칭이 아래 태그를 건드리지 않는다.
+const faceVector = Buffer.from(new Float32Array(128).fill(0.1).buffer).toString('base64');
+for (let i = 0; i < 2; i += 1) {
+  await pool.query(
+    `INSERT INTO child_face_profiles ("studentId","teacherUserId","parentUserId","createdBy",descriptor,"consentAt","createdAt")
+     VALUES ($1,$2,$3,'parent',$4,$5,$5)`,
+    [students[0].id, teacher.id, parent.id, faceVector, now]
+  );
+}
+
 // 첫째 아이 태그를 두 장에 붙인다 → "우리 아이만" 토글로 걸러지는지 확인한다.
 for (const mediaId of mediaIds.slice(0, 2)) {
   await pool.query(
