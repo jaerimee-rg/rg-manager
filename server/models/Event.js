@@ -229,6 +229,26 @@ class Event {
   }
 
   /**
+   * 이 앨범의 자동 태그를 어떤 규칙으로 계산했는지 적는다 (albumService.ensureAlbumMatched).
+   * 조회 요청에서 부르므로 updatedAt 은 건드리지 않는다 — 앨범을 열었다고 이벤트가 "수정" 된 것은 아니다.
+   */
+  static async setAlbumMatchRules(id, signature) {
+    await pool.query('UPDATE events SET "albumMatchRules" = $2 WHERE id = $1', [id, signature]);
+  }
+
+  /**
+   * 그 선생님의 모든 앨범을 "다시 매칭해야 함" 으로 돌린다 — 기준 얼굴이 등록·삭제되면 부른다.
+   * 한 얼굴은 가장 가까운 아이에게만 붙으므로, 한 아이의 기준 얼굴이 바뀌면 다른 아이의 태그도 달라질 수 있다.
+   */
+  static async invalidateAlbumMatches(teacherUserId) {
+    const result = await pool.query(
+      'UPDATE events SET "albumMatchRules" = NULL WHERE "userId" = $1 AND "albumMatchRules" IS NOT NULL',
+      [teacherUserId]
+    );
+    return result.rowCount;
+  }
+
+  /**
    * 학부모 사진 탭: 앨범 폴더가 있고 **선생님이 앨범을 공개한** 공개 이벤트를 최근 순으로.
    * 공개 범위(참가 확정 / 전체)는 컨트롤러가 걸러낸다 (신청·참가 학생을 함께 봐야 하기 때문).
    */

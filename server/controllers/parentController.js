@@ -12,6 +12,7 @@ import MediaTag from '../models/MediaTag.js';
 import { isConfirmedParent, inAudience } from '../utils/albumAccess.js';
 import { thumbnailUrl, toParentMedia } from '../utils/mediaSerializer.js';
 import { matchChild, defaultParentName } from '../services/parentOnboarding.js';
+import albumService from '../services/albumService.js';
 import { teacherIdsOf, teachersOf, childBelongsToEvent } from '../services/parentScope.js';
 import { extractInviteToken } from '../utils/oauthState.js';
 import { canRegister, todayKst } from '../services/eventService.js';
@@ -351,6 +352,7 @@ export const getEvent = async (req, res) => {
         }
 
         if (inAudience({ audience, isConfirmed: confirmed })) {
+          await albumService.ensureAlbumsMatched(event);
           const [summaries, rows] = await Promise.all([
             EventMedia.summaries([event.id], { studentIds }),
             EventMedia.list(event.id, { limit: ALBUM_PREVIEW_COUNT, uploaderUserId: req.user.id })

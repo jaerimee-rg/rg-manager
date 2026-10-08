@@ -120,6 +120,9 @@ export const listAlbums = async (req, res) => {
     }
     if (!visible.length) return res.json({ items: [] });
 
+    // "우리 아이 N장" 이 예전 규칙으로 붙은 태그를 세지 않게, 낡은 앨범은 여기서 다시 매칭한다
+    await albumService.ensureAlbumsMatched(visible);
+
     const summaries = await EventMedia.summaries(visible.map((event) => event.id), { studentIds });
     res.json({ items: visible.map((event) => toParentAlbum(event, summaries[event.id])) });
   } catch (error) {
@@ -135,6 +138,9 @@ export const listMedia = async (req, res) => {
     if (context.error) return context.error(res);
 
     const { event, children, studentIds } = context;
+    // 임계값·규칙·기준 얼굴이 바뀐 뒤 처음 여는 앨범이면 다시 매칭한 다음 보여 준다 ("우리 아이만 보기" 가 낡지 않게)
+    await albumService.ensureAlbumsMatched(event);
+
     const filter = String(req.query.filter || 'all');
     const mineOnly = String(req.query.mine || '') === '1';
     const childStudentId = req.query.studentId ? parseInt(req.query.studentId, 10) : null;
@@ -414,6 +420,9 @@ export const addFace = async (req, res) => {
     });
 
     const matched = await albumService.matchStudentAcrossAlbums(loaded.teacherId, loaded.child.studentId);
+    // 한 얼굴은 가장 가까운 아이에게만 붙는다 — 이 등록으로 다른 아이의 태그도 달라질 수 있어,
+    // 그 선생님의 앨범은 다음에 열 때 전부 다시 매칭한다.
+    await albumService.markAlbumsStale(loaded.teacherId);
 
     res.status(201).json({
       profile: { id: profile.id, createdAt: profile.createdAt, mine: true },
@@ -448,6 +457,8 @@ export const deleteFace = async (req, res) => {
     } else {
       await albumService.matchStudentAcrossAlbums(loaded.teacherId, loaded.child.studentId);
     }
+    // 지운 얼굴에 붙어 있던 사진이 다른 아이에게 더 가까울 수 있다 — 앨범을 다음에 열 때 다시 매칭한다.
+    await albumService.markAlbumsStale(loaded.teacherId);
 
     res.json({ message: '얼굴 사진을 지웠어요.', remaining });
   } catch (error) {

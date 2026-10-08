@@ -323,6 +323,21 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     await expect(page.getByRole('button', { name: '얼굴 찾기' })).toHaveCount(0);
   });
 
+  test('예전 규칙으로 붙은 자동 태그는 앨범을 열 때 다시 매칭돼 사라진다 (임계값·규칙이 바뀐 뒤)', async ({ request }) => {
+    const id = sessions.album.staleEventId;
+
+    // 픽스처: 기준 얼굴과 전혀 다른 얼굴에 'face' 태그(거리 0.45)가 붙어 있고, 앨범은 어떤 규칙으로도 맞춰 본 적이 없다
+    const first = await api(request, sessions.teacher, 'GET', `/api/events/${id}/media`);
+    expect(first.status).toBe(200);
+    expect(first.body.items).toHaveLength(1);
+    expect(first.body.items[0].faceCount).toBe(1);
+    expect(first.body.items[0].tags).toEqual([]);
+
+    // 다시 열어도 같다(이미 지금 규칙으로 적어 두었다)
+    const again = await api(request, sessions.teacher, 'GET', `/api/events/${id}/media`);
+    expect(again.body.items[0].tags).toEqual([]);
+  });
+
   test('앨범에서 공개 범위를 고르고 공개했다가 비공개로 돌린다 — Google 이 없어도 공개 설정은 된다', async ({ page }) => {
     await page.goto(`/photos/${sessions.album.privateEventId}`);
 
