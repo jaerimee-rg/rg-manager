@@ -53,7 +53,7 @@ there is no root `package.json`, so there is no one command that runs everything
 
 ```bash
 cd client && npm test          # jest — 1088 tests / 77 suites
-cd server && npm test          # 1201 tests / 56 suites
+cd server && npm test          # 1204 tests / 56 suites
 ```
 
 - **The server suite is ESM** (`"type": "module"` + `transform: {}`, i.e. no Babel) and only
