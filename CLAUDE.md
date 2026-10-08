@@ -52,8 +52,8 @@ Client and server have **separate** Jest setups and are run from their own direc
 there is no root `package.json`, so there is no one command that runs everything.
 
 ```bash
-cd client && npm test          # jest — 1183 tests / 87 suites
-cd server && npm test          # 1256 tests / 59 suites
+cd client && npm test          # jest — 1203 tests / 87 suites
+cd server && npm test          # 1257 tests / 59 suites
 ```
 
 - **The server suite is ESM** (`"type": "module"` + `transform: {}`, i.e. no Babel) and only
