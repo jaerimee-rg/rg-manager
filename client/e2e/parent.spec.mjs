@@ -273,6 +273,34 @@ test.describe('학부모 — 사진', () => {
     await expect(viewer).toHaveCount(0);
   });
 
+  test('휴대폰에서 영상을 누르면 Drive 플레이어가 화면을 채우고, 이전/다음 버튼이 플레이어를 가리지 않는다', async ({ page }) => {
+    // 진짜 Drive 플레이어 대신 빈 페이지 — 픽스처 파일 id 는 Drive 에 없다
+    await page.route('https://drive.google.com/file/d/**', (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<body style="margin:0;background:#222"></body>' }));
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/parent/photos/${sessions.album.eventId}`);
+    await page.getByRole('button', { name: '영상 열기' }).first().click();
+
+    const viewer = page.getByRole('dialog', { name: '사진 보기' });
+    const player = viewer.locator('iframe');
+    await expect(player).toHaveAttribute('src', /drive\.google\.com\/file\/d\/.+\/preview/);
+
+    // 16:9 상자였을 때는 높이가 206px 이었다 — 그 높이에서 Drive 컨트롤이 영상을 덮었다
+    const box = await player.boundingBox();
+    expect(box.width).toBeGreaterThan(360);
+    expect(box.height).toBeGreaterThan(400);
+
+    const overlaps = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+    for (const name of ['이전 사진', '다음 사진']) {
+      const button = await viewer.getByRole('button', { name }).boundingBox();
+      expect(overlaps(button, box)).toBe(false);
+    }
+
+    // 다음으로 넘기면 플레이어가 사라지고 사진이 뜬다
+    await viewer.getByRole('button', { name: '다음 사진' }).click();
+    await expect(player).toHaveCount(0);
+  });
+
   test('내가 올린 사진에만 삭제가 보인다', async ({ page }) => {
     await page.goto(`/parent/photos/${sessions.album.eventId}`);
     await page.getByRole('button', { name: /내가 올린 것/ }).click();
