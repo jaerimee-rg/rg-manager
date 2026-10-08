@@ -34,9 +34,13 @@ function ParentAlbum() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [openId] = useState(() => Number(searchParams.get('open')) || null);
   /* 선생님이 보낸 사진 폴더 링크에는 그 선생님의 초대가 실려 있다 (`?invite=`, docs/photo-menu FR-518).
-     이 선생님과 아직 연결되지 않은 학부모(다른 선생님 쪽으로만 가입)는 앨범이 404 라, 그 초대로 연결한 뒤
-     한 번 더 읽는다. 한 번만 쓴다 — 이미 연결된 학부모에게는 쓰이지 않는다. */
+     이 선생님과 아직 연결되지 않은 학부모(다른 선생님 쪽으로만 가입)는 앨범이 404 다. 그때는 **먼저 묻는다** —
+     "○○ 선생님이 공유한 사진이에요. 연결하고 볼까요?" 링크를 눌렀다는 것만으로 연결하지 않는다:
+     연결하면 그 선생님의 학부모 목록에 내 이름이 나타나므로, 누가 보낸 링크든 본인이 눌러야 한다
+     (초대 링크 화면이 버튼을 누르게 하는 것과 같은 이유). 이미 연결된 학부모에게는 쓰이지 않는다. */
   const shareInvite = useRef(searchParams.get('invite') || null);
+  const [linkOffer, setLinkOffer] = useState(null);   // { invite, teacherName } — 연결할지 묻는 중
+  const [linking, setLinking] = useState(false);
   const [mineOnly, setMineOnly] = useState(false);
   const [childId, setChildId] = useState(null);
   const [typeFilter, setTypeFilter] = useState('all');
@@ -50,17 +54,19 @@ function ParentAlbum() {
       if (mineOnly) params.set('mine', '1');
       if (mineOnly && childId) params.set('studentId', String(childId));
 
-      const url = `/api/parent/events/${eventId}/media?${params.toString()}`;
-      let response = await fetchWithAuth(url);
+      const response = await fetchWithAuth(`/api/parent/events/${eventId}/media?${params.toString()}`);
 
       if (response.status === 404 && shareInvite.current) {
         const invite = shareInvite.current;
         shareInvite.current = null;
-        const linked = await fetchWithAuth('/api/parent/teachers', {
-          method: 'POST',
-          body: JSON.stringify({ invite })
-        }).catch(() => null);
-        if (linked?.ok) response = await fetchWithAuth(url);
+        // 누구의 초대인지 읽어 묻는다. 죽은 초대면 묻지 않고 아래 "불러오지 못했어요" 로 간다.
+        const inviter = await fetch(`/api/invite/${encodeURIComponent(invite)}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .catch(() => null);
+        if (inviter) {
+          setLinkOffer({ invite, teacherName: inviter.teacherName || '' });
+          return;
+        }
       }
 
       const payload = await response.json().catch(() => ({}));
@@ -83,6 +89,20 @@ function ParentAlbum() {
   }, [eventId, mineOnly, childId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // 학부모가 [연결하고 사진 보기] 를 눌렀을 때만 그 선생님과 연결한다
+  const acceptLink = async () => {
+    if (!linkOffer || linking) return;
+    setLinking(true);
+    const linked = await fetchWithAuth('/api/parent/teachers', {
+      method: 'POST',
+      body: JSON.stringify({ invite: linkOffer.invite })
+    }).catch(() => null);
+    setLinking(false);
+    setLinkOffer(null);
+    if (linked?.ok) load();
+    else setDenied('선생님과 연결하지 못했어요.');
+  };
 
   // 초대 값은 처음 읽을 때만 쓴다 — 다 읽었으면 주소에서 지운다(주소를 다시 공유하거나 새로고침해도 깔끔하게)
   const settled = Boolean(data) || Boolean(denied);
@@ -147,6 +167,26 @@ function ParentAlbum() {
       toast('지우지 못했어요.');
     }
   };
+
+  // 공유받은 링크의 선생님과 아직 연결되지 않았다 — 연결할지 묻는다 (FR-518)
+  if (linkOffer) {
+    const who = linkOffer.teacherName ? `${linkOffer.teacherName} 선생님` : '다른 선생님';
+    return (
+      <ParentLayout title="사진" back="/parent/photos">
+        <EmptyState
+          icon="image"
+          title={`${who}이 공유한 사진이에요`}
+          description={`아직 ${who}과 연결돼 있지 않아요. 연결하면 사진을 볼 수 있고, 선생님의 학부모 목록에 내 이름이 보여요.`}
+          action={(
+            <>
+              <Button variant="primary" loading={linking} onClick={acceptLink}>연결하고 사진 보기</Button>
+              <Button disabled={linking} onClick={() => navigate('/parent/photos')}>취소</Button>
+            </>
+          )}
+        />
+      </ParentLayout>
+    );
+  }
 
   // 선생님이 비공개로 둔(또는 돌린) 앨범 — 링크를 갖고 있던 학부모가 직접 열었을 때 (docs/photo-menu FR-541)
   if (denied && deniedReason === 'album_private') {

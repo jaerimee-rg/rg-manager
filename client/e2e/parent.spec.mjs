@@ -801,7 +801,7 @@ test.describe('선생님 사진 화면 — 학부모가 올린 사진의 이름'
  * 처음 온 사람은 그 초대로 가입해서, 다른 선생님 쪽으로만 가입한 학부모는 이 선생님과 연결돼서 열린다.
  */
 test.describe('학부모 — 공유받은 사진 폴더 링크', () => {
-  test('로그인 전에 열면 누가 보냈는지 알려 주고, 로그인하면 그 선생님과 연결된 뒤 사진이 열린다', async ({ page, request }) => {
+  test('로그인 전에 열면 누가 보냈는지 알려 주고, 로그인한 뒤 연결할지 물은 다음 사진이 열린다', async ({ page, request }) => {
     const id = sessions.album.folderEventId;
     const title = sessions.album.folderTitle;
     const setAlbum = (body) => api(request, sessions.teacher, 'PATCH', `/api/events/${id}/album`, body);
@@ -843,7 +843,13 @@ test.describe('학부모 — 공유받은 사진 폴더 링크', () => {
       expect(startUrl.searchParams.get('invite')).toBe(sessions.invite);
       expect(startUrl.searchParams.get('soft')).toBe('1');
 
-      // 로그인 뒤 그 사진 폴더로 돌아온다 — 초대로 이 선생님과 연결되고 사진이 열린다. 주소의 초대는 지워진다.
+      // 로그인 뒤 그 사진 폴더로 돌아온다. 아직 이 선생님과 연결되지 않았으니 **먼저 묻는다** —
+      // 링크를 눌렀다고 바로 연결하지 않는다(선생님의 학부모 목록에 이름이 나타나므로 본인이 눌러야 한다).
+      await expect(page.getByText(`${sessions.teacher.user.username} 선생님이 공유한 사진이에요`)).toBeVisible();
+      expect((await mediaAs(sessions.parentOther)).status).toBe(404);   // 아직 연결 전
+
+      // [연결하고 사진 보기] → 이 선생님과 연결되고 사진이 열린다. 주소의 초대는 지워진다.
+      await page.getByRole('button', { name: '연결하고 사진 보기' }).click();
       await expect(page.getByRole('heading', { name: title })).toBeVisible();
       await expect(page.getByRole('button', { name: '사진 열기' })).toHaveCount(1);
       await expect(page).toHaveURL(new RegExp(`/parent/photos/${id}$`));

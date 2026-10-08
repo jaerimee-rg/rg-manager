@@ -194,50 +194,113 @@ describe('ParentAlbum', () => {
 
 describe('ParentAlbum — 공유 링크의 초대 (docs/photo-menu FR-518)', () => {
   const notFound = () => jsonResponse({ error: '이벤트를 찾을 수 없습니다.' }, { ok: false, status: 404 });
+  const inviteInfo = (teacherName) => {
+    global.fetch = jest.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ valid: true, teacherName }) }));
+  };
+  const linkCalls = () => fetchWithAuth.mock.calls.filter(([url]) => url === '/api/parent/teachers');
 
-  it('이 선생님과 아직 연결되지 않아 404 면 링크의 초대로 연결한 뒤 다시 읽는다', async () => {
+  // 연결 전에는 404, [연결하고 사진 보기] 뒤에는 사진이 온다
+  const serverThatLinks = () => {
     let linked = false;
-    fetchWithAuth.mockImplementation((url, options = {}) => {
+    fetchWithAuth.mockImplementation((url) => {
       if (url === '/api/parent/teachers') { linked = true; return jsonResponse({ teachers: [], alreadyLinked: false }, { status: 201 }); }
       if (url.startsWith('/api/parent/events/3/media')) return linked ? jsonResponse(payload()) : notFound();
       return jsonResponse({});
     });
+  };
+
+  afterEach(() => { delete global.fetch; });
+
+  it('이 선생님과 아직 연결되지 않았으면 누구의 사진인지 알리고 묻는다 — 링크를 눌렀다고 바로 연결하지 않는다', async () => {
+    inviteInfo('이재림');
+    serverThatLinks();
 
     await renderAlbum('/parent/photos/3?invite=tok');
+
+    expect(global.fetch).toHaveBeenCalledWith('/api/invite/tok');
+    expect(screen.getByText('이재림 선생님이 공유한 사진이에요')).toBeInTheDocument();
+    expect(screen.getByText(/선생님의 학부모 목록에 내 이름이 보여요/)).toBeInTheDocument();
+    expect(linkCalls()).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: /사진 열기/ })).not.toBeInTheDocument();
+  });
+
+  it('[연결하고 사진 보기] 를 누르면 그 초대로 연결한 뒤 사진을 다시 읽는다', async () => {
+    inviteInfo('이재림');
+    serverThatLinks();
+    await renderAlbum('/parent/photos/3?invite=tok');
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '연결하고 사진 보기' })); });
 
     expect(fetchWithAuth).toHaveBeenCalledWith('/api/parent/teachers', { method: 'POST', body: JSON.stringify({ invite: 'tok' }) });
     expect(screen.getAllByRole('button', { name: /사진 열기|영상 열기/ })).toHaveLength(2);
-    expect(screen.queryByText(/사진을 불러오지 못했어요/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/공유한 사진이에요/)).not.toBeInTheDocument();
   });
 
-  it('이미 연결된 학부모에게는 초대를 쓰지 않는다', async () => {
-    fetchWithAuth.mockImplementation(() => jsonResponse(payload()));
+  it('[취소] 를 누르면 연결하지 않고 사진 목록으로 간다', async () => {
+    inviteInfo('이재림');
+    serverThatLinks();
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={['/parent/photos/3?invite=tok']}>
+          <Routes>
+            <Route path="/parent/photos/:eventId" element={<ParentAlbum />} />
+            <Route path="/parent/photos" element={<div>사진 목록</div>} />
+          </Routes>
+        </MemoryRouter>
+      );
+    });
 
-    await renderAlbum('/parent/photos/3?invite=tok');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '취소' })); });
 
-    expect(fetchWithAuth.mock.calls.some(([url]) => url === '/api/parent/teachers')).toBe(false);
-    expect(screen.getAllByRole('button', { name: /사진 열기|영상 열기/ })).toHaveLength(2);
+    expect(linkCalls()).toHaveLength(0);
+    expect(screen.getByText('사진 목록')).toBeInTheDocument();
   });
 
-  it('초대가 죽었으면 한 번만 시도하고 못 불러왔다고 알린다', async () => {
+  it('연결에 실패하면 알리고 다시 묻지 않는다', async () => {
+    inviteInfo('이재림');
     fetchWithAuth.mockImplementation((url) => {
       if (url === '/api/parent/teachers') return jsonResponse({ error: '유효하지 않은 초대 링크입니다.' }, { ok: false, status: 400 });
       return notFound();
     });
+    await renderAlbum('/parent/photos/3?invite=tok');
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '연결하고 사진 보기' })); });
+
+    expect(linkCalls()).toHaveLength(1);
+    expect(screen.getByText(/선생님과 연결하지 못했어요/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '연결하고 사진 보기' })).not.toBeInTheDocument();
+  });
+
+  it('이미 연결된 학부모에게는 묻지도 않고 초대를 쓰지도 않는다', async () => {
+    inviteInfo('이재림');
+    fetchWithAuth.mockImplementation(() => jsonResponse(payload()));
+
+    await renderAlbum('/parent/photos/3?invite=tok');
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(linkCalls()).toHaveLength(0);
+    expect(screen.getAllByRole('button', { name: /사진 열기|영상 열기/ })).toHaveLength(2);
+  });
+
+  it('초대가 죽었으면 묻지 않고 못 불러왔다고 알린다', async () => {
+    global.fetch = jest.fn(() => Promise.resolve({ ok: false, json: () => Promise.resolve({}) }));
+    fetchWithAuth.mockImplementation(() => notFound());
 
     await renderAlbum('/parent/photos/3?invite=gone');
 
-    expect(fetchWithAuth.mock.calls.filter(([url]) => url === '/api/parent/teachers')).toHaveLength(1);
-    expect(fetchWithAuth.mock.calls.filter(([url]) => url.startsWith('/api/parent/events/3/media'))).toHaveLength(1);
+    expect(linkCalls()).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: '연결하고 사진 보기' })).not.toBeInTheDocument();
     expect(screen.getByText(/사진을 불러오지 못했어요/)).toBeInTheDocument();
   });
 
-  it('초대 없이 404 면 연결을 시도하지 않는다', async () => {
+  it('초대 없이 404 면 묻지 않는다', async () => {
+    global.fetch = jest.fn();
     fetchWithAuth.mockImplementation(() => notFound());
 
     await renderAlbum('/parent/photos/3');
 
-    expect(fetchWithAuth.mock.calls.some(([url]) => url === '/api/parent/teachers')).toBe(false);
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(linkCalls()).toHaveLength(0);
   });
 });
 

@@ -52,7 +52,7 @@ Client and server have **separate** Jest setups and are run from their own direc
 there is no root `package.json`, so there is no one command that runs everything.
 
 ```bash
-cd client && npm test          # jest — 1203 tests / 87 suites
+cd client && npm test          # jest — 1206 tests / 87 suites
 cd server && npm test          # 1257 tests / 59 suites
 ```
 
@@ -461,7 +461,9 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   parent; an existing parent is linked to the teacher; but a dead token **does not block login**, and a Kakao id
   that only has teacher/admin accounts is **not** turned into a parent (a teacher testing their own link). A real
   invite link (`/invite/<token>`) keeps its strict behaviour. A logged-in parent who is not yet linked gets a 404
-  on the album; `ParentAlbum` then links via `POST /api/parent/teachers` with the `invite` param once and retries.
+  on the album; `ParentAlbum` then **asks first** ("○○ 선생님이 공유한 사진이에요 · 연결하고 사진 보기") and only on
+  that click links via `POST /api/parent/teachers` — never link on navigation alone, because linking puts the
+  parent's name and email in that teacher's parent list.
   Teachers opening `/parent/photos/:id` are redirected to `/photos/:id`.
 - **Albums start private** (`events."albumPublished"` default false). The teacher publishes from the album
   page's 공개 panel, choosing `albumAudience` = `participants` (confirmed parents, default) or `all` (every
