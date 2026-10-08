@@ -105,10 +105,40 @@ export const filterChips = (counts = {}) => {
   ];
 };
 
-/** 이벤트 고르기 한 줄의 오른쪽 표시 (FR-513) */
+/**
+ * 이벤트 고르기 한 줄의 오른쪽 표시 (FR-513).
+ * 앨범이 없는 이벤트는 "사진 없음" — 폴더는 고르면 아래에 "Drive 에 새로 만들 폴더" 로 보여 준다.
+ * ("새 폴더" 라고 쓰면 맨 위의 "새 폴더(이벤트) 만들기" 와 헷갈린다, FR-517)
+ */
 export const targetState = (target) => {
-  if (!target?.hasAlbum) return { text: '새 폴더', badge: null };
+  if (!target?.hasAlbum) return { text: '사진 없음', badge: null };
   return { text: `사진 ${target.count || 0}`, badge: target.published ? 'published' : 'private' };
+};
+
+/**
+ * 서버 folderNameFromEvent 와 같은 규칙 — "2026-10-12 회장배 대회".
+ * 새 폴더(이벤트)를 만들 때 Drive 에 생길 이름을 미리 보여 준다 (FR-517).
+ */
+export const FOLDER_NAME_MAX = 100;
+export const folderNameFrom = ({ date, title } = {}) => {
+  const day = String(date || '').slice(0, 10);
+  const cleanTitle = String(title || '')
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .replace(/[\\/:*?"<>|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const name = `${day} ${cleanTitle}`.trim().slice(0, FOLDER_NAME_MAX).trim();
+  return name || '앨범';
+};
+
+/** 새 폴더(이벤트) 입력 확인 — 서버 POST /api/albums 와 같은 규칙. → null | 안내 문구 */
+export const NEW_FOLDER_TITLE_MAX = 100;
+export const newFolderProblem = ({ title, date } = {}) => {
+  const name = String(title || '').trim();
+  if (!name) return '이름을 입력해 주세요.';
+  if (name.length > NEW_FOLDER_TITLE_MAX) return `이름은 ${NEW_FOLDER_TITLE_MAX}자 이내로 입력해 주세요.`;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return '날짜를 선택해 주세요.';
+  return null;
 };
 
 /** 고른 이벤트의 앨범으로 올렸을 때 학부모에게 바로 보이는지 (FR-515) */
@@ -144,6 +174,8 @@ export default {
   PROBLEM_MESSAGES,
   filterChips,
   targetState,
+  folderNameFrom,
+  newFolderProblem,
   uploadPublishNote,
   toViewerItem
 };

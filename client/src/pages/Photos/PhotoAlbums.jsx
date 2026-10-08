@@ -12,6 +12,7 @@ import { canUploadWith, driveNotice, formatEventDate, typeLabel, PROBLEM_MESSAGE
  *
  * 앨범 하나 = 이벤트 하나. [사진 올리기] 는 먼저 "어느 이벤트 사진인가요?" 를 묻고,
  * 고른 이벤트에 사진을 연결한다(앨범이 없던 이벤트면 서버가 이벤트 이름 폴더를 만든다).
+ * 맞는 이벤트가 없으면 그 자리에서 이름·날짜로 새 폴더(이벤트)를 만든다(FR-517).
  * Google 계정 연결은 설정에서만 한다 — 여기서는 안내하고 설정으로 보낸다.
  */
 function PhotoAlbums() {
@@ -57,7 +58,7 @@ function PhotoAlbums() {
     <>
       <PageHeader
         title="사진"
-        description="사진을 올릴 때 이벤트를 고르면 그 이벤트에 연결돼요. 공개한 앨범만 학부모 ‘사진’ 탭과 이벤트 상세에 보여요."
+        description="사진을 올릴 때 이벤트를 고르거나 새 폴더(이벤트)를 만들면 거기에 연결돼요. 공개한 앨범만 학부모 ‘사진’ 탭과 이벤트 상세에 보여요."
         actions={uploadButton}
       />
 
@@ -88,7 +89,7 @@ function PhotoAlbums() {
           <EmptyState
             icon="image"
             title="아직 앨범이 없어요"
-            description="사진을 올릴 때 이벤트를 고르면, Drive 에 그 이벤트 이름의 폴더가 생기고 앨범이 만들어져요."
+            description="사진을 올릴 때 이벤트를 고르거나 새 폴더(이벤트)를 만들면, Drive 에 그 이름의 폴더가 생기고 앨범이 만들어져요."
             action={uploadButton}
           />
         </Card>

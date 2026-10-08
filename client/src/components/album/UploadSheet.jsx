@@ -4,10 +4,16 @@ import { partitionFiles, readTakenAt, makePreview, MAX_FILES } from '../../utils
 import { uploadToDrive } from '../../utils/driveUpload';
 import { detectFaces } from '../../utils/faceClient';
 import { formatSize } from '../../utils/mediaUrls';
-import { formatShortDate, targetState, uploadPublishNote } from '../../pages/Photos/albumState';
+import { todayString } from '../../utils/eventFormat';
 import {
-  Badge, Button, Callout, Checkbox, Icon, List, ListRow, Modal, Progress, Stack
+  folderNameFrom, formatShortDate, newFolderProblem, targetState, uploadPublishNote, NEW_FOLDER_TITLE_MAX
+} from '../../pages/Photos/albumState';
+import {
+  Badge, Button, Callout, Checkbox, Field, Icon, Input, List, ListRow, Modal, Progress, Stack
 } from '../ui';
+
+// 이벤트 고르기에서 "새 폴더(이벤트) 만들기" 를 고른 상태 (FR-517)
+const NEW_FOLDER = 'new';
 
 /**
  * 사진·영상 올리기 시트. 선생님·학부모가 같이 쓴다.
@@ -21,7 +27,9 @@ import {
  *
  * 선생님 사진 메뉴(docs/photo-menu)에서만 쓰는 것:
  *   targets      — 주면 첫 단계가 "어느 이벤트 사진인가요?" 가 된다(FR-513). 고른 이벤트에 사진이 연결되고,
- *                  앨범이 없던 이벤트면 서버가 업로드 직전에 이벤트 이름 폴더를 만든다. apiBase 는 고른 이벤트로 정해진다.
+ *                  앨범이 없던 이벤트면 서버가 업로드 직전에 이벤트 이름 폴더를 만든다. 올리는 주소는 고른 이벤트로 정해진다.
+ *                  맞는 이벤트가 없으면 이름·날짜를 써서 **새 폴더(이벤트)** 를 만들 수 있다(FR-517) — 이벤트는
+ *                  [N개 올리기] 를 누를 때 만든다(파일을 고르다 그만두면 빈 이벤트가 남지 않게).
  *   allowPublish — "다 올리면 바로 학부모에게 공개" 체크를 보인다(FR-515). 이미 공개된 앨범이면 체크 대신 안내 한 줄.
  *   published    — targets 없이 쓸 때 그 앨범이 공개 중인지
  * onDone({ eventId, uploaded, published }) — 다 올린 뒤 한 번 부른다.
@@ -39,9 +47,18 @@ function UploadSheet({
   onDone
 }) {
   const pickingTarget = Array.isArray(targets);
-  const [targetId, setTargetId] = useState(() => initialEventId ?? (pickingTarget ? targets[0]?.eventId ?? null : null));
-  const target = pickingTarget ? targets.find((t) => t.eventId === targetId) || null : null;
-  const apiBase = pickingTarget ? (target ? `/api/events/${target.eventId}` : null) : fixedApiBase;
+  const [targetId, setTargetId] = useState(() => initialEventId ?? (pickingTarget ? targets[0]?.eventId ?? NEW_FOLDER : null));
+  const [draft, setDraft] = useState(() => ({ title: '', date: todayString() }));
+  // 이 시트에서 만든 이벤트 — 목록 맨 위에 넣고, 업로드가 실패해 다시 올려도 같은 이벤트를 쓴다(두 번 만들지 않게)
+  const [createdTargets, setCreatedTargets] = useState([]);
+  const allTargets = pickingTarget
+    ? [...createdTargets, ...targets.filter((t) => !createdTargets.some((c) => c.eventId === t.eventId))]
+    : [];
+  const creatingNew = pickingTarget && targetId === NEW_FOLDER;
+  const draftProblem = creatingNew ? newFolderProblem(draft) : null;
+  const target = !pickingTarget ? null : creatingNew
+    ? { eventId: null, title: draft.title.trim(), date: draft.date, hasAlbum: false, published: false, folderName: folderNameFrom(draft) }
+    : allTargets.find((t) => t.eventId === targetId) || null;
   const eventTitle = pickingTarget ? target?.title : fixedTitle;
   const alreadyPublished = pickingTarget ? Boolean(target?.hasAlbum && target?.published) : published;
 
@@ -68,12 +85,37 @@ function UploadSheet({
     setError('');
   };
 
+  // 새 폴더(이벤트)를 서버에 만든다 → 만든(또는 이미 있던 같은 이름·날짜) 이벤트의 target, 실패하면 null
+  const createFolderEvent = async () => {
+    const response = await fetchWithAuth('/api/albums', {
+      method: 'POST',
+      body: JSON.stringify({ title: draft.title.trim(), date: draft.date })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.target?.eventId) {
+      setError(data.error || '새 폴더(이벤트)를 만들지 못했어요.');
+      return null;
+    }
+    setCreatedTargets((prev) => [data.target, ...prev.filter((t) => t.eventId !== data.target.eventId)]);
+    setTargetId(data.target.eventId);
+    return data.target;
+  };
+
   const start = async () => {
     if (!accepted.length) return;
     setPhase('busy');
     setError('');
 
     try {
+      // 0) 새 폴더(이벤트)를 골랐으면 먼저 이벤트를 만든다 — 이후는 고른 이벤트와 똑같다.
+      let uploadTarget = target;
+      if (creatingNew) {
+        uploadTarget = await createFolderEvent();
+        if (!uploadTarget) { setPhase('pick'); return; }
+      }
+      const base = pickingTarget ? `/api/events/${uploadTarget.eventId}` : fixedApiBase;
+      const wasPublished = pickingTarget ? Boolean(uploadTarget.hasAlbum && uploadTarget.published) : published;
+
       // 1) 세션 발급 — 찍은 시각도 함께 보내 정렬에 쓴다.
       const files = [];
       for (const entry of accepted) {
@@ -84,7 +126,7 @@ function UploadSheet({
         });
       }
 
-      const response = await fetchWithAuth(`${apiBase}/media/uploads`, {
+      const response = await fetchWithAuth(`${base}/media/uploads`, {
         method: 'POST',
         body: JSON.stringify({ files })
       });
@@ -129,7 +171,7 @@ function UploadSheet({
           }
         }
 
-        const completed = await fetchWithAuth(`${apiBase}/media/${session.mediaId}/complete`, {
+        const completed = await fetchWithAuth(`${base}/media/${session.mediaId}/complete`, {
           method: 'POST',
           body: JSON.stringify({
             driveFileId: result.file?.id,
@@ -149,8 +191,8 @@ function UploadSheet({
       //    공개 요청이 실패하면 사진은 올라갔지만 비공개 그대로이므로, 완료 화면에서 따로 알린다.
       let publishedNow = false;
       let publishFailed = false;
-      if (allowPublish && publishWhenDone && !alreadyPublished && uploaded > 0) {
-        const patched = await fetchWithAuth(`${apiBase}/album`, {
+      if (allowPublish && publishWhenDone && !wasPublished && uploaded > 0) {
+        const patched = await fetchWithAuth(`${base}/album`, {
           method: 'PATCH',
           body: JSON.stringify({ published: true })
         }).catch(() => null);
@@ -169,9 +211,9 @@ function UploadSheet({
       });
       setPhase('done');
       onDone?.({
-        eventId: pickingTarget ? target?.eventId : null,
+        eventId: pickingTarget ? uploadTarget.eventId : null,
         uploaded,
-        published: alreadyPublished || publishedNow
+        published: wasPublished || publishedNow
       });
     } catch (uploadError) {
       console.error('업로드 실패:', uploadError);
@@ -204,7 +246,9 @@ function UploadSheet({
       {phase === 'target' && (
         <>
           <Button block onClick={onClose}>닫기</Button>
-          <Button variant="primary" block icon="image" disabled={!target} onClick={chooseFiles}>사진 고르기</Button>
+          <Button variant="primary" block icon="image" disabled={!target || Boolean(draftProblem)} onClick={chooseFiles}>
+            사진 고르기
+          </Button>
         </>
       )}
       {phase === 'pick' && (
@@ -226,7 +270,7 @@ function UploadSheet({
       onClose={phase === 'busy' ? undefined : onClose}
       closeOnScrim={phase !== 'busy'}
       title={phase === 'done' ? '다 올렸어요' : phase === 'busy' ? '올리는 중…' : '사진 · 영상 올리기'}
-      description={phase === 'target' ? '어느 이벤트 사진인가요? 고른 이벤트에 연결돼요.' : undefined}
+      description={phase === 'target' ? '어느 이벤트 사진인가요? 고른 이벤트에 연결돼요. 없으면 새로 만들어요.' : undefined}
       aria-label="사진 영상 올리기"
       footer={footer}
     >
@@ -243,38 +287,68 @@ function UploadSheet({
 
       {phase === 'target' && (
         <Stack gap={4}>
-          {targets.length === 0 ? (
-            <Callout tone="neutral">사진을 연결할 대회·스페셜 이벤트가 없어요. 이벤트 관리에서 먼저 등록해 주세요.</Callout>
-          ) : (
-            <div className="ui-event-pick" role="radiogroup" aria-label="이벤트 고르기">
-              {targets.map((t) => {
-                const selected = t.eventId === targetId;
-                const state = targetState(t);
-                return (
-                  <button
-                    key={t.eventId}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    aria-pressed={selected}
-                    className="ui-choice"
-                    onClick={() => setTargetId(t.eventId)}
-                  >
-                    <span className="ui-choice__mark" data-on={selected || undefined}><Icon name="check" size={14} /></span>
-                    <span className="ui-event-pick__date">{formatShortDate(t.date)}</span>
-                    <span className="ui-event-pick__title">
-                      {t.title}{t.upcoming && <> <Badge tone="warning">예정</Badge></>}
-                    </span>
-                    <span className="ui-text-sm ui-text-muted">{state.text}</span>
-                    {state.badge === 'published' && <Badge tone="success" dot>공개</Badge>}
-                    {state.badge === 'private' && <Badge tone="muted" dot>비공개</Badge>}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <div className="ui-event-pick" role="radiogroup" aria-label="이벤트 고르기">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={creatingNew}
+              aria-pressed={creatingNew}
+              className="ui-choice"
+              onClick={() => setTargetId(NEW_FOLDER)}
+            >
+              <span className="ui-choice__mark" data-on={creatingNew || undefined}><Icon name="check" size={14} /></span>
+              <span className="ui-event-pick__date"><Icon name="plus" size={16} /></span>
+              <span className="ui-event-pick__title">새 폴더(이벤트) 만들기</span>
+              <span className="ui-text-sm ui-text-muted ui-event-pick__hint">맞는 이벤트가 없을 때</span>
+            </button>
+            {allTargets.map((t) => {
+              const selected = t.eventId === targetId;
+              const state = targetState(t);
+              return (
+                <button
+                  key={t.eventId}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  aria-pressed={selected}
+                  className="ui-choice"
+                  onClick={() => setTargetId(t.eventId)}
+                >
+                  <span className="ui-choice__mark" data-on={selected || undefined}><Icon name="check" size={14} /></span>
+                  <span className="ui-event-pick__date">{formatShortDate(t.date)}</span>
+                  <span className="ui-event-pick__title">
+                    {t.title}{t.upcoming && <> <Badge tone="warning">예정</Badge></>}
+                  </span>
+                  <span className="ui-text-sm ui-text-muted">{state.text}</span>
+                  {state.badge === 'published' && <Badge tone="success" dot>공개</Badge>}
+                  {state.badge === 'private' && <Badge tone="muted" dot>비공개</Badge>}
+                </button>
+              );
+            })}
+          </div>
           {target && (
             <div className="ui-event-pick__foot">
+              {creatingNew && (
+                <div className="ui-event-pick__new">
+                  <Field label="이름" required htmlFor="new-folder-title">
+                    {(props) => (
+                      <Input
+                        {...props} type="text" value={draft.title} maxLength={NEW_FOLDER_TITLE_MAX} autoFocus
+                        placeholder="예: 가을 소풍"
+                        onChange={(event) => setDraft((prev) => ({ ...prev, title: event.target.value }))}
+                      />
+                    )}
+                  </Field>
+                  <Field label="날짜" required htmlFor="new-folder-date">
+                    {(props) => (
+                      <Input
+                        {...props} type="date" value={draft.date}
+                        onChange={(event) => setDraft((prev) => ({ ...prev, date: event.target.value }))}
+                      />
+                    )}
+                  </Field>
+                </div>
+              )}
               <div className="ui-text-xs ui-text-muted">{target.hasAlbum ? '올라갈 폴더' : 'Drive 에 새로 만들 폴더'}</div>
               <div className="ui-folder-line">
                 <Icon name="folder" size={18} />
@@ -282,6 +356,12 @@ function UploadSheet({
                   <span className="ui-folder-line__root">{rootFolderName} / </span>{target.folderName}
                 </span>
               </div>
+              {creatingNew && (
+                <p className="ui-text-sm ui-text-muted">
+                  신청을 받지 않는 스페셜 이벤트로 함께 만들어져요. 공개하면 연결된 모든 학부모가 봐요.
+                  장소·설명은 이벤트 관리에서 고칠 수 있어요.
+                </p>
+              )}
               {publishControl}
             </div>
           )}

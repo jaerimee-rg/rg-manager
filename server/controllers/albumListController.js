@@ -75,4 +75,43 @@ export const listAlbums = async (req, res) => {
   }
 };
 
-export default { listAlbums };
+const TITLE_MAX = 100;   // 이벤트 폼과 같은 한도 (eventController.TITLE_MAX)
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+// 2026-02-31 처럼 넘어가는 날짜도, 2026-13-01 처럼 읽을 수 없는 날짜도(toISOString 이 던진다) 거른다
+const isRealDate = (date) => {
+  if (!DATE_RE.test(date)) return false;
+  const time = Date.parse(`${date}T00:00:00Z`);
+  return Number.isFinite(time) && new Date(time).toISOString().startsWith(date);
+};
+
+/**
+ * POST /api/albums — 사진을 묶을 이벤트가 없을 때 "새 폴더(이벤트)" 를 만든다 (docs/photo-menu FR-517).
+ * body { title, date } → 스페셜 이벤트 하나. Drive 폴더는 첫 업로드 때 그 이름으로 만들어진다.
+ * 같은 이름·날짜의 내 이벤트가 이미 있으면 새로 만들지 않고 그것을 돌려준다(두 번 눌러도 하나).
+ * 응답의 target 은 GET 의 targets 한 줄과 같은 모양이라 업로드 시트가 그대로 쓴다.
+ */
+export const createAlbumEvent = async (req, res) => {
+  try {
+    const title = String(req.body?.title ?? '').trim();
+    const date = String(req.body?.date ?? '').trim();
+    if (!title) return res.status(400).json({ error: '폴더(이벤트) 이름을 입력해 주세요.' });
+    if (title.length > TITLE_MAX) return res.status(400).json({ error: `이름은 ${TITLE_MAX}자 이내로 입력해 주세요.` });
+    if (!isRealDate(date)) return res.status(400).json({ error: '날짜를 선택해 주세요.' });
+
+    const today = todayKst();
+    const mine = await Event.listForPhotos(req.user.id);
+    const existing = mine.find((event) => event.title === title && event.date === date);
+    if (existing) {
+      const summaries = existing.driveFolderId ? await EventMedia.summariesForTeacher([existing.id]) : {};
+      return res.json({ created: false, target: toTarget(existing, summaries[existing.id], today) });
+    }
+
+    const event = await Event.createForPhotos({ userId: req.user.id, title, date });
+    res.status(201).json({ created: true, target: toTarget(event, null, today) });
+  } catch (error) {
+    console.error('사진 폴더(이벤트) 만들기 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+export default { listAlbums, createAlbumEvent };
