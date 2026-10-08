@@ -64,7 +64,8 @@ function ParentApp() {
           <Route path="/parent/events/:eventId" element={<ParentEventDetail />} />
           <Route path="/parent/photos" element={<ParentAlbumList />} />
           <Route path="/parent/photos/:eventId" element={<ParentAlbum />} />
-          <Route path="/parent/settings" element={<ParentSettings />} />
+          {/* 마지막 아이를 지우면 내 정보를 다시 읽어 위 가드가 온보딩으로 보낸다 */}
+          <Route path="/parent/settings" element={<ParentSettings onChildrenChanged={loadMe} />} />
           <Route path="*" element={<Navigate to="/parent/schedule" replace />} />
         </>
       )}

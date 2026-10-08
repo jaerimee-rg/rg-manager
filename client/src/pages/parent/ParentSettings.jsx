@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import ParentLayout from '../../components/parent/ParentLayout';
 import ChildFaceCard from './ChildFaceCard';
 import RoleSwitcher from '../../components/common/RoleSwitcher';
+import { ConfirmDialog, IconButton } from '../../components/ui';
 
 const STATUS = {
   linked: { label: '연결됨', className: 'badge-success' },
@@ -11,7 +12,19 @@ const STATUS = {
   unlinked: { label: '연결 해제됨', className: 'badge-gray' }
 };
 
-function ParentSettings() {
+/**
+ * 아이 삭제 확인 문구. 지워지는 것과 남는 것을 미리 알린다 —
+ * 선생님 명단의 학생과 신청은 남고, 내가 등록한 얼굴 사진은 함께 지워진다.
+ */
+export const deleteChildMessage = (child, { isLast = false } = {}) => {
+  const lines = [`${child.childName} 정보를 내 정보에서 삭제해요.`];
+  if (child.studentId) lines.push('선생님 명단의 학생과 이미 신청한 일정은 그대로 남아요.');
+  if (child.faceProfileCount > 0) lines.push('내가 등록한 얼굴 사진은 함께 지워져요.');
+  if (isLast) lines.push('마지막 아이라서, 삭제하면 아이를 다시 등록하는 화면으로 이동해요.');
+  return lines;
+};
+
+function ParentSettings({ onChildrenChanged }) {
   const { logout } = useAuth();
   const [me, setMe] = useState(null);
   const [adding, setAdding] = useState(false);
@@ -27,6 +40,11 @@ function ParentSettings() {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [nameError, setNameError] = useState('');
+  // 삭제 확인 창에 올라 있는 아이
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [childNotice, setChildNotice] = useState('');
+  const [childError, setChildError] = useState('');
 
   const load = async () => {
     const response = await fetchWithAuth('/api/parent/me');
@@ -91,6 +109,36 @@ function ParentSettings() {
     setChildTeacherId('');
     setAdding(false);
     load();
+  };
+
+  /**
+   * 내가 등록한 아이를 지운다. 선생님 명단의 학생은 그대로이고 이 계정의 연결만 사라진다.
+   * 아이가 하나도 안 남으면 ParentApp 이 내 정보를 다시 읽어 온보딩으로 보낸다.
+   */
+  const deleteChild = async () => {
+    const target = deleteTarget;
+    setDeleting(true);
+    setChildNotice('');
+    setChildError('');
+
+    try {
+      const response = await fetchWithAuth(`/api/parent/children/${target.id}`, { method: 'DELETE' });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setChildError(data.error || '삭제하지 못했어요.');
+        return;
+      }
+
+      setChildNotice(`${target.childName} 정보를 삭제했어요.`);
+      await load();
+      onChildrenChanged?.();
+    } catch {
+      setChildError('삭제하지 못했어요. 잠시 뒤 다시 시도해 주세요.');
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
   };
 
   /**
@@ -197,9 +245,20 @@ function ParentSettings() {
                 </div>
               </div>
               <span className={`badge ${status.className}`}>{status.label}</span>
+              <IconButton
+                icon="trash" size="sm" label={`${c.childName} 삭제`}
+                onClick={() => { setChildNotice(''); setChildError(''); setDeleteTarget(c); }}
+              />
             </div>
           );
         })}
+
+        {childNotice && (
+          <div role="status" style={{ fontSize: '0.8125rem', color: 'var(--color-gray-500)', marginTop: '8px' }}>{childNotice}</div>
+        )}
+        {childError && (
+          <div role="alert" style={{ color: 'var(--color-danger)', fontSize: '0.8125rem', marginTop: '8px' }}>{childError}</div>
+        )}
 
         {(me?.children || []).some((c) => c.status !== 'linked') && (
           <div style={{
@@ -324,8 +383,24 @@ function ParentSettings() {
       <button className="btn btn-outline" style={{ width: '100%' }} onClick={logout}>로그아웃</button>
 
       <p style={{ fontSize: '0.6875rem', color: 'var(--color-gray-400)', lineHeight: 1.6, marginTop: '14px', textAlign: 'center' }}>
-        아이 정보 수정·삭제는 선생님께 문의해 주세요.
+        아이 이름·생년월일 수정은 선생님께 문의해 주세요.
       </p>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="아이를 삭제할까요?"
+        message={deleteTarget
+          ? deleteChildMessage(deleteTarget, { isLast: (me?.children || []).length === 1 })
+            .map((line, index) => (
+              <span key={line} style={{ display: 'block', marginTop: index ? '6px' : 0 }}>{line}</span>
+            ))
+          : ''}
+        confirmLabel="삭제"
+        tone="danger"
+        busy={deleting}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={deleteChild}
+      />
     </ParentLayout>
   );
 }

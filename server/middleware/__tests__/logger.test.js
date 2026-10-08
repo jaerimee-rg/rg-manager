@@ -55,6 +55,16 @@ describe('logAction — 누가 한 일인지 남긴다', () => {
     expect(params[3]).toBe('대상: 이재림_학부모 (학부모)');
   });
 
+  it('학부모의 아이 삭제는 지운 아이 이름을 상세에 적는다', async () => {
+    const req = { user: { id: 20, username: '칸쵸엄마', role: 'parent' }, body: {}, params: { childId: '2' } };
+    const [, params] = await run('DELETE_PARENT_CHILD', req, {
+      deleted: { id: 2, childName: '이쵸파' }, facesRemoved: 0, children: []
+    });
+
+    expect(params[1]).toBe('DELETE_PARENT_CHILD');
+    expect(params[3]).toBe('아이: 이쵸파');
+  });
+
   it('실패 응답은 기록하지 않는다', async () => {
     const res = { statusCode: 403, json: jest.fn(), send: jest.fn() };
     logAction('IMPERSONATE')({ user: { username: 'x' } }, res, jest.fn());

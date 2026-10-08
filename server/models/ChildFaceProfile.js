@@ -84,6 +84,18 @@ class ChildFaceProfile {
     const result = await pool.query('DELETE FROM child_face_profiles WHERE id = $1 RETURNING *', [id]);
     return result.rows[0] || null;
   }
+
+  /**
+   * 이 학부모가 그 학생에게 올린 기준 얼굴을 모두 지운다 (아이를 지울 때).
+   * 같은 학생에 연결된 다른 학부모(엄마·아빠)가 올린 것은 건드리지 않는다. → 지운 장수
+   */
+  static async deleteByParentAndStudent(parentUserId, studentId) {
+    const result = await pool.query(
+      'DELETE FROM child_face_profiles WHERE "parentUserId" = $1 AND "studentId" = $2',
+      [parentUserId, studentId]
+    );
+    return result.rowCount || 0;
+  }
 }
 
 export default ChildFaceProfile;

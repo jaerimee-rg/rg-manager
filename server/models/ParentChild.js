@@ -86,6 +86,18 @@ class ParentChild {
   }
 
   /**
+   * 학부모가 내 정보에서 자기 아이를 지운다.
+   * 주인을 WHERE 에 함께 걸어, 다른 집 아이의 id 가 넘어와도 지워지지 않는다.
+   */
+  static async deleteOwned(childId, parentUserId) {
+    const result = await pool.query(
+      'DELETE FROM parent_children WHERE id = $1 AND "parentUserId" = $2 RETURNING id',
+      [childId, parentUserId]
+    );
+    return result.rows.length > 0;
+  }
+
+  /**
    * 학생을 지우기 전에 호출한다. FK 는 SET NULL 이라 연결만 끊기고 행은 남으므로
    * 학부모 화면에서 "연결이 해제되었어요" 로 보이도록 상태를 함께 바꾼다.
    */

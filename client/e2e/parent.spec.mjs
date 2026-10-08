@@ -74,6 +74,54 @@ test.describe('학부모 — 가입부터 신청까지', () => {
     }
   });
 
+  test('내 정보에서 아이를 추가했다가 삭제한다 — 확인 창을 거치고 다른 아이는 그대로다', async ({ page, request }) => {
+    await loginAs(page, sessions.parent);
+    await page.goto('/parent/settings');
+
+    // 학생 명단에 없는 이름이라 확인 대기로 들어간다 (입력칸은 20자까지)
+    const extra = `삭제${run.slice(-5)}`;
+    await page.getByRole('button', { name: '+ 아이 추가' }).click();
+    await page.getByLabel('아이 이름').fill(extra);
+    await page.getByLabel('생년월일').fill('2019-01-01');
+    await page.getByRole('button', { name: '추가', exact: true }).click();
+
+    const remove = page.getByRole('button', { name: `${extra} 삭제` });
+    await expect(remove).toBeVisible();
+    const before = await api(request, sessions.parent, 'GET', '/api/parent/me');
+
+    // 확인 창에서 취소하면 그대로 남는다
+    await remove.click();
+    const dialog = page.getByRole('dialog', { name: '아이를 삭제할까요?' });
+    await expect(dialog).toContainText(`${extra} 정보를 내 정보에서 삭제해요.`);
+    await dialog.getByRole('button', { name: '취소' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(remove).toBeVisible();
+
+    // 삭제하면 그 아이만 사라진다
+    await remove.click();
+    await dialog.getByRole('button', { name: '삭제', exact: true }).click();
+    await expect(page.getByText(`${extra} 정보를 삭제했어요.`)).toBeVisible();
+    await expect(remove).toHaveCount(0);
+    await expect(page.getByRole('button', { name: `${childName} 삭제` })).toBeVisible();
+
+    const after = await api(request, sessions.parent, 'GET', '/api/parent/me');
+    expect(after.body.children.map((c) => c.childName)).not.toContain(extra);
+    expect(after.body.children).toHaveLength(before.body.children.length - 1);
+    // 남은 아이의 학생 연결은 그대로다
+    expect(after.body.children.find((c) => c.childName === childName).status).toBe('linked');
+  });
+
+  test('다른 학부모의 아이는 삭제할 수 없다 (404, 지워지지 않는다)', async ({ request }) => {
+    const theirs = await api(request, sessions.parentMulti, 'GET', '/api/parent/me');
+    const target = theirs.body.children[0];
+
+    const res = await api(request, sessions.parent, 'DELETE', `/api/parent/children/${target.id}`);
+    expect(res.status).toBe(404);
+
+    const again = await api(request, sessions.parentMulti, 'GET', '/api/parent/me');
+    expect(again.body.children.map((c) => c.id)).toContain(target.id);
+  });
+
   test('대회를 신청하고 옵션을 바꾸고 취소한다', async ({ page, request }) => {
     // 신청할 대회를 선생님 쪽에서 하나 만들어 둔다
     const created = await api(request, sessions.teacher, 'POST', '/api/events', {

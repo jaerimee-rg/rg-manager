@@ -377,6 +377,14 @@ Parents get their own accounts and a separate app under `/parent/*`. Design docs
   (format-normalised) must hit exactly one of that teacher's students to auto-link. Zero or
   several leaves the child `pending` — signup still completes, and the teacher links it by hand
   from either the by-parent or by-student view.
+- **Deleting a child** (내 정보 › 내 아이 trash button, `DELETE /api/parent/children/:childId`, FR-34a):
+  removes **only the parent's own `parent_children` row** — `ParentChild.deleteOwned` keeps the owner in
+  the `WHERE`, so another family's id is a 404. The teacher's student and existing
+  `event_registrations` **stay** (same rule as a teacher's unlink). Face profiles **this parent**
+  registered for that student go first (`ChildFaceProfile.deleteByParentAndStudent`; another guardian's
+  stay), then auto tags are cleaned as in a single face delete — that cleanup never fails the response.
+  Deleting the last child sends the parent back to onboarding (`ParentSettings onChildrenChanged` →
+  `ParentApp.loadMe`); the confirm dialog says so beforehand (`deleteChildMessage`).
 - **Parent display name** (`parent_accounts.displayName`, e.g. "예림엄마"): what every screen
   shows for a parent. `users.username` stays the Kakao nickname and is **identity only** — it is
   UNIQUE, so two "지우엄마" would collide into `지우엄마_2`; `displayName` is not. Captured in

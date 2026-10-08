@@ -19,7 +19,7 @@ jest.unstable_mockModule('../../models/ParentTeacher.js', () => ({
 }));
 
 jest.unstable_mockModule('../../models/ParentChild.js', () => ({
-  default: { listByParent: jest.fn(), create: jest.fn(), hasStudent: jest.fn() }
+  default: { listByParent: jest.fn(), create: jest.fn(), hasStudent: jest.fn(), deleteOwned: jest.fn() }
 }));
 
 jest.unstable_mockModule('../../models/Student.js', () => ({
@@ -35,7 +35,11 @@ jest.unstable_mockModule('../../services/albumService.js', () => ({
 }));
 
 jest.unstable_mockModule('../../models/ChildFaceProfile.js', () => ({
-  default: { countsByStudents: jest.fn().mockResolvedValue({}) },
+  default: {
+    countsByStudents: jest.fn().mockResolvedValue({}),
+    deleteByParentAndStudent: jest.fn(),
+    countByStudent: jest.fn()
+  },
   MAX_PER_PARENT: 3,
   MAX_PER_STUDENT: 5
 }));
@@ -55,7 +59,11 @@ jest.unstable_mockModule('../../models/EventMedia.js', () => ({
   default: { summaries: jest.fn(), list: jest.fn() }
 }));
 jest.unstable_mockModule('../../models/MediaTag.js', () => ({
-  default: { listByMediaIds: jest.fn() }
+  default: { listByMediaIds: jest.fn(), removeAutoTagsForStudent: jest.fn() }
+}));
+// 아이를 지울 때 남은 기준 얼굴로 자동 태그를 다시 맞춘다
+jest.unstable_mockModule('../../services/albumService.js', () => ({
+  default: { matchStudentAcrossAlbums: jest.fn() }
 }));
 jest.unstable_mockModule('../../models/Competition.js', () => ({
   default: { getStudentIds: jest.fn() }
@@ -78,7 +86,9 @@ const EventMedia = (await import('../../models/EventMedia.js')).default;
 const albumService = (await import('../../services/albumService.js')).default;
 const MediaTag = (await import('../../models/MediaTag.js')).default;
 const Competition = (await import('../../models/Competition.js')).default;
-const { getMe, addChildren, updateName, getEvents, getEvent, registerChild, cancelChild, addTeacher } =
+const ChildFaceProfile = (await import('../../models/ChildFaceProfile.js')).default;
+const albumService = (await import('../../services/albumService.js')).default;
+const { getMe, addChildren, deleteChild, updateName, getEvents, getEvent, registerChild, cancelChild, addTeacher } =
   await import('../parentController.js');
 
 // 선생님 1명과 연결된 기본 상태 (기존 동작이 그대로인지 확인하는 기준)
@@ -270,6 +280,115 @@ describe('parentController', () => {
 
       expect(res.status).toHaveBeenCalledWith(400);
       expect(ParentChild.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteChild (내 정보에서 아이 삭제)', () => {
+    beforeEach(() => {
+      ParentChild.deleteOwned.mockResolvedValue(true);
+      ChildFaceProfile.deleteByParentAndStudent.mockResolvedValue(0);
+      ChildFaceProfile.countByStudent.mockResolvedValue(0);
+      MediaTag.removeAutoTagsForStudent.mockResolvedValue(0);
+      albumService.matchStudentAcrossAlbums.mockResolvedValue({ albums: 0, photos: 0, candidates: 0 });
+    });
+
+    it('확인 대기 중인 내 아이를 지우고 남은 아이 목록을 돌려준다', async () => {
+      req.params.childId = '2';
+
+      await deleteChild(req, res);
+
+      // 주인(학부모 id)을 함께 걸어 지운다
+      expect(ParentChild.deleteOwned).toHaveBeenCalledWith(2, 20);
+      const payload = res.json.mock.calls[0][0];
+      expect(payload.deleted).toEqual({ id: 2, childName: '김준호' });
+      expect(payload.children.map((c) => c.id)).toEqual([1]);
+      // 학생과 연결되지 않은 아이는 지울 얼굴도 없다
+      expect(ChildFaceProfile.deleteByParentAndStudent).not.toHaveBeenCalled();
+    });
+
+    it('내 아이가 아니면 404 — 아무 것도 지우지 않는다', async () => {
+      req.params.childId = '999';
+
+      await deleteChild(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(ParentChild.deleteOwned).not.toHaveBeenCalled();
+      expect(ChildFaceProfile.deleteByParentAndStudent).not.toHaveBeenCalled();
+    });
+
+    it('연결된 아이는 내가 올린 얼굴만 먼저 지운 뒤 아이를 지운다', async () => {
+      req.params.childId = '1';
+      ChildFaceProfile.deleteByParentAndStudent.mockResolvedValue(2);
+
+      await deleteChild(req, res);
+
+      // 다른 학부모(엄마·아빠)가 올린 얼굴은 건드리지 않도록 내 id 로 좁힌다
+      expect(ChildFaceProfile.deleteByParentAndStudent).toHaveBeenCalledWith(20, 100);
+      expect(ChildFaceProfile.deleteByParentAndStudent.mock.invocationCallOrder[0])
+        .toBeLessThan(ParentChild.deleteOwned.mock.invocationCallOrder[0]);
+      expect(res.json.mock.calls[0][0].facesRemoved).toBe(2);
+    });
+
+    it('남은 기준 얼굴이 없으면 그 학생의 자동 태그를 지운다', async () => {
+      req.params.childId = '1';
+      ChildFaceProfile.deleteByParentAndStudent.mockResolvedValue(1);
+      ChildFaceProfile.countByStudent.mockResolvedValue(0);
+
+      await deleteChild(req, res);
+
+      expect(MediaTag.removeAutoTagsForStudent).toHaveBeenCalledWith(100);
+      expect(albumService.matchStudentAcrossAlbums).not.toHaveBeenCalled();
+    });
+
+    it('다른 학부모가 올린 얼굴이 남아 있으면 그 얼굴로 다시 맞춘다', async () => {
+      req.params.childId = '1';
+      ChildFaceProfile.deleteByParentAndStudent.mockResolvedValue(1);
+      ChildFaceProfile.countByStudent.mockResolvedValue(2);
+
+      await deleteChild(req, res);
+
+      expect(albumService.matchStudentAcrossAlbums).toHaveBeenCalledWith(7, 100);
+      expect(MediaTag.removeAutoTagsForStudent).not.toHaveBeenCalled();
+    });
+
+    it('지운 얼굴이 없으면 태그는 건드리지 않는다', async () => {
+      req.params.childId = '1';
+
+      await deleteChild(req, res);
+
+      expect(ChildFaceProfile.countByStudent).not.toHaveBeenCalled();
+      expect(MediaTag.removeAutoTagsForStudent).not.toHaveBeenCalled();
+      expect(albumService.matchStudentAcrossAlbums).not.toHaveBeenCalled();
+    });
+
+    it('태그 정리가 실패해도 삭제는 정상 응답한다', async () => {
+      req.params.childId = '1';
+      ChildFaceProfile.deleteByParentAndStudent.mockResolvedValue(1);
+      MediaTag.removeAutoTagsForStudent.mockRejectedValue(new Error('db'));
+
+      await deleteChild(req, res);
+
+      expect(res.status).not.toHaveBeenCalled();
+      expect(res.json.mock.calls[0][0].deleted.id).toBe(1);
+    });
+
+    it('신청은 건드리지 않는다 — 학생의 것이라 선생님 명단에 남는다', async () => {
+      req.params.childId = '1';
+
+      await deleteChild(req, res);
+
+      expect(EventRegistration.cancel).not.toHaveBeenCalled();
+      expect(sendEventRegistrationKakaoMessage).not.toHaveBeenCalled();
+    });
+
+    it('얼굴 삭제가 실패하면 500 — 아이는 지우지 않는다', async () => {
+      req.params.childId = '1';
+      ChildFaceProfile.deleteByParentAndStudent.mockRejectedValue(new Error('db'));
+
+      await deleteChild(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(ParentChild.deleteOwned).not.toHaveBeenCalled();
     });
   });
 

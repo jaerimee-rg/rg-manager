@@ -87,6 +87,8 @@ const saveLog = async (req, action, target, responseData) => {
       details = `초대 ID: ${req.params.id}`;
     } else if (action === 'ADD_PARENT_TEACHER' && responseData) {
       details = `선생님 연결 추가`;
+    } else if (action === 'DELETE_PARENT_CHILD' && responseData?.deleted) {
+      details = `아이: ${responseData.deleted.childName}`;
     } else if (action === 'REMOVE_PARENT_TEACHER' && req.params) {
       details = `학부모 ${req.params.userId} ↔ 선생님 ${req.params.teacherId} 연결 해제`;
     } else if (action === 'SIGNUP' && req.body) {
