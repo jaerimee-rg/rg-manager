@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ParentLayout from '../../components/parent/ParentLayout';
-import { Spinner } from '../../components/ui';
+import { Button, EmptyState, Spinner } from '../../components/ui';
 import MediaGrid from '../../components/album/MediaGrid';
 import MediaViewer from '../../components/album/MediaViewer';
 import UploadSheet from '../../components/album/UploadSheet';
@@ -27,6 +27,10 @@ function ParentAlbum() {
 
   const [data, setData] = useState(null);
   const [denied, setDenied] = useState(null);
+  const [deniedReason, setDeniedReason] = useState(null);
+  // 이벤트 상세의 사진 칸에서 사진을 누르면 ?open=<id> 로 와서 그 사진이 바로 크게 열린다 (docs/photo-menu FR-545)
+  const [searchParams] = useSearchParams();
+  const [openId] = useState(() => Number(searchParams.get('open')) || null);
   const [mineOnly, setMineOnly] = useState(false);
   const [childId, setChildId] = useState(null);
   const [typeFilter, setTypeFilter] = useState('all');
@@ -43,7 +47,12 @@ function ParentAlbum() {
       const response = await fetchWithAuth(`/api/parent/events/${eventId}/media?${params.toString()}`);
       const payload = await response.json().catch(() => ({}));
 
-      if (response.status === 403) { setDenied(payload.error || '아직 사진을 볼 수 없어요.'); setData(null); return; }
+      if (response.status === 403) {
+        setDenied(payload.error || '아직 사진을 볼 수 없어요.');
+        setDeniedReason(payload.reason || null);
+        setData(null);
+        return;
+      }
       if (!response.ok) { setDenied('사진을 불러오지 못했어요.'); return; }
 
       setDenied(null);
@@ -56,6 +65,14 @@ function ParentAlbum() {
   }, [eventId, mineOnly, childId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // ?open= 은 처음 한 번만 — 목록에 그 사진이 있으면 뷰어로 연다
+  const [openedFromLink, setOpenedFromLink] = useState(false);
+  useEffect(() => {
+    if (!openId || openedFromLink || !data?.items) return;
+    if (data.items.some((item) => item.id === openId)) setViewerId(openId);
+    setOpenedFromLink(true);
+  }, [openId, openedFromLink, data]);
 
   const toast = (text) => {
     setMessage(text);
@@ -95,6 +112,20 @@ function ParentAlbum() {
       toast('지우지 못했어요.');
     }
   };
+
+  // 선생님이 비공개로 둔(또는 돌린) 앨범 — 링크를 갖고 있던 학부모가 직접 열었을 때 (docs/photo-menu FR-541)
+  if (denied && deniedReason === 'album_private') {
+    return (
+      <ParentLayout title="사진" back="/parent/photos">
+        <EmptyState
+          icon="lock"
+          title="선생님이 아직 공개하지 않은 앨범이에요"
+          description="공개되면 ‘사진’ 탭에 나타나요. 조금만 기다려 주세요."
+          action={<Button onClick={() => navigate('/parent/photos')}>사진 목록으로</Button>}
+        />
+      </ParentLayout>
+    );
+  }
 
   if (denied) {
     return (

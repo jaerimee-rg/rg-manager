@@ -27,6 +27,8 @@ jest.unstable_mockModule('../../models/GoogleDriveAccount.js', () => ({
 jest.unstable_mockModule('../../services/albumService.js', () => ({
   default: {
     createAlbumFolder: jest.fn(),
+    ensureAlbum: jest.fn(),
+    countViewers: jest.fn().mockResolvedValue({ participants: 7, all: 33 }),
     renameAlbumFolder: jest.fn(),
     refreshAlbum: jest.fn(),
     createUploadSessions: jest.fn(),
@@ -123,7 +125,56 @@ describe('getAlbum', () => {
   });
 });
 
+describe('getAlbum — 공개 단계 (docs/photo-menu)', () => {
+  it('공개 여부·범위·공개하면 볼 인원·기대 폴더 이름을 준다', async () => {
+    Event.getById.mockResolvedValue(event({ albumPublished: true, albumAudience: 'all', albumPublishedAt: '2026-10-13T01:00:00Z' }));
+
+    await getAlbum(req, res);
+
+    const payload = res.json.mock.calls[0][0];
+    expect(payload).toMatchObject({
+      published: true,
+      audience: 'all',
+      publishedAt: '2026-10-13T01:00:00Z',
+      expectedFolderName: '2026-09-12 서울시 대회',
+      viewerCounts: { participants: 7, all: 33 }
+    });
+    expect(albumService.countViewers).toHaveBeenCalledWith(expect.objectContaining({ id: 3 }));
+  });
+
+  it('공개 칸이 없던 앨범은 비공개 · 참가 확정 학부모로 본다', async () => {
+    Event.getById.mockResolvedValue(event());
+
+    await getAlbum(req, res);
+
+    expect(res.json.mock.calls[0][0]).toMatchObject({ published: false, audience: 'participants', publishedAt: null });
+  });
+
+  it('학부모가 올린 수·선생님이 올린 수를 함께 준다(필터 칩)', async () => {
+    Event.getById.mockResolvedValue(event());
+    EventMedia.stats.mockResolvedValue({ images: 40, videos: 5, hidden: 1, fromParents: 5, fromTeacher: 41, untagged: 0, candidates: 0, unanalyzed: 0, totalSize: 9 });
+
+    await getAlbum(req, res);
+
+    expect(res.json.mock.calls[0][0].counts).toMatchObject({ fromParents: 5, fromTeacher: 41 });
+  });
+});
+
 describe('createAlbum', () => {
+  it('이름을 보내지 않으면 이벤트에서 이름을 만든다(YYYY-MM-DD 이벤트명)', async () => {
+    Event.getById.mockResolvedValue(event({ driveFolderId: null, title: '회장배: 리듬체조/대회' }));
+    albumService.createAlbumFolder.mockResolvedValue({
+      event: { driveFolderId: 'f-2', driveFolderName: '2026-09-12 회장배 리듬체조 대회', albumStatus: 'ready', albumPublished: false },
+      shared: true
+    });
+
+    await createAlbum(req, res);
+
+    expect(albumService.createAlbumFolder).toHaveBeenCalledWith(7, expect.anything(), '2026-09-12 회장배 리듬체조 대회');
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json.mock.calls[0][0].published).toBe(false);
+  });
+
   it('이름을 받아 폴더를 만든다', async () => {
     Event.getById.mockResolvedValue(event({ driveFolderId: null }));
     albumService.createAlbumFolder.mockResolvedValue({
@@ -204,6 +255,72 @@ describe('updateAlbum', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
   });
+
+  it('공개하면 처음 공개한 시각을 남긴다', async () => {
+    Event.getById.mockResolvedValue(event());
+    Event.updateAlbum.mockImplementation(async (id, fields) => event(fields));
+    req.body = { published: true };
+
+    await updateAlbum(req, res);
+
+    const fields = Event.updateAlbum.mock.calls[0][1];
+    expect(fields.albumPublished).toBe(true);
+    expect(fields.albumPublishedAt).toEqual(expect.any(String));
+    expect(res.json.mock.calls[0][0]).toMatchObject({ published: true });
+  });
+
+  it('다시 공개해도 처음 공개한 시각은 그대로다', async () => {
+    Event.getById.mockResolvedValue(event({ albumPublishedAt: '2026-10-13T01:00:00Z' }));
+    Event.updateAlbum.mockImplementation(async (id, fields) => event({ albumPublishedAt: '2026-10-13T01:00:00Z', ...fields }));
+    req.body = { published: true };
+
+    await updateAlbum(req, res);
+
+    expect(Event.updateAlbum.mock.calls[0][1]).toEqual({ albumPublished: true });
+  });
+
+  it('비공개로 돌린다', async () => {
+    Event.getById.mockResolvedValue(event({ albumPublished: true }));
+    Event.updateAlbum.mockImplementation(async (id, fields) => event(fields));
+    req.body = { published: false };
+
+    await updateAlbum(req, res);
+
+    expect(Event.updateAlbum).toHaveBeenCalledWith(3, { albumPublished: false });
+    expect(res.json.mock.calls[0][0].published).toBe(false);
+  });
+
+  it('공개 범위를 바꾼다', async () => {
+    Event.getById.mockResolvedValue(event());
+    Event.updateAlbum.mockImplementation(async (id, fields) => event(fields));
+    req.body = { audience: 'all' };
+
+    await updateAlbum(req, res);
+
+    expect(Event.updateAlbum).toHaveBeenCalledWith(3, { albumAudience: 'all' });
+    expect(res.json.mock.calls[0][0].audience).toBe('all');
+  });
+
+  it('모르는 공개 범위는 거절한다', async () => {
+    Event.getById.mockResolvedValue(event());
+    req.body = { audience: 'everyone' };
+
+    await updateAlbum(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0].reason).toBe('invalid_audience');
+    expect(Event.updateAlbum).not.toHaveBeenCalled();
+  });
+
+  it('Drive 에서 폴더가 사라진 앨범은 공개할 수 없다', async () => {
+    Event.getById.mockResolvedValue(event({ albumStatus: 'missing' }));
+    req.body = { published: true };
+
+    await updateAlbum(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0].reason).toBe('album_missing');
+  });
 });
 
 describe('createUploads', () => {
@@ -249,6 +366,67 @@ describe('createUploads', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(albumService.createUploadSessions).not.toHaveBeenCalled();
+  });
+});
+
+describe('createUploads — 고른 이벤트에 연결 (docs/photo-menu FR-514)', () => {
+  it('앨범이 없는 이벤트면 이벤트 이름 폴더를 먼저 만들고 그 폴더로 세션을 만든다', async () => {
+    Event.getById.mockResolvedValue(event({ driveFolderId: null, driveAccountId: null, albumStatus: 'none' }));
+    albumService.ensureAlbum.mockResolvedValue(event({ driveFolderId: 'new-folder', driveAccountId: 11, driveFolderName: '2026-09-12 서울시 대회', albumPublished: false }));
+    albumService.createUploadSessions.mockResolvedValue([{ name: 'a.jpg', mediaId: 1, sessionUri: 'u' }]);
+    req.body = { files: [{ name: 'a.jpg', size: 100 }] };
+
+    await createUploads(req, res);
+
+    expect(albumService.ensureAlbum).toHaveBeenCalledWith(7, expect.objectContaining({ id: 3, driveFolderId: null }));
+    expect(albumService.createUploadSessions).toHaveBeenCalledWith(
+      7, expect.objectContaining({ driveFolderId: 'new-folder' }), req.body.files, expect.anything()
+    );
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json.mock.calls[0][0].album).toEqual({ created: true, driveFolderName: '2026-09-12 서울시 대회', published: false });
+  });
+
+  it('앨범이 이미 있으면 새로 만들지 않는다', async () => {
+    Event.getById.mockResolvedValue(event());
+    albumService.createUploadSessions.mockResolvedValue([]);
+    req.body = { files: [{ name: 'a.jpg', size: 1 }] };
+
+    await createUploads(req, res);
+
+    expect(albumService.ensureAlbum).not.toHaveBeenCalled();
+    expect(res.json.mock.calls[0][0].album.created).toBe(false);
+  });
+
+  it('올릴 파일이 없으면 폴더를 만들지 않는다', async () => {
+    Event.getById.mockResolvedValue(event({ driveFolderId: null }));
+    req.body = { files: [] };
+
+    await createUploads(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(albumService.ensureAlbum).not.toHaveBeenCalled();
+  });
+
+  it('휴관일에는 올릴 수 없다', async () => {
+    Event.getById.mockResolvedValue(event({ type: 'closure', driveFolderId: null }));
+    req.body = { files: [{ name: 'a.jpg', size: 1 }] };
+
+    await createUploads(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0].reason).toBe('closure_event');
+    expect(albumService.ensureAlbum).not.toHaveBeenCalled();
+  });
+
+  it('Google 이 연결되지 않았으면 폴더를 만들다 실패한 사유를 설정 안내로 준다', async () => {
+    Event.getById.mockResolvedValue(event({ driveFolderId: null }));
+    albumService.ensureAlbum.mockRejectedValue(new DriveError('not_connected', 'x'));
+    req.body = { files: [{ name: 'a.jpg', size: 1 }] };
+
+    await createUploads(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0]).toMatchObject({ reason: 'not_connected', error: expect.stringContaining('설정') });
   });
 });
 

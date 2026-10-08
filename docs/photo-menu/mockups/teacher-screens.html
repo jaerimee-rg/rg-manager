@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>사진 메뉴 — 선생님 화면</title>
+<!-- 앱과 같은 서체·스타일을 그대로 불러온다 (client/index.html, client/src/main.jsx 와 같은 순서).
+     photo-menu.css 는 이번 기능의 새 모양 — 구현 때 ui.css 로 옮긴다. -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gaegu:wght@400;700&display=swap">
+<link rel="stylesheet" href="../../../client/src/styles/tokens.css">
+<link rel="stylesheet" href="../../../client/src/styles/ui.css">
+<link rel="stylesheet" href="../../../client/src/styles/App.css">
+<link rel="stylesheet" href="photo-menu.css">
+</head>
+<body>
+
+<!--
+  화면 하나를 ?s=<이름> 으로 골라 그린다. 직접 열기보다 teacher-desktop.html / teacher-mobile.html 에서 보는 것을 권한다.
+  s: settings-off | settings-on | settings-error | settings-disconnect
+     photos-nodrive | photos-empty | photos | pick | pick-new
+     album-new | album-private | album-public | upload | select | delete | album-error | menu
+-->
+
+<div class="app">
+  <!-- ── 앱 헤더 (App.jsx 의 실제 DOM 그대로, navLinks 에 '사진' 추가) ── -->
+  <header class="app-header">
+    <div class="app-header-inner">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <h1 class="ui-brand" data-size="md"><img class="ui-brand__logo" src="../../../client/public/logo-mark.png" alt="" draggable="false"><span class="ui-brand__name">JR 리듬체조</span></h1>
+        <button class="mobile-menu-button" aria-label="메뉴">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+      </div>
+      <nav class="desktop-nav" id="desktop-nav"></nav>
+    </div>
+  </header>
+
+  <!-- ── 모바일 전체 메뉴 (s=menu 일 때 open) ── -->
+  <div class="mobile-menu-overlay" id="mobile-menu">
+    <div class="mobile-menu-header">
+      <span class="mobile-menu-title">메뉴</span>
+      <button class="mobile-menu-close" aria-label="닫기">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="mobile-menu-content" id="mobile-menu-content"></div>
+  </div>
+
+  <main class="app-main" id="main"></main>
+</div>
+
+<script src="mock-icons.js"></script>
+<script src="mock-photos.js"></script>
+<script>
+(function () {
+  // ── 데이터 ──────────────────────────────────────────────────
+  var NAV = [
+    ['대시보드', 'home'], ['학생 관리', 'users'], ['수업 관리', 'book'], ['이벤트 관리', 'calendar'],
+    ['사진', 'image', true],   // ← 새 메뉴 (이벤트 관리 바로 아래)
+    ['출석 체크', 'checkCircle'], ['학생별 출석', 'clipboard'], ['학생별 대회', 'award'],
+    ['학부모', 'heart'], ['FAQ', 'message'], ['추천 상품', 'bag']
+  ];
+
+  var ROOT = 'RG Manager';
+  var VIEWERS = { participants: 7, all: 33 };
+
+  var ALBUMS = [
+    { id: 31, title: '회장배 리듬체조 대회', date: '2026-10-12', type: 'competition', photos: 42, videos: 3, fromParents: 5, hidden: 1, size: '1.8GB', published: true, audience: 'participants', publishedAt: '10월 13일', seed: 0 },
+    { id: 29, title: '가을 공개 수업', date: '2026-10-05', type: 'special', photos: 0, videos: 0, fromParents: 0, hidden: 0, size: '0B', published: false, audience: 'participants', seed: null },
+    { id: 27, title: '스페셜 클래스 — 후프', date: '2026-09-27', type: 'special', photos: 18, videos: 0, fromParents: 3, hidden: 0, size: '410MB', published: true, audience: 'all', publishedAt: '9월 28일', seed: 6 },
+    { id: 24, title: '서울시장배 리듬체조 대회', date: '2026-09-14', type: 'competition', photos: 26, videos: 1, fromParents: 0, hidden: 0, size: '1.1GB', published: false, audience: 'participants', seed: 12 }
+  ];
+
+  var CANDIDATES = [
+    { title: '전국 꿈나무 리듬체조 대회', date: '2026-11-20', type: 'competition', upcoming: true },
+    { title: '스페셜 클래스 — 리본', date: '2026-11-02', type: 'special', upcoming: true },
+    { title: '여름 합동 공연', date: '2026-08-30', type: 'special' },
+    { title: '경기도지사배 리듬체조 대회', date: '2026-08-16', type: 'competition' }
+  ];
+
+  var DOW = ['일', '월', '화', '수', '목', '금', '토'];
+  var dayOf = function (iso) { return DOW[new Date(iso + 'T00:00:00').getDay()]; };
+  var shortDate = function (iso) { var p = iso.split('-'); return Number(p[1]) + '.' + Number(p[2]); };
+  var longDate = function (iso) { return iso + ' (' + dayOf(iso) + ')'; };
+  var folderName = function (ev) { return ev.date + ' ' + ev.title; };   // 3.2 폴더 이름 = YYYY-MM-DD 이벤트명
+  var typeLabel = function (t) { return t === 'competition' ? '대회' : '스페셜'; };
+  var esc = function (s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); };
+  var icon = function (name, size) { return '<i data-icon="' + name + '" data-size="' + (size || 18) + '"></i>'; };
+  var btn = function (label, opt) {
+    opt = opt || {};
+    return '<button type="button" class="ui-btn" data-variant="' + (opt.variant || 'outline') + '" data-size="' + (opt.size || 'md') + '"' +
+      (opt.block ? ' data-block="true"' : '') + (opt.disabled ? ' disabled' : '') + (opt.attr ? ' ' + opt.attr : '') + '>' +
+      (opt.icon ? icon(opt.icon, opt.size === 'sm' ? 16 : 18) : '') + label + (opt.after ? icon(opt.after, 16) : '') + '</button>';
+  };
+  var badge = function (label, tone, dot) {
+    return '<span class="ui-badge" data-tone="' + (tone || 'neutral') + '">' + (dot ? '<span class="ui-badge__dot"></span>' : '') + label + '</span>';
+  };
+  var callout = function (tone, html, iconName) {
+    var map = { neutral: 'info', brand: 'info', success: 'checkCircle', warning: 'alert', danger: 'alert' };
+    return '<div class="ui-callout" data-tone="' + tone + '"' + (tone === 'danger' ? ' role="alert"' : '') + '>' +
+      '<span class="ui-callout__icon">' + icon(iconName || map[tone], 18) + '</span><div class="ui-callout__body">' + html + '</div></div>';
+  };
+  var folderLine = function (name) {
+    return '<div class="ui-folder-line">' + icon('folder', 18) +
+      '<span class="ui-folder-line__path"><span class="ui-folder-line__root">' + ROOT + ' / </span>' + esc(name) + '</span></div>';
+  };
+
+  // 앨범 화면의 사진 칸 — 0번부터. 영상 3개, 학부모가 올린 것 5개, 숨긴 것 1개
+  var VIDEO = { 2: '0:42', 9: '1:15', 15: '0:28' };
+  var PARENT = { 4: '하은엄마', 7: '서윤엄마', 11: '지우엄마', 13: '하은엄마', 16: '예린엄마' };
+  var HIDDEN = { 13: true };
+
+  // ── 화면 조각 ───────────────────────────────────────────────
+  var pageHeader = function (opt) {
+    return '<header class="ui-page-header"' + (opt.back ? '' : ' data-doodle="true"') + '>' +
+      (opt.back ? '<button type="button" class="ui-page-header__back">' + icon('arrowLeft', 16) + opt.back + '</button>' : '') +
+      '<div class="ui-page-header__top"><div><h1 class="ui-page-header__title">' + esc(opt.title) + '</h1>' +
+      (opt.description ? '<p class="ui-page-header__description">' + opt.description + '</p>' : '') + '</div>' +
+      (opt.actions ? '<div class="ui-page-header__actions">' + opt.actions + '</div>' : '') + '</div></header>';
+  };
+
+  // ---------- 설정 ----------
+  var settingsPage = function (state) {
+    var head = '<header class="ui-page-header"><div class="ui-page-header__top"><div><h1 class="ui-page-header__title">설정</h1></div></div></header>';
+
+    var me = '<div class="ui-card" data-padding="md"><div class="ui-card__header"><div><h3 class="ui-card__title">내 정보</h3></div></div>' +
+      '<dl class="ui-dl ui-mt-3"><div class="ui-dl__row"><dt class="ui-dl__label">이름</dt><dd class="ui-dl__value">이재림</dd></div>' +
+      '<div class="ui-dl__row"><dt class="ui-dl__label">로그인</dt><dd class="ui-dl__value">카카오 계정</dd></div></dl></div>';
+
+    var title = '<div class="ui-card__header"><div><h3 class="ui-card__title">Google 계정 (사진 저장)</h3>' +
+      '<p class="ui-card__description">사진 메뉴의 앨범은 선생님 Google Drive 에 저장돼요.</p></div>' +
+      (state === 'off' ? '' : state === 'error' ? badge('연결 끊김', 'danger', true) : badge('연결됨', 'success', true)) + '</div>';
+
+    var body;
+    if (state === 'off') {
+      body =
+        '<div class="ui-row ui-mt-4" data-gap="3" data-align="start"><span class="ui-google-mark" aria-hidden="true">G</span>' +
+        '<div class="ui-stack" data-gap="2"><b>아직 연결하지 않았어요</b>' +
+        '<ul class="ui-text-sm" style="margin: 0; padding-left: var(--space-5); color: var(--ink-700);">' +
+        '<li>연결하면 내 드라이브에 <b>' + ROOT + '</b> 폴더가 생기고, 앨범마다 <b>이벤트 이름</b>으로 폴더가 만들어져요.</li>' +
+        '<li>앱은 <b>앱이 만든 폴더·파일만</b> 볼 수 있어요. 선생님의 다른 파일은 보지 않아요.</li>' +
+        '<li>학부모가 올린 사진도 선생님 Drive 용량(무료 15GB)을 써요.</li></ul></div></div>' +
+        '<div class="ui-card__footer"><span class="ui-hand">Google 화면에서 ‘허용’을 누르면 여기로 돌아와요</span>' +
+        btn('<span class="ui-google-mark" data-size="sm" aria-hidden="true">G</span>Google 계정 연결하기', { variant: 'primary' }) + '</div>';
+    } else {
+      var error = state === 'error';
+      body =
+        (error
+          ? '<div class="ui-mt-4">' + callout('danger', '<b>Google 계정 연결이 끊어졌어요.</b> Google 쪽에서 권한이 철회됐어요. 앨범은 계속 보이지만 사진 올리기·지우기는 멈춰요.<div class="ui-mt-2">' + btn('다시 연결', { variant: 'primary', size: 'sm' }) + '</div>') + '</div>'
+          : (state === 'on' ? '<div class="ui-mt-4">' + callout('success', 'Google 계정을 연결했어요. 이제 사진 메뉴에서 앨범을 만들 수 있어요.') + '</div>' : '')) +
+        '<div class="ui-row ui-mt-4" data-gap="3"><span class="ui-google-mark" aria-hidden="true">G</span>' +
+        '<div style="flex: 1; min-width: 0;"><b style="word-break: break-all;">jaerim.rg@gmail.com</b>' +
+        '<div class="ui-text-sm ui-text-muted">권한: 앱이 만든 파일만 (drive.file)</div></div>' +
+        btn('연결 해제', { variant: 'outline', size: 'sm' }) + '</div>' +
+        '<dl class="ui-dl ui-mt-4">' +
+        '<div class="ui-dl__row"><dt class="ui-dl__label">저장 위치</dt><dd class="ui-dl__value"><div class="ui-row" data-gap="2">' + '<div class="ui-folder-line">' + icon('folder', 18) + '<span class="ui-folder-line__path"><span class="ui-folder-line__root">내 드라이브 / </span>' + ROOT + '</span></div>' + btn('이름 바꾸기', { variant: 'ghost', size: 'sm' }) + '</div></dd></div>' +
+        '<div class="ui-dl__row"><dt class="ui-dl__label">Drive 사용량</dt><dd class="ui-dl__value" style="flex: 1; max-width: 320px;">' +
+        '<div class="ui-row ui-text-sm" data-justify="between"><span>5.9GB 사용</span><span class="ui-text-muted">15GB 중</span></div>' +
+        '<div class="ui-progress ui-mt-2" role="progressbar" aria-valuenow="39"><div class="ui-progress__bar" style="width: 39%;"></div></div></dd></div>' +
+        '<div class="ui-dl__row"><dt class="ui-dl__label">앨범</dt><dd class="ui-dl__value">4개 · 사진 86장 · 영상 4개</dd></div></dl>' +
+        '<div class="ui-card__footer">' + btn('사진 메뉴로 가기', { variant: error ? 'outline' : 'primary', after: 'arrowRight' }) + '</div>';
+    }
+
+    var google = '<div class="ui-card" data-padding="md" id="google-card">' + title + body + '</div>';
+    var notice = '<div class="ui-card" data-padding="md"><div class="ui-card__header"><div><h3 class="ui-card__title">알림 설정</h3>' +
+      '<p class="ui-card__description">학부모 신청이 들어오면 카카오톡 ‘나에게 보내기’로 알려 드려요.</p></div>' + badge('켜짐', 'success', true) + '</div></div>';
+
+    return head + '<div class="ui-stack" data-gap="4">' + me + google + notice + '</div>';
+  };
+
+  // ---------- 사진 목록 ----------
+  var albumCard = function (a) {
+    var cover = a.seed === null
+      ? '<div class="ui-album-card__cover" data-empty>' + icon('image', 22) + '아직 사진이 없어요</div>'
+      : '<div class="ui-album-card__cover">' + [0, 1, 2, 3].map(function (k) { return '<img data-photo="' + (a.seed + k) + '" alt="">'; }).join('') + '</div>';
+    var badges = (a.published
+      ? badge('공개', 'success', true) + badge(a.audience === 'all' ? '모든 학부모' : '참가 학부모', 'neutral')
+      : badge('비공개', 'muted', true)) +
+      (a.fromParents ? badge('학부모가 올린 ' + a.fromParents + '장', 'neutral') : '');
+    return '<button type="button" class="ui-album-card">' + cover +
+      '<div class="ui-album-card__body"><h3 class="ui-album-card__title">' + esc(a.title) + '</h3>' +
+      '<div class="ui-album-card__meta"><span>' + longDate(a.date) + ' · ' + typeLabel(a.type) + '</span>' +
+      '<span>사진 ' + a.photos + (a.videos ? ' · 영상 ' + a.videos : '') + '</span></div>' +
+      '<div class="ui-album-card__badges">' + badges + '</div></div></button>';
+  };
+
+  var photosPage = function (state) {
+    var connected = state !== 'nodrive';
+    var actions = btn('사진 올리기', { variant: 'primary', icon: 'upload', disabled: !connected });
+    var head = pageHeader({
+      title: '사진',
+      description: '사진을 올릴 때 이벤트를 고르면 그 이벤트에 연결돼요. 공개한 앨범만 학부모 ‘사진’ 탭과 이벤트 상세에 보여요.',
+      actions: actions
+    });
+    var notice = connected ? '' :
+      '<div class="ui-mb-4">' + callout('warning', '<b>사진은 선생님 Google Drive 에 저장돼요.</b> 설정에서 Google 계정을 먼저 연결해 주세요.' +
+        '<div class="ui-mt-2">' + btn('설정으로 가기', { variant: 'primary', size: 'sm', after: 'arrowRight' }) + '</div>') + '</div>';
+
+    if (state === 'photos') {
+      return head + '<div class="ui-grid" data-auto="true">' + ALBUMS.map(albumCard).join('') + '</div>';
+    }
+    return head + notice +
+      '<div class="ui-card" data-padding="lg"><div class="ui-empty"><span class="ui-empty__icon">' + icon('image', 28) + '</span>' +
+      '<p class="ui-empty__title">아직 앨범이 없어요</p>' +
+      '<p class="ui-empty__description">사진을 올릴 때 이벤트를 고르면, Drive 에 그 이벤트 이름의 폴더가 생기고 앨범이 만들어져요.</p>' +
+      '<div class="ui-empty__actions">' + btn('사진 올리기', { variant: connected ? 'primary' : 'outline', icon: 'upload', disabled: !connected }) + '</div></div></div>';
+  };
+
+  // ---------- 사진 올리기 1단계 — 어느 이벤트 사진인가요? ----------
+  // 대회·스페셜 전부(앨범 유무와 상관없이) 날짜 최근순. 앨범이 없으면 올릴 때 폴더가 생긴다.
+  var TARGETS = ALBUMS.map(function (a) { return { title: a.title, date: a.date, type: a.type, album: a }; })
+    .concat(CANDIDATES.map(function (c) { return { title: c.title, date: c.date, type: c.type, upcoming: c.upcoming, album: null }; }))
+    .sort(function (x, y) { return x.date < y.date ? 1 : -1; });
+
+  var targetState = function (t) {
+    if (!t.album) return '<span class="ui-text-sm ui-text-muted">새 폴더</span>';
+    return '<span class="ui-text-sm ui-text-muted">사진 ' + (t.album.photos + t.album.videos) + '</span>' +
+      (t.album.published ? badge('공개', 'success', true) : badge('비공개', 'muted', true));
+  };
+  var pickFoot = function (t) {
+    var line = '<div class="ui-text-xs ui-text-muted ui-mb-2">' + (t.album ? '올라갈 폴더' : 'Drive 에 새로 만들 폴더') + '</div>' + folderLine(folderName(t));
+    var publish = t.album && t.album.published
+      ? '<p class="ui-text-sm ui-mt-3" style="margin-bottom: 0;">' + icon('eye', 16) + ' 공개 중인 앨범이라 올리면 바로 학부모에게 보여요 — 사진 탭과 이 이벤트 상세.</p>'
+      : '<label class="ui-check ui-mt-3"><input type="checkbox"><span>다 올리면 바로 학부모에게 공개 <span class="ui-text-muted ui-text-sm">(사진 탭 · 이 이벤트 상세)</span></span></label>';
+    return line + publish;
+  };
+  var uploadPick = function (picked) {
+    var rows = TARGETS.map(function (t, i) {
+      return '<button type="button" class="ui-choice" aria-pressed="' + (i === picked) + '" data-pick="' + i + '">' +
+        '<span class="ui-choice__mark"' + (i === picked ? ' data-on' : '') + '>' + icon('check', 14) + '</span>' +
+        '<span class="ui-event-pick__date">' + shortDate(t.date) + ' (' + dayOf(t.date) + ')</span>' +
+        '<span class="ui-event-pick__title">' + esc(t.title) + (t.upcoming ? ' ' + badge('예정', 'warning') : '') + '</span>' +
+        targetState(t) + '</button>';
+    }).join('');
+    return '<div class="ui-scrim"></div>' +
+      '<div class="ui-overlay" data-mode="sheet" data-size="md" role="dialog" aria-label="사진 올리기">' +
+      '<div class="ui-overlay__grip"></div>' +
+      '<div class="ui-overlay__header"><div><h2 class="ui-overlay__title">사진 올리기</h2>' +
+      '<p class="ui-overlay__description">어느 이벤트 사진인가요? 고른 이벤트에 연결돼요.</p></div>' +
+      '<button type="button" class="ui-callout__dismiss" aria-label="닫기">' + icon('x', 20) + '</button></div>' +
+      '<div class="ui-overlay__body"><div class="ui-event-pick" id="event-pick">' + rows + '</div>' +
+      '<div class="ui-card ui-mt-4" data-padding="sm" style="background: var(--surface-muted);" id="pick-foot">' + pickFoot(TARGETS[picked]) + '</div></div>' +
+      '<div class="ui-overlay__footer">' + btn('취소') + btn('사진 고르기', { variant: 'primary', icon: 'image' }) + '</div></div>';
+  };
+
+  // ---------- 앨범 ----------
+  var tiles = function (count, opt) {
+    opt = opt || {};
+    var out = '';
+    for (var i = 0; i < count; i += 1) {
+      var selected = opt.selected && opt.selected.indexOf(i) >= 0;
+      out += '<button type="button" class="ui-media-tile" data-i="' + i + '"' + (HIDDEN[i] ? ' data-hidden' : '') + (selected ? ' data-selected' : '') + '>' +
+        '<img data-photo="' + i + '" alt="">' +
+        (PARENT[i] ? '<span class="ui-media-tile__who">' + PARENT[i] + '</span>' : '') +
+        (VIDEO[i] ? '<span class="ui-media-tile__video">' + icon('play', 10) + VIDEO[i] + '</span>' : '') +
+        (HIDDEN[i] ? '<span class="ui-media-tile__hidden">' + icon('eyeOff', 22) + '숨김</span>' : '') +
+        (opt.selectable ? '<span class="ui-media-tile__check">' + icon('check', 14) + '</span>' : '') +
+        '</button>';
+    }
+    return out;
+  };
+
+  var publishCard = function (a, opt) {
+    opt = opt || {};
+    var on = a.published;
+    var who = on
+      ? (a.audience === 'all' ? '모든 학부모 ' + VIEWERS.all + '명' : '참가 확정 학부모 ' + opt.participants + '명') + '이 볼 수 있어요 · ' + a.publishedAt + ' 공개'
+      : '학부모에게 보이지 않아요. 사진을 다 올린 뒤 공개하세요.';
+    var choice = function (key, title, hint) {
+      var sel = a.audience === key;
+      return '<button type="button" class="ui-choice" aria-pressed="' + sel + '" data-audience="' + key + '"' + (opt.locked ? ' disabled' : '') + '>' +
+        '<span class="ui-choice__mark"' + (sel ? ' data-on' : '') + '>' + icon('check', 14) + '</span>' +
+        '<span><span class="ui-publish__option-title">' + title + '</span><span class="ui-publish__option-hint">' + hint + '</span></span></button>';
+    };
+    var zero = !on && a.audience === 'participants' && opt.participants === 0;
+    return '<div class="ui-card" data-padding="md"><div class="ui-publish">' +
+      '<div class="ui-row" data-justify="between" data-gap="3"><h3 class="ui-card__title">학부모 공개</h3>' +
+      (on ? badge('공개', 'success', true) : badge('비공개', 'muted', true)) + '</div>' +
+      '<div class="ui-publish__status"><span class="ui-publish__lamp"' + (on ? ' data-on' : '') + '></span>' +
+      '<span class="ui-publish__state">' + (on ? '공개 중' : '비공개') + '</span><span class="ui-publish__who">' + who + '</span></div>' +
+      '<div><div class="ui-field__label ui-mb-2">공개 범위</div><div class="ui-publish__audience">' +
+      choice('participants', '참가 확정 학부모 · ' + opt.participants + '명', a.type === 'competition' ? '이 대회에 확정된 학생의 학부모' : '이 이벤트에 신청이 확정된 학생의 학부모') +
+      choice('all', '모든 학부모 · ' + VIEWERS.all + '명', '선생님과 연결된 학부모 전체') + '</div></div>' +
+      '<div><div class="ui-field__label ui-mb-2">' + (on ? '보이는 곳' : '공개하면 보이는 곳') + '</div>' +
+      '<div class="ui-row ui-text-sm" data-gap="4" style="flex-wrap: wrap;">' +
+      '<span class="ui-row" data-gap="1">' + icon('image', 16) + '학부모 ‘사진’ 탭</span>' +
+      '<span class="ui-row" data-gap="1">' + icon('calendar', 16) + '‘' + esc(a.title) + '’ 이벤트 상세</span></div></div>' +
+      (zero ? callout('warning', '<b>이 이벤트에는 확정된 학생이 없어요.</b> 지금 공개하면 아무도 볼 수 없어요. 공개 범위를 ‘모든 학부모’로 바꿔 주세요.') : '') +
+      '<div class="ui-publish__actions">' +
+      (on ? btn('비공개로 전환', { icon: 'lock', disabled: opt.locked })
+          : btn('학부모에게 공개', { variant: 'primary', icon: 'eye', disabled: opt.locked })) +
+      '<span class="ui-text-sm ui-text-muted">' + (on ? '비공개로 돌리면 두 곳 모두에서 바로 사라져요.' : '누르면 위 두 곳에 바로 나타나요.') + '</span></div>' +
+      '<hr class="ui-publish__divider">' +
+      '<div class="ui-switch-field"><label class="ui-switch"><input type="checkbox" role="switch" checked' + (on && !opt.locked ? '' : ' disabled') + '>' +
+      '<span class="ui-switch__track"><span class="ui-switch__thumb"></span></span><span>학부모도 사진 올리기</span></label>' +
+      '<p class="ui-switch-field__description">' + (on
+        ? '공개된 동안 학부모가 사진·영상을 올릴 수 있어요.' + (a.fromParents ? ' 지금까지 ' + a.fromParents + '장을 올렸어요.' : '')
+        : '공개하면 적용돼요. 공개된 동안 학부모도 이 앨범에 올릴 수 있어요.') + '</p></div>' +
+      '</div></div>';
+  };
+
+  var driveCard = function (a, opt) {
+    opt = opt || {};
+    return '<div class="ui-card" data-padding="md"><div class="ui-stack" data-gap="3">' +
+      '<div class="ui-row" data-justify="between" data-gap="2"><h3 class="ui-card__title">Drive 폴더</h3>' +
+      btn('Drive 에서 열기', { variant: 'ghost', size: 'sm', after: 'external' }) + '</div>' +
+      folderLine(folderName(a)) +
+      '<dl class="ui-dl">' +
+      '<div class="ui-dl__row"><dt class="ui-dl__label">올린 것</dt><dd class="ui-dl__value">사진 ' + a.photos + ' · 영상 ' + a.videos + ' · ' + a.size + '</dd></div>' +
+      '<div class="ui-dl__row"><dt class="ui-dl__label">Drive 남은 용량</dt><dd class="ui-dl__value">' + (opt.error ? '—' : '9.1GB / 15GB') + '</dd></div></dl>' +
+      '<p class="ui-hand" style="margin: 0;">Drive 에서 직접 넣은 사진은 여기 안 보여요. 사진은 이 화면에서 올려 주세요.</p>' +
+      '</div></div>';
+  };
+
+  var albumPage = function (a, opt) {
+    opt = opt || {};
+    var locked = !!opt.error;
+    var head = pageHeader({
+      back: '사진',
+      title: a.title,
+      description: longDate(a.date) + ' · ' + typeLabel(a.type),
+      actions: btn('사진 올리기', { variant: 'primary', icon: 'upload', disabled: locked })
+    });
+    var errorBanner = opt.error
+      ? '<div class="ui-mb-4">' + callout('danger', '<b>Google 계정 연결이 끊어졌어요.</b> 사진은 계속 보이지만 올리기 · 지우기 · 공개 설정 바꾸기는 멈춰요.' +
+        '<div class="ui-mt-2">' + btn('설정에서 다시 연결', { variant: 'primary', size: 'sm', after: 'arrowRight' }) + '</div>') + '</div>'
+      : '';
+    var top = '<div class="ui-album-top">' + publishCard(a, { participants: opt.participants, locked: locked }) + driveCard(a, { error: locked }) + '</div>';
+
+    var gallery;
+    if (!a.photos && !a.videos) {
+      gallery = '<div class="ui-dropzone ui-mt-5">' + icon('upload', 28) +
+        '<p class="ui-dropzone__title">아직 사진이 없어요</p>' +
+        '<p class="ui-dropzone__hint">사진·영상을 여기에 끌어다 놓거나 [사진 올리기]를 누르세요. 한 번에 30개, 사진 25MB · 영상 500MB 까지.</p>' +
+        btn('사진 올리기', { variant: 'primary', icon: 'upload' }) + '</div>';
+    } else {
+      var selecting = !!opt.selected;
+      var toolbar = selecting
+        ? '<div class="ui-row ui-mt-5 ui-mb-3" data-justify="between" data-gap="2"><b>' + opt.selected.length + '장 골랐어요</b>' +
+          '<div class="ui-row" data-gap="2">' + btn('모두 고르기', { variant: 'ghost', size: 'sm' }) + btn('취소', { size: 'sm' }) + '</div></div>'
+        : '<div class="ui-row ui-mt-5 ui-mb-3" data-justify="between" data-gap="2">' +
+          '<div class="ui-toolbar" data-scroll-mobile="true" role="toolbar" style="flex: 1; min-width: 0;">' +
+          '<button type="button" class="ui-chip" aria-pressed="true">전체<span class="ui-chip__count">' + (a.photos + a.videos) + '</span></button>' +
+          '<button type="button" class="ui-chip" aria-pressed="false">선생님<span class="ui-chip__count">' + (a.photos + a.videos - a.fromParents) + '</span></button>' +
+          '<button type="button" class="ui-chip" aria-pressed="false">학부모<span class="ui-chip__count">' + a.fromParents + '</span></button>' +
+          '<button type="button" class="ui-chip" aria-pressed="false">숨김<span class="ui-chip__count">' + a.hidden + '</span></button></div>' +
+          btn('고르기', { size: 'sm', icon: 'check', disabled: locked }) + '</div>';
+      gallery = toolbar + '<div class="ui-media-grid" id="media-grid">' + tiles(18, { selectable: selecting, selected: opt.selected }) + '</div>' +
+        '<p class="ui-text-sm ui-text-muted" style="text-align: center; margin: var(--space-4) 0 0;">아래로 내리면 나머지 ' + (a.photos + a.videos - 18) + '개를 이어서 불러와요</p>';
+    }
+
+    var bar = opt.selected
+      ? '<div class="ui-sticky-actions">' + btn('숨기기', { icon: 'eyeOff' }) + btn('다시 보이기', { icon: 'eye', disabled: true }) + btn('지우기', { variant: 'danger-quiet', icon: 'trash' }) + '</div>'
+      : '';
+    return head + errorBanner + top + gallery + bar;
+  };
+
+  // ---------- 업로드 시트 ----------
+  var uploadSheet = function (a) {
+    var rows = [
+      { n: 0, name: 'IMG_2041.JPG', size: '4.2MB', state: 'done', sub: '얼굴 2명 찾음' },
+      { n: 1, name: 'IMG_2042.JPG', size: '3.9MB', state: 'done', sub: '얼굴 1명 찾음' },
+      { n: 2, name: 'IMG_2044.MOV', size: '182MB', state: 'up', pct: 64, sub: '116MB / 182MB' },
+      { n: 3, name: 'IMG_2047.HEIC', size: '2.8MB', state: 'up', pct: 18, sub: '이어서 올리는 중' },
+      { n: 5, name: 'IMG_2050.JPG', size: '5.1MB', state: 'wait', sub: '기다리는 중' },
+      { n: 8, name: '대회요강.pdf', size: '1.2MB', state: 'reject', sub: '사진·영상만 올릴 수 있어요' }
+    ];
+    var body = rows.map(function (r) {
+      var stateLabel = { done: '<span class="ui-row" data-gap="1">' + icon('checkCircle', 16) + '완료</span>', up: r.pct + '%', wait: '대기', reject: '<span class="ui-text-danger">못 올림</span>' }[r.state];
+      return '<div class="ui-upload-row">' +
+        (r.state === 'reject' ? '<span class="ui-upload-row__file">' + icon('file', 20) + '</span>' : '<img data-photo="' + r.n + '" alt="">') +
+        '<div style="min-width: 0;"><div class="ui-upload-row__name">' + r.name + '</div>' +
+        '<div class="ui-upload-row__sub' + (r.state === 'reject' ? ' ui-text-danger' : '') + '">' + r.size + ' · ' + r.sub + '</div>' +
+        (r.state === 'up' ? '<div class="ui-progress"><div class="ui-progress__bar" style="width:' + r.pct + '%;"></div></div>' : '') +
+        '</div><span class="ui-upload-row__state">' + stateLabel + '</span></div>';
+    }).join('');
+    return '<div class="ui-scrim"></div>' +
+      '<div class="ui-overlay" data-mode="sheet" data-size="md" role="dialog" aria-label="사진 올리기">' +
+      '<div class="ui-overlay__grip"></div>' +
+      '<div class="ui-overlay__header"><div><h2 class="ui-overlay__title">사진 올리기</h2>' +
+      '<p class="ui-overlay__description">‘' + esc(a.title) + '’ 에 연결 · Drive 의 앨범 폴더로 바로 올라가요</p></div></div>' +
+      '<div class="ui-overlay__body">' +
+      '<div class="ui-row ui-mb-2" data-justify="between"><b>5개 중 2개 올림</b><span class="ui-text-sm ui-text-muted">198MB 남음</span></div>' +
+      '<div class="ui-progress ui-mb-4"><div class="ui-progress__bar" style="width: 46%;"></div></div>' +
+      body +
+      '<p class="ui-hand ui-mt-3" style="margin-bottom: 0;">올리는 동안 이 화면을 닫지 마세요. 끊기면 이어서 올려요.</p></div>' +
+      '<div class="ui-overlay__footer">' + btn('사진 더 고르기', { icon: 'plus' }) + btn('완료', { variant: 'primary', disabled: true }) + '</div></div>';
+  };
+
+  var confirmDialog = function (opt) {
+    return '<div class="ui-scrim"></div>' +
+      '<div class="ui-overlay" data-mode="modal" data-size="sm" role="dialog" aria-label="' + opt.title + '">' +
+      '<div class="ui-overlay__grip"></div>' +
+      '<div class="ui-overlay__header"><div><h2 class="ui-overlay__title">' + opt.title + '</h2></div></div>' +
+      '<div class="ui-overlay__body"><p style="margin: 0;">' + opt.message + '</p></div>' +
+      '<div class="ui-overlay__footer">' + btn('취소') + btn(opt.confirm, { variant: 'danger' }) + '</div></div>';
+  };
+
+  // ── 화면 조립 ───────────────────────────────────────────────
+  var A = ALBUMS[0];             // 회장배 — 사진 있음
+  var NEW = ALBUMS[1];           // 가을 공개 수업 — 방금 만든 앨범
+  var priv = Object.assign({}, A, { published: false });
+  var SCREENS = {
+    'settings-off':        { nav: '설정', html: function () { return settingsPage('off'); } },
+    'settings-on':         { nav: '설정', html: function () { return settingsPage('on'); } },
+    'settings-error':      { nav: '설정', html: function () { return settingsPage('error'); } },
+    'settings-disconnect': { nav: '설정', html: function () { return settingsPage('steady'); },
+      overlay: function () { return confirmDialog({ title: 'Google 계정 연결을 해제할까요?', confirm: '연결 해제',
+        message: 'Drive 에 있는 사진과 폴더는 그대로 남아요. 해제하면 앨범 4개는 볼 수만 있고, 새 사진을 올리거나 지울 수 없어요.' }); } },
+    'photos-nodrive':      { nav: '사진', html: function () { return photosPage('nodrive'); } },
+    'photos-empty':        { nav: '사진', html: function () { return photosPage('empty'); } },
+    photos:                { nav: '사진', html: function () { return photosPage('photos'); } },
+    pick:                  { nav: '사진', html: function () { return photosPage('photos'); }, overlay: function () { return uploadPick(2); } },
+    'pick-new':            { nav: '사진', html: function () { return photosPage('photos'); }, overlay: function () { return uploadPick(6); } },
+    'album-new':           { nav: '사진', html: function () { return albumPage(NEW, { participants: 0 }); } },
+    'album-private':       { nav: '사진', html: function () { return albumPage(priv, { participants: 7 }); } },
+    'album-public':        { nav: '사진', html: function () { return albumPage(A, { participants: 7 }); } },
+    upload:                { nav: '사진', html: function () { return albumPage(priv, { participants: 7 }); }, overlay: function () { return uploadSheet(A); } },
+    select:                { nav: '사진', html: function () { return albumPage(A, { participants: 7, selected: [1, 5, 8] }); } },
+    'delete':              { nav: '사진', html: function () { return albumPage(A, { participants: 7, selected: [1, 5, 8] }); },
+      overlay: function () { return confirmDialog({ title: '사진 3장을 지울까요?', confirm: '지우기',
+        message: '학부모 화면에서 바로 사라지고, Drive 에서는 휴지통으로 옮겨져요. 30일 안에는 Drive 휴지통에서 되살릴 수 있어요.' }); } },
+    'album-error':         { nav: '사진', html: function () { return albumPage(A, { participants: 7, error: true }); } },
+    menu:                  { nav: '사진', html: function () { return photosPage('photos'); }, menu: true }
+  };
+
+  var name = new URLSearchParams(location.search).get('s') || 'photos';
+  var screen = SCREENS[name] || SCREENS.photos;
+
+  // 헤더 메뉴 (데스크탑) — 현재 메뉴에 active
+  document.getElementById('desktop-nav').innerHTML =
+    NAV.map(function (n) { return '<a href="#"' + (n[0] === screen.nav ? ' class="active"' : '') + '>' + n[0] + '</a>'; }).join('') +
+    '<div class="role-switch-menu"><button type="button" class="role-switch-trigger"><span class="badge badge-gray">선생님</span><span class="role-switch-name">이재림</span><span aria-hidden="true">▾</span></button></div>' +
+    '<a href="#"' + (screen.nav === '설정' ? ' class="active"' : '') + '>설정</a>' +
+    '<button class="btn btn-ghost" style="font-size: 0.875rem;">로그아웃</button>';
+
+  // 모바일 전체 메뉴
+  document.getElementById('mobile-menu-content').innerHTML =
+    '<div class="mobile-menu-section"><div class="mobile-menu-section-title">메인</div>' +
+    NAV.map(function (n) {
+      return '<a class="mobile-menu-item' + (n[0] === screen.nav ? ' active' : '') + '" href="#"><span class="mobile-menu-icon">' + icon(n[1], 20) + '</span><span class="mobile-menu-label">' + n[0] + '</span></a>';
+    }).join('') + '</div>' +
+    '<div class="mobile-menu-section"><div class="mobile-menu-section-title">역할</div><div class="role-switch-list"><button type="button" class="role-switch-item"><span>관리자 화면으로</span><small>이재림</small></button></div></div>' +
+    '<div class="mobile-menu-section"><div class="mobile-menu-section-title">계정</div>' +
+    '<a class="mobile-menu-item' + (screen.nav === '설정' ? ' active' : '') + '" href="#"><span class="mobile-menu-icon">' + icon('settings', 20) + '</span><span class="mobile-menu-label">설정</span></a>' +
+    '<button class="mobile-menu-item"><span class="mobile-menu-icon">' + icon('logout', 20) + '</span><span class="mobile-menu-label">로그아웃</span></button></div>';
+
+  document.getElementById('main').innerHTML = screen.html();
+  // 오버레이는 앱에서 document.body 로 포털된다
+  if (screen.overlay) document.body.insertAdjacentHTML('beforeend', screen.overlay());
+  if (screen.menu) {
+    document.getElementById('mobile-menu').classList.add('open');
+    var active = document.querySelector('.mobile-menu-item.active');
+    if (active) active.scrollIntoView({ block: 'center' });
+  }
+
+  window.renderMockIcons();
+  window.renderMockPhotos();
+  // 고른 이벤트가 목록 안에서 보이도록 그 줄까지 내린다(목록만 스크롤 — 바깥 갤러리는 건드리지 않는다)
+  var pickList = document.getElementById('event-pick');
+  var pickedRow = pickList && pickList.querySelector('[aria-pressed="true"]');
+  if (pickedRow) pickList.scrollTop = Math.max(0, pickedRow.offsetTop - pickList.offsetTop - pickList.clientHeight / 2 + pickedRow.offsetHeight / 2);
+
+  // ── 목업 안에서 눌러 볼 수 있는 것 ─────────────────────────────
+  // 사진 올리기 1단계: 이벤트를 고르면 올라갈 폴더와 공개 안내가 바뀐다
+  document.addEventListener('click', function (e) {
+    var pick = e.target.closest('[data-pick]');
+    if (pick) {
+      document.querySelectorAll('[data-pick]').forEach(function (b) {
+        var on = b === pick;
+        b.setAttribute('aria-pressed', String(on));
+        var mark = b.querySelector('.ui-choice__mark');
+        if (on) mark.setAttribute('data-on', ''); else mark.removeAttribute('data-on');
+      });
+      document.getElementById('pick-foot').innerHTML = pickFoot(TARGETS[Number(pick.getAttribute('data-pick'))]);
+      window.renderMockIcons(document.getElementById('pick-foot'));
+    }
+    // 공개 범위
+    var aud = e.target.closest('[data-audience]');
+    if (aud && !aud.disabled) {
+      document.querySelectorAll('[data-audience]').forEach(function (b) {
+        var on = b === aud;
+        b.setAttribute('aria-pressed', String(on));
+        var mark = b.querySelector('.ui-choice__mark');
+        if (on) mark.setAttribute('data-on', ''); else mark.removeAttribute('data-on');
+      });
+    }
+    // 고르기 모드: 사진을 눌러 고르기
+    var tile = e.target.closest('.ui-media-tile');
+    if (tile && tile.querySelector('.ui-media-tile__check')) {
+      if (tile.hasAttribute('data-selected')) tile.removeAttribute('data-selected'); else tile.setAttribute('data-selected', '');
+    }
+    // 목업이므로 링크·폼은 움직이지 않는다
+    if (e.target.closest('a, button')) e.preventDefault();
+  });
+
+  // 갤러리(iframe)에 높이를 알려 준다
+  var post = function () {
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: 'mock-height', h: Math.ceil(document.documentElement.scrollHeight) }, '*');
+    }
+  };
+  window.addEventListener('load', post);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(post);
+  if (window.ResizeObserver) new ResizeObserver(post).observe(document.body);
+})();
+</script>
+</body>
+</html>

@@ -71,10 +71,13 @@ const loadAlbumContext = async (req) => {
   const studentIds = children.map((child) => child.studentId);
   const { confirmed, confirmedIds } = await confirmationFor(event, studentIds);
 
+  // 선생님이 공개한 앨범만, 공개 범위 안일 때만 (docs/photo-menu FR-540~541)
   const view = canViewAlbum({
     isConfirmed: confirmed,
     isPublished: event.isPublished !== false,
-    hasAlbum: Boolean(event.driveFolderId)
+    hasAlbum: Boolean(event.driveFolderId),
+    albumPublished: event.albumPublished === true,
+    audience: event.albumAudience || 'participants'
   });
 
   if (!view.ok) {
@@ -83,8 +86,17 @@ const loadAlbumContext = async (req) => {
     };
   }
 
-  return { teacherIds, event, children, studentIds, confirmedIds };
+  return { teacherIds, event, children, studentIds, confirmed, confirmedIds };
 };
+
+/**
+ * 학부모가 올린 파일 이름에 쓸 자녀 — 이 이벤트에서 확정된 아이가 먼저,
+ * 공개 범위가 '모든 학부모'라 확정된 아이가 없으면 이 선생님 반의 아이, 그것도 없으면 '학부모'.
+ */
+export const uploadLabelChild = (children, confirmedIds, teacherId) =>
+  children.find((child) => confirmedIds.includes(child.studentId))
+  || children.find((child) => Number(child.teacherId) === Number(teacherId))
+  || null;
 
 const studentNamesOf = (children) =>
   Object.fromEntries(children.map((child) => [child.studentId, child.studentName || child.childName]));
@@ -101,9 +113,10 @@ export const listAlbums = async (req, res) => {
     const events = await Event.listWithAlbumsForParent(teacherIds);
     if (!events.length) return res.json({ items: [] });
 
-    // 확정된 이벤트만 남긴다.
+    // 공개된 앨범만 온다(Event.listWithAlbumsForParent). 그중 공개 범위에 드는 것만 남긴다.
     const visible = [];
     for (const event of events) {
+      if (event.albumAudience === 'all') { visible.push(event); continue; }
       const { confirmed } = await confirmationFor(event, studentIds);
       if (confirmed) visible.push(event);
     }
@@ -193,11 +206,13 @@ export const createUploads = async (req, res) => {
     const context = await loadAlbumContext(req);
     if (context.error) return context.error(res);
 
-    const { event, children, confirmedIds } = context;
+    const { event, children, confirmed, confirmedIds } = context;
     const account = await GoogleDriveAccount.getByUserId(event.userId);
 
     const allowed = canUpload({
-      isConfirmed: true,
+      isConfirmed: confirmed,
+      albumPublished: event.albumPublished === true,
+      audience: event.albumAudience || 'participants',
       hasAlbum: Boolean(event.driveFolderId),
       albumUploadOpen: event.albumUploadOpen !== false,
       albumStatus: event.albumStatus,
@@ -212,8 +227,7 @@ export const createUploads = async (req, res) => {
       return res.status(400).json({ error: `한 번에 ${MAX_FILES_PER_UPLOAD}개까지 올릴 수 있어요.` });
     }
 
-    // 파일 이름에 쓸 자녀 — 이 이벤트에서 확정된 첫 아이
-    const labelChild = children.find((child) => confirmedIds.includes(child.studentId));
+    const labelChild = uploadLabelChild(children, confirmedIds, event.userId);
 
     const items = await albumService.createUploadSessions(event.userId, event, files, {
       userId: req.user.id,

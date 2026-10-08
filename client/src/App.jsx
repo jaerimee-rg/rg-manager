@@ -23,6 +23,8 @@ import PublicChat from './pages/PublicChat';
 import PublicShop from './pages/PublicShop';
 import ShopManager from './pages/Shop/ShopManager';
 import EventList from './pages/Events/EventList';
+import PhotoAlbums from './pages/Photos/PhotoAlbums';
+import PhotoAlbum from './pages/Photos/PhotoAlbum';
 import EventForm from './pages/Events/EventForm';
 import ParentList from './pages/Parents/ParentList';
 import InviteLanding from './pages/parent/InviteLanding';
@@ -174,6 +176,8 @@ function App() {
     { path: '/students', label: '학생 관리', icon: 'users' },
     { path: '/classes', label: '수업 관리', icon: 'book' },
     { path: '/events', label: '이벤트 관리', icon: 'calendar' },
+    // 사진 메뉴 (docs/photo-menu) — 사진은 여기서만 올린다. 이벤트 화면에는 사진 입구가 없다.
+    { path: '/photos', label: '사진', icon: 'image' },
     { path: '/attendance', label: '출석 체크', icon: 'checkCircle' },
     { path: '/student-attendance', label: '학생별 출석', icon: 'clipboard' },
     { path: '/student-competitions', label: '학생별 대회', icon: 'award' },
@@ -336,6 +340,8 @@ function App() {
           <Route path="/events" element={<ProtectedRoute><EventList /></ProtectedRoute>} />
           <Route path="/events/new" element={<ProtectedRoute><EventForm /></ProtectedRoute>} />
           <Route path="/events/edit" element={<ProtectedRoute><EventForm /></ProtectedRoute>} />
+          <Route path="/photos" element={<ProtectedRoute><PhotoAlbums /></ProtectedRoute>} />
+          <Route path="/photos/:eventId" element={<ProtectedRoute><PhotoAlbum /></ProtectedRoute>} />
           <Route path="/parents" element={<ProtectedRoute><ParentList /></ProtectedRoute>} />
           <Route path="/competitions/new" element={<ProtectedRoute><CompetitionForm /></ProtectedRoute>} />
           <Route path="/competitions/edit" element={<ProtectedRoute><CompetitionForm /></ProtectedRoute>} />

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>선생님 · 모바일</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="../../../client/src/styles/tokens.css">
+<link rel="stylesheet" href="gallery.css">
+</head>
+<body>
+<!-- 사진 메뉴 목업 — 화면은 teacher-screens.html 의 상태(?s=)를 iframe 으로 띄운다.
+     앱의 실제 CSS(client/src/styles)를 쓰므로 저장소 루트에서 정적 서버로 연다(README "목업 보는 법"). -->
+<script>
+window.MOCK = {
+  "name": "사진 메뉴 목업",
+  "page": "teacher-mobile.html",
+  "device": "mobile",
+  "src": "teacher-screens.html",
+  "title": "선생님 · 모바일",
+  "host": "rg-manager.vercel.app",
+  "width": 390,
+  "height": 780,
+  "browserBar": "rg-manager.vercel.app",
+  "intro": [
+    "요구사항(2026-10-08, README 번호): ① 선생님마다 <b>본인 Google 계정</b>으로 사진을 관리하고, 선생님·학부모가 올리며, 폴더는 <b>이벤트 이름</b>으로 ② 선생님 <b>사진</b> 메뉴에서 폴더 만들기 · 사진 올리기 · <b>공개 여부 확인</b>, <b>공개하면 학부모 ‘사진’ 탭에 보임</b> ③ <b>이벤트 화면에서는 사진을 올리지 않고</b>, 사진 메뉴에서 추가한 것만 보임 ④ Google 계정 연동은 <b>설정</b>에서. ⑤ 사진을 올릴 때 <b>이벤트와 연결</b>하고, 연결된 사진은 학부모 <b>이벤트 상세</b>에서 본다.",
+    "앱의 실제 스타일(<code>tokens.css · ui.css · App.css</code>)로 그렸다. 새 모양(앨범 카드·공개 패널·사진 칸·업로드 줄)은 <code>photo-menu.css</code> 에 있고, 구현 때 <code>ui.css</code> 로 옮긴다. 노란 칸은 화면 설명이다. 사진은 아이 사진 대신 그린 자리 표시 그림이다.",
+    "같은 화면을 390px 폭으로 — 반응형은 CSS 가 맡는다(공개 패널과 Drive 카드는 세로로 쌓이고, 사진은 3칸, 모달은 바텀시트)."
+  ],
+  "screens": [
+    {
+      "src": "teacher-screens.html",
+      "s": "menu",
+      "title": "모바일 메뉴 — 사진",
+      "path": "/photos",
+      "notes": [
+        "모바일 전체 메뉴에도 이벤트 관리 아래 <b>사진</b>(이미지 아이콘)."
+      ],
+      "fixed": true,
+      "group": "선생님 · 휴대폰"
+    },
+    {
+      "src": "teacher-screens.html",
+      "s": "settings-off",
+      "title": "설정 — Google 계정 연결 전",
+      "path": "/settings",
+      "notes": [
+        "Google 계정 연결은 <b>설정</b>에서만 한다(요구 ④). 지금 있는 ‘Google Drive’ 카드를 디자인 시스템으로 옮기고 제목을 <b>‘Google 계정 (사진 저장)’</b>으로 바꾼다.",
+        "연결하면 무엇이 생기는지(RG Manager 폴더, 이벤트 이름 폴더), 앱이 볼 수 있는 범위(앱이 만든 파일만), <b>학부모 사진도 선생님 용량을 쓴다</b>는 것을 먼저 알려 준다.",
+        "Google 마크는 파랑·초록을 쓰지 않는 규칙 때문에 잉크로 그린 G 로 바꾼다(지금 카드는 그라데이션 G).",
+        "<b>지금 운영에서 누르면</b> Google 이 ‘Access blocked … 403 access_denied’ 를 낸다 — 동의 화면이 테스트 상태라서다. 선생님 계정을 테스트 사용자로 등록하면 된다(<code>02-google-setup.md</code>)."
+      ]
+    },
+    {
+      "src": "teacher-screens.html",
+      "s": "photos",
+      "title": "사진 — 앨범 목록",
+      "path": "/photos",
+      "notes": [
+        "앨범 하나 = 이벤트 하나. <b>이벤트 날짜 최근순</b> 카드. 썸네일 4장, 이벤트명·날짜·종류, 사진·영상 수.",
+        "배지로 <b>공개 / 비공개</b>와 공개 범위(참가 학부모 · 모든 학부모), 학부모가 올린 장 수를 바로 알 수 있다(요구 ② ‘공개 여부 확인’).",
+        "방금 만든 앨범(가을 공개 수업)처럼 사진이 없으면 손글씨로 ‘아직 사진이 없어요’."
+      ]
+    },
+    {
+      "src": "teacher-screens.html",
+      "s": "pick",
+      "title": "사진 올리기 1단계 — 어느 이벤트 사진인가요?",
+      "path": "/photos",
+      "fixed": true,
+      "notes": [
+        "목록 위 <b>[사진 올리기]</b>를 누르면 먼저 <b>이벤트를 고른다</b> — 고른 이벤트에 사진이 <b>연결</b>된다(요구 ⑤). 이벤트를 고르지 않고는 올릴 수 없다(D-8).",
+        "내 대회·스페셜 전부를 날짜 최근순(예정 포함, 휴관일 제외). 앨범이 있는 이벤트는 사진 수와 공개 상태, 없는 이벤트는 ‘새 폴더’.",
+        "고르면 아래에 <b>올라갈 폴더</b>가 보인다. 공개 중인 앨범(회장배)이면 ‘올리면 바로 학부모에게 보여요 — 사진 탭과 이 이벤트 상세’.",
+        "여기서 직접 눌러 보세요 — 고른 이벤트에 따라 폴더와 공개 안내가 바뀐다.",
+        "[사진 고르기] → 파일 선택 → 2단계(진행률)."
+      ]
+    },
+    {
+      "src": "teacher-screens.html",
+      "s": "album-private",
+      "title": "앨범 — 비공개 (사진을 올린 상태)",
+      "path": "/photos/31",
+      "notes": [
+        "<b>비공개</b>: 학부모에게 보이지 않는다. 공개 범위를 고르고 <b>[학부모에게 공개]</b>를 누르면 학부모 ‘사진’ 탭에 바로 나타난다.",
+        "<b>공개하면 보이는 곳</b>: 학부모 ‘사진’ 탭과 ‘회장배 리듬체조 대회’ 이벤트 상세(요구 ⑤).",
+        "공개 범위 두 칸에 <b>몇 명이 보게 되는지</b>를 숫자로 보여 준다(참가 확정 7명 · 모든 학부모 33명). 직접 눌러 보세요.",
+        "‘학부모도 사진 올리기’는 공개됐을 때만 적용된다 — 비공개 동안은 흐리게.",
+        "사진 칸: 학부모가 올린 사진에는 <b>누가 올렸는지</b>(선생님에게만 보임), 영상은 ▶ 길이, 숨긴 사진은 흐리게 ‘숨김’. 필터 칩은 전체 · 선생님 · 학부모 · 숨김.",
+        "Drive 폴더 카드: 이벤트 이름 폴더와 [Drive 에서 열기]. Drive 에서 직접 넣은 사진은 앱에 안 보인다는 것을 손글씨로 알린다(drive.file 범위의 한계)."
+      ]
+    },
+    {
+      "src": "teacher-screens.html",
+      "s": "album-public",
+      "title": "앨범 — 공개됨",
+      "path": "/photos/31",
+      "notes": [
+        "램프가 별 노랑으로 켜지고 <b>‘참가 확정 학부모 7명이 볼 수 있어요 · 10월 13일 공개’</b>.",
+        "<b>[비공개로 전환]</b>을 누르면 학부모 화면에서 바로 사라진다. 공개 중에도 범위는 바꿀 수 있다.",
+        "학부모 업로드 스위치가 켜져 있고, 지금까지 학부모가 올린 장 수를 보여 준다."
+      ]
+    },
+    {
+      "src": "teacher-screens.html",
+      "s": "upload",
+      "title": "사진 올리기 — 진행 중",
+      "path": "/photos/31",
+      "notes": [
+        "기존 업로드 흐름 그대로 — 서버는 Drive 업로드 주소만 만들어 주고 <b>브라우저가 Drive 로 직접</b> 보낸다(영상 500MB 까지, 8MB 씩 이어 올리기).",
+        "사진은 올리면서 얼굴 특징값을 계산해 함께 저장한다(학부모 ‘우리 아이 사진만 보기’에 쓰임). 실패해도 업로드는 성공.",
+        "사진·영상이 아닌 파일은 줄에서 바로 걸러진다."
+      ],
+      "fixed": true
+    },
+    {
+      "src": "teacher-screens.html",
+      "s": "select",
+      "title": "고르기 — 숨기기 · 지우기",
+      "path": "/photos/31",
+      "notes": [
+        "[고르기]를 누르면 사진마다 체크 칸이 생긴다. 직접 눌러 보세요.",
+        "아래 고정 줄: <b>숨기기</b>(학부모에게만 안 보임) · 다시 보이기 · <b>지우기</b>."
+      ]
+    }
+  ]
+};
+</script>
+<script src="gallery.js"></script>
+</body>
+</html>

@@ -25,7 +25,7 @@ import { runWithDrive, ensureRootFolder } from './driveAccess.js';
 import { encodeDescriptor, isValidDescriptor, decodeDescriptor, classifyDistance, bestPerStudent,
   DEFAULT_MATCH_THRESHOLD, DEFAULT_CANDIDATE_THRESHOLD } from '../utils/faceVector.js';
 import { mergeMatches } from '../utils/faceMatch.js';
-import { buildDriveName, validateUpload, kindFromMime } from '../utils/mediaValidation.js';
+import { buildDriveName, validateUpload, kindFromMime, folderNameFromEvent } from '../utils/mediaValidation.js';
 import { APP_URL } from '../utils/appUrl.js';
 
 /** 관리자가 조정할 수 있는 임계값. 실패해도 기본값으로 계속 간다 (aiSettings 와 같은 규칙). */
@@ -75,6 +75,48 @@ export const createAlbumFolder = async (userId, event, folderName) => {
 
     return { event: updated, folder, shared };
   });
+};
+
+/**
+ * 이벤트에 앨범이 없으면 만든다 (docs/photo-menu FR-514).
+ * 선생님이 [사진 올리기]에서 앨범 없는 이벤트를 고르면 업로드 세션을 만들기 직전에 부른다.
+ * 이름은 언제나 이벤트에서 나오고, 새 앨범은 비공개로 시작한다(칸 기본값).
+ * → 앨범이 붙은 이벤트
+ */
+export const ensureAlbum = async (userId, event) => {
+  if (event.driveFolderId) return event;
+  const result = await createAlbumFolder(userId, event, folderNameFromEvent(event));
+  return result.event || event;
+};
+
+/**
+ * 이벤트 제목·날짜가 바뀌면 앨범 폴더 이름도 바꾼다 (FR-531).
+ * 실패해도 이벤트 저장은 이미 끝났으므로 던지지 않는다 — 로그만 남긴다(competitionMirror 와 같은 규칙).
+ * 제목·날짜가 그대로면 Drive 를 부르지 않는다.
+ */
+export const syncFolderName = async (userId, before, after) => {
+  if (!after?.driveFolderId) return { renamed: false };
+  const was = folderNameFromEvent(before || {});
+  const next = folderNameFromEvent(after);
+  if (was === next) return { renamed: false };
+
+  try {
+    await renameAlbumFolder(userId, after, next);
+    return { renamed: true, name: next };
+  } catch (error) {
+    console.error('앨범 폴더 이름 맞추기 실패(이벤트 저장은 성공):', error?.message || error);
+    return { renamed: false, error: error?.message || String(error) };
+  }
+};
+
+/** 공개하면 몇 명이 보는지. 실패해도 앨범 화면은 떠야 하므로 0 으로 돌려준다. */
+export const countViewers = async (event) => {
+  try {
+    return await Event.countAlbumViewers(event);
+  } catch (error) {
+    console.error('앨범 공개 인원 조회 실패:', error?.message || error);
+    return { participants: 0, all: 0 };
+  }
 };
 
 export const renameAlbumFolder = async (userId, event, folderName) =>
@@ -409,6 +451,9 @@ export const deleteMedia = async (ownerUserId, media) => {
 export default {
   getThresholds,
   createAlbumFolder,
+  ensureAlbum,
+  syncFolderName,
+  countViewers,
   renameAlbumFolder,
   refreshAlbum,
   createUploadSessions,

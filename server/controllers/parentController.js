@@ -8,13 +8,17 @@ import EventRegistration from '../models/EventRegistration.js';
 import ChildFaceProfile from '../models/ChildFaceProfile.js';
 import Competition from '../models/Competition.js';
 import EventMedia from '../models/EventMedia.js';
-import { isConfirmedParent } from '../utils/albumAccess.js';
-import { thumbnailUrl } from '../utils/mediaSerializer.js';
+import MediaTag from '../models/MediaTag.js';
+import { isConfirmedParent, inAudience } from '../utils/albumAccess.js';
+import { thumbnailUrl, toParentMedia } from '../utils/mediaSerializer.js';
 import { matchChild, defaultParentName } from '../services/parentOnboarding.js';
 import { teacherIdsOf, teachersOf, childBelongsToEvent } from '../services/parentScope.js';
 import { extractInviteToken } from '../utils/oauthState.js';
 import { canRegister, todayKst } from '../services/eventService.js';
 import { sendEventRegistrationKakaoMessage } from '../utils/kakaoMessage.js';
+
+/** 이벤트 상세에 바로 보여 줄 사진 수 (3×2) */
+export const ALBUM_PREVIEW_COUNT = 6;
 
 export const CHILD_NAME_MAX = 20;
 export const PARENT_NAME_MAX = 20;
@@ -332,26 +336,38 @@ export const getEvent = async (req, res) => {
         }));
     }
 
-    // 앨범이 있고 자녀가 확정됐으면 상세에서 바로 사진으로 들어갈 수 있게 알려준다.
+    // 이 이벤트에 연결된 사진 (docs/photo-menu FR-545) — 선생님이 앨범을 공개했고 공개 범위 안일 때만.
+    // 비공개·범위 밖·앨범 없음은 모두 album:null 이다(앨범이 있다는 사실도 알리지 않는다).
     // 여기가 실패해도 상세 화면은 떠야 하므로 앨범 정보만 비운다.
     let album = null;
     try {
-      if (event.driveFolderId) {
-        const confirmedStudentIds = registrations.filter((r) => r.status === 'confirmed').map((r) => r.studentId);
-        const competitionStudentIds = event.competitionId ? await Competition.getStudentIds(event.competitionId) : [];
-        const confirmed = isConfirmedParent({ childStudentIds: studentIds, confirmedStudentIds, competitionStudentIds });
+      if (event.driveFolderId && event.albumPublished === true) {
+        const audience = event.albumAudience || 'participants';
+        let confirmed = false;
+        if (audience !== 'all') {
+          const confirmedStudentIds = registrations.filter((r) => r.status === 'confirmed').map((r) => r.studentId);
+          const competitionStudentIds = event.competitionId ? await Competition.getStudentIds(event.competitionId) : [];
+          confirmed = isConfirmedParent({ childStudentIds: studentIds, confirmedStudentIds, competitionStudentIds });
+        }
 
-        if (confirmed) {
-          const summaries = await EventMedia.summaries([event.id], { studentIds });
+        if (inAudience({ audience, isConfirmed: confirmed })) {
+          const [summaries, rows] = await Promise.all([
+            EventMedia.summaries([event.id], { studentIds }),
+            EventMedia.list(event.id, { limit: ALBUM_PREVIEW_COUNT, uploaderUserId: req.user.id })
+          ]);
+          const tagsByMedia = await MediaTag.listByMediaIds(rows.map((row) => row.id));
           const counts = summaries[event.id] || { images: 0, videos: 0, mine: 0, previews: [] };
           album = {
             available: true,
             counts: { images: counts.images, videos: counts.videos, mine: counts.mine },
+            // 숨김을 뺀 최근 사진 — 학부모용 화이트리스트(toParentMedia) 그대로
+            items: rows.map((row) => toParentMedia(
+              { ...row, tags: tagsByMedia[row.id] || [] },
+              { myStudentIds: studentIds, myUserId: req.user.id }
+            )),
             previews: (counts.previews || []).map((id) => thumbnailUrl(id, 400)),
             uploadOpen: event.albumUploadOpen !== false
           };
-        } else {
-          album = { available: false, reason: 'not_confirmed' };
         }
       }
     } catch (error) {

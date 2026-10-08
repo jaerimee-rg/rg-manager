@@ -34,9 +34,14 @@ jest.unstable_mockModule('../../models/Competition.js', () => ({
   default: { addStudent: jest.fn(), delete: jest.fn() }
 }));
 
+jest.unstable_mockModule('../../services/albumService.js', () => ({
+  default: { syncFolderName: jest.fn().mockResolvedValue({ renamed: false }) }
+}));
+
 const Event = (await import('../../models/Event.js')).default;
 const EventRegistration = (await import('../../models/EventRegistration.js')).default;
 const Competition = (await import('../../models/Competition.js')).default;
+const albumService = (await import('../../services/albumService.js')).default;
 const {
   getEvents, createEvent, updateEvent, deleteEvent,
   getRegistrations, confirmRegistration, confirmAllRegistrations, registerStudent
@@ -255,6 +260,37 @@ describe('eventController', () => {
 
       expect(res.status).toHaveBeenCalledWith(400);
       expect(Event.update).not.toHaveBeenCalled();
+    });
+
+    it('앨범이 있는 이벤트를 고치면 폴더 이름 맞추기를 부른다 (docs/photo-menu FR-531)', async () => {
+      const withAlbum = { ...existing, title: '서울시 대회', date: '2026-09-12', location: '올림픽공원', driveFolderId: 'folder-1' };
+      Event.getById.mockResolvedValue(withAlbum);
+      Event.update.mockResolvedValue({ ...withAlbum, title: '서울시장배 대회' });
+      EventRegistration.listByEvent.mockResolvedValue([]);
+      req.params.id = '5';
+      req.body = { title: '서울시장배 대회', date: '2026-09-12', location: '올림픽공원', options: existing.options };
+
+      await updateEvent(req, res);
+
+      expect(albumService.syncFolderName).toHaveBeenCalledWith(
+        7,
+        expect.objectContaining({ title: '서울시 대회' }),
+        expect.objectContaining({ title: '서울시장배 대회', driveFolderId: 'folder-1' })
+      );
+      expect(res.json).toHaveBeenCalled();
+      expect(res.status).not.toHaveBeenCalledWith(500);
+    });
+
+    it('앨범이 없는 이벤트는 폴더를 건드리지 않는다', async () => {
+      Event.getById.mockResolvedValue({ ...existing, title: 'A', date: '2026-09-12', location: 'B' });
+      Event.update.mockResolvedValue({ id: 5 });
+      EventRegistration.listByEvent.mockResolvedValue([]);
+      req.params.id = '5';
+      req.body = { title: 'C', date: '2026-09-12', location: 'B', options: existing.options };
+
+      await updateEvent(req, res);
+
+      expect(albumService.syncFolderName).not.toHaveBeenCalled();
     });
 
     it('라벨을 고쳐도 옵션 id 는 유지된다', async () => {

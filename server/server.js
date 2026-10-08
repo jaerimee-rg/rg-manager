@@ -14,6 +14,7 @@ import competitionRoutes from './routes/competitions.js';
 import eventRoutes from './routes/events.js';
 import parentAdminRoutes from './routes/parents.js';
 import driveRoutes from './routes/drive.js';
+import albumRoutes from './routes/albums.js';
 import inviteRoutes from './routes/invite.js';
 import { adminRouter as teacherInviteRoutes, publicRouter as teacherInvitePublicRoutes } from './routes/teacherInvites.js';
 import parentRoutes from './routes/parent.js';
@@ -218,6 +219,7 @@ app.use('/api/parents', rejectParents, parentAdminRoutes);
 // 선생님의 Google Drive 연결 (앨범 폴더를 만들고 업로드 세션을 발급한다).
 // /api/drive/callback 만 Google 이 브라우저를 되돌려 보내는 공개 경로다.
 app.use('/api/drive', rejectParents, driveRoutes);
+app.use('/api/albums', rejectParents, albumRoutes);
 
 // 초대 링크 확인은 비로그인 학부모·선생님이 여는 공개 경로다.
 app.use('/api/invite', inviteRoutes);

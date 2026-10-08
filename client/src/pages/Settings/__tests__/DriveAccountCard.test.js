@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 
 jest.mock('../../../utils/api', () => ({
   fetchWithAuth: jest.fn()
@@ -35,7 +36,7 @@ const CONNECTED = {
 
 const renderCard = async () => {
   await act(async () => {
-    render(<DriveAccountCard />);
+    render(<MemoryRouter><DriveAccountCard /></MemoryRouter>);
   });
 };
 
@@ -86,7 +87,7 @@ describe('DriveAccountCard', () => {
     respondWith({ ...CONNECTED, status: 'error', lastError: 'invalid_grant' });
     await renderCard();
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Google Drive 연결이 끊어졌어요');
+    expect(screen.getByRole('alert')).toHaveTextContent('Google 계정 연결이 끊어졌어요');
     expect(screen.getByRole('button', { name: '다시 연결' })).toBeInTheDocument();
     expect(screen.getByText('연결 오류')).toBeInTheDocument();
   });
@@ -96,7 +97,7 @@ describe('DriveAccountCard', () => {
     await renderCard();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '이름 변경' }));
+      fireEvent.click(screen.getByRole('button', { name: '이름 바꾸기' }));
     });
     fireEvent.change(screen.getByLabelText('루트 폴더 이름'), { target: { value: '리듬체조 앨범' } });
     await act(async () => {
@@ -128,6 +129,43 @@ describe('DriveAccountCard', () => {
 
     expect(screen.getByText('Google 계정 연결을 취소했습니다.')).toBeInTheDocument();
     expect(window.location.search).toBe('');
+  });
+
+  it('연결 해제는 브라우저 confirm 이 아니라 확인 창으로 묻고, 확인하면 DELETE 한다', async () => {
+    respondWith(CONNECTED);
+    const confirmSpy = jest.spyOn(window, 'confirm');
+    await renderCard();
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '연결 해제' })); });
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('Drive 에 있는 사진과 폴더는 그대로 남아요');
+    await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: '연결 해제' })); });
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(fetchWithAuth).toHaveBeenCalledWith('/api/drive/account', { method: 'DELETE' });
+    confirmSpy.mockRestore();
+  });
+
+  it('연결되면 사진 메뉴로 가는 링크가 있다 (docs/photo-menu FR-500)', async () => {
+    respondWith(CONNECTED);
+    await renderCard();
+
+    expect(screen.getByRole('link', { name: /사진 메뉴로 가기/ })).toHaveAttribute('href', '/photos');
+  });
+
+  it('연결 시작이 실패하면 alert 대신 카드 안에 알린다', async () => {
+    const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
+    fetchWithAuth.mockImplementation((url) => {
+      if (url === '/api/drive/connect') return Promise.resolve({ ok: false, json: () => Promise.resolve({ error: '연동이 꺼져 있어요' }) });
+      return ok({ connected: false, configured: true });
+    });
+    await renderCard();
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Google 계정 연결하기/ })); });
+
+    expect(screen.getByText('연동이 꺼져 있어요')).toBeInTheDocument();
+    expect(alertSpy).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
   });
 
   it('조회에 실패하면 안내만 보여주고 깨지지 않는다', async () => {

@@ -52,8 +52,8 @@ Client and server have **separate** Jest setups and are run from their own direc
 there is no root `package.json`, so there is no one command that runs everything.
 
 ```bash
-cd client && npm test          # jest — 999 tests / 74 suites
-cd server && npm test          # 1113 tests / 53 suites
+cd client && npm test          # jest — 1076 tests / 77 suites
+cd server && npm test          # 1189 tests / 55 suites
 ```
 
 - **The server suite is ESM** (`"type": "module"` + `transform: {}`, i.e. no Babel) and only
@@ -412,8 +412,9 @@ DATABASE_URL=postgresql://<user>@localhost:5432/rg_manager npm start
 ### Event Photo Albums (Google Drive)
 
 Competition photos and videos live in the **teacher's own Google Drive**; the app stores only
-file ids, metadata, and face vectors. Design docs: `docs/photo-sharing/` (requirements, data
-model, implementation plan, mockups).
+file ids, metadata, and face vectors. Design docs: `docs/photo-sharing/` (base design: Drive, uploads,
+faces, parent gallery) and **`docs/photo-menu/`** (2026-10: the teacher 사진 menu, the publish step,
+upload-time event linking, the parent event-detail photos, HTML mockups, Google setup).
 
 - **Drive connection** is per teacher (`google_drive_accounts`), OAuth scope **`drive.file` only** —
   the app sees only files it created, so Google requires no verification. `utils/googleDrive.js`
@@ -426,21 +427,35 @@ model, implementation plan, mockups).
   (anyone with the link, reader)** — the gallery uses Drive thumbnail URLs directly, so without
   sharing nothing renders. `events.albumStatus` is `none|ready|missing|unshared`. Deleting an
   event never deletes the Drive folder.
-- **There is no teacher-facing album screen right now.** The 사진·영상 section used to live at the
-  bottom of the event form; it was removed on 2026-09-01 at the owner's request, together with
-  `EventAlbumSection.jsx` and `MediaDetailModal.jsx`. Everything else — the API (`/api/events/:id/album`,
-  `/media/*`), access rules, the parent gallery and existing albums — is untouched and still tested,
-  but **nothing in the UI creates a new album folder**, so events created from now on have no album
-  until a teacher-facing entry point comes back. Restore the screen from git history (`git log
-  -- client/src/pages/Events/EventAlbumSection.jsx`) rather than rewriting it.
+- **Teacher UI = the 사진 menu** (`/photos`, `/photos/:eventId`, `client/src/pages/Photos/`), right below
+  이벤트 관리. **Photos are uploaded only there** — the event list/form have no photo entry (owner's call,
+  2026-09-01 and again 2026-10-08). `GET /api/albums` (`albumListController`, guarded by `rejectParents`)
+  returns the album cards plus every competition/special as an upload **target**.
+- **Uploading links photos to an event.** [사진 올리기] opens `UploadSheet` with `targets`: step 1 is
+  "어느 이벤트 사진인가요?"; the chosen event's `POST /api/events/:id/media/uploads` **creates the album folder
+  first if the event has none** (`albumService.ensureAlbum`, closure events refused). The album page's own
+  [사진 올리기] skips step 1. The folder name always comes from the event — `folderNameFromEvent` =
+  `YYYY-MM-DD 제목`, Drive-forbidden characters become spaces (never rejected) — and **follows title/date
+  edits** (`eventController.updateEvent` → `syncFolderName`, which never fails the event save).
+- **Albums start private** (`events."albumPublished"` default false). The teacher publishes from the album
+  page's 공개 panel, choosing `albumAudience` = `participants` (confirmed parents, default) or `all` (every
+  linked parent); `albumPublishedAt` keeps the first publish. A published album shows in the parent 사진 tab
+  **and** on that event's parent detail page. The upload sheet can publish when done (a follow-up
+  `PATCH .../album {published:true}`, only if something uploaded). **Publishing, audience and hide/show stay
+  available when Google is disconnected** — only Drive-backed actions (upload, delete) lock, so an album can
+  always be taken down.
 - **Uploads never pass through the server.** `POST .../media/uploads` returns a Drive *resumable
   session URI* (created with an `Origin` header so the browser may PUT to it); the browser uploads
   in 8MB chunks with progress and resume (`utils/driveUpload.js`). `POST .../media/:id/complete`
   re-reads the file from Drive and **verifies it landed in this album's folder** before marking it
   `ready` — a leaked session URI cannot inject files elsewhere.
-- **Who can see an album**: the teacher, plus parents whose child is **confirmed** for that event —
-  either `event_registrations.status='confirmed'` or already in `competition_students`
-  (`utils/albumAccess.js:isConfirmedParent`). Everything parent-facing goes through
+- **Who can see an album** (`utils/albumAccess.js`, order matters): no album → event private
+  (`not_published`) → **album private (`album_private`, checked before any confirmation)** → audience. With
+  `participants`, the parent's child must be **confirmed** — `event_registrations.status='confirmed'` or in
+  `competition_students` (`isConfirmedParent`); with `all`, being linked to the teacher is enough.
+  `albumPublished` defaults to **closed** in `canViewAlbum`/`canUpload` when a caller omits it.
+  `GET /api/parent/events/:id` returns `album:null` unless visible (existence isn't revealed) and otherwise the
+  6 newest non-hidden photos in `album.items`. Everything parent-facing goes through
   `utils/mediaSerializer.js:toParentMedia`, a **whitelist** — other children's tags, face boxes,
   descriptors, uploader names and Drive filenames never leave the server. A test pins the exact
   field list so a new column cannot leak by accident.
@@ -457,17 +472,21 @@ model, implementation plan, mockups).
   resurrected by re-matching (`utils/faceMatch.js:nextTagSource`, the whole table is unit-tested).
   Distance ≤ `face_match_threshold` (0.50) auto-tags, ≤ `face_candidate_threshold` (0.60) becomes a
   "혹시 우리 아이?" candidate; both are `app_settings` keys.
-- **Parents**: 사진 tab (`/parent/photos`), gallery (`/parent/photos/:eventId`) with the
-  **우리 아이 사진만 보기** toggle, a full-screen viewer whose 저장 button opens the Drive download
-  URL, and child face registration in 내 정보. Parents may delete only what they uploaded.
+- **Parents**: 사진 tab (`/parent/photos`, published albums only), gallery (`/parent/photos/:eventId`) with the
+  **우리 아이 사진만 보기** toggle and `?open=<mediaId>` to open one photo, a full-screen viewer whose 저장 button
+  opens the Drive download URL, child face registration in 내 정보, and a **6-photo grid on the event detail**
+  (view only — uploads happen in the album). Parents upload only to published albums with 업로드 받기 on, and
+  may delete only what they uploaded. A private album opened by URL shows "선생님이 아직 공개하지 않은 앨범이에요".
 - **Deletes go to the Drive trash** (`files.update {trashed:true}`), never permanent — 30 days to
   recover. The DB row is removed, cascading faces and tags.
 
-**Google setup required before this works** (see `docs/photo-sharing/03-implementation-plan.md` §12):
-`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, an authorized redirect URI of
-`<APP_URL>/api/drive/callback`, Drive API enabled, and the consent screen published. Without them
-`/api/drive/account` returns `configured:false` and every album screen shows connect guidance —
-the rest of the app is unaffected.
+**Google setup** (`docs/photo-menu/02-google-setup.md`): `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`,
+an authorized redirect URI of `<APP_URL>/api/drive/callback` and the Drive API are **in production already**
+(2026-10-08). The consent screen is still **Testing**, so only registered test users can connect
+(`403 access_denied` otherwise) and their refresh tokens **expire after 7 days** — the row flips to
+`status='error'` and the teacher reconnects in 설정. Publishing the app (scopes `drive.file`, `openid`, `email`
+are all non-sensitive → no Google review) removes both limits. Without the keys `/api/drive/account` returns
+`configured:false` and the photo screens show "관리자에게 문의" — the rest of the app is unaffected.
 
 ### Event Share Link (선생님 → 학부모)
 
@@ -680,7 +699,7 @@ cd ../server && DATABASE_URL=postgresql://<user>@localhost:5432/rg_manager PORT=
   JWT_SECRET=local-dev-secret API_RATE_LIMIT_MAX=100000 AUTH_RATE_LIMIT_MAX=100000 \
   SUPABASE_URL=http://localhost:5056 SUPABASE_SECRET_KEY=e2e-fake node server.js &
 cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e:setup   # writes e2e/.sessions.json
-cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 98 tests
+cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 103 tests
 ```
 
 - **`design` project** (`e2e/design.spec.mjs`) checks the redesign in a real browser — computed

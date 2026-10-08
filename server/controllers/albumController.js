@@ -7,8 +7,8 @@ import GoogleDriveAccount from '../models/GoogleDriveAccount.js';
 import albumService from '../services/albumService.js';
 import { DriveError, isDriveConfigured, getStorageQuota } from '../utils/googleDrive.js';
 import { getAccessToken } from '../services/driveAccess.js';
-import { sanitizeFolderName, defaultFolderName, MAX_FILES_PER_UPLOAD } from '../utils/mediaValidation.js';
-import { canUpload, canManageAlbum, canDeleteMedia, reasonMessage } from '../utils/albumAccess.js';
+import { sanitizeFolderName, folderNameFromEvent, MAX_FILES_PER_UPLOAD } from '../utils/mediaValidation.js';
+import { canUpload, canManageAlbum, canDeleteMedia, reasonMessage, isValidAudience } from '../utils/albumAccess.js';
 import { toTeacherMedia } from '../utils/mediaSerializer.js';
 
 /**
@@ -71,7 +71,13 @@ export const getAlbum = async (req, res) => {
       driveFolderName: event.driveFolderName || null,
       folderUrl: event.driveFolderId ? `https://drive.google.com/drive/folders/${event.driveFolderId}` : null,
       albumUploadOpen: event.albumUploadOpen !== false,
-      defaultFolderName: defaultFolderName(event),
+      // 공개 단계 (docs/photo-menu 3.3) — 앨범은 비공개로 시작한다
+      published: event.albumPublished === true,
+      audience: event.albumAudience || 'participants',
+      publishedAt: event.albumPublishedAt || null,
+      defaultFolderName: folderNameFromEvent(event),
+      expectedFolderName: folderNameFromEvent(event),
+      viewerCounts: { participants: 0, all: 0 },
       foreignAccount,
       drive: {
         configured: isDriveConfigured(),
@@ -85,12 +91,14 @@ export const getAlbum = async (req, res) => {
     };
 
     if (event.driveFolderId) {
-      const stats = await EventMedia.stats(event.id);
+      const [stats, viewers] = await Promise.all([EventMedia.stats(event.id), albumService.countViewers(event)]);
       payload.counts = {
         images: stats.images, videos: stats.videos, hidden: stats.hidden,
+        fromParents: stats.fromParents || 0, fromTeacher: stats.fromTeacher || 0,
         untagged: stats.untagged, candidates: stats.candidates, unanalyzed: stats.unanalyzed
       };
       payload.totalSize = stats.totalSize;
+      payload.viewerCounts = viewers;
     }
 
     if (account && account.status === 'connected') {
@@ -117,7 +125,8 @@ export const createAlbum = async (req, res) => {
     if (event.type === 'closure') return res.status(400).json({ error: reasonMessage('closure_event'), reason: 'closure_event' });
     if (event.driveFolderId) return res.status(400).json({ error: '이미 앨범이 있습니다.', reason: 'already_exists' });
 
-    const name = sanitizeFolderName(req.body?.folderName ?? defaultFolderName(event));
+    // 이름은 이벤트에서 나온다(docs/photo-menu 3.2). 예전 화면처럼 이름을 보내는 호출도 받는다.
+    const name = sanitizeFolderName(req.body?.folderName ?? folderNameFromEvent(event));
     if (!name.ok) return res.status(400).json({ error: name.message, reason: name.reason });
 
     const result = await albumService.createAlbumFolder(ownerOf(event), event, name.name);
@@ -127,19 +136,28 @@ export const createAlbum = async (req, res) => {
       driveFolderName: result.event.driveFolderName,
       albumStatus: result.event.albumStatus,
       folderUrl: `https://drive.google.com/drive/folders/${result.event.driveFolderId}`,
-      shared: result.shared
+      shared: result.shared,
+      published: result.event.albumPublished === true
     });
   } catch (error) {
     driveErrorResponse(res, error, '앨범 폴더를 만들지 못했습니다.');
   }
 };
 
-/** PATCH /api/events/:id/album — 이름 변경 · 업로드 받기 토글 */
+/** PATCH /api/events/:id/album — 이름 변경 · 업로드 받기 토글 · 공개 · 공개 범위 */
 export const updateAlbum = async (req, res) => {
   try {
     const event = await loadEvent(req);
     if (!event) return notFound(res);
     if (!event.driveFolderId) return res.status(400).json({ error: '아직 앨범이 없습니다.', reason: 'no_album' });
+
+    const body = req.body || {};
+    if (body.audience !== undefined && !isValidAudience(body.audience)) {
+      return res.status(400).json({ error: '공개 범위를 다시 골라 주세요.', reason: 'invalid_audience' });
+    }
+    if (body.published === true && event.albumStatus === 'missing') {
+      return res.status(400).json({ error: reasonMessage('album_missing'), reason: 'album_missing' });
+    }
 
     let updated = event;
 
@@ -149,14 +167,25 @@ export const updateAlbum = async (req, res) => {
       updated = await albumService.renameAlbumFolder(ownerOf(event), event, name.name);
     }
 
-    if (req.body?.albumUploadOpen !== undefined) {
-      updated = await Event.updateAlbum(event.id, { albumUploadOpen: Boolean(req.body.albumUploadOpen) });
+    const fields = {};
+    if (body.albumUploadOpen !== undefined) fields.albumUploadOpen = Boolean(body.albumUploadOpen);
+    if (body.audience !== undefined) fields.albumAudience = body.audience;
+    if (body.published !== undefined) {
+      fields.albumPublished = Boolean(body.published);
+      // "몇 월 며칠 공개" 는 처음 공개한 날을 남긴다
+      if (fields.albumPublished && !event.albumPublishedAt) fields.albumPublishedAt = new Date().toISOString();
+    }
+    if (Object.keys(fields).length) {
+      updated = (await Event.updateAlbum(event.id, fields)) || updated;
     }
 
     res.json({
       driveFolderName: updated.driveFolderName,
       albumUploadOpen: updated.albumUploadOpen !== false,
-      albumStatus: updated.albumStatus
+      albumStatus: updated.albumStatus,
+      published: updated.albumPublished === true,
+      audience: updated.albumAudience || 'participants',
+      publishedAt: updated.albumPublishedAt || null
     });
   } catch (error) {
     driveErrorResponse(res, error, '앨범을 수정하지 못했습니다.');
@@ -223,11 +252,29 @@ export const listMedia = async (req, res) => {
   }
 };
 
-/** POST /api/events/:id/media/uploads — 업로드 세션 발급 */
+/**
+ * POST /api/events/:id/media/uploads — 업로드 세션 발급
+ *
+ * 사진 메뉴의 [사진 올리기]는 이벤트를 고르는 것으로 사진을 그 이벤트에 연결한다(docs/photo-menu FR-514).
+ * 고른 이벤트에 앨범이 없으면 여기서 이벤트 이름 폴더를 먼저 만든다(비공개로 시작).
+ */
 export const createUploads = async (req, res) => {
   try {
-    const event = await loadEvent(req);
+    let event = await loadEvent(req);
     if (!event) return notFound(res);
+    if (event.type === 'closure') return res.status(400).json({ error: reasonMessage('closure_event'), reason: 'closure_event' });
+
+    const files = Array.isArray(req.body?.files) ? req.body.files : [];
+    if (!files.length) return res.status(400).json({ error: '올릴 파일이 없습니다.' });
+    if (files.length > MAX_FILES_PER_UPLOAD) {
+      return res.status(400).json({ error: `한 번에 ${MAX_FILES_PER_UPLOAD}개까지 올릴 수 있습니다.` });
+    }
+
+    let created = false;
+    if (!event.driveFolderId) {
+      event = await albumService.ensureAlbum(ownerOf(event), event);
+      created = Boolean(event.driveFolderId);
+    }
 
     const { driveStatus, foreignAccount } = await driveStatusOf(event);
     const allowed = canUpload({
@@ -240,17 +287,18 @@ export const createUploads = async (req, res) => {
     });
     if (!allowed.ok) return res.status(400).json({ error: reasonMessage(allowed.reason), reason: allowed.reason });
 
-    const files = Array.isArray(req.body?.files) ? req.body.files : [];
-    if (!files.length) return res.status(400).json({ error: '올릴 파일이 없습니다.' });
-    if (files.length > MAX_FILES_PER_UPLOAD) {
-      return res.status(400).json({ error: `한 번에 ${MAX_FILES_PER_UPLOAD}개까지 올릴 수 있습니다.` });
-    }
-
     const items = await albumService.createUploadSessions(ownerOf(event), event, files, {
       userId: req.user.id, role: 'teacher', label: '선생님'
     });
 
-    res.status(201).json({ items });
+    res.status(201).json({
+      items,
+      album: {
+        created,
+        driveFolderName: event.driveFolderName || null,
+        published: event.albumPublished === true
+      }
+    });
   } catch (error) {
     driveErrorResponse(res, error, '업로드를 시작하지 못했습니다.');
   }

@@ -36,10 +36,10 @@ const payload = (overrides = {}) => ({
 const jsonResponse = (data, { ok = true, status = 200 } = {}) =>
   Promise.resolve({ ok, status, json: () => Promise.resolve(data) });
 
-const renderAlbum = async () => {
+const renderAlbum = async (entry = '/parent/photos/3') => {
   await act(async () => {
     render(
-      <MemoryRouter initialEntries={['/parent/photos/3']}>
+      <MemoryRouter initialEntries={[entry]}>
         <Routes>
           <Route path="/parent/photos/:eventId" element={<ParentAlbum />} />
         </Routes>
@@ -122,6 +122,25 @@ describe('ParentAlbum', () => {
 
     expect(screen.getByText('아직 사진을 볼 수 없어요')).toBeInTheDocument();
     expect(screen.getByText(/확정된 이벤트의 사진만/)).toBeInTheDocument();
+  });
+
+  it('선생님이 공개하지 않은 앨범이면 기다려 달라는 안내 (docs/photo-menu FR-541)', async () => {
+    fetchWithAuth.mockImplementation(() =>
+      jsonResponse({ error: '선생님이 아직 공개하지 않은 앨범이에요.', reason: 'album_private' }, { ok: false, status: 403 }));
+
+    await renderAlbum();
+
+    expect(screen.getByText('선생님이 아직 공개하지 않은 앨범이에요')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '사진 목록으로' })).toBeInTheDocument();
+    expect(screen.queryByText(/신청 후 선생님이 확정하면/)).not.toBeInTheDocument();
+  });
+
+  it('이벤트 상세에서 누른 사진(?open=)은 바로 크게 열린다', async () => {
+    fetchWithAuth.mockImplementation(() => jsonResponse(payload()));
+
+    await renderAlbum('/parent/photos/3?open=2');
+
+    expect(screen.getByRole('dialog', { name: '사진 보기' })).toBeInTheDocument();
   });
 
   it('업로드가 마감이면 올리기 버튼이 잠긴다', async () => {

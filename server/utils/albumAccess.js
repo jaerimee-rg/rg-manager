@@ -28,12 +28,37 @@ export const confirmedChildIds = ({ childStudentIds = [], confirmedStudentIds = 
   return childStudentIds.map(Number).filter((id) => confirmed.has(id));
 };
 
-/** 앨범을 볼 수 있는지 (FR-201, 203, 245). */
-export const canViewAlbum = ({ isOwner = false, isConfirmed = false, isPublished = true, hasAlbum = true } = {}) => {
+/** 공개 범위 값 (docs/photo-menu 3.4). participants = 참가 확정 학부모, all = 연결된 학부모 전체 */
+export const ALBUM_AUDIENCES = ['participants', 'all'];
+export const isValidAudience = (value) => ALBUM_AUDIENCES.includes(value);
+
+/**
+ * 공개 범위에 드는 학부모인지. 연결된 선생님의 이벤트라는 것은 호출자가 이미 확인했다
+ * (parentScope — 연결 안 된 선생님의 이벤트는 404).
+ */
+export const inAudience = ({ audience = 'participants', isConfirmed = false } = {}) =>
+  audience === 'all' || isConfirmed;
+
+/**
+ * 앨범을 볼 수 있는지 (FR-201, 203, 245 · photo-menu FR-540~541).
+ *
+ * 판정 순서: 앨범 없음 → 이벤트 비공개 → **앨범 비공개** → 공개 범위.
+ * 비공개 앨범은 확정 여부를 묻기 전에 막는다. albumPublished 의 기본값은 false —
+ * 값을 빠뜨린 호출이 앨범을 여는 일이 없게 한다.
+ */
+export const canViewAlbum = ({
+  isOwner = false,
+  isConfirmed = false,
+  isPublished = true,
+  hasAlbum = true,
+  albumPublished = false,
+  audience = 'participants'
+} = {}) => {
   if (isOwner) return { ok: hasAlbum, reason: hasAlbum ? undefined : 'no_album' };
   if (!hasAlbum) return { ok: false, reason: 'no_album' };
   if (!isPublished) return { ok: false, reason: 'not_published' };
-  if (!isConfirmed) return { ok: false, reason: 'not_confirmed' };
+  if (!albumPublished) return { ok: false, reason: 'album_private' };
+  if (!inAudience({ audience, isConfirmed })) return { ok: false, reason: 'not_confirmed' };
   return { ok: true };
 };
 
@@ -48,10 +73,14 @@ export const canUpload = ({
   albumUploadOpen = true,
   albumStatus = 'ready',
   driveStatus = 'connected',
-  foreignAccount = false
+  foreignAccount = false,
+  albumPublished = false,
+  audience = 'participants'
 } = {}) => {
   if (!hasAlbum) return { ok: false, reason: 'no_album' };
-  if (!isOwner && !isConfirmed) return { ok: false, reason: 'not_confirmed' };
+  // 학부모는 공개된 앨범에, 공개 범위 안일 때만 올린다. 선생님은 비공개여도 올린다.
+  if (!isOwner && !albumPublished) return { ok: false, reason: 'album_private' };
+  if (!isOwner && !inAudience({ audience, isConfirmed })) return { ok: false, reason: 'not_confirmed' };
   if (albumStatus === 'missing') return { ok: false, reason: 'album_missing' };
   if (foreignAccount) return { ok: false, reason: 'foreign_account' };
   if (driveStatus !== 'connected') return { ok: false, reason: 'drive_error' };
@@ -79,6 +108,7 @@ export const REASON_MESSAGES = {
   no_album: '아직 앨범이 없어요.',
   not_published: '아직 공개되지 않은 일정이에요.',
   not_confirmed: '자녀가 확정된 이벤트의 사진만 볼 수 있어요.',
+  album_private: '선생님이 아직 공개하지 않은 앨범이에요.',
   upload_closed: '업로드가 마감됐어요.',
   drive_error: '지금은 사진을 올릴 수 없어요. 선생님이 Google Drive 연결을 확인해야 해요.',
   album_missing: 'Drive 에서 앨범 폴더를 찾을 수 없어요.',
@@ -91,6 +121,9 @@ export const REASON_MESSAGES = {
 export const reasonMessage = (reason) => REASON_MESSAGES[reason] || '지금은 할 수 없어요.';
 
 export default {
+  ALBUM_AUDIENCES,
+  isValidAudience,
+  inAudience,
   isConfirmedParent,
   confirmedChildIds,
   canViewAlbum,

@@ -1,50 +1,31 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import { formatSize } from '../../utils/mediaUrls';
-import { Spinner } from '../../components/ui';
+import {
+  Badge, Button, Callout, Card, CardFooter, CardHeader, ConfirmDialog, Icon, Input, Progress, Spinner
+} from '../../components/ui';
 
 /**
- * 설정 화면의 Google Drive 연결 카드.
+ * 설정 화면의 Google 계정 카드 (docs/photo-menu FR-500~505).
  *
- * 앨범 사진은 선생님의 Drive 에 저장되므로 이 카드가 앨범 기능의 출발점이다.
+ * 사진 메뉴의 앨범은 선생님의 Google Drive 에 저장되므로 이 카드가 사진 기능의 출발점이다.
+ * 연결은 이 카드에서만 한다 — 사진 메뉴는 연결 전이면 여기로 보낸다.
  * 연결은 브라우저 리다이렉트로 끝나기 때문에 돌아온 결과(?drive=...)를 여기서 한 줄로 알려 준다.
- * react-router 를 쓰지 않고 window.location 만 보는 이유는 이 카드가 어떤 화면에도 붙을 수 있어서다.
+ * 지금 주소의 쿼리만 보고 고치므로(window.location) 이 카드가 어느 화면에 붙어도 된다.
  */
 
 const CALLBACK_MESSAGES = {
-  connected: { tone: 'ok', text: 'Google 계정을 연결했습니다.' },
-  denied: { tone: 'warn', text: 'Google 계정 연결을 취소했습니다.' },
-  expired: { tone: 'warn', text: '연결 요청이 만료되었습니다. 다시 연결해 주세요.' },
-  norefresh: { tone: 'warn', text: '권한을 다 받지 못했습니다. Google 계정 연결을 다시 해 주세요.' },
+  connected: { tone: 'success', text: 'Google 계정을 연결했습니다.' },
+  denied: { tone: 'warning', text: 'Google 계정 연결을 취소했습니다.' },
+  expired: { tone: 'warning', text: '연결 요청이 만료되었습니다. 다시 연결해 주세요.' },
+  norefresh: { tone: 'warning', text: '권한을 다 받지 못했습니다. Google 계정 연결을 다시 해 주세요.' },
   error: { tone: 'danger', text: 'Google 계정을 연결하지 못했습니다. 잠시 뒤 다시 시도해 주세요.' }
 };
 
-const TONES = {
-  ok: { background: 'var(--color-success-bg)', color: 'var(--ink-900)' },
-  warn: { background: 'var(--color-warning-bg)', color: 'var(--color-warning)' },
-  danger: { background: 'var(--color-danger-bg)', color: 'var(--alert)' },
-  info: { background: 'var(--color-primary-bg)', color: 'var(--color-primary-dark)' },
-  gray: { background: 'var(--color-gray-100)', color: 'var(--color-gray-600)' }
-};
-
-const noticeStyle = (tone) => ({
-  ...TONES[tone] || TONES.gray,
-  fontSize: '0.8125rem',
-  padding: '11px 13px',
-  borderRadius: 'var(--shape-box)',
-  lineHeight: 1.6
-});
-
-const GoogleMark = ({ size = 42 }) => (
-  <span
-    aria-hidden="true"
-    style={{
-      width: `${size}px`, height: `${size}px`, borderRadius: 'var(--radius-md)', flexShrink: 0,
-      background: 'linear-gradient(135deg,#FFD04D,#4285F4 60%,#0F9D58)',
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      color: '#fff', fontWeight: 900, fontSize: size >= 32 ? '1.1rem' : '0.7rem'
-    }}
-  >G</span>
+/** 파랑·초록을 쓰지 않는 규칙이라 Google 마크는 잉크로 그린 G 다 (.ui-google-mark) */
+const GoogleMark = ({ small = false }) => (
+  <span className="ui-google-mark" data-size={small ? 'sm' : undefined} aria-hidden="true">G</span>
 );
 
 function DriveAccountCard() {
@@ -52,9 +33,11 @@ function DriveAccountCard() {
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [flash, setFlash] = useState(null);
+  const [problem, setProblem] = useState('');
   const [busy, setBusy] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [nameInput, setNameInput] = useState('');
+  const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
 
   const load = async () => {
     try {
@@ -88,17 +71,18 @@ function DriveAccountCard() {
 
   const connect = async () => {
     setBusy(true);
+    setProblem('');
     try {
       const response = await fetchWithAuth('/api/drive/connect');
       const data = await response.json();
       if (!response.ok || !data.url) {
-        alert(data.error || 'Google 연결을 시작하지 못했습니다.');
+        setProblem(data.error || 'Google 연결을 시작하지 못했습니다.');
         return;
       }
       window.location.href = data.url;
     } catch (error) {
       console.error('Drive 연결 시작 실패:', error);
-      alert('Google 연결을 시작하지 못했습니다.');
+      setProblem('Google 연결을 시작하지 못했습니다.');
     } finally {
       setBusy(false);
     }
@@ -114,6 +98,7 @@ function DriveAccountCard() {
     if (!name) return;
 
     setBusy(true);
+    setProblem('');
     try {
       const response = await fetchWithAuth('/api/drive/account', {
         method: 'PATCH',
@@ -121,89 +106,107 @@ function DriveAccountCard() {
       });
       const data = await response.json();
       if (!response.ok) {
-        alert(data.error || '폴더 이름 변경에 실패했습니다.');
+        setProblem(data.error || '폴더 이름 변경에 실패했습니다.');
         return;
       }
       setAccount((prev) => ({ ...prev, ...data }));
       setRenaming(false);
     } catch (error) {
       console.error('Drive 폴더 이름 변경 실패:', error);
-      alert('폴더 이름 변경에 실패했습니다.');
+      setProblem('폴더 이름 변경에 실패했습니다.');
     } finally {
       setBusy(false);
     }
   };
 
   const disconnect = async () => {
-    if (!window.confirm('Google Drive 연결을 해제할까요?\n새 앨범을 만들 수 없게 되지만 Drive 에 있는 사진은 그대로 남습니다.')) return;
-
     setBusy(true);
+    setProblem('');
     try {
       const response = await fetchWithAuth('/api/drive/account', { method: 'DELETE' });
       const data = await response.json();
       if (!response.ok) {
-        alert(data.error || '연결 해제에 실패했습니다.');
+        setProblem(data.error || '연결 해제에 실패했습니다.');
         return;
       }
-      setFlash({ tone: 'gray', text: 'Google Drive 연결을 해제했습니다.' });
+      setFlash({ tone: 'neutral', text: 'Google 계정 연결을 해제했습니다. Drive 의 사진과 폴더는 그대로 있어요.' });
       setRenaming(false);
       await load();
     } catch (error) {
       console.error('Drive 연결 해제 실패:', error);
-      alert('연결 해제에 실패했습니다.');
+      setProblem('연결 해제에 실패했습니다.');
     } finally {
       setBusy(false);
+      setConfirmingDisconnect(false);
     }
   };
 
-  const banner = flash ? <div style={{ ...noticeStyle(flash.tone), marginBottom: '14px' }}>{flash.text}</div> : null;
+  const connected = Boolean(account?.connected);
+  const hasError = connected && account.status === 'error';
 
-  const shell = (children) => (
-    <div className="card" style={{ marginBottom: 'var(--spacing-lg)' }}>
-      <div className="card-header">
-        <h3 className="card-title">Google Drive</h3>
-      </div>
-      <div style={{ marginTop: 'var(--spacing-lg)' }}>
-        {banner}
-        {children}
-      </div>
-    </div>
+  const header = (
+    <CardHeader
+      title="Google 계정 (사진 저장)"
+      description="사진 메뉴의 앨범은 선생님 Google Drive 에 저장돼요."
+      actions={connected ? (hasError ? <Badge tone="danger" dot>연결 오류</Badge> : <Badge tone="success" dot>연결됨</Badge>) : null}
+    />
+  );
+
+  const notices = (
+    <>
+      {flash && <div className="ui-mt-4"><Callout tone={flash.tone}>{flash.text}</Callout></div>}
+      {problem && <div className="ui-mt-4"><Callout tone="danger">{problem}</Callout></div>}
+    </>
   );
 
   if (loading) {
-    return shell(<Spinner inline />);
+    return <Card padding="md" className="ui-mb-4">{header}<Spinner inline /></Card>;
   }
 
   if (loadFailed) {
-    return shell(<div style={noticeStyle('gray')}>Google Drive 연결 정보를 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요.</div>);
-  }
-
-  if (account?.configured === false) {
-    return shell(
-      <div style={noticeStyle('gray')}>
-        Google Drive 연동이 아직 설정되지 않았습니다. <b>관리자</b>가 Google 연동 키를 등록해야 사용할 수 있습니다.
-      </div>
+    return (
+      <Card padding="md" className="ui-mb-4">
+        {header}
+        <div className="ui-mt-4"><Callout tone="neutral">Google 계정 연결 정보를 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요.</Callout></div>
+      </Card>
     );
   }
 
-  if (!account?.connected) {
-    return shell(
-      <>
-        <div style={{ fontSize: '0.8125rem', color: 'var(--color-gray-600)', lineHeight: 1.7, marginBottom: '14px' }}>
-          아직 연결되지 않았습니다. 연결하면 이벤트마다 <b>앨범 폴더</b>를 만들 수 있고, 확정된 학부모가 앱에서 바로 사진·영상을 올릴 수 있습니다.
-          앱은 <b>앱이 만든 폴더와 파일만</b> 볼 수 있으며 선생님의 다른 파일에는 접근하지 않습니다.
+  if (account?.configured === false) {
+    return (
+      <Card padding="md" className="ui-mb-4">
+        {header}
+        {notices}
+        <div className="ui-mt-4">
+          <Callout tone="neutral">Google Drive 연동이 아직 설정되지 않았습니다. <b>관리자</b>가 Google 연동 키를 등록해야 사용할 수 있습니다.</Callout>
         </div>
-        <button
-          type="button"
-          className="btn btn-outline"
-          onClick={connect}
-          disabled={busy}
-          style={{ fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}
-        >
-          <GoogleMark size={20} />
-          Google 계정 연결하기
-        </button>
-      </>
+      </Card>
+    );
+  }
+
+  if (!connected) {
+    return (
+      <Card padding="md" className="ui-mb-4">
+        {header}
+        {notices}
+        <div className="ui-row ui-mt-4" data-gap="3" data-align="start">
+          <GoogleMark />
+          <div className="ui-stack" data-gap="2">
+            <b>아직 연결하지 않았어요</b>
+            <ul className="ui-text-sm ui-bullets">
+              <li>연결하면 내 드라이브에 <b>RG Manager</b> 폴더가 생기고, 사진을 올릴 때 고른 <b>이벤트 이름</b>으로 앨범 폴더가 만들어져요.</li>
+              <li>앱은 <b>앱이 만든 폴더·파일만</b> 볼 수 있어요. 선생님의 다른 파일은 보지 않아요.</li>
+              <li>학부모가 올린 사진도 선생님 Drive 용량(무료 15GB)을 써요.</li>
+            </ul>
+          </div>
+        </div>
+        <CardFooter>
+          <span className="ui-hand">Google 화면에서 ‘허용’을 누르면 여기로 돌아와요</span>
+          <Button variant="primary" onClick={connect} loading={busy}>
+            <GoogleMark small />Google 계정 연결하기
+          </Button>
+        </CardFooter>
+      </Card>
     );
   }
 
@@ -212,116 +215,96 @@ function DriveAccountCard() {
   const usage = Number(quota?.usage) || 0;
   const percent = limit > 0 ? Math.min(100, Math.round((usage / limit) * 100)) : 0;
   const nearFull = percent > 85;
-  const hasError = account.status === 'error';
 
-  return shell(
-    <>
+  return (
+    <Card padding="md" className="ui-mb-4">
+      {header}
+      {notices}
+
       {hasError && (
-        <div style={{ ...noticeStyle('danger'), marginBottom: '14px' }} role="alert">
-          ⚠️ <b>Google Drive 연결이 끊어졌어요.</b> 권한이 철회되어 업로드·삭제·분석이 멈춰 있습니다. 앨범 조회는 계속됩니다.
-          <div>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={connect}
-              disabled={busy}
-              style={{ marginTop: '8px', fontFamily: 'inherit' }}
-            >다시 연결</button>
-          </div>
+        <div className="ui-mt-4">
+          <Callout tone="danger">
+            <b>Google 계정 연결이 끊어졌어요.</b> 권한이 철회됐거나 연결 기간이 끝났어요. 앨범은 계속 보이지만 사진 올리기·지우기는 멈춰요.
+            <div className="ui-mt-2"><Button size="sm" variant="primary" onClick={connect} loading={busy}>다시 연결</Button></div>
+          </Callout>
         </div>
       )}
 
       {!hasError && nearFull && (
-        <div style={{ ...noticeStyle('warn'), marginBottom: '14px' }}>
-          ⚠️ <b>Drive 용량이 거의 찼습니다.</b> 새 업로드가 실패할 수 있으니 저장 용량을 늘리거나 지난 앨범을 정리해 주세요.
+        <div className="ui-mt-4">
+          <Callout tone="warning">
+            <b>Drive 용량이 거의 찼습니다.</b> 새 업로드가 실패할 수 있으니 저장 용량을 늘리거나 지난 앨범을 정리해 주세요.
+          </Callout>
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+      <div className="ui-row ui-mt-4" data-gap="3">
         <GoogleMark />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 800, wordBreak: 'break-all' }}>{account.email || '연결된 계정'}</div>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--color-gray-500)', marginTop: '2px' }}>
-            <span className={`badge ${hasError ? 'badge-danger' : 'badge-success'}`}>
-              {hasError ? '연결 오류' : '연결됨'}
-            </span>
-            {' '}권한: 앱이 만든 파일만 (drive.file)
-          </div>
+        <div className="ui-drive-account__who">
+          <b className="ui-drive-account__email">{account.email || '연결된 계정'}</b>
+          <div className="ui-text-sm ui-text-muted">권한: 앱이 만든 파일만 (drive.file)</div>
         </div>
-        <button
-          type="button"
-          className="btn btn-outline btn-sm"
-          onClick={disconnect}
-          disabled={busy}
-          style={{ fontFamily: 'inherit' }}
-        >연결 해제</button>
+        <Button size="sm" onClick={() => setConfirmingDisconnect(true)} disabled={busy}>연결 해제</Button>
       </div>
 
-      {quota && limit > 0 && (
-        <div style={{ marginTop: '12px' }}>
-          <div style={{
-            display: 'flex', justifyContent: 'space-between',
-            fontSize: '0.75rem', color: 'var(--color-gray-500)', marginBottom: '5px'
-          }}>
-            <span>Drive 사용량</span>
-            <span>{formatSize(usage)} / {formatSize(limit)}</span>
-          </div>
-          <div
-            role="progressbar"
-            aria-label="Drive 사용량"
-            aria-valuenow={percent}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            style={{ height: '8px', borderRadius: '5px', background: 'var(--color-gray-200)', overflow: 'hidden' }}
-          >
-            <i style={{
-              display: 'block', height: '100%', width: `${percent}%`,
-              background: nearFull ? 'var(--color-warning)' : 'var(--color-primary)'
-            }} />
-          </div>
+      <dl className="ui-dl ui-mt-4">
+        <div className="ui-dl__row">
+          <dt className="ui-dl__label">저장 위치</dt>
+          <dd className="ui-dl__value">
+            {renaming ? (
+              <div className="ui-row" data-gap="2" data-wrap="true">
+                <Input
+                  value={nameInput}
+                  maxLength={60}
+                  aria-label="루트 폴더 이름"
+                  onChange={(event) => setNameInput(event.target.value)}
+                />
+                <Button size="sm" variant="primary" onClick={saveName} disabled={busy}>저장</Button>
+                <Button size="sm" onClick={() => setRenaming(false)} disabled={busy}>취소</Button>
+              </div>
+            ) : (
+              <div className="ui-row" data-gap="2" data-wrap="true">
+                <span className="ui-folder-line">
+                  <Icon name="folder" size={18} />
+                  <span className="ui-folder-line__path"><span className="ui-folder-line__root">내 드라이브 / </span>{account.rootFolderName || 'RG Manager'}</span>
+                </span>
+                <Button size="sm" variant="ghost" onClick={startRename}>이름 바꾸기</Button>
+              </div>
+            )}
+          </dd>
         </div>
-      )}
-
-      <div style={{
-        display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap',
-        padding: '12px 0 4px', marginTop: '8px', borderTop: '1px solid var(--color-gray-100)', fontSize: '0.875rem'
-      }}>
-        <div style={{ width: '120px', flexShrink: 0, color: 'var(--color-gray-500)', fontSize: '0.8125rem', fontWeight: 600 }}>
-          루트 폴더
-        </div>
-        {renaming ? (
-          <div style={{ display: 'flex', gap: '8px', flex: 1, flexWrap: 'wrap' }}>
-            <input
-              type="text"
-              value={nameInput}
-              maxLength={60}
-              aria-label="루트 폴더 이름"
-              onChange={(event) => setNameInput(event.target.value)}
-              style={{ flex: 1, minWidth: '140px' }}
-            />
-            <button type="button" className="btn btn-primary btn-sm" onClick={saveName} disabled={busy} style={{ fontFamily: 'inherit' }}>
-              저장
-            </button>
-            <button type="button" className="btn btn-outline btn-sm" onClick={() => setRenaming(false)} disabled={busy} style={{ fontFamily: 'inherit' }}>
-              취소
-            </button>
+        {quota && limit > 0 && (
+          <div className="ui-dl__row">
+            <dt className="ui-dl__label">Drive 사용량</dt>
+            <dd className="ui-dl__value ui-drive-account__usage">
+              <div className="ui-row ui-text-sm" data-justify="between"><span>{formatSize(usage)} / {formatSize(limit)}</span></div>
+              <Progress className="ui-mt-2" value={percent} tone={nearFull ? undefined : 'success'} label="Drive 사용량" />
+            </dd>
           </div>
-        ) : (
-          <>
-            <div style={{ flex: 1, minWidth: 0, wordBreak: 'break-all' }}>
-              내 드라이브 / <b>{account.rootFolderName || 'RG Manager'}</b>
-            </div>
-            <button type="button" className="btn btn-outline btn-sm" onClick={startRename} style={{ fontFamily: 'inherit' }}>
-              이름 변경
-            </button>
-          </>
         )}
-      </div>
+      </dl>
 
-      <div style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', lineHeight: 1.7, marginTop: '8px' }}>
+      <p className="ui-text-xs ui-text-muted ui-mt-3">
         사진이 올라올 때 브라우저가 <b>얼굴 특징값만</b> 계산해 저장합니다. 사진 속 얼굴 이미지는 저장하지 않습니다.
-      </div>
-    </>
+      </p>
+
+      <CardFooter>
+        <Link className="ui-btn" data-variant={hasError ? 'outline' : 'primary'} data-size="md" to="/photos">
+          사진 메뉴로 가기<Icon name="arrowRight" size={18} />
+        </Link>
+      </CardFooter>
+
+      <ConfirmDialog
+        open={confirmingDisconnect}
+        title="Google 계정 연결을 해제할까요?"
+        message="Drive 에 있는 사진과 폴더는 그대로 남아요. 해제하면 앨범은 볼 수만 있고, 새 사진을 올리거나 지울 수 없어요."
+        confirmLabel="연결 해제"
+        tone="danger"
+        busy={busy}
+        onCancel={() => setConfirmingDisconnect(false)}
+        onConfirm={disconnect}
+      />
+    </Card>
   );
 }
 

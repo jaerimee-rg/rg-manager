@@ -2,6 +2,7 @@ import pool from '../database.js';
 import Event from '../models/Event.js';
 import EventRegistration from '../models/EventRegistration.js';
 import Competition from '../models/Competition.js';
+import albumService from '../services/albumService.js';
 import {
   isKnownType,
   normalizeOptions,
@@ -202,6 +203,12 @@ export const updateEvent = async (req, res) => {
     }
 
     await client.query('COMMIT');
+
+    // 앨범 폴더 이름은 이벤트 제목·날짜를 따라간다(docs/photo-menu FR-531).
+    // 제목·날짜가 그대로면 Drive 를 부르지 않고, 실패해도 이벤트 저장은 이미 끝났다(던지지 않는다).
+    if (existing.driveFolderId) {
+      await albumService.syncFolderName(existing.userId, existing, { ...existing, ...updated });
+    }
 
     res.json({ ...updated, removedOptionRegistrations });
   } catch (error) {
