@@ -146,13 +146,16 @@ function UploadSheet({
       }
 
       // 5) "다 올리면 바로 공개" — 하나도 못 올렸으면 공개하지 않는다(빈 앨범을 공개하지 않게).
+      //    공개 요청이 실패하면 사진은 올라갔지만 비공개 그대로이므로, 완료 화면에서 따로 알린다.
       let publishedNow = false;
+      let publishFailed = false;
       if (allowPublish && publishWhenDone && !alreadyPublished && uploaded > 0) {
         const patched = await fetchWithAuth(`${apiBase}/album`, {
           method: 'PATCH',
           body: JSON.stringify({ published: true })
         }).catch(() => null);
         publishedNow = Boolean(patched?.ok);
+        publishFailed = !publishedNow;
       }
 
       setSummary({
@@ -160,6 +163,7 @@ function UploadSheet({
         analyzed,
         skipped,
         publishedNow,
+        publishFailed,
         images: accepted.filter((entry) => entry.kind === 'image').length,
         videos: accepted.filter((entry) => entry.kind === 'video').length
       });
@@ -360,6 +364,12 @@ function UploadSheet({
             {' '}올렸어요.
             {summary.publishedNow && ' 학부모에게 공개했어요.'}
           </Callout>
+          {summary.publishFailed && (
+            <Callout tone="warning">
+              사진은 올라갔지만 <b>공개하지 못했어요.</b> 앨범은 아직 비공개예요.
+              앨범 화면에서 [학부모에게 공개]를 다시 눌러 주세요.
+            </Callout>
+          )}
           <Stack gap={2} className="ui-text-sm ui-text-muted">
             {summary.analyzed > 0 && <div>얼굴 분석 {summary.analyzed}장 완료 — 우리 아이 사진에 자동으로 모아드려요</div>}
             {summary.skipped > 0 && <div>{summary.skipped}장은 분석하지 못했어요 (선생님이 다시 분석할 수 있어요)</div>}

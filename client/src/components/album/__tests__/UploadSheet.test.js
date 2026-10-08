@@ -95,6 +95,36 @@ describe('UploadSheet — 이벤트 고르기 단계 (docs/photo-menu FR-513~515
     expect(fetchWithAuth.mock.calls.some(([, options]) => options?.method === 'PATCH')).toBe(false);
   });
 
+  it('공개 요청이 실패하면 사진은 올라갔지만 비공개라고 따로 알린다', async () => {
+    fetchWithAuth.mockImplementation((url, options = {}) => {
+      if (url.endsWith('/media/uploads')) return ok({ items: [{ name: 'a.jpg', mediaId: 9, sessionUri: 'https://upload' }] });
+      if (url.includes('/complete')) return ok({ media: {} });
+      if (options.method === 'PATCH') return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
+      return ok({});
+    });
+    const onDone = jest.fn();
+    render(<UploadSheet targets={TARGETS} allowPublish onClose={() => {}} onDone={onDone} />);
+
+    await act(async () => { fireEvent.click(screen.getByRole('checkbox', { name: /다 올리면 바로 학부모에게 공개/ })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '사진 고르기' })); });
+    await pickFile();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '1개 올리기' })); });
+
+    expect(screen.getByText(/공개하지 못했어요/)).toBeInTheDocument();
+    expect(screen.queryByText(/학부모에게 공개했어요/)).not.toBeInTheDocument();
+    expect(onDone).toHaveBeenCalledWith({ eventId: 40, uploaded: 1, published: false });
+  });
+
+  it('공개를 고르지 않았으면 실패 안내도 없다', async () => {
+    render(<UploadSheet targets={TARGETS} allowPublish onClose={() => {}} />);
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '사진 고르기' })); });
+    await pickFile();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '1개 올리기' })); });
+
+    expect(screen.queryByText(/공개하지 못했어요/)).not.toBeInTheDocument();
+  });
+
   it('이벤트를 다시 고를 수 있다', async () => {
     render(<UploadSheet targets={TARGETS} allowPublish onClose={() => {}} />);
 
