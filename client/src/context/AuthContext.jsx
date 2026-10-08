@@ -149,10 +149,13 @@ export const AuthProvider = ({ children }) => {
    * 초대 토큰(학부모 invite / 선생님 tinvite)과 "마지막에 쓰던 역할" 힌트를 함께 보낸다.
    * 힌트가 있으면 계정이 여럿인 사람이 매번 같은 역할로 들어온다 (FR-301).
    */
-  const getKakaoLoginUrl = async ({ invite, tinvite } = {}) => {
+  // soft: invite 가 사진 폴더 공유 링크에 실려 온 것 (docs/photo-menu FR-518) — 서버가 "가입할 수 있으면 가입,
+  //       아니면 그냥 로그인" 으로 다룬다(죽은 토큰이 로그인을 막지 않고, 선생님을 학부모로 만들지 않는다).
+  const getKakaoLoginUrl = async ({ invite, tinvite, soft } = {}) => {
     const params = new URLSearchParams();
     if (invite) params.set('invite', invite);
     if (tinvite) params.set('tinvite', tinvite);
+    if (invite && soft) params.set('soft', '1');
 
     const prefer = getLastRole();
     if (prefer) params.set('prefer', prefer);

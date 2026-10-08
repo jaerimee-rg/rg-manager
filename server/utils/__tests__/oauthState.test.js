@@ -36,6 +36,20 @@ describe('encodeState / decodeState', () => {
     expect(decodeState(notOurs).legacy).toBe(true);
   });
 
+  it('사진 폴더 공유 링크의 초대는 soft 표시를 함께 왕복시킨다 (photo-menu FR-518)', () => {
+    const state = encodeState({ invite: 'tok', soft: true, prefer: 'parent' });
+    expect(decodeState(state)).toEqual({ prefer: 'parent', invite: 'tok', soft: true });
+  });
+
+  it('soft 는 invite 없이 혼자서는 실리지 않는다', () => {
+    expect(encodeState({ soft: true })).toBeUndefined();
+    expect(decodeState(encodeState({ soft: true, prefer: 'user' }))).toEqual({ prefer: 'user' });
+  });
+
+  it('보통 초대에는 soft 가 붙지 않는다', () => {
+    expect(decodeState(encodeState({ invite: 'tok' }))).toEqual({ invite: 'tok' });
+  });
+
   it('선생님 초대만 실을 수도 있다', () => {
     expect(decodeState(encodeState({ tinvite: 'T1' }))).toEqual({ tinvite: 'T1' });
   });

@@ -448,6 +448,34 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     expect(removed.status).toBeLessThan(300);
   });
 
+  // FR-518 — 학부모에게 보낼 사진 폴더 링크
+  test('앨범의 [공유] 는 초대가 실린 학부모 사진 주소를 복사하고, 비공개 앨범에서는 잠긴다', async ({ page, context, baseURL }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+
+    // 공개된 앨범 (픽스처: 공개 범위 = 참가 확정 학부모)
+    await page.goto(`/photos/${sessions.album.eventId}`);
+    await page.getByRole('button', { name: '공유', exact: true }).click();
+
+    await expect(page.locator('.ui-toast')).toContainText('공유 링크를 복사했어요');
+    await expect(page.locator('.ui-toast')).toContainText('참가 확정 학부모만 볼 수 있어요');
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    // 학부모 앱의 앨범 주소 + 이 선생님의 학부모 초대 — 처음 온 학부모도 이 링크로 가입한다
+    expect(copied).toBe(`${baseURL}/parent/photos/${sessions.album.eventId}?invite=${sessions.invite}`);
+
+    // 비공개 앨범은 학부모에게 보내 봐야 열리지 않는다
+    await page.goto(`/photos/${sessions.album.privateEventId}`);
+    const locked = page.getByRole('button', { name: '공유', exact: true });
+    await expect(locked).toBeDisabled();
+    await expect(locked).toHaveAttribute('title', '학부모에게 공개한 앨범만 공유할 수 있어요');
+  });
+
+  test('선생님이 자기가 보낸 사진 링크를 열면 그 앨범의 관리 화면으로 간다', async ({ page }) => {
+    await page.goto(`/parent/photos/${sessions.album.eventId}?invite=${sessions.invite}`);
+
+    await expect(page).toHaveURL(new RegExp(`/photos/${sessions.album.eventId}$`));
+    await expect(page.getByLabel('학부모 공개')).toBeVisible();
+  });
+
   test('새 폴더 API — 학부모는 막히고, 이름·날짜가 없으면 400, 같은 이름·날짜는 하나', async ({ request }) => {
     const asParent = await api(request, sessions.parent, 'POST', '/api/albums', { title: 'x', date: '2026-09-27' });
     expect(asParent.status).toBe(403);

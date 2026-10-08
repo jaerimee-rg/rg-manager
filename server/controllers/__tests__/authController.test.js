@@ -771,6 +771,86 @@ describe('authController', () => {
       expect(global.fetch).toBeUndefined();
     });
 
+    // ── 사진 폴더 공유 링크에 실린 초대 (soft, docs/photo-menu FR-518) ──
+    describe('사진 폴더 공유 링크의 초대 (soft)', () => {
+      it('처음 온 사람은 그 초대로 학부모 계정이 만들어지고 선생님에 묶인다', async () => {
+        kakaoOk();
+        ParentInvite.getByToken.mockResolvedValue({ id: 3, userId: 7, token: 'tok' });
+        ParentInvite.isUsable.mockReturnValue(true);
+        User.getByUsername.mockResolvedValue(null);
+        User.createWithKakao.mockResolvedValue({ id: 20, username: '민서엄마', role: 'parent' });
+        req.body.state = stateFor({ i: 'tok', s: 1 });
+
+        await authController.kakaoCallback(req, res);
+
+        expect(User.createWithKakao).toHaveBeenCalledWith(expect.objectContaining({ role: 'parent' }));
+        expect(ParentAccount.create).toHaveBeenCalledWith({ userId: 20, teacherId: 7, inviteId: 3 });
+        expect(res.json.mock.calls[0][0]).toMatchObject({ role: 'parent', needsOnboarding: true });
+      });
+
+      it('이미 학부모 계정이 있으면 로그인시키고 그 선생님과 연결한다 (다른 선생님 쪽으로만 가입했어도)', async () => {
+        kakaoOk();
+        ParentInvite.getByToken.mockResolvedValue({ id: 9, userId: 11 });
+        ParentInvite.isUsable.mockReturnValue(true);
+        User.listByKakaoId.mockResolvedValue([{ id: 20, username: '민서엄마', role: 'parent' }]);
+        User.getByKakaoId.mockResolvedValue({ id: 20, username: '민서엄마', role: 'parent' });
+        req.body.state = stateFor({ i: 'tok', s: 1 });
+
+        await authController.kakaoCallback(req, res);
+
+        expect(User.createWithKakao).not.toHaveBeenCalled();
+        expect(ParentAccount.create).toHaveBeenCalledWith({ userId: 20, teacherId: 11, inviteId: 9 });
+        expect(res.json.mock.calls[0][0].role).toBe('parent');
+      });
+
+      it('선생님 계정만 있는 사람은 학부모 계정을 만들지 않고 선생님으로 로그인시킨다 — 자기 링크를 눌러 본 선생님', async () => {
+        kakaoOk();
+        ParentInvite.getByToken.mockResolvedValue({ id: 3, userId: 7 });
+        ParentInvite.isUsable.mockReturnValue(true);
+        User.listByKakaoId.mockResolvedValue([{ id: 5, username: '이재림', role: 'user' }]);
+        User.getByKakaoId.mockResolvedValue({ id: 5, username: '이재림', role: 'user' });
+        User.updateKakaoTokens.mockResolvedValue(null);
+        req.body.state = stateFor({ i: 'tok', s: 1 });
+
+        await authController.kakaoCallback(req, res);
+
+        expect(User.createWithKakao).not.toHaveBeenCalled();
+        expect(ParentAccount.create).not.toHaveBeenCalled();
+        expect(User.getByKakaoId).toHaveBeenCalledWith('12345', 'user');
+        expect(res.json.mock.calls[0][0].role).toBe('user');
+      });
+
+      it('토큰이 죽었어도(선생님이 초대 링크를 새로 만듦) 이미 가입한 학부모의 로그인은 막지 않는다', async () => {
+        kakaoOk();
+        ParentInvite.getByToken.mockResolvedValue(null);
+        ParentInvite.isUsable.mockReturnValue(false);
+        User.listByKakaoId.mockResolvedValue([{ id: 20, username: '민서엄마', role: 'parent' }]);
+        User.getByKakaoId.mockResolvedValue({ id: 20, username: '민서엄마', role: 'parent' });
+        req.body.state = stateFor({ i: 'gone', s: 1 });
+
+        await authController.kakaoCallback(req, res);
+
+        expect(res.status).not.toHaveBeenCalledWith(400);
+        expect(ParentAccount.create).not.toHaveBeenCalled();   // 죽은 초대로는 연결하지 않는다
+        expect(ParentAccount.touchLogin).toHaveBeenCalledWith(20);
+        expect(res.json.mock.calls[0][0].role).toBe('parent');
+      });
+
+      it('토큰이 죽었고 계정도 없으면 초대 없이 온 것과 같다 — 403 needsInvite', async () => {
+        kakaoOk();
+        ParentInvite.getByToken.mockResolvedValue(null);
+        ParentInvite.isUsable.mockReturnValue(false);
+        User.listByKakaoId.mockResolvedValue([]);
+        req.body.state = stateFor({ i: 'gone', s: 1 });
+
+        await authController.kakaoCallback(req, res);
+
+        expect(User.createWithKakao).not.toHaveBeenCalled();
+        expect(res.status).toHaveBeenCalledWith(403);
+        expect(res.json.mock.calls[0][0].outcome).toBe('needsInvite');
+      });
+    });
+
     it('선생님 카카오로 학부모 초대에 들어와도 거절하지 않고 학부모 계정을 만든다', async () => {
       kakaoOk();
       ParentInvite.getByToken.mockResolvedValue({ id: 3, userId: 7 });
@@ -863,6 +943,22 @@ describe('authController', () => {
       authController.getKakaoAuthUrl(req, res);
 
       expect(stateOf(res.json.mock.calls[0][0].url)).toEqual({ v: 1, i: 'tok123' });
+    });
+
+    it('사진 폴더 공유 링크로 온 로그인은 soft 표시를 함께 싣는다 (photo-menu FR-518)', () => {
+      req.query = { invite: 'tok123', soft: '1' };
+
+      authController.getKakaoAuthUrl(req, res);
+
+      expect(stateOf(res.json.mock.calls[0][0].url)).toEqual({ v: 1, i: 'tok123', s: 1 });
+    });
+
+    it('soft 만 있고 invite 가 없으면 싣지 않는다', () => {
+      req.query = { soft: '1' };
+
+      authController.getKakaoAuthUrl(req, res);
+
+      expect(res.json.mock.calls[0][0].url).not.toContain('state=');
     });
 
     it('선생님 초대와 역할 힌트도 실어 보낸다', () => {

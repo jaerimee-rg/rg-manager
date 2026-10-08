@@ -712,3 +712,102 @@ test.describe('선생님 사진 화면 — 학부모가 올린 사진의 이름'
     await expect(viewer.getByText(parentName)).toBeVisible();
   });
 });
+
+/**
+ * 선생님(또는 다른 학부모)이 보낸 사진 폴더 링크 (docs/photo-menu FR-518).
+ * 링크 = 학부모 앨범 주소 + 그 선생님의 학부모 초대. 가입한 학부모는 로그인 뒤 그 사진으로,
+ * 처음 온 사람은 그 초대로 가입해서, 다른 선생님 쪽으로만 가입한 학부모는 이 선생님과 연결돼서 열린다.
+ */
+test.describe('학부모 — 공유받은 사진 폴더 링크', () => {
+  test('로그인 전에 열면 누가 보냈는지 알려 주고, 로그인하면 그 선생님과 연결된 뒤 사진이 열린다', async ({ page, request }) => {
+    const id = sessions.album.folderEventId;
+    const title = sessions.album.folderTitle;
+    const setAlbum = (body) => api(request, sessions.teacher, 'PATCH', `/api/events/${id}/album`, body);
+    const mediaAs = (session) => api(request, session, 'GET', `/api/parent/events/${id}/media`);
+
+    expect((await setAlbum({ published: true })).status).toBe(200);
+    try {
+      // parentOther 는 두 번째 선생님 쪽으로만 가입해 있다 — 이 앨범은 아직 "없는 이벤트"
+      expect((await mediaAs(sessions.parentOther)).status).toBe(404);
+
+      // 세션 없이 링크를 연다 → 로그인 화면. 누가 보냈는지와 처음 온 사람이 할 일을 알려 준다.
+      await page.goto(`/parent/photos/${id}?invite=${sessions.invite}`);
+      await expect(page).toHaveURL(/\/login$/);
+      const notice = page.getByRole('status');
+      await expect(notice).toContainText(`${sessions.teacher.user.username} 선생님이 사진을 공유했어요.`);
+      await expect(notice).toContainText('처음이라면 로그인 뒤 아이 정보만 등록하면 돼요.');
+      await expect(page.getByText('받은 사진 링크로 바로 가입할 수 있어요.')).toBeVisible();
+
+      // 카카오 인가 화면은 자동화할 수 없다 — 로그인 주소 요청만 확인하고(초대가 soft 로 실려 나간다)
+      // 콜백 API 응답을 흉내 내 "다른 선생님 쪽으로만 가입한 학부모" 로 로그인시킨다.
+      await page.route(/\/api\/auth\/kakao\?/, (route) =>
+        route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ url: '/oauth/kakao/callback?code=e2e-fake-code' }) }));
+      await page.route('**/api/auth/kakao/callback', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            token: sessions.parentOther.token,
+            user: sessions.parentOther.user,
+            role: 'parent',
+            isNewUser: false,
+            needsOnboarding: false,
+            accounts: []
+          })
+        }));
+      const started = page.waitForRequest(/\/api\/auth\/kakao\?/);
+      await page.getByRole('button', { name: '카카오로 시작하기' }).click();
+      const startUrl = new URL((await started).url());
+      expect(startUrl.searchParams.get('invite')).toBe(sessions.invite);
+      expect(startUrl.searchParams.get('soft')).toBe('1');
+
+      // 로그인 뒤 그 사진 폴더로 돌아온다 — 초대로 이 선생님과 연결되고 사진이 열린다. 주소의 초대는 지워진다.
+      await expect(page.getByRole('heading', { name: title })).toBeVisible();
+      await expect(page.getByRole('button', { name: '사진 열기' })).toHaveCount(1);
+      await expect(page).toHaveURL(new RegExp(`/parent/photos/${id}$`));
+
+      const linked = await mediaAs(sessions.parentOther);
+      expect(linked.status).toBe(200);
+      // 이제 이 선생님의 학부모다
+      const me = await api(request, sessions.parentOther, 'GET', '/api/parent/me');
+      expect(me.body.teachers.map((t) => t.id)).toContain(sessions.teacher.user.id);
+    } finally {
+      await setAlbum({ published: false });
+    }
+  });
+
+  test('학부모도 사진 폴더 화면 오른쪽 위 아이콘으로 같은 공유 링크를 복사한다', async ({ page, context, baseURL }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    const id = sessions.album.eventId;
+
+    // parentMulti 의 아이는 이 대회에 확정돼 있다 (setup)
+    await loginAs(page, sessions.parentMulti);
+    await page.goto(`/parent/photos/${id}`);
+
+    const icon = page.getByRole('button', { name: '공유 링크 복사' });
+    await expect(icon).toBeVisible();
+    // 제목 줄 오른쪽 끝에 있다
+    const box = await icon.boundingBox();
+    const title = await page.getByRole('heading', { level: 1 }).boundingBox();
+    expect(box.x).toBeGreaterThan(title.x + title.width - 1);
+    expect(Math.abs((box.y + box.height / 2) - (title.y + title.height / 2))).toBeLessThan(40);
+    expect(box.x + box.width).toBeGreaterThan(page.viewportSize().width - 48);
+
+    await icon.click();
+    await expect(page.getByText(/공유 링크를 복사했어요/)).toBeVisible();
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied).toBe(`${baseURL}/parent/photos/${id}?invite=${sessions.invite}`);
+  });
+
+  test('앨범을 볼 수 없는 학부모에게는 공유 주소(초대)를 주지 않는다', async ({ page, request }) => {
+    // 공개 범위(참가 확정) 밖인 앨범
+    const denied = await api(request, sessions.parent, 'GET', `/api/parent/events/${sessions.album.lockedEventId}/media`);
+    expect(denied.status).toBe(403);
+    expect(JSON.stringify(denied.body)).not.toContain(sessions.invite);
+
+    await loginAs(page, sessions.parent);
+    await page.goto(`/parent/photos/${sessions.album.lockedEventId}`);
+    await expect(page.getByText('아직 사진을 볼 수 없어요')).toBeVisible();
+    await expect(page.getByRole('button', { name: '공유 링크 복사' })).toHaveCount(0);
+  });
+});

@@ -24,6 +24,9 @@ jest.unstable_mockModule('../../models/Student.js', () => ({
 jest.unstable_mockModule('../../models/GoogleDriveAccount.js', () => ({
   default: { getByUserId: jest.fn() }
 }));
+jest.unstable_mockModule('../../models/ParentInvite.js', () => ({
+  default: { getOrCreate: jest.fn(), isUsable: jest.fn() }
+}));
 jest.unstable_mockModule('../../services/albumService.js', () => ({
   default: {
     createAlbumFolder: jest.fn(),
@@ -57,6 +60,7 @@ const EventMedia = (await import('../../models/EventMedia.js')).default;
 const MediaTag = (await import('../../models/MediaTag.js')).default;
 const Student = (await import('../../models/Student.js')).default;
 const GoogleDriveAccount = (await import('../../models/GoogleDriveAccount.js')).default;
+const ParentInvite = (await import('../../models/ParentInvite.js')).default;
 const albumService = (await import('../../services/albumService.js')).default;
 const { DriveError } = await import('../../utils/googleDrive.js');
 const {
@@ -82,6 +86,8 @@ beforeEach(() => {
   res = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() };
   jest.spyOn(console, 'error').mockImplementation(() => {});
   GoogleDriveAccount.getByUserId.mockResolvedValue({ id: 11, status: 'connected', googleEmail: 'a@b.com' });
+  ParentInvite.getOrCreate.mockResolvedValue({ id: 5, userId: 7, token: 'inv-tok' });
+  ParentInvite.isUsable.mockReturnValue(true);
 });
 
 describe('getAlbum', () => {
@@ -122,6 +128,46 @@ describe('getAlbum', () => {
     await getAlbum(req, res);
 
     expect(res.json.mock.calls[0][0].foreignAccount).toBe(true);
+  });
+});
+
+describe('getAlbum — 학부모에게 보낼 사진 폴더 링크 (docs/photo-menu FR-518)', () => {
+  it('학부모 앨범 주소에 이 앨범 주인 선생님의 초대 토큰을 붙여 준다', async () => {
+    Event.getById.mockResolvedValue(event({ userId: 9 }));
+    req.user = { id: 1, username: '관리자', role: 'admin' };   // 관리자가 봐도 앨범 주인의 초대다
+
+    await getAlbum(req, res);
+
+    expect(ParentInvite.getOrCreate).toHaveBeenCalledWith(9);
+    expect(res.json.mock.calls[0][0].sharePath).toBe('/parent/photos/3?invite=inv-tok');
+  });
+
+  it('초대가 만료됐으면 초대 없는 주소만 준다 — 이미 가입한 학부모에게는 그대로 쓸 수 있다', async () => {
+    Event.getById.mockResolvedValue(event());
+    ParentInvite.isUsable.mockReturnValue(false);
+
+    await getAlbum(req, res);
+
+    expect(res.json.mock.calls[0][0].sharePath).toBe('/parent/photos/3');
+  });
+
+  it('초대를 읽지 못해도 앨범 화면은 뜬다', async () => {
+    Event.getById.mockResolvedValue(event());
+    ParentInvite.getOrCreate.mockRejectedValue(new Error('db'));
+
+    await getAlbum(req, res);
+
+    expect(res.status).not.toHaveBeenCalledWith(500);
+    expect(res.json.mock.calls[0][0]).toMatchObject({ eventId: 3, sharePath: '/parent/photos/3' });
+  });
+
+  it('토큰에 주소에 못 쓰는 글자가 있어도 깨지지 않게 인코딩한다', async () => {
+    Event.getById.mockResolvedValue(event());
+    ParentInvite.getOrCreate.mockResolvedValue({ id: 5, userId: 7, token: 'a b&c' });
+
+    await getAlbum(req, res);
+
+    expect(res.json.mock.calls[0][0].sharePath).toBe('/parent/photos/3?invite=a%20b%26c');
   });
 });
 

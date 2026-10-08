@@ -9,6 +9,7 @@ import MediaTag from '../models/MediaTag.js';
 import ChildFaceProfile, { MAX_PER_PARENT, MAX_PER_STUDENT } from '../models/ChildFaceProfile.js';
 import GoogleDriveAccount from '../models/GoogleDriveAccount.js';
 import albumService from '../services/albumService.js';
+import { sharePathFor } from '../services/albumShare.js';
 import { DriveError } from '../utils/googleDrive.js';
 import { isConfirmedParent, confirmedChildIds, canViewAlbum, canUpload, canDeleteMedia, reasonMessage } from '../utils/albumAccess.js';
 import { toParentMedia, toParentAlbum } from '../utils/mediaSerializer.js';
@@ -183,6 +184,9 @@ export const listMedia = async (req, res) => {
         uploadOpen: event.albumUploadOpen !== false,
         albumStatus: event.albumStatus
       },
+      /* 다른 학부모에게 보낼 사진 폴더 링크 (FR-518) — 선생님이 보내는 것과 같은 링크다.
+         여기까지 왔으면 이 앨범을 볼 수 있는 학부모다(loadAlbumContext). */
+      sharePath: await sharePathFor(event),
       children: children.map((child) => ({
         studentId: child.studentId,
         name: child.studentName || child.childName

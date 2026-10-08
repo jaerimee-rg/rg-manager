@@ -12,6 +12,9 @@ jest.unstable_mockModule('../../models/ParentChild.js', () => ({
   default: { listByParent: jest.fn() }
 }));
 jest.unstable_mockModule('../../models/Student.js', () => ({ default: {} }));
+jest.unstable_mockModule('../../models/ParentInvite.js', () => ({
+  default: { getOrCreate: jest.fn(), isUsable: jest.fn() }
+}));
 jest.unstable_mockModule('../../models/Event.js', () => ({
   default: { getPublishedForParent: jest.fn(), listWithAlbumsForParent: jest.fn() }
 }));
@@ -71,6 +74,7 @@ const EventMedia = (await import('../../models/EventMedia.js')).default;
 const MediaTag = (await import('../../models/MediaTag.js')).default;
 const ChildFaceProfile = (await import('../../models/ChildFaceProfile.js')).default;
 const GoogleDriveAccount = (await import('../../models/GoogleDriveAccount.js')).default;
+const ParentInvite = (await import('../../models/ParentInvite.js')).default;
 const albumService = (await import('../../services/albumService.js')).default;
 const {
   listAlbums, listMedia, createUploads, deleteMedia, confirmTag, addFace, deleteFace, uploadLabelChild
@@ -101,6 +105,9 @@ beforeEach(() => {
   req = { body: {}, params: { id: '3' }, query: {}, user: { ...parent } };
   res = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() };
   jest.spyOn(console, 'error').mockImplementation(() => {});
+
+  ParentInvite.getOrCreate.mockResolvedValue({ id: 5, userId: 7, token: 'inv-tok' });
+  ParentInvite.isUsable.mockReturnValue(true);
 
   // clearAllMocks 는 구현을 지우지 않으므로 기본값을 매번 다시 세운다 (기본은 "미확정").
   EventRegistration.listForStudents.mockResolvedValue([]);
@@ -197,6 +204,34 @@ describe('listMedia — 공개 단계 (photo-menu FR-541)', () => {
 
     expect(res.status).not.toHaveBeenCalledWith(403);
     expect(res.json.mock.calls[0][0].items).toEqual([]);
+  });
+});
+
+describe('listMedia — 학부모도 사진 폴더 링크를 공유한다 (photo-menu FR-518)', () => {
+  it('앨범을 볼 수 있는 학부모에게 선생님 것과 같은 공유 주소(앨범 주인 선생님의 초대 포함)를 준다', async () => {
+    makeConfirmed();
+
+    await listMedia(req, res);
+
+    expect(ParentInvite.getOrCreate).toHaveBeenCalledWith(7);   // 이 앨범의 주인 선생님
+    expect(res.json.mock.calls[0][0].sharePath).toBe('/parent/photos/3?invite=inv-tok');
+  });
+
+  it('앨범을 볼 수 없는 학부모에게는 주지 않는다 — 초대 토큰도 읽지 않는다', async () => {
+    await listMedia(req, res);   // 기본은 미확정
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(ParentInvite.getOrCreate).not.toHaveBeenCalled();
+    expect(res.json.mock.calls[0][0].sharePath).toBeUndefined();
+  });
+
+  it('초대가 만료됐으면 초대 없는 주소만 준다', async () => {
+    makeConfirmed();
+    ParentInvite.isUsable.mockReturnValue(false);
+
+    await listMedia(req, res);
+
+    expect(res.json.mock.calls[0][0].sharePath).toBe('/parent/photos/3');
   });
 });
 

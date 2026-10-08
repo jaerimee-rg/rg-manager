@@ -1,8 +1,19 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { peekReturnTo, isEventSharePath } from '../utils/returnTo';
+import { peekReturnTo, isEventSharePath, albumShareOf } from '../utils/returnTo';
 import { Brand } from '../components/ui';
+
+const shareNotice = {
+  marginBottom: 'var(--spacing-lg)',
+  background: 'var(--color-primary-bg)',
+  color: 'var(--color-gray-700)',
+  padding: '13px 15px',
+  borderRadius: 'var(--shape-box)',
+  fontSize: '0.875rem',
+  lineHeight: 1.6,
+  wordBreak: 'keep-all'
+};
 
 function Login() {
   const [searchParams] = useSearchParams();
@@ -17,11 +28,28 @@ function Login() {
   /* 선생님이 보낸 이벤트 공유 링크를 눌러 여기로 온 학부모 — 로그인하면 그 이벤트로 돌아간다. */
   const fromEventLink = isEventSharePath(peekReturnTo());
 
+  /* 선생님이 보낸 사진 폴더 링크 (docs/photo-menu FR-518). 링크에 그 선생님의 초대가 실려 있어서
+     처음 온 학부모도 여기서 바로 가입한다 — 그래서 카카오 로그인에 그 초대를 함께 보낸다. */
+  const [albumShare] = useState(() => albumShareOf(peekReturnTo()));
+  const [sharedBy, setSharedBy] = useState('');
+  const shareInvite = albumShare?.invite || null;
+
+  useEffect(() => {
+    if (!shareInvite) return undefined;
+    let stale = false;
+    // 누가 보냈는지 알려 준다. 못 읽어도(초대가 바뀜 등) 로그인은 그대로 된다 — 이름만 빠진다.
+    fetch(`/api/invite/${encodeURIComponent(shareInvite)}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => { if (!stale && data?.teacherName) setSharedBy(data.teacherName); })
+      .catch(() => {});
+    return () => { stale = true; };
+  }, [shareInvite]);
+
   const handleKakaoLogin = async () => {
     setError('');
     setLoading(true);
     try {
-      const url = await getKakaoLoginUrl();
+      const url = await getKakaoLoginUrl(shareInvite ? { invite: shareInvite, soft: true } : {});
       window.location.href = url;
     } catch (err) {
       setError(err.message || '카카오 로그인을 시작할 수 없습니다.');
@@ -70,21 +98,17 @@ function Login() {
           )}
 
           {fromEventLink && !needsInvite && (
-            <div
-              role="status"
-              style={{
-                marginBottom: 'var(--spacing-lg)',
-                background: 'var(--color-primary-bg)',
-                color: 'var(--color-gray-700)',
-                padding: '13px 15px',
-                borderRadius: 'var(--shape-box)',
-                fontSize: '0.875rem',
-                lineHeight: 1.6,
-                wordBreak: 'keep-all'
-              }}
-            >
+            <div role="status" style={shareNotice}>
               <b>공유받은 이벤트가 있어요.</b><br />
               카카오로 로그인하면 그 이벤트 신청 화면이 바로 열려요.
+            </div>
+          )}
+
+          {albumShare && !needsInvite && (
+            <div role="status" style={shareNotice}>
+              <b>{sharedBy ? `${sharedBy} 선생님이 사진을 공유했어요.` : '공유받은 사진이 있어요.'}</b><br />
+              카카오로 로그인하면 그 사진이 바로 열려요.
+              {shareInvite && ' 처음이라면 로그인 뒤 아이 정보만 등록하면 돼요.'}
             </div>
           )}
 
@@ -144,7 +168,9 @@ function Login() {
             fontSize: '0.8125rem',
             lineHeight: 1.6
           }}>
-            초대를 받은 분만 가입할 수 있어요.<br />초대 링크가 있으면 그 링크를 눌러 주세요.
+            {shareInvite
+              ? <>처음이어도 괜찮아요.<br />받은 사진 링크로 바로 가입할 수 있어요.</>
+              : <>초대를 받은 분만 가입할 수 있어요.<br />초대 링크가 있으면 그 링크를 눌러 주세요.</>}
           </p>
         </div>
       </div>

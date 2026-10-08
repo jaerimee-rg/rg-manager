@@ -1,5 +1,6 @@
 import {
-  isSafeReturnPath, saveReturnTo, peekReturnTo, consumeReturnTo, clearReturnTo, returnPathFor, isEventSharePath
+  isSafeReturnPath, saveReturnTo, peekReturnTo, consumeReturnTo, clearReturnTo, returnPathFor, isEventSharePath,
+  albumShareOf
 } from '../returnTo';
 
 const NOW = 1_700_000_000_000;
@@ -110,5 +111,32 @@ describe('isEventSharePath', () => {
     expect(isEventSharePath('/parent/schedule')).toBe(false);
     expect(isEventSharePath('/parent/events/abc')).toBe(false);
     expect(isEventSharePath(null)).toBe(false);
+  });
+});
+
+describe('albumShareOf — 공유받은 사진 폴더 링크 (docs/photo-menu FR-518)', () => {
+  it('학부모 앨범 주소에서 앨범 번호와 초대를 읽는다', () => {
+    expect(albumShareOf('/parent/photos/34?invite=tok')).toEqual({ eventId: 34, invite: 'tok' });
+    expect(albumShareOf('/parent/photos/34?open=7&invite=a%20b')).toEqual({ eventId: 34, invite: 'a b' });
+  });
+
+  it('초대가 없어도 사진 링크다 — 이미 가입한 학부모에게는 그대로 열린다', () => {
+    expect(albumShareOf('/parent/photos/34')).toEqual({ eventId: 34, invite: null });
+    expect(albumShareOf('/parent/photos/34?invite=')).toEqual({ eventId: 34, invite: null });
+  });
+
+  it('사진 탭 목록이나 다른 주소는 아니다', () => {
+    expect(albumShareOf('/parent/photos')).toBeNull();
+    expect(albumShareOf('/parent/events/12?invite=tok')).toBeNull();
+    expect(albumShareOf('/photos/34')).toBeNull();
+    expect(albumShareOf(null)).toBeNull();
+  });
+
+  it('초대가 실린 주소도 로그인 뒤 돌아갈 곳으로 저장되고, 학부모에게만 열린다', () => {
+    const path = '/parent/photos/34?invite=tok';
+    expect(isSafeReturnPath(path)).toBe(true);
+    expect(saveReturnTo(path)).toBe(true);
+    expect(returnPathFor('parent', peekReturnTo())).toBe(path);
+    expect(returnPathFor('user', path)).toBeNull();
   });
 });

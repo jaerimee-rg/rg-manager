@@ -233,7 +233,9 @@ export const getKakaoAuthUrl = (req, res) => {
   const state = encodeState({
     prefer: String(req.query.prefer || '').trim() || undefined,
     invite: String(req.query.invite || '').trim() || undefined,
-    tinvite: String(req.query.tinvite || '').trim() || undefined
+    tinvite: String(req.query.tinvite || '').trim() || undefined,
+    // 사진 폴더 공유 링크로 온 로그인 (FR-518) — 콜백의 softInvite 설명 참고
+    soft: req.query.soft === '1'
   });
 
   if (state) {
@@ -324,7 +326,7 @@ export const kakaoCallback = async (req, res) => {
       return res.status(400).json({ error: '인증 코드가 없습니다.' });
     }
 
-    const { prefer, invite: inviteToken, tinvite: teacherInviteToken } = decodeState(state);
+    const { prefer, invite: inviteToken, tinvite: teacherInviteToken, soft: softInvite } = decodeState(state);
 
     /* 초대 토큰은 카카오를 다녀오기 **전에** 확인한다.
        무효한 링크로 굳이 카카오 인증까지 시키지 않기 위함이다. */
@@ -332,7 +334,13 @@ export const kakaoCallback = async (req, res) => {
     if (inviteToken) {
       parentInvite = await ParentInvite.getByToken(inviteToken);
       if (!ParentInvite.isUsable(parentInvite)) {
-        return res.status(400).json({ error: '유효하지 않은 초대 링크입니다. 선생님께 새 링크를 요청해 주세요.' });
+        /* 사진 폴더 공유 링크에 실린 초대(soft, docs/photo-menu FR-518)는 로그인을 막지 않는다.
+           선생님이 초대 링크를 새로 만들어 토큰이 죽었어도, 이미 가입한 학부모는 그 사진 링크로
+           그대로 들어와야 한다. 초대 없이 로그인하는 것과 같아진다(계정이 없으면 needsInvite). */
+        if (!softInvite) {
+          return res.status(400).json({ error: '유효하지 않은 초대 링크입니다. 선생님께 새 링크를 요청해 주세요.' });
+        }
+        parentInvite = null;
       }
     }
 
@@ -352,6 +360,13 @@ export const kakaoCallback = async (req, res) => {
     const { kakaoId, nickname, email, accessToken, refreshToken, tokenExpiresAt } = profile;
     const accounts = await User.listByKakaoId(kakaoId);
     const accountOf = (role) => accounts.find((a) => a.role === role) || null;
+
+    /* soft 초대: 이 카카오 계정에 선생님·관리자 계정만 있으면 학부모 계정을 새로 만들지 않는다.
+       선생님이 자기가 보낸 사진 링크를 눌러 봤다고 자기 반의 학부모가 되면 안 된다.
+       (학부모로도 쓰려면 진짜 초대 링크를 쓴다 — 그건 지금처럼 계정을 만든다) */
+    if (parentInvite && softInvite && accounts.length > 0 && !accountOf('parent')) {
+      parentInvite = null;
+    }
 
     let user = null;
     let isNewUser = false;
