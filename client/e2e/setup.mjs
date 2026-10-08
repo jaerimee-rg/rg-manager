@@ -157,6 +157,20 @@ for (let i = 0; i < 2; i += 1) {
   );
 }
 
+// 예전 규칙으로 붙은 자동 태그가 남은 앨범 — 얼굴은 기준 얼굴과 전혀 다른데(0.9 vs 0.1) 'face' 태그가 붙어 있다.
+// 앨범을 열면 지금 규칙으로 다시 매칭돼 이 태그가 사라져야 한다(albumMatchRules 가 비어 있다).
+const staleEventId = await mkEvent(`e2e재매칭_${stamp}`, null, true, { type: 'special', published: false });
+const staleMediaId = await mkMedia({ i: 10, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: staleEventId });
+const farVector = Buffer.from(new Float32Array(128).fill(0.9).buffer).toString('base64');
+const staleFace = await pool.query(
+  `INSERT INTO media_faces ("mediaId", box, score, descriptor, "createdAt") VALUES ($1,$2,0.9,$3,$4) RETURNING id`,
+  [staleMediaId, JSON.stringify({ x: 0.1, y: 0.1, w: 0.2, h: 0.2 }), farVector, now]
+);
+await pool.query(
+  `INSERT INTO media_tags ("mediaId","studentId",source,distance,"faceId","createdAt","updatedAt") VALUES ($1,$2,'face',0.45,$3,$4,$4)`,
+  [staleMediaId, students[0].id, staleFace.rows[0].id, now]
+);
+
 // 첫째 아이 태그를 두 장에 붙인다 → "우리 아이만" 토글로 걸러지는지 확인한다.
 for (const mediaId of mediaIds.slice(0, 2)) {
   await pool.query(
@@ -284,7 +298,7 @@ const tinv = await pool.query(
 );
 
 const sessions = {
-  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, faceScanEventId, mediaIds, taggedCount: 2, totalCount: 4 },
+  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, faceScanEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
   teacher: { token: sign(teacher), user: { id: teacher.id, username: teacher.username, role: 'user' } },
   teacher2Token: sign(teacher2),
   parent: { token: sign(parent), user: { id: parent.id, username: parent.username, role: 'parent' } },

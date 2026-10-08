@@ -30,6 +30,10 @@ jest.unstable_mockModule('../../models/Event.js', () => ({
   default: { listUpcomingForParent: jest.fn(), listPastForParent: jest.fn(), getPublishedForParent: jest.fn() }
 }));
 
+jest.unstable_mockModule('../../services/albumService.js', () => ({
+  default: { ensureAlbumsMatched: jest.fn().mockResolvedValue(0) }
+}));
+
 jest.unstable_mockModule('../../models/ChildFaceProfile.js', () => ({
   default: { countsByStudents: jest.fn().mockResolvedValue({}) },
   MAX_PER_PARENT: 3,
@@ -71,6 +75,7 @@ const Event = (await import('../../models/Event.js')).default;
 const EventRegistration = (await import('../../models/EventRegistration.js')).default;
 const { sendEventRegistrationKakaoMessage } = await import('../../utils/kakaoMessage.js');
 const EventMedia = (await import('../../models/EventMedia.js')).default;
+const albumService = (await import('../../services/albumService.js')).default;
 const MediaTag = (await import('../../models/MediaTag.js')).default;
 const Competition = (await import('../../models/Competition.js')).default;
 const { getMe, addChildren, updateName, getEvents, getEvent, registerChild, cancelChild, addTeacher } =
@@ -500,6 +505,8 @@ describe('parentController', () => {
         // Drive 파일 이름(아이 이름이 들어 있다)은 나가지 않는다
         expect(JSON.stringify(album)).not.toContain('하은');
         expect(EventMedia.list).toHaveBeenCalledWith(5, { limit: 6, uploaderUserId: 20 });
+        // 사진 칸의 "우리 아이" 개수도 지금 규칙으로 맞춘 뒤에 센다
+        expect(albumService.ensureAlbumsMatched).toHaveBeenCalledWith(expect.objectContaining({ id: 5 }));
       });
 
       it('선생님이 공개하지 않은 앨범은 확정이어도 album:null — 앨범이 있다는 사실도 알리지 않는다', async () => {

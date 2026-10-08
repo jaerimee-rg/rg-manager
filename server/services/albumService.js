@@ -23,7 +23,7 @@ import {
 } from '../utils/googleDrive.js';
 import { runWithDrive, ensureRootFolder } from './driveAccess.js';
 import { encodeDescriptor, isValidDescriptor, decodeDescriptor, classifyDistance, bestPerStudent,
-  parseAnalyzerVersion, DEFAULT_MATCH_THRESHOLD, DEFAULT_CANDIDATE_THRESHOLD } from '../utils/faceVector.js';
+  parseAnalyzerVersion, matchRulesSignature, DEFAULT_MATCH_THRESHOLD, DEFAULT_CANDIDATE_THRESHOLD } from '../utils/faceVector.js';
 import { mergeMatches } from '../utils/faceMatch.js';
 import { buildDriveName, validateUpload, kindFromMime, folderNameFromEvent } from '../utils/mediaValidation.js';
 import { APP_URL } from '../utils/appUrl.js';
@@ -368,8 +368,11 @@ export const rematchAlbum = async (event) => {
   let candidates = 0;
   let removed = 0;
 
+  // 태그는 한 번에 읽는다 — 앨범을 열 때도 부르므로(ensureAlbumMatched) 사진 수만큼 질의하지 않는다.
+  const tagsByMedia = await MediaTag.listByMediaIds([...facesByMedia.keys()]);
+
   for (const [mediaId, faces] of facesByMedia.entries()) {
-    const existing = await MediaTag.listByMedia(mediaId);
+    const existing = tagsByMedia[mediaId] || [];
     const matches = bestPerStudent(faces, profiles)
       .map((match) => ({ ...match, source: classifyDistance(match.distance, thresholds) }))
       .filter((match) => match.source);
@@ -386,6 +389,48 @@ export const rematchAlbum = async (event) => {
   }
 
   return { added, candidates, removed };
+};
+
+/**
+ * 앨범의 자동 태그가 **지금 규칙**으로 계산된 것인지 보고, 아니면 다시 매칭한다.
+ *
+ * 태그는 매칭 결과를 적어 둔 것이라 임계값(app_settings)·매칭 방식(코드)·기준 얼굴(등록/삭제)이 바뀌면 낡는다.
+ * 예전에는 선생님이 [얼굴 찾기] 를 눌러야만 다시 계산돼, 임계값을 좁힌 뒤에도 틀린 태그가 남았다.
+ * 앨범을 여는 요청(선생님·학부모)에서 부른다 — 규칙이 같으면 아무 것도 하지 않고, 실패해도 던지지 않는다
+ * (앨범은 떠야 한다). events: 한 개 또는 여러 개.
+ * → 다시 매칭한 앨범 수
+ */
+export const ensureAlbumsMatched = async (events) => {
+  const albums = (Array.isArray(events) ? events : [events]).filter((event) => event?.driveFolderId);
+  if (!albums.length) return 0;
+
+  let rematched = 0;
+  try {
+    const signature = matchRulesSignature(await getThresholds());
+    for (const event of albums) {
+      if (event.albumMatchRules === signature) continue;
+      await rematchAlbum(event);
+      await Event.setAlbumMatchRules(event.id, signature);
+      event.albumMatchRules = signature;
+      rematched += 1;
+    }
+  } catch (error) {
+    console.error('앨범 다시 매칭 실패(그대로 보여 줍니다):', error?.message || error);
+  }
+  return rematched;
+};
+
+/**
+ * 기준 얼굴이 등록·삭제됐다 — 그 선생님의 앨범을 다음에 열 때 전부 다시 매칭하게 한다.
+ * 한 얼굴은 가장 가까운 아이에게만 붙으므로 한 아이의 기준 얼굴이 바뀌면 다른 아이의 태그도 달라질 수 있다.
+ * 등록·삭제는 이미 끝난 일이라 여기가 실패해도 던지지 않는다.
+ */
+export const markAlbumsStale = async (teacherUserId) => {
+  try {
+    await Event.invalidateAlbumMatches(teacherUserId);
+  } catch (error) {
+    console.error('앨범 다시 매칭 표시 실패:', error?.message || error);
+  }
 };
 
 /**
@@ -469,6 +514,8 @@ export default {
   indexFaces,
   rematchMedia,
   rematchAlbum,
+  ensureAlbumsMatched,
+  markAlbumsStale,
   matchStudentAcrossAlbums,
   deleteMedia
 };

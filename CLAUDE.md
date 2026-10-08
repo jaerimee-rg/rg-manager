@@ -53,7 +53,7 @@ there is no root `package.json`, so there is no one command that runs everything
 
 ```bash
 cd client && npm test          # jest — 1206 tests / 87 suites
-cd server && npm test          # 1257 tests / 59 suites
+cd server && npm test          # 1273 tests / 60 suites
 ```
 
 - **The server suite is ESM** (`"type": "module"` + `transform: {}`, i.e. no Babel) and only
@@ -519,6 +519,14 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   almost anyone (wrong tags measured 0.378–0.492). Boot moves rows still holding an old default (0.50/0.55,
   0.60/0.65) and leaves any other value alone. **One face → at most one child** (`faceVector.js:bestPerStudent`
   assigns each face to its nearest student), so one face can no longer tag two children.
+- **Auto tags are a cache and re-match themselves.** `events."albumMatchRules"` records the rule signature the
+  album's `face`/`candidate` tags were computed with (`faceVector.js:matchRulesSignature` = rules version + both
+  thresholds). `albumService.ensureAlbumsMatched` runs in every album read (teacher `getAlbum`/`listMedia`, parent
+  album list / gallery / event-detail photos): signature differs or is NULL → `rematchAlbum` → store it. Registering
+  or deleting a child face NULLs it for all of that teacher's albums (`albumService.markAlbumsStale`), because one
+  face goes to the nearest child only. Before this a threshold change left the old tags in place until a teacher
+  pressed [얼굴 찾기] — a parent's "우리 아이만 보기" showed another child (2026-10). Bump
+  `FACE_MATCH_RULES_VERSION` when the matching logic itself changes.
 - **Matched names are never shown on photos.** `toParentMedia` sends `myTags` as `{studentId, source}` only (no
   name), and `MediaGrid` / `MediaViewer` draw no name badge — matching can be wrong. The "우리 아이 사진만 보기"
   filter and the 맞아요/아니에요 candidate box still use the tags.

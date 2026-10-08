@@ -9,7 +9,9 @@ import {
   FACE_ANALYZER_VERSION,
   parseAnalyzerVersion,
   DEFAULT_MATCH_THRESHOLD,
-  DEFAULT_CANDIDATE_THRESHOLD
+  DEFAULT_CANDIDATE_THRESHOLD,
+  FACE_MATCH_RULES_VERSION,
+  matchRulesSignature
 } from '../faceVector.js';
 
 const makeDescriptor = (fill = 0.1) => Array.from({ length: DESCRIPTOR_LENGTH }, (_, i) => fill + i * 0.001);
@@ -211,5 +213,18 @@ describe('얼굴 찾기 방식 버전', () => {
     expect(parseAnalyzerVersion(1.5)).toBeNull();
     expect(parseAnalyzerVersion('abc')).toBeNull();
     expect(parseAnalyzerVersion(1e6)).toBeNull();
+  });
+});
+
+describe('matchRulesSignature — 앨범 태그를 어떤 규칙으로 계산했는지', () => {
+  it('방식 버전 + 두 임계값. 하나라도 바뀌면 서명이 달라진다', () => {
+    expect(FACE_MATCH_RULES_VERSION).toBe(2);
+    expect(matchRulesSignature({ match: 0.35, candidate: 0.4 })).toBe('r2:0.35:0.4');
+    expect(matchRulesSignature({ match: 0.5, candidate: 0.6 })).not.toBe(matchRulesSignature({ match: 0.35, candidate: 0.4 }));
+  });
+
+  it('임계값이 없으면 기본값으로', () => {
+    expect(matchRulesSignature()).toBe('r2:0.35:0.4');
+    expect(matchRulesSignature({ match: NaN })).toBe('r2:0.35:0.4');
   });
 });
