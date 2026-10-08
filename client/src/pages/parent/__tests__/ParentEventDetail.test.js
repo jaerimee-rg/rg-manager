@@ -242,3 +242,46 @@ describe('ParentEventDetail — 오시는 길 (지도)', () => {
     expect(screen.queryByTestId('place-section')).not.toBeInTheDocument();
   });
 });
+
+
+describe('ParentEventDetail — 이벤트에 연결된 사진 (docs/photo-menu FR-545)', () => {
+  const withAlbum = (items) => ({
+    ...EVENT,
+    album: {
+      available: true,
+      counts: { images: 41, videos: 3, mine: 12 },
+      items,
+      uploadOpen: true
+    }
+  });
+  const photo = (id, kind = 'image') => ({ id, kind, thumbnailUrl: `https://drive/thumb/${id}`, durationMs: kind === 'video' ? 42000 : null });
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('공개된 앨범이면 사진을 바로 보여 주고 모두 보기로 이어진다', async () => {
+    await renderDetail(withAlbum([photo(1), photo(2), photo(3, 'video')]));
+
+    expect(screen.getByRole('heading', { name: '사진 · 영상' })).toBeInTheDocument();
+    expect(screen.getByText('사진 41 · 영상 3 · 우리 아이 12장')).toBeInTheDocument();
+    expect(document.querySelectorAll('.ui-media-tile')).toHaveLength(3);
+    fireEvent.click(screen.getByRole('button', { name: /사진 44개 모두 보기/ }));
+    expect(mockNavigate).toHaveBeenCalledWith('/parent/photos/12');
+  });
+
+  it('사진을 누르면 앨범에서 그 사진을 연다', async () => {
+    await renderDetail(withAlbum([photo(7)]));
+
+    fireEvent.click(document.querySelector('.ui-media-tile'));
+    expect(mockNavigate).toHaveBeenCalledWith('/parent/photos/12?open=7');
+  });
+
+  it('여기에는 업로드 버튼이 없다 (요청 ③)', async () => {
+    await renderDetail(withAlbum([photo(1)]));
+    expect(screen.queryByRole('button', { name: /올리기/ })).not.toBeInTheDocument();
+  });
+
+  it('album 이 없으면(비공개·범위 밖) 사진 칸이 없다', async () => {
+    await renderDetail(EVENT);
+    expect(screen.queryByRole('heading', { name: '사진 · 영상' })).not.toBeInTheDocument();
+  });
+});

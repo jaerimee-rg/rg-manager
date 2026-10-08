@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import ParentLayout from '../../components/parent/ParentLayout';
+import PhotoGrid from '../Photos/PhotoGrid';
 import { formatCardDate, dDay, reasonText, scheduleBackPath } from '../../utils/parentSchedule';
 import { typeOf } from '../../utils/eventFormat';
 import { hasCoordinates, kakaoMapLinks } from '../../utils/kakaoMap';
@@ -349,39 +350,24 @@ function ParentEventDetail() {
           </Section>
         )}
 
+        {/* 선생님이 이 이벤트에 연결해 올리고 공개한 사진 (docs/photo-menu FR-545) — 보기만 하고, 올리기는 사진 탭 앨범에서 */}
         {event.album?.available && (
-          <Section title="사진 · 영상">
-            <button
-              type="button"
-              className="ui-card"
-              data-padding="none"
-              data-interactive="true"
-              onClick={() => navigate(`/parent/photos/${event.id}`)}
-            >
-              {event.album.previews?.length > 0 && (
-                <div className="ui-album-preview">
-                  {event.album.previews.slice(0, 4).map((url, i) => (
-                    <img
-                      key={i}
-                      src={url}
-                      alt=""
-                      loading="lazy"
-                      onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
-                    />
-                  ))}
-                </div>
-              )}
-              <Row gap={3} justify="between" style={{ padding: 'var(--space-3) var(--space-4)' }}>
-                <div>
-                  <div className="ui-list-row__title">앨범 열기</div>
-                  <div className="ui-list-row__subtitle">
-                    사진 {event.album.counts.images} · 영상 {event.album.counts.videos}
-                    {event.album.counts.mine ? ` · 우리 아이 ${event.album.counts.mine}장` : ''}
-                  </div>
-                </div>
-                <Icon name="chevronRight" size={18} />
-              </Row>
-            </button>
+          <Section
+            title="사진 · 영상"
+            description={`사진 ${event.album.counts.images} · 영상 ${event.album.counts.videos}${event.album.counts.mine ? ` · 우리 아이 ${event.album.counts.mine}장` : ''}`}
+          >
+            {event.album.items?.length > 0 && (
+              <PhotoGrid
+                items={event.album.items}
+                onOpen={(item) => navigate(`/parent/photos/${event.id}?open=${item.id}`)}
+              />
+            )}
+            <Button block onClick={() => navigate(`/parent/photos/${event.id}`)}>
+              {event.album.items?.length
+                ? `사진 ${event.album.counts.images + event.album.counts.videos}개 모두 보기`
+                : '앨범 열기'}
+              <Icon name="chevronRight" size={16} />
+            </Button>
           </Section>
         )}
 

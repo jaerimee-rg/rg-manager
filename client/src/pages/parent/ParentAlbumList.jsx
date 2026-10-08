@@ -39,12 +39,12 @@ function ParentAlbumList() {
 
   if (!albums.length) {
     return (
-      <ParentLayout title="사진" subtitle="확정된 이벤트의 앨범">
+      <ParentLayout title="사진" subtitle="선생님이 공개한 앨범">
         <div style={{ textAlign: 'center', padding: '50px 20px' }}>
           <div style={{ fontSize: '2.5rem' }}>📷</div>
-          <div style={{ fontSize: '1rem', fontWeight: 700, marginTop: '8px' }}>아직 앨범이 없어요</div>
+          <div style={{ fontSize: '1rem', fontWeight: 700, marginTop: '8px' }}>아직 공개된 앨범이 없어요</div>
           <div style={{ fontSize: '0.8125rem', color: 'var(--color-gray-500)', lineHeight: 1.6, marginTop: '6px' }}>
-            확정된 대회의 사진이 여기에 모여요.<br />선생님이 앨범을 열면 바로 보여요.
+            선생님이 대회·이벤트 앨범을 공개하면<br />여기에 바로 보여요.
           </div>
         </div>
       </ParentLayout>
@@ -52,7 +52,7 @@ function ParentAlbumList() {
   }
 
   return (
-    <ParentLayout title="사진" subtitle="확정된 이벤트의 앨범">
+    <ParentLayout title="사진" subtitle="선생님이 공개한 앨범">
       {albums.map((album) => (
         <button
           key={album.eventId}

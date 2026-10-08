@@ -97,9 +97,11 @@ function EventList({ basePath = '/events' }) {
   const events = includePast ? allEvents : upcomingEvents;
 
   const remove = async (event) => {
-    const extra = event.type === 'competition'
+    const extra = (event.type === 'competition'
       ? '\n연결된 대회의 참가 학생·신청 정보도 함께 삭제됩니다.'
-      : '';
+      : '')
+      // 사진 메뉴의 앨범은 앱에서만 사라지고 선생님 Drive 의 폴더는 남는다 (docs/photo-menu FR-532)
+      + (event.driveFolderId ? '\n앱의 사진 앨범도 사라지지만, Drive 의 사진 폴더는 그대로 남아요.' : '');
     if (!confirm(`"${event.title}" 이벤트를 삭제할까요?${extra}`)) return;
 
     const response = await fetchWithAuth(`/api/events/${event.id}`, { method: 'DELETE' });
