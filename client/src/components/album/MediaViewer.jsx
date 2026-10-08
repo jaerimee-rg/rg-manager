@@ -113,7 +113,8 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
           <span style={{ opacity: 0.6 }}>📅</span>
           <span>{formatDayLabel(dayKeyOf(item.takenAt))} {formatTime(item.takenAt)}</span>
           <span style={{ opacity: 0.6, marginLeft: '4px' }}>👤</span>
-          <span>{uploaderLabel(item.uploader)}</span>
+          {/* 선생님 화면은 학부모가 올린 사진에 그 학부모의 이름이 온다(uploaderName). 학부모 화면에는 이름이 오지 않는다 */}
+          <span>{item.uploaderRole === 'parent' && item.uploaderName ? item.uploaderName : uploaderLabel(item.uploader)}</span>
           {(item.myTags || []).filter((tag) => tag.source !== 'candidate').map((tag) => (
             <span
               key={tag.studentId}

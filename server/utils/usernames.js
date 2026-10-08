@@ -58,4 +58,17 @@ export const displayNameOf = (user) => {
 /** SQL 에서 같은 규칙으로 이름을 고를 때 — `COALESCE(NULLIF(u."displayName", ''), u.username)` */
 export const displayNameSql = (alias) => `COALESCE(NULLIF(${alias}."displayName", ''), ${alias}.username)`;
 
-export default { uniqueUsername, USERNAME_MAX, isPlaceholderName, placeholderUsername, displayNameOf, displayNameSql };
+/**
+ * **학부모일 수 있는 사람**을 선생님에게 보여줄 이름 (사진을 올린 사람 등).
+ * 학부모가 가입 때 정한 이름(parent_accounts."displayName", "예림엄마") → users."displayName" → username 순이다.
+ * 학부모의 username 은 카카오 닉네임이거나 `카카오_<숫자>` 자동 식별자라서, 이것부터 쓰면 선생님이 누구인지
+ * 알아볼 수 없다. 자동 식별자는 받는 쪽에서 isPlaceholderName 으로 걸러 이름으로 쓰지 않는다.
+ * parentAlias 는 `LEFT JOIN parent_accounts <alias> ON <alias>."userId" = <user>.id` 로 붙인 별칭이다.
+ */
+export const parentAwareDisplayNameSql = (userAlias, parentAlias) =>
+  `COALESCE(NULLIF(${parentAlias}."displayName", ''), NULLIF(${userAlias}."displayName", ''), ${userAlias}.username)`;
+
+export default {
+  uniqueUsername, USERNAME_MAX, isPlaceholderName, placeholderUsername, displayNameOf, displayNameSql,
+  parentAwareDisplayNameSql
+};

@@ -632,3 +632,40 @@ test.describe('학부모 — 선생님이 보낸 이벤트 공유 링크', () =>
     await expect(page).toHaveURL(/\/parent\/schedule$/);
   });
 });
+
+/**
+ * 학부모가 올린 사진을 선생님이 볼 때 — 올린 사람은 카카오 식별자가 아니라 학부모가 정한 이름(학부모명)이다.
+ * 픽스처 앨범에는 이 학부모가 올린 사진이 한 장 있다(setup.mjs i:3).
+ */
+test.describe('선생님 사진 화면 — 학부모가 올린 사진의 이름', () => {
+  test('올린 사람은 학부모 계정 이름(username)이 아니라 학부모명으로 보인다', async ({ page, request }) => {
+    // 앞 테스트(가입)가 학부모명을 정해 뒀으면 그 이름을, 혼자 돌려 아직 없으면 지금 정한다
+    const me = await api(request, sessions.parent, 'GET', '/api/parent/me');
+    let parentName = me.body.user.displayName;
+    if (!parentName) {
+      parentName = `${childName}엄마`;
+      const named = await api(request, sessions.parent, 'PUT', '/api/parent/name', { parentName });
+      expect(named.status).toBe(200);
+    }
+    expect(parentName).not.toBe(sessions.parent.user.username);
+
+    // API: 선생님용 목록의 올린 사람 이름
+    const list = await api(request, sessions.teacher, 'GET', `/api/events/${sessions.album.eventId}/media?includeHidden=true`);
+    expect(list.status).toBe(200);
+    const fromParent = list.body.items.filter((item) => item.uploaderRole === 'parent');
+    expect(fromParent.length).toBeGreaterThan(0);
+    for (const item of fromParent) expect(item.uploaderName).toBe(parentName);
+
+    // 화면: 사진 칸의 이름표와, 크게 봤을 때의 올린 사람
+    await loginAs(page, sessions.teacher);
+    await page.goto(`/photos/${sessions.album.eventId}`);
+    const who = page.locator('.ui-media-tile__who');
+    await expect(who).toHaveCount(fromParent.length);
+    await expect(who.first()).toHaveText(parentName);
+    await expect(page.getByText(sessions.parent.user.username)).toHaveCount(0);
+
+    await page.locator('.ui-media-tile', { has: who.first() }).click();
+    const viewer = page.getByRole('dialog', { name: '사진 보기' });
+    await expect(viewer.getByText(parentName)).toBeVisible();
+  });
+});

@@ -1,5 +1,5 @@
 import pool from '../database.js';
-import { displayNameSql } from '../utils/usernames.js';
+import { parentAwareDisplayNameSql } from '../utils/usernames.js';
 
 /**
  * 앨범의 사진·영상 한 건. 바이트는 Drive 에 있고 여기에는 파일 id 와 메타만 둔다.
@@ -154,9 +154,11 @@ class EventMedia {
     params.push(Math.min(Number(limit) || 60, 200));
 
     const result = await pool.query(
-      `SELECT m.*, ${displayNameSql('u')} AS "uploaderName"
+      // 올린 사람 이름: 학부모면 본인이 정한 학부모명("예림엄마")이 먼저다 — username 은 카카오 식별자다
+      `SELECT m.*, ${parentAwareDisplayNameSql('u', 'pa')} AS "uploaderName"
          FROM event_media m
          LEFT JOIN users u ON u.id = m."uploaderUserId"
+         LEFT JOIN parent_accounts pa ON pa."userId" = m."uploaderUserId"
         WHERE ${where.join(' AND ')}
         ORDER BY m."takenAt" DESC, m.id DESC
         LIMIT $${params.length}`,

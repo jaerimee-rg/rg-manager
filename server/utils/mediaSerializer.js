@@ -10,6 +10,8 @@
  *   - Drive 파일 이름(누구 아이 이름이 들어 있다)
  */
 
+import { isPlaceholderName } from './usernames.js';
+
 const THUMBNAIL_BASE = 'https://drive.google.com/thumbnail';
 const FILE_BASE = 'https://drive.google.com/file/d';
 
@@ -85,6 +87,16 @@ export const toParentAlbum = (event, counts = {}) => ({
   previews: (counts.previews || []).map((id) => thumbnailUrl(id, 400))
 });
 
+/**
+ * 선생님에게 보여 줄 "올린 사람" 이름. 모델이 학부모명 → 표시 이름 → username 순으로 골라 준다(EventMedia.list).
+ * `카카오_1788076610466` 같은 자동 식별자는 이름이 아니다 — 이름을 정하지 않은 옛 계정이면 역할로만 적는다.
+ */
+export const uploaderNameOf = (media) => {
+  const name = String(media?.uploaderName ?? '').trim();
+  if (name && !isPlaceholderName(name)) return name;
+  return media?.uploaderRole === 'teacher' ? '선생님' : '학부모';
+};
+
 /** 선생님용 미디어 한 건 — 관리에 필요한 정보를 모두 준다. */
 export const toTeacherMedia = (media, { studentNames = {} } = {}) => ({
   id: media.id,
@@ -104,7 +116,7 @@ export const toTeacherMedia = (media, { studentNames = {} } = {}) => ({
   durationMs: media.durationMs ?? null,
   takenAt: media.takenAt,
   uploaderRole: media.uploaderRole,
-  uploaderName: media.uploaderName || (media.uploaderRole === 'teacher' ? '선생님' : '학부모'),
+  uploaderName: uploaderNameOf(media),
   status: media.status,
   isHidden: Boolean(media.isHidden),
   faceStatus: media.faceStatus,
@@ -130,5 +142,6 @@ export default {
   downloadUrl,
   toParentMedia,
   toParentAlbum,
+  uploaderNameOf,
   toTeacherMedia
 };

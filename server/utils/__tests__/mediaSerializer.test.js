@@ -119,6 +119,18 @@ describe('toTeacherMedia', () => {
     expect(toTeacherMedia({ ...media, uploaderName: null }).uploaderName).toBe('학부모');
     expect(toTeacherMedia({ ...media, uploaderName: null, uploaderRole: 'teacher' }).uploaderName).toBe('선생님');
   });
+
+  it('카카오 자동 식별자는 이름이 아니다 — 선생님에게 "카카오_숫자" 를 보여 주지 않는다', () => {
+    for (const id of ['카카오_1788076610466', '카카오1234', '카카오_1788076610466_2', '  카카오_1788076610466  ']) {
+      expect(toTeacherMedia({ ...media, uploaderName: id }).uploaderName).toBe('학부모');
+    }
+    expect(toTeacherMedia({ ...media, uploaderName: '카카오_1788076610466', uploaderRole: 'teacher' }).uploaderName).toBe('선생님');
+  });
+
+  it('카카오 닉네임(사람이 정한 이름)은 그대로 보여 준다', () => {
+    expect(toTeacherMedia({ ...media, uploaderName: '카카오프렌즈' }).uploaderName).toBe('카카오프렌즈');
+    expect(toTeacherMedia({ ...media, uploaderName: ' 지우맘 ' }).uploaderName).toBe('지우맘');
+  });
 });
 
 describe('toParentAlbum', () => {

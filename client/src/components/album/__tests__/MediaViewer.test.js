@@ -117,3 +117,40 @@ describe('MediaViewer — 영상', () => {
     expect(screen.queryByRole('button', { name: '이전 사진' })).toBeNull();
   });
 });
+
+describe('MediaViewer — 올린 사람', () => {
+  it('선생님 화면: 학부모가 올린 사진에는 그 학부모의 이름이 나온다', () => {
+    render(
+      <MediaViewer
+        items={[media({ uploader: 'parent', uploaderRole: 'parent', uploaderName: '예림엄마' })]}
+        startId={1}
+        onClose={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText('예림엄마')).toBeInTheDocument();
+    expect(screen.queryByText('학부모')).not.toBeInTheDocument();
+  });
+
+  it('선생님 화면: 선생님이 올린 사진은 그대로 "선생님"', () => {
+    render(
+      <MediaViewer
+        items={[media({ uploader: 'teacher', uploaderRole: 'teacher', uploaderName: '이재림' })]}
+        startId={1}
+        onClose={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText('선생님')).toBeInTheDocument();
+    expect(screen.queryByText('이재림')).not.toBeInTheDocument();
+  });
+
+  it('학부모 화면: 이름이 오지 않으므로 "학부모" · "내가 올림" 으로만 보인다', () => {
+    const { unmount } = render(<MediaViewer items={[media({ uploader: 'parent' })]} startId={1} onClose={jest.fn()} />);
+    expect(screen.getByText('학부모')).toBeInTheDocument();
+    unmount();
+
+    render(<MediaViewer items={[media({ uploader: 'me' })]} startId={1} onClose={jest.fn()} />);
+    expect(screen.getByText('내가 올림')).toBeInTheDocument();
+  });
+});
