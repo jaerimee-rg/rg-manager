@@ -3409,6 +3409,8 @@ a.ui-btn { text-decoration: none; }
   grid-template-rows: repeat(2, minmax(0, 1fr));
   gap: 2px;
   aspect-ratio: 16 / 10;
+  /* 넘침을 잘라야 aspect-ratio 가 지켜진다 — 없으면 Chrome 이 세로 사진 높이만큼 표지를 늘린다(224px → 630px) */
+  overflow: hidden;
   background: var(--rule-soft);
   border-bottom: var(--stroke);
 }

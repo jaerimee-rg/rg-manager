@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'fs';
-import { loginAs, api } from './helpers.mjs';
+import { loginAs, api, stubPortraitThumbnails } from './helpers.mjs';
 import { stubKakaoMaps } from './kakao-fakes.mjs';
 
 const sessions = JSON.parse(readFileSync(new URL('./.sessions.json', import.meta.url)));
@@ -239,6 +239,28 @@ test.describe('학부모 — 사진', () => {
 
     await expect(page.getByText(/e2e확정대회/)).toBeVisible();
     await expect(page.getByText(/e2e미확정대회/)).toHaveCount(0);
+  });
+
+  test('휴대폰 사진 탭 — 세로 썸네일이 앨범 카드의 제목·날짜를 덮지 않는다', async ({ page }) => {
+    await stubPortraitThumbnails(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/parent/photos');
+
+    const card = page.getByRole('button', { name: /e2e확정대회/ });
+    const strip = card.getByTestId('album-previews');
+    const thumbs = strip.locator('img');
+    await expect(thumbs.first()).toBeVisible();
+    // 세로 그림이 실제로 그려졌는지 — 안 그려지면 넘침도 생기지 않아 검사가 헛돈다
+    await expect.poll(() => thumbs.first().evaluate((img) => img.naturalHeight)).toBe(711);
+
+    const stripBox = await strip.boundingBox();
+    // 휴대폰 폭에서 칸이 정사각형(4:1 줄)
+    expect(Math.abs(stripBox.height - stripBox.width / 4)).toBeLessThan(2);
+    for (const box of await Promise.all((await thumbs.all()).map((thumb) => thumb.boundingBox()))) {
+      expect(box.y + box.height).toBeLessThanOrEqual(stripBox.y + stripBox.height + 0.5);
+    }
+    const titleBox = await card.getByText(/e2e확정대회/).boundingBox();
+    expect(titleBox.y).toBeGreaterThanOrEqual(stripBox.y + stripBox.height);
   });
 
   test('앨범을 열면 갤러리가 보이고 우리 아이만 토글이 걸러 준다', async ({ page }) => {

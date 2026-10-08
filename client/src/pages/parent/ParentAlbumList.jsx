@@ -65,7 +65,15 @@ function ParentAlbumList() {
             cursor: 'pointer', fontFamily: 'inherit'
           }}
         >
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '2px', height: '88px', background: 'var(--color-gray-100)' }}>
+          {/* 미리보기 줄 — 행 높이를 묶고 넘침을 자른다. 안 그러면 세로 사진(휴대폰 영상)이 원래 비율대로
+              행을 늘려 아래 제목·날짜 글자를 덮는다. 4:1 이라 어느 폭에서도 칸이 정사각형이다. */}
+          <div
+            data-testid="album-previews"
+            style={{
+              display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gridTemplateRows: 'minmax(0, 1fr)',
+              gap: '2px', aspectRatio: '4 / 1', overflow: 'hidden', background: 'var(--color-gray-100)'
+            }}
+          >
             {(album.previews || []).slice(0, 4).map((url, i) => (
               <img
                 key={i}
