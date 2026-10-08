@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Link, Navigate, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { useIsMobile } from './hooks/useMediaQuery';
 import StudentList from './components/Students/StudentList';
@@ -68,6 +68,15 @@ function ProtectedRoute({ children }) {
   }
 
   return children;
+}
+
+/**
+ * 선생님이 학부모에게 보낸 사진 폴더 링크(`/parent/photos/34?invite=…`)를 자기가 눌렀을 때 —
+ * 학부모 화면은 선생님 계정으로 열리지 않으니 그 앨범의 관리 화면으로 보낸다 (docs/photo-menu FR-518).
+ */
+function SharedAlbumForTeacher() {
+  const { eventId } = useParams();
+  return <Navigate to={`/photos/${eventId}`} replace />;
 }
 
 function App() {
@@ -342,6 +351,7 @@ function App() {
           <Route path="/events/edit" element={<ProtectedRoute><EventForm /></ProtectedRoute>} />
           <Route path="/photos" element={<ProtectedRoute><PhotoAlbums /></ProtectedRoute>} />
           <Route path="/photos/:eventId" element={<ProtectedRoute><PhotoAlbum /></ProtectedRoute>} />
+          <Route path="/parent/photos/:eventId" element={<SharedAlbumForTeacher />} />
           <Route path="/parents" element={<ProtectedRoute><ParentList /></ProtectedRoute>} />
           <Route path="/competitions/new" element={<ProtectedRoute><CompetitionForm /></ProtectedRoute>} />
           <Route path="/competitions/edit" element={<ProtectedRoute><CompetitionForm /></ProtectedRoute>} />

@@ -3,9 +3,11 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
 jest.mock('../../../utils/api', () => ({ fetchWithAuth: jest.fn() }));
+jest.mock('../../../utils/copyToClipboard', () => ({ copyToClipboard: jest.fn().mockResolvedValue(true) }));
 jest.mock('../../../utils/faceClient', () => ({ detectFaces: jest.fn(), detectSingleFace: jest.fn() }));
 
 import { fetchWithAuth } from '../../../utils/api';
+import { copyToClipboard } from '../../../utils/copyToClipboard';
 import ParentAlbum from '../ParentAlbum';
 
 const media = (overrides = {}) => ({
@@ -187,5 +189,159 @@ describe('ParentAlbum', () => {
     });
 
     expect(screen.getByRole('button', { name: /얼굴 사진 등록하러 가기/ })).toBeInTheDocument();
+  });
+});
+
+describe('ParentAlbum — 공유 링크의 초대 (docs/photo-menu FR-518)', () => {
+  const notFound = () => jsonResponse({ error: '이벤트를 찾을 수 없습니다.' }, { ok: false, status: 404 });
+  const inviteInfo = (teacherName) => {
+    global.fetch = jest.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ valid: true, teacherName }) }));
+  };
+  const linkCalls = () => fetchWithAuth.mock.calls.filter(([url]) => url === '/api/parent/teachers');
+
+  // 연결 전에는 404, [연결하고 사진 보기] 뒤에는 사진이 온다
+  const serverThatLinks = () => {
+    let linked = false;
+    fetchWithAuth.mockImplementation((url) => {
+      if (url === '/api/parent/teachers') { linked = true; return jsonResponse({ teachers: [], alreadyLinked: false }, { status: 201 }); }
+      if (url.startsWith('/api/parent/events/3/media')) return linked ? jsonResponse(payload()) : notFound();
+      return jsonResponse({});
+    });
+  };
+
+  afterEach(() => { delete global.fetch; });
+
+  it('이 선생님과 아직 연결되지 않았으면 누구의 사진인지 알리고 묻는다 — 링크를 눌렀다고 바로 연결하지 않는다', async () => {
+    inviteInfo('이재림');
+    serverThatLinks();
+
+    await renderAlbum('/parent/photos/3?invite=tok');
+
+    expect(global.fetch).toHaveBeenCalledWith('/api/invite/tok');
+    expect(screen.getByText('이재림 선생님이 공유한 사진이에요')).toBeInTheDocument();
+    expect(screen.getByText(/선생님의 학부모 목록에 내 이름이 보여요/)).toBeInTheDocument();
+    expect(linkCalls()).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: /사진 열기/ })).not.toBeInTheDocument();
+  });
+
+  it('[연결하고 사진 보기] 를 누르면 그 초대로 연결한 뒤 사진을 다시 읽는다', async () => {
+    inviteInfo('이재림');
+    serverThatLinks();
+    await renderAlbum('/parent/photos/3?invite=tok');
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '연결하고 사진 보기' })); });
+
+    expect(fetchWithAuth).toHaveBeenCalledWith('/api/parent/teachers', { method: 'POST', body: JSON.stringify({ invite: 'tok' }) });
+    expect(screen.getAllByRole('button', { name: /사진 열기|영상 열기/ })).toHaveLength(2);
+    expect(screen.queryByText(/공유한 사진이에요/)).not.toBeInTheDocument();
+  });
+
+  it('[취소] 를 누르면 연결하지 않고 사진 목록으로 간다', async () => {
+    inviteInfo('이재림');
+    serverThatLinks();
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={['/parent/photos/3?invite=tok']}>
+          <Routes>
+            <Route path="/parent/photos/:eventId" element={<ParentAlbum />} />
+            <Route path="/parent/photos" element={<div>사진 목록</div>} />
+          </Routes>
+        </MemoryRouter>
+      );
+    });
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '취소' })); });
+
+    expect(linkCalls()).toHaveLength(0);
+    expect(screen.getByText('사진 목록')).toBeInTheDocument();
+  });
+
+  it('연결에 실패하면 알리고 다시 묻지 않는다', async () => {
+    inviteInfo('이재림');
+    fetchWithAuth.mockImplementation((url) => {
+      if (url === '/api/parent/teachers') return jsonResponse({ error: '유효하지 않은 초대 링크입니다.' }, { ok: false, status: 400 });
+      return notFound();
+    });
+    await renderAlbum('/parent/photos/3?invite=tok');
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '연결하고 사진 보기' })); });
+
+    expect(linkCalls()).toHaveLength(1);
+    expect(screen.getByText(/선생님과 연결하지 못했어요/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '연결하고 사진 보기' })).not.toBeInTheDocument();
+  });
+
+  it('이미 연결된 학부모에게는 묻지도 않고 초대를 쓰지도 않는다', async () => {
+    inviteInfo('이재림');
+    fetchWithAuth.mockImplementation(() => jsonResponse(payload()));
+
+    await renderAlbum('/parent/photos/3?invite=tok');
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(linkCalls()).toHaveLength(0);
+    expect(screen.getAllByRole('button', { name: /사진 열기|영상 열기/ })).toHaveLength(2);
+  });
+
+  it('초대가 죽었으면 묻지 않고 못 불러왔다고 알린다', async () => {
+    global.fetch = jest.fn(() => Promise.resolve({ ok: false, json: () => Promise.resolve({}) }));
+    fetchWithAuth.mockImplementation(() => notFound());
+
+    await renderAlbum('/parent/photos/3?invite=gone');
+
+    expect(linkCalls()).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: '연결하고 사진 보기' })).not.toBeInTheDocument();
+    expect(screen.getByText(/사진을 불러오지 못했어요/)).toBeInTheDocument();
+  });
+
+  it('초대 없이 404 면 묻지 않는다', async () => {
+    global.fetch = jest.fn();
+    fetchWithAuth.mockImplementation(() => notFound());
+
+    await renderAlbum('/parent/photos/3');
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(linkCalls()).toHaveLength(0);
+  });
+});
+
+describe('ParentAlbum — 학부모도 공유 링크를 복사한다 (docs/photo-menu FR-518)', () => {
+  it('오른쪽 위 링크 아이콘을 누르면 선생님 것과 같은 공유 주소를 복사하고 알린다', async () => {
+    copyToClipboard.mockResolvedValue(true);
+    fetchWithAuth.mockImplementation(() => jsonResponse(payload({ sharePath: '/parent/photos/3?invite=inv-tok' })));
+    await renderAlbum();
+
+    const button = screen.getByRole('button', { name: '공유 링크 복사' });
+    expect(button.closest('.ui-mobile-app__head-action')).not.toBeNull();   // 제목 줄 오른쪽 끝
+    await act(async () => { fireEvent.click(button); });
+
+    expect(copyToClipboard).toHaveBeenCalledWith(`${window.location.origin}/parent/photos/3?invite=inv-tok`);
+    expect(screen.getByText(/공유 링크를 복사했어요/)).toBeInTheDocument();
+  });
+
+  it('서버가 공유 주소를 주지 않아도(옛 서버) 앨범 주소를 복사한다', async () => {
+    copyToClipboard.mockResolvedValue(true);
+    fetchWithAuth.mockImplementation(() => jsonResponse(payload()));
+    await renderAlbum();
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '공유 링크 복사' })); });
+
+    expect(copyToClipboard).toHaveBeenCalledWith(`${window.location.origin}/parent/photos/3`);
+  });
+
+  it('복사가 막힌 브라우저에서는 주소를 그대로 보여 준다', async () => {
+    copyToClipboard.mockResolvedValue(false);
+    fetchWithAuth.mockImplementation(() => jsonResponse(payload({ sharePath: '/parent/photos/3?invite=inv-tok' })));
+    await renderAlbum();
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '공유 링크 복사' })); });
+
+    expect(screen.getByText(`${window.location.origin}/parent/photos/3?invite=inv-tok`)).toBeInTheDocument();
+  });
+
+  it('볼 수 없는 앨범(미확정 · 비공개)에는 공유 아이콘이 없다', async () => {
+    fetchWithAuth.mockImplementation(() => jsonResponse({ error: '아직 볼 수 없어요', reason: 'not_confirmed' }, { ok: false, status: 403 }));
+    await renderAlbum();
+
+    expect(screen.queryByRole('button', { name: '공유 링크 복사' })).not.toBeInTheDocument();
   });
 });

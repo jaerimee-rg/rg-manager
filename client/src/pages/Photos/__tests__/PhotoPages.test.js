@@ -3,6 +3,7 @@ import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
 jest.mock('../../../utils/api', () => ({ fetchWithAuth: jest.fn() }));
+jest.mock('../../../utils/copyToClipboard', () => ({ copyToClipboard: jest.fn().mockResolvedValue(true) }));
 jest.mock('../../../utils/faceClient', () => ({ detectFaces: jest.fn().mockResolvedValue([]) }));
 
 const mockNavigate = jest.fn();
@@ -12,6 +13,7 @@ jest.mock('react-router-dom', () => ({
 }));
 
 import { fetchWithAuth } from '../../../utils/api';
+import { copyToClipboard } from '../../../utils/copyToClipboard';
 import PhotoAlbums from '../PhotoAlbums';
 import PhotoAlbum from '../PhotoAlbum';
 
@@ -135,6 +137,45 @@ describe('PhotoAlbum — 앨범 (docs/photo-menu FR-520~529)', () => {
     // 참가 확정 0명 경고는 폴더에는 해당 없다
     expect(screen.queryByText(/확정된 학생이 없어요/)).not.toBeInTheDocument();
     expect(screen.getByText(/사진 폴더$/)).toBeInTheDocument();
+  });
+
+  describe('공유 — 학부모에게 보낼 사진 폴더 링크 (FR-518)', () => {
+    const SHARED = { ...ALBUM, published: true, audience: 'all', sharePath: '/parent/photos/31?invite=inv-tok' };
+
+    it('공개한 앨범의 [공유] 는 초대가 실린 학부모 앨범 주소를 복사하고 알린다', async () => {
+      copyToClipboard.mockResolvedValue(true);
+      await renderAlbum(SHARED);
+
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: '공유' })); });
+
+      expect(copyToClipboard).toHaveBeenCalledWith(`${window.location.origin}/parent/photos/31?invite=inv-tok`);
+      expect(screen.getByText(/공유 링크를 복사했어요 · 학부모가 로그인\(처음이면 가입\)하면 이 사진이 바로 열려요/)).toBeInTheDocument();
+    });
+
+    it('공개 범위가 참가 확정 학부모면 복사 알림에서 알려 준다', async () => {
+      await renderAlbum({ ...SHARED, audience: 'participants' });
+
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: '공유' })); });
+
+      expect(screen.getByText(/참가 확정 학부모만 볼 수 있어요/)).toBeInTheDocument();
+    });
+
+    it('비공개 앨범은 [공유] 가 잠기고 이유를 알려 준다', async () => {
+      await renderAlbum({ ...ALBUM, published: false, sharePath: '/parent/photos/31?invite=inv-tok' });
+
+      const button = screen.getByRole('button', { name: '공유' });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('title', '학부모에게 공개한 앨범만 공유할 수 있어요');
+    });
+
+    it('복사가 막힌 브라우저에서는 주소를 그대로 보여 준다', async () => {
+      copyToClipboard.mockResolvedValue(false);
+      await renderAlbum(SHARED);
+
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: '공유' })); });
+
+      expect(screen.getByText(`${window.location.origin}/parent/photos/31?invite=inv-tok`)).toBeInTheDocument();
+    });
   });
 
   it('[학부모에게 공개] 는 PATCH {published:true}', async () => {

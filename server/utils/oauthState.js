@@ -5,7 +5,10 @@
  *   - prefer  : 이 브라우저가 마지막으로 쓰던 역할 (로그인할 계정 선택 힌트)
  *   - invite  : 학부모 초대 토큰
  *   - tinvite : 선생님 초대 토큰
- * 세 가지를 운반한다. DB 를 건드리지 않는 순수 함수라 단위 테스트로 고정한다.
+ *   - soft    : invite 가 **사진 폴더 공유 링크**에 실려 온 것 (docs/photo-menu FR-518).
+ *               초대 링크와 달리 "가입할 수 있으면 가입, 아니면 그냥 로그인" 이다 —
+ *               토큰이 죽었어도 로그인을 막지 않고, 선생님·관리자 계정만 있는 사람을 학부모로 만들지 않는다.
+ * 를 운반한다. DB 를 건드리지 않는 순수 함수라 단위 테스트로 고정한다.
  */
 
 export const ROLES = ['admin', 'user', 'parent'];
@@ -19,12 +22,14 @@ const STATE_VERSION = 1;
  * 값이 하나도 없으면 undefined 를 돌려준다 → 호출부가 state 자체를 생략해
  * 지금까지와 완전히 같은 인가 URL 이 만들어진다.
  */
-export const encodeState = ({ prefer, invite, tinvite } = {}) => {
+export const encodeState = ({ prefer, invite, tinvite, soft } = {}) => {
   const payload = { v: STATE_VERSION };
 
   if (ROLES.includes(prefer)) payload.p = prefer;
   if (invite) payload.i = String(invite);
   if (tinvite) payload.t = String(tinvite);
+  // soft 는 invite 를 꾸미는 값이다 — invite 없이 혼자서는 뜻이 없다
+  if (invite && soft) payload.s = 1;
 
   if (Object.keys(payload).length === 1) return undefined;
 
@@ -34,7 +39,7 @@ export const encodeState = ({ prefer, invite, tinvite } = {}) => {
 /**
  * 하위 호환 (FR-307):
  *   - 빈 값        → {} (힌트도 초대도 없음)
- *   - 우리 포맷    → { prefer, invite, tinvite }
+ *   - 우리 포맷    → { prefer, invite, tinvite, soft }
  *   - 그 밖의 문자열 → 옛 클라이언트가 보낸 **학부모 초대 토큰 원문**으로 본다
  */
 export const decodeState = (raw) => {
@@ -52,6 +57,7 @@ export const decodeState = (raw) => {
     if (ROLES.includes(parsed.p)) out.prefer = parsed.p;
     if (parsed.i) out.invite = String(parsed.i);
     if (parsed.t) out.tinvite = String(parsed.t);
+    if (parsed.i && parsed.s) out.soft = true;
     return out;
   } catch {
     // base64 도 JSON 도 아니면 옛 초대 토큰이다

@@ -255,6 +255,29 @@ await pool.query(
   [parentMulti.id, teacher2.id, studentB.id, studentB.name, studentB.birthdate, now]
 );
 
+/* 사진 폴더 공유 링크(docs/photo-menu FR-518)용 학부모 — **두 번째 선생님 쪽으로만** 가입해 있다.
+   첫 번째 선생님이 보낸 사진 링크(초대 포함)를 열면 그 선생님과 연결된 뒤 사진이 열려야 한다.
+   다른 시나리오의 학부모를 건드리지 않게 따로 둔다(연결이 늘어나면 그 학부모의 화면이 달라진다). */
+const p3 = await pool.query(
+  `INSERT INTO users (username, password, role, "createdAt", "kakaoId") VALUES ($1,$2,'parent',$3,$4) RETURNING id, username, role`,
+  [`e2e다른반학부모_${stamp}`, parentPw, now, `e2e-kakao-other-${stamp}`]
+);
+const parentOther = p3.rows[0];
+await pool.query(
+  `INSERT INTO parent_accounts ("userId","teacherId","inviteId","createdAt","lastLoginAt") VALUES ($1,$2,$3,$4,$4)`,
+  [parentOther.id, teacher2.id, invB.rows[0].id, now]
+);
+await pool.query(
+  `INSERT INTO parent_teachers ("parentUserId","teacherId","inviteId","createdAt") VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
+  [parentOther.id, teacher2.id, invB.rows[0].id, now]
+);
+// 아이가 하나라도 있어야 온보딩으로 돌려보내지 않는다 (학생과 아직 맞춰지지 않은 상태)
+await pool.query(
+  `INSERT INTO parent_children ("parentUserId","teacherId","studentId","childName","childBirthdate",status,"createdAt")
+   VALUES ($1,$2,NULL,$3,'2019-03-03','pending',$4)`,
+  [parentOther.id, teacher2.id, `다른반아이${stamp}`, now]
+);
+
 /* 관리자: 첫 번째 선생님과 **같은 카카오 계정** 을 쓴다.
    역할 전환(관리자 ↔ 선생님)을 카카오 화면 없이 검증하기 위한 구성이다. */
 const sharedKakao = `e2e-shared-${stamp}`;
@@ -280,6 +303,7 @@ const sessions = {
   teacher2Token: sign(teacher2),
   parent: { token: sign(parent), user: { id: parent.id, username: parent.username, role: 'parent' } },
   parentMulti: { token: sign(parentMulti), user: { id: parentMulti.id, username: parentMulti.username, role: 'parent' } },
+  parentOther: { token: sign(parentOther), user: { id: parentOther.id, username: parentOther.username, role: 'parent' } },
   admin: { token: sign(adminUser), user: { id: adminUser.id, username: adminUser.username, role: 'admin' } },
   teacher2: { id: teacher2.id, username: teacher2.username, displayName: teacher2DisplayName, invite: invB.rows[0].token, eventId: eventB.rows[0].id },
   teacherInvite: { id: tinv.rows[0].id, token: tinv.rows[0].token },

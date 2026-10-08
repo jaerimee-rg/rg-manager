@@ -10,6 +10,7 @@ import { getAccessToken } from '../services/driveAccess.js';
 import { sanitizeFolderName, folderNameFromEvent, MAX_FILES_PER_UPLOAD } from '../utils/mediaValidation.js';
 import { canUpload, canManageAlbum, canDeleteMedia, reasonMessage, isValidAudience, isPhotoFolder } from '../utils/albumAccess.js';
 import { toTeacherMedia } from '../utils/mediaSerializer.js';
+import { sharePathFor } from '../services/albumShare.js';
 
 /**
  * 선생님의 앨범 관리. 이벤트 소유자만 들어온다.
@@ -63,7 +64,10 @@ export const getAlbum = async (req, res) => {
     // 자동 태그가 예전 규칙으로 계산된 앨범이면 여기서 다시 매칭한다 (개수·후보 수가 맞게)
     await albumService.ensureAlbumsMatched(event);
 
-    const { account, driveStatus, foreignAccount } = await driveStatusOf(event);
+    const [{ account, driveStatus, foreignAccount }, sharePath] = await Promise.all([
+      driveStatusOf(event),
+      sharePathFor(event)
+    ]);
     const payload = {
       eventId: event.id,
       eventType: event.type,
@@ -78,6 +82,8 @@ export const getAlbum = async (req, res) => {
       published: event.albumPublished === true,
       audience: event.albumAudience || 'participants',
       publishedAt: event.albumPublishedAt || null,
+      // 학부모에게 보낼 링크 (FR-518) — 앨범 주소 + 이 선생님의 학부모 초대 토큰 (services/albumShare)
+      sharePath,
       defaultFolderName: folderNameFromEvent(event),
       expectedFolderName: folderNameFromEvent(event),
       viewerCounts: { participants: 0, all: 0 },

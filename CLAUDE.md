@@ -52,8 +52,8 @@ Client and server have **separate** Jest setups and are run from their own direc
 there is no root `package.json`, so there is no one command that runs everything.
 
 ```bash
-cd client && npm test          # jest — 1140 tests / 83 suites
-cd server && npm test          # 1217 tests / 57 suites
+cd client && npm test          # jest — 1206 tests / 87 suites
+cd server && npm test          # 1273 tests / 60 suites
 ```
 
 - **The server suite is ESM** (`"type": "module"` + `transform: {}`, i.e. no Babel) and only
@@ -452,6 +452,19 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   `parentAwareDisplayNameSql('u','pa')` (parent name → `users.displayName` → username) and
   `mediaSerializer.uploaderNameOf` drops placeholder ids (falls back to 학부모/선생님). Parents still never get
   uploader names (`toParentMedia` whitelist).
+- **Album share link** (docs/photo-menu FR-518) = the parent album URL **plus the album owner's parent-invite
+  token**: `/parent/photos/<eventId>?invite=<token>`, built server-side by `services/albumShare.sharePathFor` and
+  returned as `sharePath` to the teacher (`GET /api/events/:id/album`) **and to any parent who can view the album**
+  (`GET /api/parent/events/:id/media`) — parents re-share it from the icon at the top right of the album screen.
+  Access is still decided by publish state + audience, never by the link. The invite in a share link is **soft**
+  (OAuth state key `s`, `/api/auth/kakao?invite=…&soft=1`): a brand-new Kakao user signs up as that teacher's
+  parent; an existing parent is linked to the teacher; but a dead token **does not block login**, and a Kakao id
+  that only has teacher/admin accounts is **not** turned into a parent (a teacher testing their own link). A real
+  invite link (`/invite/<token>`) keeps its strict behaviour. A logged-in parent who is not yet linked gets a 404
+  on the album; `ParentAlbum` then **asks first** ("○○ 선생님이 공유한 사진이에요 · 연결하고 사진 보기") and only on
+  that click links via `POST /api/parent/teachers` — never link on navigation alone, because linking puts the
+  parent's name and email in that teacher's parent list.
+  Teachers opening `/parent/photos/:id` are redirected to `/photos/:id`.
 - **Albums start private** (`events."albumPublished"` default false). The teacher publishes from the album
   page's 공개 panel, choosing `albumAudience` = `participants` (confirmed parents, default) or `all` (every
   linked parent); `albumPublishedAt` keeps the first publish. A published album shows in the parent 사진 tab

@@ -94,6 +94,19 @@ export const returnPathFor = (role, path) => {
 /** 공유받은 이벤트 링크인가 — 로그인 화면의 안내 문구용 */
 export const isEventSharePath = (path) => /^\/parent\/events\/\d+(\?.*)?$/.test(String(path ?? ''));
 
+/**
+ * 공유받은 사진 폴더 링크인가 (docs/photo-menu FR-518) — `/parent/photos/34?invite=<token>`.
+ * → { eventId, invite } (invite 는 없을 수 있다) | null
+ * 로그인 화면이 안내 문구를 고르고, 카카오 로그인에 그 초대를 실어 보낼 때 쓴다.
+ */
+export const albumShareOf = (path) => {
+  const match = /^\/parent\/photos\/(\d+)(?:\?(.*))?$/.exec(String(path ?? ''));
+  if (!match) return null;
+  const invite = new URLSearchParams(match[2] || '').get('invite');
+  return { eventId: Number(match[1]), invite: invite ? invite.trim() || null : null };
+};
+
 export default {
-  isSafeReturnPath, saveReturnTo, clearReturnTo, peekReturnTo, consumeReturnTo, returnPathFor, isEventSharePath
+  isSafeReturnPath, saveReturnTo, clearReturnTo, peekReturnTo, consumeReturnTo, returnPathFor, isEventSharePath,
+  albumShareOf
 };

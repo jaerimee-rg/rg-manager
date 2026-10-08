@@ -1,11 +1,13 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ParentLayout from '../../components/parent/ParentLayout';
-import { Button, EmptyState, Spinner } from '../../components/ui';
+import { Button, EmptyState, IconButton, Spinner } from '../../components/ui';
 import MediaGrid from '../../components/album/MediaGrid';
 import MediaViewer from '../../components/album/MediaViewer';
 import UploadSheet from '../../components/album/UploadSheet';
 import { fetchWithAuth } from '../../utils/api';
+import { copyToClipboard } from '../../utils/copyToClipboard';
+import { albumShareUrl } from '../../utils/albumShare';
 import { applyTypeFilter, countsOf, formatTime, uploaderLabel } from '../../utils/albumFilter';
 
 const TYPE_FILTERS = [
@@ -29,8 +31,16 @@ function ParentAlbum() {
   const [denied, setDenied] = useState(null);
   const [deniedReason, setDeniedReason] = useState(null);
   // 이벤트 상세의 사진 칸에서 사진을 누르면 ?open=<id> 로 와서 그 사진이 바로 크게 열린다 (docs/photo-menu FR-545)
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [openId] = useState(() => Number(searchParams.get('open')) || null);
+  /* 선생님이 보낸 사진 폴더 링크에는 그 선생님의 초대가 실려 있다 (`?invite=`, docs/photo-menu FR-518).
+     이 선생님과 아직 연결되지 않은 학부모(다른 선생님 쪽으로만 가입)는 앨범이 404 다. 그때는 **먼저 묻는다** —
+     "○○ 선생님이 공유한 사진이에요. 연결하고 볼까요?" 링크를 눌렀다는 것만으로 연결하지 않는다:
+     연결하면 그 선생님의 학부모 목록에 내 이름이 나타나므로, 누가 보낸 링크든 본인이 눌러야 한다
+     (초대 링크 화면이 버튼을 누르게 하는 것과 같은 이유). 이미 연결된 학부모에게는 쓰이지 않는다. */
+  const shareInvite = useRef(searchParams.get('invite') || null);
+  const [linkOffer, setLinkOffer] = useState(null);   // { invite, teacherName } — 연결할지 묻는 중
+  const [linking, setLinking] = useState(false);
   const [mineOnly, setMineOnly] = useState(false);
   const [childId, setChildId] = useState(null);
   const [typeFilter, setTypeFilter] = useState('all');
@@ -45,6 +55,20 @@ function ParentAlbum() {
       if (mineOnly && childId) params.set('studentId', String(childId));
 
       const response = await fetchWithAuth(`/api/parent/events/${eventId}/media?${params.toString()}`);
+
+      if (response.status === 404 && shareInvite.current) {
+        const invite = shareInvite.current;
+        shareInvite.current = null;
+        // 누구의 초대인지 읽어 묻는다. 죽은 초대면 묻지 않고 아래 "불러오지 못했어요" 로 간다.
+        const inviter = await fetch(`/api/invite/${encodeURIComponent(invite)}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .catch(() => null);
+        if (inviter) {
+          setLinkOffer({ invite, teacherName: inviter.teacherName || '' });
+          return;
+        }
+      }
+
       const payload = await response.json().catch(() => ({}));
 
       if (response.status === 403) {
@@ -66,6 +90,29 @@ function ParentAlbum() {
 
   useEffect(() => { load(); }, [load]);
 
+  // 학부모가 [연결하고 사진 보기] 를 눌렀을 때만 그 선생님과 연결한다
+  const acceptLink = async () => {
+    if (!linkOffer || linking) return;
+    setLinking(true);
+    const linked = await fetchWithAuth('/api/parent/teachers', {
+      method: 'POST',
+      body: JSON.stringify({ invite: linkOffer.invite })
+    }).catch(() => null);
+    setLinking(false);
+    setLinkOffer(null);
+    if (linked?.ok) load();
+    else setDenied('선생님과 연결하지 못했어요.');
+  };
+
+  // 초대 값은 처음 읽을 때만 쓴다 — 다 읽었으면 주소에서 지운다(주소를 다시 공유하거나 새로고침해도 깔끔하게)
+  const settled = Boolean(data) || Boolean(denied);
+  useEffect(() => {
+    if (!settled || !searchParams.has('invite')) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('invite');
+    setSearchParams(next, { replace: true });
+  }, [settled, searchParams, setSearchParams]);
+
   // ?open= 은 처음 한 번만 — 목록에 그 사진이 있으면 뷰어로 연다
   const [openedFromLink, setOpenedFromLink] = useState(false);
   useEffect(() => {
@@ -77,6 +124,14 @@ function ParentAlbum() {
   const toast = (text) => {
     setMessage(text);
     setTimeout(() => setMessage(''), 2600);
+  };
+
+  /* 다른 학부모에게 보낼 링크 (docs/photo-menu FR-518) — 선생님이 보내는 것과 같은 링크다(서버가 준 sharePath).
+     받은 사람은 로그인하면 이 사진이 열리고, 처음이면 가입부터 한다. 누른 그 자리에서 복사한다. */
+  const share = async () => {
+    const url = albumShareUrl({ eventId, sharePath: data?.sharePath });
+    const ok = await copyToClipboard(url);
+    toast(ok ? '공유 링크를 복사했어요 · 받은 분이 로그인하면 이 사진이 열려요' : url);
   };
 
   const confirmCandidate = async (mediaId, studentId, confirmed) => {
@@ -112,6 +167,26 @@ function ParentAlbum() {
       toast('지우지 못했어요.');
     }
   };
+
+  // 공유받은 링크의 선생님과 아직 연결되지 않았다 — 연결할지 묻는다 (FR-518)
+  if (linkOffer) {
+    const who = linkOffer.teacherName ? `${linkOffer.teacherName} 선생님` : '다른 선생님';
+    return (
+      <ParentLayout title="사진" back="/parent/photos">
+        <EmptyState
+          icon="image"
+          title={`${who}이 공유한 사진이에요`}
+          description={`아직 ${who}과 연결돼 있지 않아요. 연결하면 사진을 볼 수 있고, 선생님의 학부모 목록에 내 이름이 보여요.`}
+          action={(
+            <>
+              <Button variant="primary" loading={linking} onClick={acceptLink}>연결하고 사진 보기</Button>
+              <Button disabled={linking} onClick={() => navigate('/parent/photos')}>취소</Button>
+            </>
+          )}
+        />
+      </ParentLayout>
+    );
+  }
 
   // 선생님이 비공개로 둔(또는 돌린) 앨범 — 링크를 갖고 있던 학부모가 직접 열었을 때 (docs/photo-menu FR-541)
   if (denied && deniedReason === 'album_private') {
@@ -163,7 +238,11 @@ function ParentAlbum() {
   const uploadOpen = data.event?.uploadOpen;
 
   return (
-    <ParentLayout title={data.event?.title || '사진'} subtitle={`${data.event?.date || ''} · 사진 ${counts.photo} · 영상 ${counts.video}`}>
+    <ParentLayout
+      title={data.event?.title || '사진'}
+      subtitle={`${data.event?.date || ''} · 사진 ${counts.photo} · 영상 ${counts.video}`}
+      action={<IconButton icon="link" label="공유 링크 복사" onClick={share} />}
+    >
       <button
         type="button"
         onClick={() => setMineOnly((prev) => !prev)}

@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import { formatSize } from '../../utils/mediaUrls';
+import { copyToClipboard } from '../../utils/copyToClipboard';
+import { albumShareUrl, albumShareToast, canShareAlbum, ALBUM_SHARE_DISABLED_HINT } from '../../utils/albumShare';
 import UploadSheet from '../../components/album/UploadSheet';
 import MediaViewer from '../../components/album/MediaViewer';
 import {
@@ -164,6 +166,27 @@ function PhotoAlbum() {
     <Button variant="primary" icon="upload" disabled={locked} onClick={() => setUploading(true)}>사진 올리기</Button>
   );
 
+  // 학부모에게 보낼 링크 (FR-518) — 누른 그 자리에서 복사한다(주소는 앨범을 읽을 때 받아 둔 sharePath)
+  const shareable = canShareAlbum(album);
+  const share = async () => {
+    const url = albumShareUrl(album);
+    const ok = await copyToClipboard(url);
+    showToast(ok ? albumShareToast(album) : url);
+  };
+  const headerActions = (
+    <>
+      <Button
+        icon="link"
+        disabled={!shareable}
+        title={shareable ? '학부모에게 보낼 링크 복사' : ALBUM_SHARE_DISABLED_HINT}
+        onClick={share}
+      >
+        공유
+      </Button>
+      {uploadButton}
+    </>
+  );
+
   return (
     <>
       <PageHeader
@@ -171,7 +194,7 @@ function PhotoAlbum() {
         description={`${formatEventDate(album.eventDate)} · ${typeLabel(album.eventType)}`}
         onBack={() => navigate('/photos')}
         backLabel="사진"
-        actions={uploadButton}
+        actions={headerActions}
       />
 
       {problem && (
