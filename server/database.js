@@ -725,6 +725,11 @@ const initDatabase = async () => {
     await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumStatus" TEXT NOT NULL DEFAULT 'none'`);
     await client.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumCreatedAt" TEXT');
     await client.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumCheckedAt" TEXT');
+    // 사진 메뉴 (docs/photo-menu) — 앨범은 비공개로 시작하고, 선생님이 공개해야 학부모에게 보인다.
+    // 공개 범위: participants(참가 확정 학부모) | all(선생님과 연결된 학부모 전체)
+    await client.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumPublished" BOOLEAN NOT NULL DEFAULT FALSE');
+    await client.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumAudience" TEXT NOT NULL DEFAULT 'participants'`);
+    await client.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumPublishedAt" TEXT');
 
     // 사진·영상 1개. 바이트는 Drive 에 있고 여기에는 파일 id 와 메타만 둔다.
     await client.query(`

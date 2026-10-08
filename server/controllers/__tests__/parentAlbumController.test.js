@@ -73,16 +73,18 @@ const ChildFaceProfile = (await import('../../models/ChildFaceProfile.js')).defa
 const GoogleDriveAccount = (await import('../../models/GoogleDriveAccount.js')).default;
 const albumService = (await import('../../services/albumService.js')).default;
 const {
-  listAlbums, listMedia, createUploads, deleteMedia, confirmTag, addFace, deleteFace
+  listAlbums, listMedia, createUploads, deleteMedia, confirmTag, addFace, deleteFace, uploadLabelChild
 } = await import('../parentAlbumController.js');
 
 const parent = { id: 42, username: '하은엄마', role: 'parent' };
 const DESCRIPTOR = new Array(128).fill(0.1);
 
+// 기본은 "선생님이 공개한 앨범, 공개 범위 = 참가 확정 학부모" (docs/photo-menu)
 const event = (overrides = {}) => ({
   id: 3, userId: 7, type: 'competition', title: '서울시 대회', date: '2026-09-12',
   driveFolderId: 'folder-1', driveAccountId: 11, albumStatus: 'ready',
   albumUploadOpen: true, isPublished: true, competitionId: 21,
+  albumPublished: true, albumAudience: 'participants',
   ...overrides
 });
 
@@ -155,6 +157,37 @@ describe('listAlbums — 확정된 이벤트만 보인다', () => {
     await listAlbums(req, res);
 
     expect(res.json).toHaveBeenCalledWith({ items: [] });
+  });
+
+  it('공개 범위가 모든 학부모인 앨범은 확정 없이도 보인다', async () => {
+    Event.listWithAlbumsForParent.mockResolvedValue([event({ albumAudience: 'all', type: 'special', competitionId: null })]);
+
+    await listAlbums(req, res);
+
+    expect(res.json.mock.calls[0][0].items).toHaveLength(1);
+    expect(EventRegistration.listForStudents).not.toHaveBeenCalled();
+  });
+});
+
+describe('listMedia — 공개 단계 (photo-menu FR-541)', () => {
+  it('선생님이 공개하지 않은 앨범은 확정 학부모에게도 403 album_private', async () => {
+    makeConfirmed();
+    Event.getPublishedForParent.mockResolvedValue(event({ albumPublished: false }));
+
+    await listMedia(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json.mock.calls[0][0]).toMatchObject({ reason: 'album_private', error: expect.stringContaining('공개하지 않은') });
+    expect(EventMedia.list).not.toHaveBeenCalled();
+  });
+
+  it('공개 범위가 모든 학부모면 미확정 학부모도 본다', async () => {
+    Event.getPublishedForParent.mockResolvedValue(event({ albumAudience: 'all' }));
+
+    await listMedia(req, res);
+
+    expect(res.status).not.toHaveBeenCalledWith(403);
+    expect(res.json.mock.calls[0][0].items).toEqual([]);
   });
 });
 
@@ -274,6 +307,54 @@ describe('createUploads', () => {
     await createUploads(req, res);
 
     expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  it('비공개 앨범에는 올릴 수 없다', async () => {
+    makeConfirmed();
+    Event.getPublishedForParent.mockResolvedValue(event({ albumPublished: false }));
+    req.body = { files: [{ name: 'a.jpg', size: 100 }] };
+
+    await createUploads(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json.mock.calls[0][0].reason).toBe('album_private');
+    expect(albumService.createUploadSessions).not.toHaveBeenCalled();
+  });
+
+  it('모든 학부모 범위면 미확정 학부모도 올리고, 파일 이름에는 그 선생님 반 아이 이름을 쓴다', async () => {
+    Event.getPublishedForParent.mockResolvedValue(event({ albumAudience: 'all' }));
+    ParentChild.listByParent.mockResolvedValue([
+      child({ id: 101, teacherId: 9, studentId: 6, studentName: '다른반아이' }),
+      child()
+    ]);
+    req.body = { files: [{ name: 'a.jpg', size: 100 }] };
+
+    await createUploads(req, res);
+
+    expect(albumService.createUploadSessions).toHaveBeenCalledWith(
+      7, expect.anything(), req.body.files,
+      expect.objectContaining({ role: 'parent', label: '김하은', studentId: 5 })
+    );
+  });
+});
+
+describe('uploadLabelChild', () => {
+  const kids = [
+    { studentId: 6, teacherId: 9, studentName: '다른반' },
+    { studentId: 5, teacherId: 7, studentName: '김하은' },
+    { studentId: 8, teacherId: 7, studentName: '김하준' }
+  ];
+
+  it('확정된 아이가 먼저다', () => {
+    expect(uploadLabelChild(kids, [8], 7).studentId).toBe(8);
+  });
+
+  it('확정된 아이가 없으면 그 선생님 반의 첫 아이', () => {
+    expect(uploadLabelChild(kids, [], 7).studentId).toBe(5);
+  });
+
+  it('그 선생님 반 아이도 없으면 null (이름은 "학부모")', () => {
+    expect(uploadLabelChild(kids, [], 99)).toBeNull();
   });
 });
 

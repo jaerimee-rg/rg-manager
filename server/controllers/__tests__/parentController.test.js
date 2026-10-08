@@ -46,6 +46,17 @@ jest.unstable_mockModule('../../models/EventRegistration.js', () => ({
   }
 }));
 
+// 이벤트 상세의 사진 칸 (docs/photo-menu FR-545)
+jest.unstable_mockModule('../../models/EventMedia.js', () => ({
+  default: { summaries: jest.fn(), list: jest.fn() }
+}));
+jest.unstable_mockModule('../../models/MediaTag.js', () => ({
+  default: { listByMediaIds: jest.fn() }
+}));
+jest.unstable_mockModule('../../models/Competition.js', () => ({
+  default: { getStudentIds: jest.fn() }
+}));
+
 // 알림은 신청이 저장된 뒤에 나가고 실패해도 응답을 막지 않는다.
 jest.unstable_mockModule('../../utils/kakaoMessage.js', () => ({
   sendEventRegistrationKakaoMessage: jest.fn().mockResolvedValue({ success: true })
@@ -59,6 +70,9 @@ const Student = (await import('../../models/Student.js')).default;
 const Event = (await import('../../models/Event.js')).default;
 const EventRegistration = (await import('../../models/EventRegistration.js')).default;
 const { sendEventRegistrationKakaoMessage } = await import('../../utils/kakaoMessage.js');
+const EventMedia = (await import('../../models/EventMedia.js')).default;
+const MediaTag = (await import('../../models/MediaTag.js')).default;
+const Competition = (await import('../../models/Competition.js')).default;
 const { getMe, addChildren, updateName, getEvents, getEvent, registerChild, cancelChild, addTeacher } =
   await import('../parentController.js');
 
@@ -452,6 +466,96 @@ describe('parentController', () => {
       expect(res.json.mock.calls[1][0]).toEqual(expect.objectContaining({
         address: null, latitude: null, longitude: null
       }));
+    });
+
+    describe('사진 칸 — 이벤트에 연결된 사진 (docs/photo-menu FR-545)', () => {
+      const albumEvent = (overrides = {}) => ({
+        ...openEvent, competitionId: null, driveFolderId: 'folder-1', albumUploadOpen: true,
+        albumPublished: true, albumAudience: 'participants', ...overrides
+      });
+      const photo = { id: 11, kind: 'image', driveFileId: 'drive-11', originalName: 'IMG.jpg', driveName: '20261012_하은_IMG.jpg', takenAt: 't', uploaderRole: 'teacher', uploaderUserId: 7 };
+
+      beforeEach(() => {
+        req.params.id = '5';
+        EventMedia.summaries.mockResolvedValue({ 5: { images: 41, videos: 3, mine: 12, previews: ['drive-11'] } });
+        EventMedia.list.mockResolvedValue([photo]);
+        MediaTag.listByMediaIds.mockResolvedValue({});
+        Competition.getStudentIds.mockResolvedValue([]);
+      });
+      const confirmMine = () => EventRegistration.listForStudents.mockResolvedValue([
+        { eventId: 5, studentId: 100, status: 'confirmed', optionIds: [] }
+      ]);
+
+      it('공개 + 참가 확정이면 최근 사진 6장과 개수를 준다 — 학부모용 화이트리스트로', async () => {
+        confirmMine();
+        Event.getPublishedForParent.mockResolvedValue(albumEvent());
+
+        await getEvent(req, res);
+
+        const { album } = res.json.mock.calls[0][0];
+        expect(album).toMatchObject({ available: true, counts: { images: 41, videos: 3, mine: 12 }, uploadOpen: true });
+        expect(album.items).toHaveLength(1);
+        expect(album.items[0]).toMatchObject({ id: 11, kind: 'image', uploader: 'teacher' });
+        expect(album.items[0].thumbnailUrl).toContain('drive-11');
+        // Drive 파일 이름(아이 이름이 들어 있다)은 나가지 않는다
+        expect(JSON.stringify(album)).not.toContain('하은');
+        expect(EventMedia.list).toHaveBeenCalledWith(5, { limit: 6, uploaderUserId: 20 });
+      });
+
+      it('선생님이 공개하지 않은 앨범은 확정이어도 album:null — 앨범이 있다는 사실도 알리지 않는다', async () => {
+        confirmMine();
+        Event.getPublishedForParent.mockResolvedValue(albumEvent({ albumPublished: false }));
+
+        await getEvent(req, res);
+
+        expect(res.json.mock.calls[0][0].album).toBeNull();
+        expect(EventMedia.list).not.toHaveBeenCalled();
+      });
+
+      it('참가 확정 범위인데 내 아이가 확정이 아니면 album:null', async () => {
+        Event.getPublishedForParent.mockResolvedValue(albumEvent());
+
+        await getEvent(req, res);
+
+        expect(res.json.mock.calls[0][0].album).toBeNull();
+      });
+
+      it('선생님이 참가 학생으로 직접 넣은 아이도 확정으로 본다', async () => {
+        Competition.getStudentIds.mockResolvedValue([100]);
+        Event.getPublishedForParent.mockResolvedValue(albumEvent({ competitionId: 99 }));
+
+        await getEvent(req, res);
+
+        expect(res.json.mock.calls[0][0].album).toMatchObject({ available: true });
+      });
+
+      it('모든 학부모 범위면 확정 없이도 보인다', async () => {
+        Event.getPublishedForParent.mockResolvedValue(albumEvent({ albumAudience: 'all' }));
+
+        await getEvent(req, res);
+
+        expect(res.json.mock.calls[0][0].album).toMatchObject({ available: true });
+        expect(Competition.getStudentIds).not.toHaveBeenCalled();
+      });
+
+      it('앨범이 없으면 album:null', async () => {
+        Event.getPublishedForParent.mockResolvedValue(albumEvent({ driveFolderId: null }));
+
+        await getEvent(req, res);
+
+        expect(res.json.mock.calls[0][0].album).toBeNull();
+      });
+
+      it('사진 조회가 실패해도 상세는 뜨고 album 만 비운다', async () => {
+        Event.getPublishedForParent.mockResolvedValue(albumEvent({ albumAudience: 'all' }));
+        EventMedia.list.mockRejectedValue(new Error('DB 오류'));
+
+        await getEvent(req, res);
+
+        const payload = res.json.mock.calls[0][0];
+        expect(payload.album).toBeNull();
+        expect(payload.options).toHaveLength(2);
+      });
     });
 
     describe('신청한 학생 명단 (registrations)', () => {

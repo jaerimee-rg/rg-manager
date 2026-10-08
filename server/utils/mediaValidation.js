@@ -106,6 +106,24 @@ export const defaultFolderName = ({ date, title }) => {
   return name.slice(0, FOLDER_NAME_MAX);
 };
 
+/**
+ * 앨범 폴더 이름은 언제나 이벤트에서 나온다: `YYYY-MM-DD 이벤트명` (docs/photo-menu 3.2, D-3).
+ *
+ * 이벤트 제목에는 Drive 가 싫어하는 문자(\ / : * ? " < > |)가 들어갈 수 있다.
+ * sanitizeFolderName 처럼 거절하면 그 이벤트는 앨범을 영영 못 만들므로, 여기서는 공백으로 바꾼다.
+ * 결과는 언제나 sanitizeFolderName 을 통과한다.
+ */
+export const folderNameFromEvent = ({ date, title } = {}) => {
+  const day = String(date || '').slice(0, 10);
+  const cleanTitle = String(title || '')
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .replace(/[\\/:*?"<>|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const name = `${day} ${cleanTitle}`.trim().slice(0, FOLDER_NAME_MAX).trim();
+  return name || '앨범';
+};
+
 export default {
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
@@ -118,5 +136,6 @@ export default {
   validateUpload,
   buildDriveName,
   sanitizeFolderName,
-  defaultFolderName
+  defaultFolderName,
+  folderNameFromEvent
 };

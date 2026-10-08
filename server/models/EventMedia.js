@@ -172,6 +172,8 @@ class EventMedia {
          COUNT(*) FILTER (WHERE kind = 'image' AND status = 'ready' AND NOT "isHidden")::int AS images,
          COUNT(*) FILTER (WHERE kind = 'video' AND status = 'ready' AND NOT "isHidden")::int AS videos,
          COUNT(*) FILTER (WHERE status = 'ready' AND "isHidden")::int AS hidden,
+         COUNT(*) FILTER (WHERE status = 'ready' AND "uploaderRole" = 'parent')::int AS "fromParents",
+         COUNT(*) FILTER (WHERE status = 'ready' AND "uploaderRole" = 'teacher')::int AS "fromTeacher",
          COUNT(*) FILTER (WHERE status = 'ready' AND kind = 'image'
                             AND "faceStatus" IN ('pending','failed','skipped'))::int AS unanalyzed,
          COALESCE(SUM(size) FILTER (WHERE status = 'ready'), 0)::bigint AS "totalSize"
@@ -198,6 +200,8 @@ class EventMedia {
       images: row.images || 0,
       videos: row.videos || 0,
       hidden: row.hidden || 0,
+      fromParents: row.fromParents || 0,
+      fromTeacher: row.fromTeacher || 0,
       unanalyzed: row.unanalyzed || 0,
       totalSize: Number(row.totalSize || 0),
       untagged: tagged.rows[0]?.untagged || 0,
@@ -246,6 +250,44 @@ class EventMedia {
     for (const id of eventIds) out[id] = { images: 0, videos: 0, mine: 0, previews: [] };
     for (const row of counts.rows) Object.assign(out[row.eventId], { images: row.images, videos: row.videos });
     for (const row of mine.rows) out[row.eventId].mine = row.mine;
+    for (const row of previews.rows) out[row.eventId].previews.push(row.driveFileId);
+    return out;
+  }
+
+  /**
+   * 선생님 사진 목록의 카드 요약 (docs/photo-menu 5.1).
+   * 학부모용 summaries 와 달리 숨긴 수·학부모가 올린 수를 함께 센다. 썸네일은 숨기지 않은 것 4장.
+   */
+  static async summariesForTeacher(eventIds) {
+    if (!eventIds?.length) return {};
+
+    const counts = await pool.query(
+      `SELECT "eventId",
+              COUNT(*) FILTER (WHERE kind = 'image' AND NOT "isHidden")::int AS images,
+              COUNT(*) FILTER (WHERE kind = 'video' AND NOT "isHidden")::int AS videos,
+              COUNT(*) FILTER (WHERE "isHidden")::int AS hidden,
+              COUNT(*) FILTER (WHERE "uploaderRole" = 'parent')::int AS "fromParents"
+         FROM event_media
+        WHERE "eventId" = ANY($1::int[]) AND status = 'ready'
+        GROUP BY "eventId"`,
+      [eventIds]
+    );
+
+    const previews = await pool.query(
+      `SELECT "eventId", "driveFileId" FROM (
+         SELECT "eventId", "driveFileId",
+                ROW_NUMBER() OVER (PARTITION BY "eventId" ORDER BY "takenAt" DESC, id DESC) AS rn
+           FROM event_media
+          WHERE "eventId" = ANY($1::int[]) AND status = 'ready' AND NOT "isHidden" AND "driveFileId" IS NOT NULL
+       ) ranked WHERE rn <= 4`,
+      [eventIds]
+    );
+
+    const out = {};
+    for (const id of eventIds) out[id] = { images: 0, videos: 0, hidden: 0, fromParents: 0, previews: [] };
+    for (const row of counts.rows) {
+      Object.assign(out[row.eventId], { images: row.images, videos: row.videos, hidden: row.hidden, fromParents: row.fromParents });
+    }
     for (const row of previews.rows) out[row.eventId].previews.push(row.driveFileId);
     return out;
   }

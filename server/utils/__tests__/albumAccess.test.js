@@ -5,7 +5,9 @@ import {
   canUpload,
   canDeleteMedia,
   canManageAlbum,
-  reasonMessage
+  reasonMessage,
+  inAudience,
+  isValidAudience
 } from '../albumAccess.js';
 
 describe('isConfirmedParent (FR-200)', () => {
@@ -50,12 +52,13 @@ describe('canViewAlbum', () => {
     expect(canViewAlbum({ isOwner: true, isPublished: false, hasAlbum: true }).ok).toBe(true);
   });
 
-  it('확정 학부모는 공개된 이벤트의 앨범을 본다', () => {
-    expect(canViewAlbum({ isConfirmed: true, isPublished: true, hasAlbum: true }).ok).toBe(true);
+  it('확정 학부모는 공개된 이벤트의 공개 앨범을 본다', () => {
+    expect(canViewAlbum({ isConfirmed: true, isPublished: true, hasAlbum: true, albumPublished: true }).ok).toBe(true);
   });
 
-  it('미확정 학부모는 막힌다', () => {
-    expect(canViewAlbum({ isConfirmed: false, hasAlbum: true })).toEqual({ ok: false, reason: 'not_confirmed' });
+  it('미확정 학부모는 막힌다 (공개 범위 = 참가 확정 학부모)', () => {
+    expect(canViewAlbum({ isConfirmed: false, hasAlbum: true, albumPublished: true }))
+      .toEqual({ ok: false, reason: 'not_confirmed' });
   });
 
   it('비공개 이벤트는 확정 학부모에게도 보이지 않는다 (FR-203)', () => {
@@ -68,8 +71,83 @@ describe('canViewAlbum', () => {
   });
 });
 
+// docs/photo-menu 3.4 의 표를 칸마다 고정한다.
+describe('canViewAlbum — 공개 단계 (photo-menu FR-540~541)', () => {
+  const parent = (overrides) => ({ isPublished: true, hasAlbum: true, ...overrides });
+
+  it('선생님(주인)은 비공개 앨범도 본다', () => {
+    expect(canViewAlbum({ isOwner: true, hasAlbum: true, albumPublished: false }).ok).toBe(true);
+  });
+
+  it('비공개 앨범은 확정 학부모에게도 막힌다', () => {
+    expect(canViewAlbum(parent({ isConfirmed: true, albumPublished: false })))
+      .toEqual({ ok: false, reason: 'album_private' });
+  });
+
+  it('비공개는 확정 여부를 묻기 전에 막는다 — 미확정 학부모에게도 album_private', () => {
+    expect(canViewAlbum(parent({ isConfirmed: false, albumPublished: false })).reason).toBe('album_private');
+  });
+
+  it('공개 여부를 빠뜨리면 닫힌 쪽(비공개)으로 본다', () => {
+    expect(canViewAlbum(parent({ isConfirmed: true })).reason).toBe('album_private');
+  });
+
+  it('범위가 참가 확정 학부모면 확정 학부모만 본다', () => {
+    expect(canViewAlbum(parent({ isConfirmed: true, albumPublished: true, audience: 'participants' })).ok).toBe(true);
+    expect(canViewAlbum(parent({ isConfirmed: false, albumPublished: true, audience: 'participants' })).reason)
+      .toBe('not_confirmed');
+  });
+
+  it('범위가 모든 학부모면 미확정 학부모도 본다', () => {
+    expect(canViewAlbum(parent({ isConfirmed: false, albumPublished: true, audience: 'all' })).ok).toBe(true);
+  });
+
+  it('이벤트가 비공개면 앨범을 공개해도 막힌다 — not_published 가 album_private 보다 먼저', () => {
+    expect(canViewAlbum({ isConfirmed: true, isPublished: false, hasAlbum: true, albumPublished: false }).reason)
+      .toBe('not_published');
+    expect(canViewAlbum({ isConfirmed: true, isPublished: false, hasAlbum: true, albumPublished: true, audience: 'all' }).reason)
+      .toBe('not_published');
+  });
+
+  it('앨범이 없으면 공개 여부와 상관없이 no_album', () => {
+    expect(canViewAlbum({ isConfirmed: true, hasAlbum: false, albumPublished: true }).reason).toBe('no_album');
+  });
+});
+
+describe('inAudience · isValidAudience', () => {
+  it('모든 학부모 범위는 확정 없이도 든다', () => {
+    expect(inAudience({ audience: 'all', isConfirmed: false })).toBe(true);
+    expect(inAudience({ audience: 'participants', isConfirmed: false })).toBe(false);
+    expect(inAudience({ audience: 'participants', isConfirmed: true })).toBe(true);
+  });
+
+  it('범위 값은 두 가지만 받는다', () => {
+    expect(isValidAudience('participants')).toBe(true);
+    expect(isValidAudience('all')).toBe(true);
+    expect(isValidAudience('everyone')).toBe(false);
+    expect(isValidAudience(undefined)).toBe(false);
+  });
+});
+
 describe('canUpload', () => {
-  const base = { hasAlbum: true, albumUploadOpen: true, albumStatus: 'ready', driveStatus: 'connected' };
+  const base = { hasAlbum: true, albumUploadOpen: true, albumStatus: 'ready', driveStatus: 'connected', albumPublished: true };
+
+  it('선생님은 비공개 앨범에도 올린다', () => {
+    expect(canUpload({ ...base, isOwner: true, albumPublished: false }).ok).toBe(true);
+  });
+
+  it('학부모는 비공개 앨범에 올릴 수 없다', () => {
+    expect(canUpload({ ...base, isConfirmed: true, albumPublished: false }))
+      .toEqual({ ok: false, reason: 'album_private' });
+  });
+
+  it('범위가 모든 학부모면 미확정 학부모도 올린다', () => {
+    expect(canUpload({ ...base, isConfirmed: false, audience: 'all' }).ok).toBe(true);
+  });
+
+  it('범위가 모든 학부모여도 업로드 받기를 끄면 막힌다', () => {
+    expect(canUpload({ ...base, isConfirmed: false, audience: 'all', albumUploadOpen: false }).reason).toBe('upload_closed');
+  });
 
   it('확정 학부모는 업로드할 수 있다', () => {
     expect(canUpload({ ...base, isConfirmed: true }).ok).toBe(true);
@@ -140,6 +218,7 @@ describe('reasonMessage', () => {
   it('사유마다 화면에 그대로 쓸 한국어를 준다', () => {
     expect(reasonMessage('not_confirmed')).toContain('확정된');
     expect(reasonMessage('upload_closed')).toContain('마감');
+    expect(reasonMessage('album_private')).toContain('공개하지 않은');
   });
 
   it('모르는 사유에도 기본 문구를 준다', () => {

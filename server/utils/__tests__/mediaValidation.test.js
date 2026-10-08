@@ -1,4 +1,5 @@
 import {
+  folderNameFromEvent,
   validateUpload,
   buildDriveName,
   sanitizeFolderName,
@@ -136,5 +137,37 @@ describe('kindFromMime', () => {
     expect(kindFromMime('video/mp4')).toBe('video');
     expect(kindFromMime('application/pdf')).toBeNull();
     expect(kindFromMime(null)).toBeNull();
+  });
+});
+
+
+describe('folderNameFromEvent — 폴더 이름은 이벤트에서 (docs/photo-menu D-3)', () => {
+  it('YYYY-MM-DD 이벤트명', () => {
+    expect(folderNameFromEvent({ date: '2026-10-12', title: '회장배 리듬체조 대회' })).toBe('2026-10-12 회장배 리듬체조 대회');
+  });
+
+  it('Drive 가 싫어하는 문자는 거절하지 않고 공백으로 바꾼다', () => {
+    expect(folderNameFromEvent({ date: '2026-10-12', title: '회장배: 리듬/체조 "대회"?' })).toBe('2026-10-12 회장배 리듬 체조 대회');
+  });
+
+  it('제어 문자는 지우고 공백은 하나로 줄인다', () => {
+    expect(folderNameFromEvent({ date: '2026-10-12', title: '  가을\t\n공개   수업  ' })).toBe('2026-10-12 가을공개 수업');
+  });
+
+  it('100자에서 자른다', () => {
+    const name = folderNameFromEvent({ date: '2026-10-12', title: '가'.repeat(200) });
+    expect(name).toHaveLength(100);
+    expect(name.startsWith('2026-10-12 가')).toBe(true);
+  });
+
+  it('언제나 sanitizeFolderName 을 통과한다', () => {
+    for (const title of ['a\\b', 'a*b', 'a<b>c|d', '   ', '\u0007벨']) {
+      expect(sanitizeFolderName(folderNameFromEvent({ date: '2026-10-12', title })).ok).toBe(true);
+    }
+  });
+
+  it('제목·날짜가 비어도 빈 이름은 내지 않는다', () => {
+    expect(folderNameFromEvent({})).toBe('앨범');
+    expect(folderNameFromEvent({ date: '2026-10-12', title: '' })).toBe('2026-10-12');
   });
 });

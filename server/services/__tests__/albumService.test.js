@@ -6,7 +6,10 @@ jest.unstable_mockModule('../../database.js', () => ({
   default: { connect: jest.fn().mockResolvedValue(mockClient), query: jest.fn().mockResolvedValue({ rows: [{ count: 2 }] }) }
 }));
 jest.unstable_mockModule('../../models/Event.js', () => ({
-  default: { updateAlbum: jest.fn(async (id, fields) => ({ id, ...fields })) }
+  default: {
+    updateAlbum: jest.fn(async (id, fields) => ({ id, ...fields })),
+    countAlbumViewers: jest.fn().mockResolvedValue({ participants: 7, all: 33 })
+  }
 }));
 jest.unstable_mockModule('../../models/EventMedia.js', () => ({
   default: {
@@ -64,12 +67,13 @@ jest.unstable_mockModule('../driveAccess.js', () => ({
   ensureRootFolder: jest.fn().mockResolvedValue({ id: 'root-1', name: 'RG Manager' })
 }));
 
+const Event = (await import('../../models/Event.js')).default;
 const EventMedia = (await import('../../models/EventMedia.js')).default;
 const MediaFace = (await import('../../models/MediaFace.js')).default;
 const MediaTag = (await import('../../models/MediaTag.js')).default;
 const ChildFaceProfile = (await import('../../models/ChildFaceProfile.js')).default;
 const AppSetting = (await import('../../models/AppSetting.js')).default;
-const { createFolder, shareAnyoneReader, getFile, createResumableSession, trashFile, DriveError } =
+const { createFolder, shareAnyoneReader, getFile, createResumableSession, trashFile, renameFile, DriveError } =
   await import('../../utils/googleDrive.js');
 const albumService = (await import('../albumService.js')).default;
 
@@ -341,5 +345,74 @@ describe('deleteMedia', () => {
     await albumService.deleteMedia(7, { id: 55, driveFileId: 'f1' });
 
     expect(EventMedia.delete).toHaveBeenCalledWith(55);
+  });
+});
+
+
+describe('ensureAlbum (docs/photo-menu FR-514)', () => {
+  it('앨범이 있으면 그대로 돌려주고 Drive 를 부르지 않는다', async () => {
+    const ev = event();
+    await expect(albumService.ensureAlbum(7, ev)).resolves.toBe(ev);
+    expect(createFolder).not.toHaveBeenCalled();
+  });
+
+  it('없으면 이벤트 이름 폴더를 만들어 붙인다 — 공개 칸은 건드리지 않는다(비공개로 시작)', async () => {
+    createFolder.mockResolvedValue({ id: 'folder-9', name: '2026-09-12 회장배 대회' });
+
+    const result = await albumService.ensureAlbum(7, event({ driveFolderId: null, title: '회장배 대회' }));
+
+    expect(createFolder).toHaveBeenCalledWith('at', { name: '2026-09-12 회장배 대회', parentId: 'root-1' });
+    expect(result.driveFolderId).toBe('folder-9');
+    const fields = Event.updateAlbum.mock.calls[0][1];
+    expect(fields).not.toHaveProperty('albumPublished');
+  });
+});
+
+describe('syncFolderName (FR-531)', () => {
+  it('제목이 바뀌면 폴더 이름을 이벤트 기준으로 바꾼다', async () => {
+    const before = event({ title: '서울시 대회' });
+    const after = event({ title: '서울시장배 대회' });
+
+    const result = await albumService.syncFolderName(7, before, after);
+
+    expect(renameFile).toHaveBeenCalledWith('at', 'folder-1', '2026-09-12 서울시장배 대회');
+    expect(Event.updateAlbum).toHaveBeenCalledWith(3, { driveFolderName: '2026-09-12 서울시장배 대회' });
+    expect(result).toEqual({ renamed: true, name: '2026-09-12 서울시장배 대회' });
+  });
+
+  it('날짜가 바뀌어도 바꾼다', async () => {
+    await albumService.syncFolderName(7, event({ title: 'A' }), event({ title: 'A', date: '2026-09-13' }));
+    expect(renameFile).toHaveBeenCalledWith('at', 'folder-1', '2026-09-13 A');
+  });
+
+  it('제목·날짜가 그대로면 Drive 를 부르지 않는다', async () => {
+    const result = await albumService.syncFolderName(7, event({ title: 'A', location: '옛 장소' }), event({ title: 'A', location: '새 장소' }));
+    expect(renameFile).not.toHaveBeenCalled();
+    expect(result.renamed).toBe(false);
+  });
+
+  it('앨범이 없으면 아무것도 하지 않는다', async () => {
+    await albumService.syncFolderName(7, event({ driveFolderId: null, title: 'A' }), event({ driveFolderId: null, title: 'B' }));
+    expect(renameFile).not.toHaveBeenCalled();
+  });
+
+  it('Drive 가 실패해도 던지지 않는다 — 이벤트 저장은 이미 끝났다', async () => {
+    renameFile.mockRejectedValueOnce(new DriveError('invalid_grant', '끊김'));
+
+    const result = await albumService.syncFolderName(7, event({ title: 'A' }), event({ title: 'B' }));
+
+    expect(result.renamed).toBe(false);
+    expect(result.error).toBe('끊김');
+  });
+});
+
+describe('countViewers', () => {
+  it('모델 값을 그대로 준다', async () => {
+    await expect(albumService.countViewers(event())).resolves.toEqual({ participants: 7, all: 33 });
+  });
+
+  it('조회가 실패해도 0 명으로 계속 간다(앨범 화면은 떠야 한다)', async () => {
+    Event.countAlbumViewers.mockRejectedValueOnce(new Error('DB 오류'));
+    await expect(albumService.countViewers(event())).resolves.toEqual({ participants: 0, all: 0 });
   });
 });

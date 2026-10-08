@@ -195,7 +195,10 @@ class Event {
 
   /** 앨범 폴더를 붙이거나 이름·상태를 고친다. 앨범 컬럼만 건드린다. */
   static async updateAlbum(id, fields) {
-    const allowed = ['driveFolderId', 'driveFolderName', 'driveAccountId', 'albumUploadOpen', 'albumStatus', 'albumCheckedAt', 'albumCreatedAt'];
+    const allowed = [
+      'driveFolderId', 'driveFolderName', 'driveAccountId', 'albumUploadOpen', 'albumStatus', 'albumCheckedAt', 'albumCreatedAt',
+      'albumPublished', 'albumAudience', 'albumPublishedAt'
+    ];
     const sets = [];
     const params = [id];
 
@@ -217,8 +220,8 @@ class Event {
   }
 
   /**
-   * 학부모 사진 탭: 앨범 폴더가 있는 공개 이벤트를 최근 순으로.
-   * 확정 여부는 컨트롤러가 걸러낸다 (신청·참가 학생을 함께 봐야 하기 때문).
+   * 학부모 사진 탭: 앨범 폴더가 있고 **선생님이 앨범을 공개한** 공개 이벤트를 최근 순으로.
+   * 공개 범위(참가 확정 / 전체)는 컨트롤러가 걸러낸다 (신청·참가 학생을 함께 봐야 하기 때문).
    */
   static async listWithAlbumsForParent(teacherIds) {
     const ids = toIdArray(teacherIds);
@@ -231,11 +234,54 @@ class Event {
         WHERE e."userId" = ANY($1)
           AND e."isPublished" IS NOT FALSE
           AND e."driveFolderId" IS NOT NULL
+          AND e."albumPublished" IS TRUE
           AND e.type <> 'closure'
         ORDER BY e.date DESC, e.id DESC`,
       [ids]
     );
     return result.rows.map(hydrate);
+  }
+
+  /**
+   * 선생님 사진 메뉴(docs/photo-menu 5.1): 내 대회·스페셜 전부를 최근 순으로.
+   * 앨범이 있는 것은 앨범 카드가 되고, 전부가 [사진 올리기]의 "어느 이벤트 사진인가요?" 목록이 된다.
+   * 사진 메뉴는 선생님 화면이라 역할과 상관없이 **자기 이벤트만** 본다.
+   */
+  static async listForPhotos(userId) {
+    const result = await pool.query(
+      `SELECT * FROM events
+        WHERE "userId" = $1 AND type <> 'closure'
+        ORDER BY date DESC, id DESC`,
+      [userId]
+    );
+    return result.rows.map(hydrate);
+  }
+
+  /**
+   * 공개하면 몇 명이 보게 되는지 (공개 패널 문구 · 0명 경고, photo-menu FR-521~522).
+   * participants = 이 이벤트에 확정됐거나 참가 학생으로 들어간 학생과 연결된 학부모 계정 수
+   * all          = 이 선생님과 연결된 학부모 계정 수
+   */
+  static async countAlbumViewers(event) {
+    const result = await pool.query(
+      `SELECT
+         (SELECT COUNT(DISTINCT pc."parentUserId")::int
+            FROM parent_children pc
+           WHERE pc.status = 'linked'
+             AND pc."studentId" IN (
+               SELECT r."studentId" FROM event_registrations r
+                WHERE r."eventId" = $1 AND r.status = 'confirmed'
+               UNION
+               SELECT cs."studentId" FROM competition_students cs
+                WHERE $2::int IS NOT NULL AND cs."competitionId" = $2::int
+             )) AS participants,
+         (SELECT COUNT(DISTINCT pt."parentUserId")::int
+            FROM parent_teachers pt
+           WHERE pt."teacherId" = $3) AS "all"`,
+      [event.id, event.competitionId || null, event.userId]
+    );
+    const row = result.rows[0] || {};
+    return { participants: row.participants || 0, all: row.all || 0 };
   }
 
   /** 선생님이 Google 계정을 바꾸면 이전 연결로 만든 앨범을 표시해 둘 수 있게 */
