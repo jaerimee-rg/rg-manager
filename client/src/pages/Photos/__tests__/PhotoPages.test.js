@@ -56,8 +56,8 @@ describe('PhotoAlbums — 사진 목록 (docs/photo-menu FR-510~516)', () => {
   it('[사진 올리기] 는 이벤트 고르기부터 연다', async () => {
     await renderList();
     await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: '사진 올리기' })[0]); });
-    expect(screen.getByText('어느 이벤트 사진인가요? 고른 이벤트에 연결돼요. 없으면 새로 만들어요.')).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /새 폴더\(이벤트\) 만들기/ })).toBeInTheDocument();
+    expect(screen.getByText('어느 이벤트 사진인가요? 이벤트가 없으면 새 폴더를 만들어 올려요.')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /새 폴더 만들기/ })).toBeInTheDocument();
   });
 
   it('Google 연결 전이면 설정으로 보내고 [사진 올리기] 를 막는다', async () => {
@@ -118,6 +118,23 @@ describe('PhotoAlbum — 앨범 (docs/photo-menu FR-520~529)', () => {
     expect(within(panel).getByText('모든 학부모 · 33명')).toBeInTheDocument();
     expect(within(panel).getByText('학부모 ‘사진’ 탭')).toBeInTheDocument();
     expect(within(panel).getByText('‘회장배 대회’ 이벤트 상세')).toBeInTheDocument();
+  });
+
+  it('사진 전용 폴더: 공개 범위를 고르지 않고(모든 학부모), 보이는 곳은 사진 탭뿐이다 (FR-517)', async () => {
+    await renderAlbum({
+      ...ALBUM, eventType: 'folder', eventTitle: '가을 소풍', audience: 'all', viewerCounts: { participants: 0, all: 33 }
+    });
+
+    const panel = screen.getByLabelText('학부모 공개');
+    expect(within(panel).getByText(/모든 학부모 · 33명/)).toBeInTheDocument();
+    expect(within(panel).queryByRole('group', { name: '공개 범위' })).not.toBeInTheDocument();
+    expect(within(panel).queryByText(/참가 확정 학부모/)).not.toBeInTheDocument();
+    expect(within(panel).getByText('학부모 ‘사진’ 탭')).toBeInTheDocument();
+    expect(within(panel).queryByText(/이벤트 상세/)).not.toBeInTheDocument();
+    expect(within(panel).getByText('누르면 사진 탭에 바로 나타나요.')).toBeInTheDocument();
+    // 참가 확정 0명 경고는 폴더에는 해당 없다
+    expect(screen.queryByText(/확정된 학생이 없어요/)).not.toBeInTheDocument();
+    expect(screen.getByText(/사진 폴더$/)).toBeInTheDocument();
   });
 
   it('[학부모에게 공개] 는 PATCH {published:true}', async () => {

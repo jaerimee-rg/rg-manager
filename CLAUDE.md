@@ -52,8 +52,8 @@ Client and server have **separate** Jest setups and are run from their own direc
 there is no root `package.json`, so there is no one command that runs everything.
 
 ```bash
-cd client && npm test          # jest — 1088 tests / 77 suites
-cd server && npm test          # 1204 tests / 56 suites
+cd client && npm test          # jest — 1116 tests / 82 suites
+cd server && npm test          # 1213 tests / 56 suites
 ```
 
 - **The server suite is ESM** (`"type": "module"` + `transform: {}`, i.e. no Babel) and only
@@ -434,11 +434,16 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
 - **Uploading links photos to an event.** [사진 올리기] opens `UploadSheet` with `targets`: step 1 is
   "어느 이벤트 사진인가요?"; the chosen event's `POST /api/events/:id/media/uploads` **creates the album folder
   first if the event has none** (`albumService.ensureAlbum`, closure events refused). The album page's own
-  [사진 올리기] skips step 1. **No matching event? Step 1's top row "새 폴더(이벤트) 만들기"** takes a name + date;
-  the sheet calls `POST /api/albums` (`createAlbumEvent` → `Event.createForPhotos`) only when [N개 올리기] is pressed,
-  making a **published special event with registration closed and `albumAudience='all'`** (no registrants, so
-  "participants" would be 0 viewers). Same title + date as one of the teacher's events → that event is reused
-  (200 `created:false`), so retries never duplicate. The folder name always comes from the event — `folderNameFromEvent` =
+  [사진 올리기] skips step 1. **No event at all? Step 1's top row "새 폴더 만들기"** takes a name + date and makes a
+  **photo-only folder — not an event.** It is stored as an `events` row with **`type='folder'`** so every album
+  feature works unchanged (no new table, no DDL), but it must stay out of event surfaces: `Event.getAll`,
+  `listUpcomingForParent`/`listPastForParent` and `getPublishedForParent` (default) exclude it; only the parent
+  album screen passes `{ includeFolders: true }`. **Any new query that lists events must exclude `type='folder'`.**
+  `updateEvent` refuses folders (400 `photo_folder`); `PATCH /album` refuses `audience:'participants'` on a folder
+  (400 `folder_audience`) — a folder has no registrants, so it is always `albumAudience='all'` and shows only in the
+  parent 사진 tab. The sheet calls `POST /api/albums` (`createPhotoFolder` → `Event.createForPhotos`) only when
+  [N개 올리기] is pressed; same title + date as an existing **folder** reuses it (200 `created:false`), an event
+  with the same name is never reused. The folder name always comes from the event — `folderNameFromEvent` =
   `YYYY-MM-DD 제목`, Drive-forbidden characters become spaces (never rejected) — and **follows title/date
   edits** (`eventController.updateEvent` → `syncFolderName`, which never fails the event save).
 - **Albums start private** (`events."albumPublished"` default false). The teacher publishes from the album

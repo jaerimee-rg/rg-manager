@@ -8,7 +8,7 @@ import albumService from '../services/albumService.js';
 import { DriveError, isDriveConfigured, getStorageQuota } from '../utils/googleDrive.js';
 import { getAccessToken } from '../services/driveAccess.js';
 import { sanitizeFolderName, folderNameFromEvent, MAX_FILES_PER_UPLOAD } from '../utils/mediaValidation.js';
-import { canUpload, canManageAlbum, canDeleteMedia, reasonMessage, isValidAudience } from '../utils/albumAccess.js';
+import { canUpload, canManageAlbum, canDeleteMedia, reasonMessage, isValidAudience, isPhotoFolder } from '../utils/albumAccess.js';
 import { toTeacherMedia } from '../utils/mediaSerializer.js';
 
 /**
@@ -154,6 +154,10 @@ export const updateAlbum = async (req, res) => {
     const body = req.body || {};
     if (body.audience !== undefined && !isValidAudience(body.audience)) {
       return res.status(400).json({ error: '공개 범위를 다시 골라 주세요.', reason: 'invalid_audience' });
+    }
+    // 사진 전용 폴더에는 신청한 학생이 없다 — "참가 확정" 범위로는 아무도 못 본다 (FR-517)
+    if (body.audience !== undefined && body.audience !== 'all' && isPhotoFolder(event)) {
+      return res.status(400).json({ error: '사진 폴더는 연결된 모든 학부모에게 공개돼요.', reason: 'folder_audience' });
     }
     if (body.published === true && event.albumStatus === 'missing') {
       return res.status(400).json({ error: reasonMessage('album_missing'), reason: 'album_missing' });

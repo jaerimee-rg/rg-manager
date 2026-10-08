@@ -29,6 +29,8 @@ class Event {
       params.push(today);
       where.push(`COALESCE(e."endDate", e.date) >= $${params.length}`);
     }
+    // 사진 전용 폴더(type='folder')는 이벤트가 아니다 — 이벤트 관리 목록에 넣지 않는다 (photo-menu FR-517)
+    where.push(`e.type <> 'folder'`);
 
     const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const result = await pool.query(
@@ -144,6 +146,7 @@ class Event {
          JOIN users u ON u.id = e."userId"
         WHERE e."userId" = ANY($1)
           AND e."isPublished" IS NOT FALSE
+          AND e.type <> 'folder'
           AND COALESCE(e."endDate", e.date) >= $2
           AND e.date <= $3
         ORDER BY e.date ASC, e."startTime" ASC NULLS FIRST, e.id ASC`,
@@ -169,6 +172,7 @@ class Event {
          JOIN users u ON u.id = e."userId"
         WHERE e."userId" = ANY($1)
           AND e."isPublished" IS NOT FALSE
+          AND e.type <> 'folder'
           AND COALESCE(e."endDate", e.date) < $2
         ORDER BY e.date DESC, e."startTime" DESC NULLS LAST, e.id DESC`,
       [ids, today]
@@ -176,8 +180,12 @@ class Event {
     return result.rows.map(hydrate);
   }
 
-  // 학부모용 단건 조회 (공개된 것만, **연결된 선생님** 것만)
-  static async getPublishedForParent(id, teacherIds) {
+  /**
+   * 학부모용 단건 조회 (공개된 것만, **연결된 선생님** 것만).
+   * 사진 전용 폴더(type='folder')는 이벤트 상세·신청에서는 없는 것으로 친다. 앨범 화면만
+   * includeFolders 로 읽는다 (photo-menu FR-517).
+   */
+  static async getPublishedForParent(id, teacherIds, { includeFolders = false } = {}) {
     const ids = toIdArray(teacherIds);
     if (!ids.length) return null;
 
@@ -185,7 +193,8 @@ class Event {
       `SELECT e.*, ${displayNameSql('u')} AS "teacherName"
          FROM events e
          JOIN users u ON u.id = e."userId"
-        WHERE e.id = $1 AND e."userId" = ANY($2) AND e."isPublished" IS NOT FALSE`,
+        WHERE e.id = $1 AND e."userId" = ANY($2) AND e."isPublished" IS NOT FALSE
+          ${includeFolders ? '' : `AND e.type <> 'folder'`}`,
       [id, ids]
     );
     return result.rows.length > 0 ? hydrate(result.rows[0]) : null;
@@ -243,7 +252,7 @@ class Event {
   }
 
   /**
-   * 선생님 사진 메뉴(docs/photo-menu 5.1): 내 대회·스페셜 전부를 최근 순으로.
+   * 선생님 사진 메뉴(docs/photo-menu 5.1): 내 대회·스페셜·사진 폴더 전부를 최근 순으로.
    * 앨범이 있는 것은 앨범 카드가 되고, 전부가 [사진 올리기]의 "어느 이벤트 사진인가요?" 목록이 된다.
    * 사진 메뉴는 선생님 화면이라 역할과 상관없이 **자기 이벤트만** 본다.
    */
@@ -258,10 +267,12 @@ class Event {
   }
 
   /**
-   * 사진 메뉴의 "새 폴더(이벤트) 만들기"(docs/photo-menu FR-517): 사진을 묶을 이벤트가 아직 없을 때
-   * 이름과 날짜만으로 스페셜 이벤트를 만든다. 신청은 받지 않고(registrationOpen=false),
-   * 신청한 학생이 없어 "참가 확정" 범위로는 볼 사람이 0명이므로 앨범 공개 범위는 처음부터 모든 학부모다.
-   * 앨범 공개는 따로 — 처음에는 비공개이고, 폴더는 첫 업로드 때 만든다(albumService.ensureAlbum).
+   * 사진 메뉴의 "새 폴더 만들기"(docs/photo-menu FR-517): 이벤트 없이 이름과 날짜만으로 **사진 전용 폴더**를 만든다.
+   * 앨범 기능을 그대로 쓰려고 events 행(type='folder')으로 두지만 이벤트가 아니다 — 이벤트 관리·학부모 일정·
+   * 이벤트 상세·신청에는 나오지 않는다(getAll · listUpcoming/PastForParent · getPublishedForParent 가 뺀다).
+   * isPublished=TRUE 는 앨범 접근 검사(이벤트 비공개면 앨범도 안 보임)를 통과하기 위해서다. 신청은 없고,
+   * 신청한 학생이 없으니 앨범 공개 범위는 모든 학부모다. 앨범은 비공개로 시작하고, Drive 폴더는 첫 업로드 때
+   * 만든다(albumService.ensureAlbum).
    */
   static async createForPhotos({ userId, title, date }) {
     const now = new Date().toISOString();
@@ -269,7 +280,7 @@ class Event {
       `INSERT INTO events
          ("userId", type, title, date, options, "requireOption", "isPublished", "registrationOpen",
           "albumAudience", "createdAt", "updatedAt")
-       VALUES ($1, 'special', $2, $3, '[]', FALSE, TRUE, FALSE, 'all', $4, $4)
+       VALUES ($1, 'folder', $2, $3, '[]', FALSE, TRUE, FALSE, 'all', $4, $4)
        RETURNING *`,
       [userId, title, date, now]
     );

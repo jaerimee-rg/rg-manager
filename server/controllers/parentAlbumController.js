@@ -64,7 +64,8 @@ const loadAlbumContext = async (req) => {
   if (isNaN(eventId)) return { error: notFound };
 
   // 연결되지 않은 선생님의 이벤트는 존재 자체를 알리지 않는다 (404)
-  const event = await Event.getPublishedForParent(eventId, teacherIds);
+  // 사진 전용 폴더도 앨범이다 — 이벤트 상세와 달리 여기서는 함께 읽는다 (photo-menu FR-517)
+  const event = await Event.getPublishedForParent(eventId, teacherIds, { includeFolders: true });
   if (!event) return { error: notFound };
 
   const children = await linkedChildren(req.user.id);

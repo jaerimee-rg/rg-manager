@@ -30,6 +30,15 @@ export const confirmedChildIds = ({ childStudentIds = [], confirmedStudentIds = 
 
 /** 공개 범위 값 (docs/photo-menu 3.4). participants = 참가 확정 학부모, all = 연결된 학부모 전체 */
 export const ALBUM_AUDIENCES = ['participants', 'all'];
+
+/**
+ * 사진 전용 폴더 — 사진 메뉴에서 이벤트 없이 만든 앨범 (docs/photo-menu FR-517).
+ * events 행에 type='folder' 로 저장해 앨범 기능(Drive 폴더·공개·학부모 사진 탭)을 그대로 쓰지만
+ * 이벤트가 아니다: 이벤트 관리 목록·학부모 일정·이벤트 상세·신청에는 나오지 않는다.
+ * 신청한 학생이 없으니 공개 범위는 언제나 모든 학부모다.
+ */
+export const PHOTO_FOLDER_TYPE = 'folder';
+export const isPhotoFolder = (event) => event?.type === PHOTO_FOLDER_TYPE;
 export const isValidAudience = (value) => ALBUM_AUDIENCES.includes(value);
 
 /**
@@ -122,6 +131,8 @@ export const reasonMessage = (reason) => REASON_MESSAGES[reason] || '지금은 �
 
 export default {
   ALBUM_AUDIENCES,
+  PHOTO_FOLDER_TYPE,
+  isPhotoFolder,
   isValidAudience,
   inAudience,
   isConfirmedParent,

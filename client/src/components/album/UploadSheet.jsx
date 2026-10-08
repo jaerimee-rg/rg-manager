@@ -6,13 +6,14 @@ import { detectFaces } from '../../utils/faceClient';
 import { formatSize } from '../../utils/mediaUrls';
 import { todayString } from '../../utils/eventFormat';
 import {
-  folderNameFrom, formatShortDate, newFolderProblem, targetState, uploadPublishNote, NEW_FOLDER_TITLE_MAX
+  folderNameFrom, formatShortDate, isPhotoFolder, newFolderProblem, publishPlaces, targetState, uploadPublishNote,
+  NEW_FOLDER_TITLE_MAX, PHOTO_FOLDER_TYPE
 } from '../../pages/Photos/albumState';
 import {
   Badge, Button, Callout, Checkbox, Field, Icon, Input, List, ListRow, Modal, Progress, Stack
 } from '../ui';
 
-// 이벤트 고르기에서 "새 폴더(이벤트) 만들기" 를 고른 상태 (FR-517)
+// 이벤트 고르기에서 "새 폴더 만들기"(이벤트 없는 사진 전용 폴더)를 고른 상태 (FR-517)
 const NEW_FOLDER = 'new';
 
 /**
@@ -29,10 +30,12 @@ const NEW_FOLDER = 'new';
  * 선생님 사진 메뉴(docs/photo-menu)에서만 쓰는 것:
  *   targets      — 주면 첫 단계가 "어느 이벤트 사진인가요?" 가 된다(FR-513). 고른 이벤트에 사진이 연결되고,
  *                  앨범이 없던 이벤트면 서버가 업로드 직전에 이벤트 이름 폴더를 만든다. 올리는 주소는 고른 이벤트로 정해진다.
- *                  맞는 이벤트가 없으면 이름·날짜를 써서 **새 폴더(이벤트)** 를 만들 수 있다(FR-517) — 이벤트는
- *                  [N개 올리기] 를 누를 때 만든다(파일을 고르다 그만두면 빈 이벤트가 남지 않게).
+ *                  맞는 이벤트가 없으면 이름·날짜를 써서 **사진 전용 폴더**를 만들 수 있다(FR-517). 이벤트가 아니라서
+ *                  이벤트 관리·학부모 일정에는 나오지 않는다. 폴더는 [N개 올리기] 를 누를 때 만든다
+ *                  (파일을 고르다 그만두면 빈 폴더가 남지 않게).
  *   allowPublish — "다 올리면 바로 학부모에게 공개" 체크를 보인다(FR-515). 이미 공개된 앨범이면 체크 대신 안내 한 줄.
  *   published    — targets 없이 쓸 때 그 앨범이 공개 중인지
+ *   photoFolder  — targets 없이 쓸 때 그 앨범이 사진 전용 폴더인지(공개하면 보이는 곳이 사진 탭뿐이다)
  * onDone({ eventId, uploaded, published }) — 다 올린 뒤 한 번 부른다.
  */
 function UploadSheet({
@@ -42,6 +45,7 @@ function UploadSheet({
   initialEventId = null,
   allowPublish = false,
   published = false,
+  photoFolder = false,
   audienceHint = '이 앨범을 보는 학부모와 선생님이 함께 봐요',
   rootFolderName = 'RG Manager',
   onClose,
@@ -58,10 +62,11 @@ function UploadSheet({
   const creatingNew = pickingTarget && targetId === NEW_FOLDER;
   const draftProblem = creatingNew ? newFolderProblem(draft) : null;
   const target = !pickingTarget ? null : creatingNew
-    ? { eventId: null, title: draft.title.trim(), date: draft.date, hasAlbum: false, published: false, folderName: folderNameFrom(draft) }
+    ? { eventId: null, type: PHOTO_FOLDER_TYPE, title: draft.title.trim(), date: draft.date, hasAlbum: false, published: false, folderName: folderNameFrom(draft) }
     : allTargets.find((t) => t.eventId === targetId) || null;
   const eventTitle = pickingTarget ? target?.title : fixedTitle;
   const alreadyPublished = pickingTarget ? Boolean(target?.hasAlbum && target?.published) : published;
+  const albumType = pickingTarget ? target?.type : (photoFolder ? PHOTO_FOLDER_TYPE : null);
 
   const [phase, setPhase] = useState(pickingTarget ? 'target' : 'pick');   // target | pick | busy | done
   const [publishWhenDone, setPublishWhenDone] = useState(false);
@@ -86,7 +91,7 @@ function UploadSheet({
     setError('');
   };
 
-  // 새 폴더(이벤트)를 서버에 만든다 → 만든(또는 이미 있던 같은 이름·날짜) 이벤트의 target, 실패하면 null
+  // 사진 전용 폴더를 서버에 만든다 → 만든(또는 이미 있던 같은 이름·날짜) 폴더의 target, 실패하면 null
   const createFolderEvent = async () => {
     const response = await fetchWithAuth('/api/albums', {
       method: 'POST',
@@ -94,7 +99,7 @@ function UploadSheet({
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.target?.eventId) {
-      setError(data.error || '새 폴더(이벤트)를 만들지 못했어요.');
+      setError(data.error || '새 폴더를 만들지 못했어요.');
       return null;
     }
     setCreatedTargets((prev) => [data.target, ...prev.filter((t) => t.eventId !== data.target.eventId)]);
@@ -108,7 +113,7 @@ function UploadSheet({
     setError('');
 
     try {
-      // 0) 새 폴더(이벤트)를 골랐으면 먼저 이벤트를 만든다 — 이후는 고른 이벤트와 똑같다.
+      // 0) 새 폴더를 골랐으면 먼저 폴더를 만든다 — 이후는 고른 이벤트와 똑같다.
       let uploadTarget = target;
       if (creatingNew) {
         uploadTarget = await createFolderEvent();
@@ -229,11 +234,11 @@ function UploadSheet({
   const publishControl = allowPublish && (alreadyPublished ? (
     <p className="ui-text-sm ui-row" data-gap="2">
       <Icon name="eye" size={16} />
-      {uploadPublishNote({ hasAlbum: true, published: true }).text}
+      {uploadPublishNote({ hasAlbum: true, published: true, type: albumType }).text}
     </p>
   ) : (
     <Checkbox
-      label={<>다 올리면 바로 학부모에게 공개 <span className="ui-text-muted ui-text-sm">(사진 탭 · 이 이벤트 상세)</span></>}
+      label={<>다 올리면 바로 학부모에게 공개 <span className="ui-text-muted ui-text-sm">({publishPlaces(albumType)})</span></>}
       checked={publishWhenDone}
       onChange={(event) => setPublishWhenDone(event.target.checked)}
     />
@@ -268,7 +273,7 @@ function UploadSheet({
       onClose={phase === 'busy' ? undefined : onClose}
       closeOnScrim={phase !== 'busy'}
       title={phase === 'done' ? '다 올렸어요' : phase === 'busy' ? '올리는 중…' : '사진 · 영상 올리기'}
-      description={phase === 'target' ? '어느 이벤트 사진인가요? 고른 이벤트에 연결돼요. 없으면 새로 만들어요.' : undefined}
+      description={phase === 'target' ? '어느 이벤트 사진인가요? 이벤트가 없으면 새 폴더를 만들어 올려요.' : undefined}
       aria-label="사진 영상 올리기"
       footer={footer}
     >
@@ -296,8 +301,8 @@ function UploadSheet({
             >
               <span className="ui-choice__mark" data-on={creatingNew || undefined}><Icon name="check" size={14} /></span>
               <span className="ui-event-pick__date"><Icon name="plus" size={16} /></span>
-              <span className="ui-event-pick__title">새 폴더(이벤트) 만들기</span>
-              <span className="ui-text-sm ui-text-muted ui-event-pick__hint">맞는 이벤트가 없을 때</span>
+              <span className="ui-event-pick__title">새 폴더 만들기</span>
+              <span className="ui-text-sm ui-text-muted ui-event-pick__hint">이벤트가 없을 때</span>
             </button>
             {allTargets.map((t) => {
               const selected = t.eventId === targetId;
@@ -315,7 +320,9 @@ function UploadSheet({
                   <span className="ui-choice__mark" data-on={selected || undefined}><Icon name="check" size={14} /></span>
                   <span className="ui-event-pick__date">{formatShortDate(t.date)}</span>
                   <span className="ui-event-pick__title">
-                    {t.title}{t.upcoming && <> <Badge tone="warning">예정</Badge></>}
+                    {t.title}
+                    {isPhotoFolder(t.type) && <> <Badge tone="neutral">폴더</Badge></>}
+                    {t.upcoming && <> <Badge tone="warning">예정</Badge></>}
                   </span>
                   <span className="ui-text-sm ui-text-muted">{state.text}</span>
                   {state.badge === 'published' && <Badge tone="success" dot>공개</Badge>}
@@ -356,8 +363,8 @@ function UploadSheet({
               </div>
               {creatingNew && (
                 <p className="ui-text-sm ui-text-muted">
-                  신청을 받지 않는 스페셜 이벤트로 함께 만들어져요. 공개하면 연결된 모든 학부모가 봐요.
-                  장소·설명은 이벤트 관리에서 고칠 수 있어요.
+                  이벤트와 상관없는 사진 폴더예요. 이벤트 관리·학부모 일정에는 나오지 않고,
+                  공개하면 연결된 모든 학부모가 사진 탭에서 봐요.
                 </p>
               )}
               {publishControl}

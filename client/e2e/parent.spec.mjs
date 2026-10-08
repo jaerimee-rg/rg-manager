@@ -372,6 +372,55 @@ test.describe('학부모 — 사진', () => {
     }
   });
 
+  // 이벤트 없이 만든 사진 전용 폴더 (docs/photo-menu FR-517)
+  test('사진 전용 폴더는 공개하면 사진 탭에만 보인다 — 일정에도 이벤트 상세에도 없다', async ({ page, request }) => {
+    const id = sessions.album.folderEventId;
+    const title = sessions.album.folderTitle;
+    const setAlbum = async (body) => api(request, sessions.teacher, 'PATCH', `/api/events/${id}/album`, body);
+
+    try {
+      // 비공개일 때: 사진 탭에 없다
+      await page.goto('/parent/photos');
+      await expect(page.getByText(/e2e확정대회/)).toBeVisible();
+      await expect(page.getByText(title)).toHaveCount(0);
+
+      // 폴더는 "참가 확정" 범위로 바꿀 수 없다 — 신청한 학생이 없다
+      expect((await setAlbum({ audience: 'participants' })).status).toBe(400);
+      expect((await setAlbum({ published: true })).status).toBe(200);
+
+      // 사진 탭: "사진" 배지로 보이고(스페셜이 아니다), 누르면 사진이 열린다
+      await page.goto('/parent/photos');
+      const card = page.getByRole('button', { name: new RegExp(title) });
+      await expect(card).toBeVisible();
+      await expect(card.getByText('📁 사진')).toBeVisible();
+      await card.click();
+      await expect(page).toHaveURL(new RegExp(`/parent/photos/${id}$`));
+      await expect(page.getByRole('button', { name: '사진 열기' })).toHaveCount(1);
+
+      // 일정(다가오는 · 지난)에는 없다
+      for (const view of ['', '?view=past']) {
+        const schedule = await api(request, sessions.parent, 'GET', `/api/parent/events${view}`);
+        expect(schedule.body.events.some((e) => e.id === id)).toBe(false);
+      }
+      await page.goto('/parent/schedule');
+      const pastToggle = page.getByRole('button', { name: /지난 일정 보기/ });
+      if (await pastToggle.count()) await pastToggle.first().click();
+      await expect(page.getByText(title)).toHaveCount(0);
+
+      // 이벤트 상세 주소로 들어가도 없는 이벤트다
+      const detail = await api(request, sessions.parent, 'GET', `/api/parent/events/${id}`);
+      expect(detail.status).toBe(404);
+
+      // 비공개로 돌리면 사진 탭에서 사라진다
+      expect((await setAlbum({ published: false })).status).toBe(200);
+      await page.goto('/parent/photos');
+      await expect(page.getByText(/e2e확정대회/)).toBeVisible();
+      await expect(page.getByText(title)).toHaveCount(0);
+    } finally {
+      await setAlbum({ published: false });
+    }
+  });
+
   test('확정되지 않은 이벤트의 앨범은 열리지 않는다', async ({ page }) => {
     await page.goto(`/parent/photos/${sessions.album.lockedEventId}`);
 

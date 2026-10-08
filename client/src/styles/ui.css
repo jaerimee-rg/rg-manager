@@ -3623,7 +3623,7 @@ a.ui-btn { text-decoration: none; }
   border-radius: var(--shape-box);
 }
 .ui-event-pick__foot p { margin: 0; }
-/* 새 폴더(이벤트) 만들기 — 이름은 넓게, 날짜는 내용만큼. 좁은 화면에서는 위아래로 */
+/* 새 폴더 만들기 — 이름은 넓게, 날짜는 내용만큼. 좁은 화면에서는 위아래로 */
 .ui-event-pick__new { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); }
 @media (max-width: 480px) { .ui-event-pick__new { grid-template-columns: minmax(0, 1fr); } }
 

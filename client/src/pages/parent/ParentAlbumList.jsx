@@ -6,7 +6,7 @@ import { fetchWithAuth } from '../../utils/api';
 import { albumSummaryText } from '../../utils/albumFilter';
 
 /**
- * 사진 탭 — 자녀가 확정된 이벤트의 앨범만 보인다.
+ * 사진 탭 — 선생님이 공개한 앨범 중 내가 볼 수 있는 것(공개 범위 안의 이벤트 앨범 + 사진 전용 폴더)만 보인다.
  * 일정에서 대회를 눌러 들어올 수도 있고, 여기서 모아 볼 수도 있다.
  */
 function ParentAlbumList() {
@@ -88,8 +88,9 @@ function ParentAlbumList() {
 
           <div style={{ padding: '12px 14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-              <span className={`badge ${album.type === 'competition' ? 'badge-danger' : 'badge-purple'}`}>
-                {album.type === 'competition' ? '🏆 대회' : '⭐ 스페셜'}
+              {/* 사진 전용 폴더는 이벤트가 아니다 (photo-menu FR-517) */}
+              <span className={`badge ${album.type === 'competition' ? 'badge-danger' : album.type === 'folder' ? 'badge-gray' : 'badge-purple'}`}>
+                {album.type === 'competition' ? '🏆 대회' : album.type === 'folder' ? '📁 사진' : '⭐ 스페셜'}
               </span>
               <span className={`badge ${album.uploadOpen ? 'badge-primary' : 'badge-gray'}`}>
                 {album.uploadOpen ? '사진 올릴 수 있어요' : '업로드 마감'}
@@ -125,7 +126,7 @@ function ParentAlbumList() {
         background: 'var(--color-gray-100)', color: 'var(--color-gray-600)', fontSize: '0.8125rem',
         padding: '11px 12px', borderRadius: 'var(--shape-box)', lineHeight: 1.55
       }}>
-        확정된 이벤트의 앨범만 보여요. 일정에서 대회를 눌러 들어올 수도 있어요.
+        선생님이 공개한 앨범만 보여요. 이벤트 사진은 일정에서 그 이벤트를 눌러 들어올 수도 있어요.
       </div>
     </ParentLayout>
   );

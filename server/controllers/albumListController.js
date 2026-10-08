@@ -5,11 +5,12 @@ import { isDriveConfigured } from '../utils/googleDrive.js';
 import { folderNameFromEvent } from '../utils/mediaValidation.js';
 import { thumbnailUrl } from '../utils/mediaSerializer.js';
 import { todayKst } from '../services/eventService.js';
+import { isPhotoFolder } from '../utils/albumAccess.js';
 
 /**
  * 선생님 사진 메뉴 목록 (docs/photo-menu 5.1).
  *
- * 앨범 하나 = 이벤트 하나. 앨범이 있는 이벤트는 카드(albums)가 되고, 대회·스페셜 전부가
+ * 앨범 하나 = 이벤트(또는 이벤트 없이 만든 사진 폴더, type='folder') 하나. 앨범이 있는 것은 카드(albums)가 되고, 대회·스페셜·사진 폴더 전부가
  * [사진 올리기]의 "어느 이벤트 사진인가요?" 목록(targets)이 된다.
  * Google 은 부르지 않는다 — Drive 가 느리거나 끊겨도 목록은 바로 떠야 한다(용량은 앨범 화면에서).
  */
@@ -85,22 +86,24 @@ const isRealDate = (date) => {
 };
 
 /**
- * POST /api/albums — 사진을 묶을 이벤트가 없을 때 "새 폴더(이벤트)" 를 만든다 (docs/photo-menu FR-517).
- * body { title, date } → 스페셜 이벤트 하나. Drive 폴더는 첫 업로드 때 그 이름으로 만들어진다.
- * 같은 이름·날짜의 내 이벤트가 이미 있으면 새로 만들지 않고 그것을 돌려준다(두 번 눌러도 하나).
+ * POST /api/albums — 이벤트 없이 **사진 전용 폴더**를 만든다 (docs/photo-menu FR-517).
+ * body { title, date } → type='folder' 행 하나(Event.createForPhotos). 이벤트 관리·학부모 일정에는 나오지 않는다.
+ * Drive 폴더는 첫 업로드 때 "날짜 이름" 으로 만들어진다.
+ * 같은 이름·날짜의 내 **사진 폴더**가 이미 있으면 새로 만들지 않고 그것을 돌려준다(두 번 눌러도 하나).
+ * 이름이 같은 이벤트가 있어도 거기에 붙이지 않는다 — "새 폴더" 를 골랐으니 이벤트와는 따로다.
  * 응답의 target 은 GET 의 targets 한 줄과 같은 모양이라 업로드 시트가 그대로 쓴다.
  */
-export const createAlbumEvent = async (req, res) => {
+export const createPhotoFolder = async (req, res) => {
   try {
     const title = String(req.body?.title ?? '').trim();
     const date = String(req.body?.date ?? '').trim();
-    if (!title) return res.status(400).json({ error: '폴더(이벤트) 이름을 입력해 주세요.' });
+    if (!title) return res.status(400).json({ error: '폴더 이름을 입력해 주세요.' });
     if (title.length > TITLE_MAX) return res.status(400).json({ error: `이름은 ${TITLE_MAX}자 이내로 입력해 주세요.` });
     if (!isRealDate(date)) return res.status(400).json({ error: '날짜를 선택해 주세요.' });
 
     const today = todayKst();
     const mine = await Event.listForPhotos(req.user.id);
-    const existing = mine.find((event) => event.title === title && event.date === date);
+    const existing = mine.find((event) => isPhotoFolder(event) && event.title === title && event.date === date);
     if (existing) {
       const summaries = existing.driveFolderId ? await EventMedia.summariesForTeacher([existing.id]) : {};
       return res.json({ created: false, target: toTarget(existing, summaries[existing.id], today) });
@@ -109,9 +112,9 @@ export const createAlbumEvent = async (req, res) => {
     const event = await Event.createForPhotos({ userId: req.user.id, title, date });
     res.status(201).json({ created: true, target: toTarget(event, null, today) });
   } catch (error) {
-    console.error('사진 폴더(이벤트) 만들기 오류:', error);
+    console.error('사진 폴더 만들기 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
   }
 };
 
-export default { listAlbums, createAlbumEvent };
+export default { listAlbums, createPhotoFolder };

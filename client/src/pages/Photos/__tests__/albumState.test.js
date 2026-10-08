@@ -1,7 +1,7 @@
 import {
   publishSummary, zeroAudienceWarning, driveNotice, canUploadWith, albumProblem, filterChips,
   targetState, uploadPublishNote, formatPublishedDate, formatEventDate, formatShortDate, toViewerItem, publishLocked,
-  folderNameFrom, newFolderProblem
+  folderNameFrom, newFolderProblem, typeLabel, isPhotoFolder, publishPlaces
 } from '../albumState';
 
 describe('publishSummary (docs/photo-menu FR-521)', () => {
@@ -83,13 +83,24 @@ describe('이벤트 고르기 (FR-513, 515)', () => {
   });
 });
 
-describe('새 폴더(이벤트) 만들기 (FR-517)', () => {
+describe('새 폴더 만들기 · 사진 전용 폴더 (FR-517)', () => {
   it('폴더 이름은 서버와 같은 규칙 — 날짜 + 이름, Drive 금지 문자는 공백', () => {
     expect(folderNameFrom({ date: '2026-09-27', title: '가을 소풍' })).toBe('2026-09-27 가을 소풍');
     expect(folderNameFrom({ date: '2026-09-27', title: '  스페셜: 리본/곤봉  ' })).toBe('2026-09-27 스페셜 리본 곤봉');
     expect(folderNameFrom({ date: '2026-09-27', title: '' })).toBe('2026-09-27');
     expect(folderNameFrom({})).toBe('앨범');
     expect(folderNameFrom({ date: '2026-09-27', title: '가'.repeat(120) })).toHaveLength(100);
+  });
+
+  it('사진 전용 폴더는 종류 이름이 따로 있고, 공개하면 사진 탭에만 보인다', () => {
+    expect(isPhotoFolder('folder')).toBe(true);
+    expect(isPhotoFolder('special')).toBe(false);
+    expect(typeLabel('folder')).toBe('사진 폴더');
+    expect(typeLabel('competition')).toBe('대회');
+    expect(publishPlaces('folder')).toBe('사진 탭');
+    expect(publishPlaces('special')).toBe('사진 탭 · 이 이벤트 상세');
+    expect(uploadPublishNote({ hasAlbum: true, published: true, type: 'folder' }).text).toMatch(/사진 탭에 보여요/);
+    expect(uploadPublishNote({ hasAlbum: true, published: true, type: 'competition' }).text).toMatch(/이 이벤트 상세/);
   });
 
   it('이름과 날짜가 있어야 만들 수 있다', () => {

@@ -181,6 +181,15 @@ describe('listMedia — 공개 단계 (photo-menu FR-541)', () => {
     expect(EventMedia.list).not.toHaveBeenCalled();
   });
 
+  it('앨범 화면은 사진 전용 폴더도 읽는다 — 이벤트 상세와 달리 includeFolders (FR-517)', async () => {
+    Event.getPublishedForParent.mockResolvedValue(event({ type: 'folder', albumAudience: 'all' }));
+
+    await listMedia(req, res);
+
+    expect(Event.getPublishedForParent).toHaveBeenCalledWith(expect.anything(), expect.anything(), { includeFolders: true });
+    expect(res.status).not.toHaveBeenCalledWith(403);
+  });
+
   it('공개 범위가 모든 학부모면 미확정 학부모도 본다', async () => {
     Event.getPublishedForParent.mockResolvedValue(event({ albumAudience: 'all' }));
 

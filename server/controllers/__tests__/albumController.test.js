@@ -301,6 +301,28 @@ describe('updateAlbum', () => {
     expect(res.json.mock.calls[0][0].audience).toBe('all');
   });
 
+  it('사진 전용 폴더는 "참가 확정" 범위로 바꿀 수 없다 — 신청한 학생이 없다 (FR-517)', async () => {
+    Event.getById.mockResolvedValue(event({ type: 'folder', albumAudience: 'all' }));
+    req.body = { audience: 'participants' };
+
+    await updateAlbum(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0].reason).toBe('folder_audience');
+    expect(Event.updateAlbum).not.toHaveBeenCalled();
+  });
+
+  it('사진 전용 폴더도 공개·비공개와 "모든 학부모" 는 그대로 된다', async () => {
+    Event.getById.mockResolvedValue(event({ type: 'folder', albumAudience: 'all' }));
+    Event.updateAlbum.mockResolvedValue(event({ type: 'folder', albumAudience: 'all', albumPublished: true }));
+    req.body = { published: true, audience: 'all' };
+
+    await updateAlbum(req, res);
+
+    expect(res.status).not.toHaveBeenCalledWith(400);
+    expect(Event.updateAlbum).toHaveBeenCalledWith(3, expect.objectContaining({ albumPublished: true, albumAudience: 'all' }));
+  });
+
   it('모르는 공개 범위는 거절한다', async () => {
     Event.getById.mockResolvedValue(event());
     req.body = { audience: 'everyone' };
