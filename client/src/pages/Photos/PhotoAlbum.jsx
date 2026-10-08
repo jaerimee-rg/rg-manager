@@ -8,6 +8,7 @@ import {
   Button, Callout, Card, Chip, ConfirmDialog, EmptyState, Icon, PageHeader, SkeletonList, StickyActions, Toast, Toolbar
 } from '../../components/ui';
 import PublishPanel from './PublishPanel';
+import FaceScanPanel from './FaceScanPanel';
 import PhotoGrid from './PhotoGrid';
 import {
   albumProblem, filterChips, formatEventDate, publishLocked, typeLabel, toViewerItem, PROBLEM_MESSAGES
@@ -197,6 +198,11 @@ function PhotoAlbum() {
             <div className="ui-mt-2"><Button size="sm" icon="refresh" loading={busy} onClick={refresh}>새로고침</Button></div>
           </Callout>
         </div>
+      )}
+
+      {/* 얼굴 찾기는 공유 링크로 Drive 사진을 읽는다 — Google 연결이 끊겨도 되지만 폴더가 없거나 공유가 꺼지면 못 읽는다 */}
+      {hasAlbum && !['missing', 'unshared'].includes(album.albumStatus) && (
+        <FaceScanPanel className="ui-mb-4" apiBase={apiBase} count={counts.unanalyzed || 0} onDone={reloadAll} />
       )}
 
       {!hasAlbum ? (

@@ -5,7 +5,11 @@ import {
   decodeDescriptor,
   euclideanDistance,
   classifyDistance,
-  bestPerStudent
+  bestPerStudent,
+  FACE_ANALYZER_VERSION,
+  parseAnalyzerVersion,
+  DEFAULT_MATCH_THRESHOLD,
+  DEFAULT_CANDIDATE_THRESHOLD
 } from '../faceVector.js';
 
 const makeDescriptor = (fill = 0.1) => Array.from({ length: DESCRIPTOR_LENGTH }, (_, i) => fill + i * 0.001);
@@ -89,18 +93,23 @@ describe('euclideanDistance', () => {
 });
 
 describe('classifyDistance', () => {
+  it('기본값은 0.55 / 0.65 — 어느 정도만 비슷해도 보이게 넓혔다', () => {
+    expect(DEFAULT_MATCH_THRESHOLD).toBe(0.55);
+    expect(DEFAULT_CANDIDATE_THRESHOLD).toBe(0.65);
+  });
+
   it('임계값 이하는 자동 태그다', () => {
     expect(classifyDistance(0.3)).toBe('face');
-    expect(classifyDistance(0.5)).toBe('face');
+    expect(classifyDistance(0.55)).toBe('face');
   });
 
   it('그 사이는 후보다', () => {
-    expect(classifyDistance(0.55)).toBe('candidate');
-    expect(classifyDistance(0.6)).toBe('candidate');
+    expect(classifyDistance(0.56)).toBe('candidate');
+    expect(classifyDistance(0.65)).toBe('candidate');
   });
 
   it('멀면 태그하지 않는다', () => {
-    expect(classifyDistance(0.61)).toBeNull();
+    expect(classifyDistance(0.66)).toBeNull();
     expect(classifyDistance(Infinity)).toBeNull();
   });
 
@@ -156,5 +165,23 @@ describe('bestPerStudent', () => {
     const faces = [{ id: 1, descriptor: null }];
     const profiles = [{ studentId: 1, descriptor: Float32Array.from(zeros()) }];
     expect(bestPerStudent(faces, profiles)).toEqual([]);
+  });
+});
+
+describe('얼굴 찾기 방식 버전', () => {
+  it('지금 방식은 2 — 1920px · 512+1024 (client/src/utils/faceClient.js 와 같은 값)', () => {
+    expect(FACE_ANALYZER_VERSION).toBe(2);
+  });
+
+  it('브라우저가 보낸 값은 양의 정수만 받고, 나머지는 기록 없음(null) — 예전 방식으로 취급된다', () => {
+    expect(parseAnalyzerVersion(2)).toBe(2);
+    expect(parseAnalyzerVersion('2')).toBe(2);
+    expect(parseAnalyzerVersion(undefined)).toBeNull();
+    expect(parseAnalyzerVersion(null)).toBeNull();
+    expect(parseAnalyzerVersion(0)).toBeNull();
+    expect(parseAnalyzerVersion(-1)).toBeNull();
+    expect(parseAnalyzerVersion(1.5)).toBeNull();
+    expect(parseAnalyzerVersion('abc')).toBeNull();
+    expect(parseAnalyzerVersion(1e6)).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'fs';
-import { loginAs, api, stubPortraitThumbnails } from './helpers.mjs';
+import { loginAs, api, stubPortraitThumbnails, FACELESS_PNG } from './helpers.mjs';
 import { stubKakaoMaps } from './kakao-fakes.mjs';
 
 const sessions = JSON.parse(readFileSync(new URL('./.sessions.json', import.meta.url)));
@@ -507,16 +507,6 @@ test.describe('학부모 — 사진', () => {
     await page.getByRole('checkbox').first().uncheck();
     await expect(page.getByRole('button', { name: '사진 고르기' })).toBeDisabled();
   });
-
-  // 얼굴이 없는 64×64 PNG — 브라우저가 읽을 수는 있는 사진
-  const FACELESS_PNG = {
-    name: 'no-face.png',
-    mimeType: 'image/png',
-    buffer: Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAu0lEQVR42u3PBUEYAAAAQWLj7u6y4bLh+kCFj0UECvw1uAEZlCEZlhEZlTEZlwmZlCmZlhmZlTmZlwVZlCVZlhVZlTVZlw3ZlC3Zlh3ZlT3ZlwM5lCP5I3/lWE7kVM7kXC7kUq7kWm7kn/yXW7mTe3mQR3mSZ3mRV3mTd/kQ5FO+5HugQIECBQoUKFCgQIECBQoUKFCgQIECBQoUKFCgQIECBQoUKFCgQIECBQoUKFCgQIECBQoUKPBb4Acwdznwjg4iTgAAAABJRU5ErkJggg==',
-      'base64'
-    )
-  };
 
   const pickFacePhoto = async (page) => {
     await page.goto('/parent/settings');

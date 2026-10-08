@@ -7,7 +7,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
  */
 
 jest.mock('../../../utils/api', () => ({ fetchWithAuth: jest.fn() }));
-jest.mock('../../../utils/faceClient', () => ({ detectFaces: jest.fn() }));
+jest.mock('../../../utils/faceClient', () => ({ ANALYSIS_LONG_SIDE: 1920, FACE_ANALYZER_VERSION: 2, detectFaces: jest.fn() }));
 jest.mock('../../../utils/driveUpload', () => ({
   uploadToDrive: jest.fn().mockResolvedValue({ ok: true, file: { id: 'drive-1' } })
 }));
@@ -55,6 +55,15 @@ const completeBody = () => {
 };
 
 describe('UploadSheet — 얼굴 분석 결과 보고', () => {
+  it('긴 변 1920 축소본으로 찾고, 찾은 방식의 버전을 함께 보낸다(서버가 예전 결과를 가려낸다)', async () => {
+    detectFaces.mockResolvedValue([]);
+
+    await upload();
+
+    expect(makePreview).toHaveBeenCalledWith(expect.any(File), 1920);
+    expect(completeBody().analyzerVersion).toBe(2);
+  });
+
   it('분석이 실패하면 faces:null 로 보내고 "분석하지 못했어요" 라고 알린다', async () => {
     detectFaces.mockResolvedValue(null);
 
@@ -91,6 +100,7 @@ describe('UploadSheet — 얼굴 분석 결과 보고', () => {
     await upload();
 
     expect(completeBody().faces).toEqual([FACE]);
+    expect(completeBody().analyzerVersion).toBe(2);
     expect(screen.getByText(/얼굴 분석 1장 완료/)).toBeInTheDocument();
     expect(screen.queryByText(/분석하지 못했어요/)).not.toBeInTheDocument();
   });

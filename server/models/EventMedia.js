@@ -1,5 +1,16 @@
 import pool from '../database.js';
 import { parentAwareDisplayNameSql } from '../utils/usernames.js';
+import { FACE_ANALYZER_VERSION } from '../utils/faceVector.js';
+
+/**
+ * 얼굴을 (다시) 찾아야 하는 사진 — 아직 못 찾았거나(pending·failed·skipped), 예전 방식으로 찾은 것.
+ * "얼굴 없음(none)" 도 예전 방식이면 다시 본다: 작은 얼굴을 놓친 결과일 수 있다.
+ * 재분석 목록 · 통계 · 필터가 모두 이 조건을 쓴다. prefix 는 테이블 별칭('m.').
+ */
+export const needsFaceAnalysisSql = (prefix = '') => (
+  `${prefix}kind = 'image' AND (${prefix}"faceStatus" IN ('pending','failed','skipped')`
+  + ` OR COALESCE(${prefix}"faceAnalyzerVersion", 1) < ${Number(FACE_ANALYZER_VERSION)})`
+);
 
 /**
  * 앨범의 사진·영상 한 건. 바이트는 Drive 에 있고 여기에는 파일 id 와 메타만 둔다.
@@ -53,14 +64,15 @@ class EventMedia {
     return result.rows[0] || null;
   }
 
-  static async setFaceStatus(id, { faceStatus, faceCount = 0, faceError = null }, client = pool) {
+  static async setFaceStatus(id, { faceStatus, faceCount = 0, faceError = null, analyzerVersion = null }, client = pool) {
     const now = new Date().toISOString();
     const result = await client.query(
       `UPDATE event_media
-          SET "faceStatus" = $2, "faceCount" = $3, "faceError" = $4, "faceAnalyzedAt" = $5, "updatedAt" = $5
+          SET "faceStatus" = $2, "faceCount" = $3, "faceError" = $4, "faceAnalyzedAt" = $5, "updatedAt" = $5,
+              "faceAnalyzerVersion" = $6
         WHERE id = $1
         RETURNING *`,
-      [id, faceStatus, faceCount, faceError, now]
+      [id, faceStatus, faceCount, faceError, now, analyzerVersion]
     );
     return result.rows[0] || null;
   }
@@ -132,7 +144,7 @@ class EventMedia {
     }
     if (filter === 'teacher') where.push(`m."uploaderRole" = 'teacher'`);
     if (filter === 'parent') where.push(`m."uploaderRole" = 'parent'`);
-    if (filter === 'unanalyzed') where.push(`m.kind = 'image' AND m."faceStatus" IN ('pending','failed','skipped')`);
+    if (filter === 'unanalyzed') where.push(needsFaceAnalysisSql('m.'));
     if (filter === 'untagged') {
       where.push(`NOT EXISTS (SELECT 1 FROM media_tags t WHERE t."mediaId" = m.id AND t.source <> 'candidate' AND t.source <> 'excluded')`);
     }
@@ -176,8 +188,7 @@ class EventMedia {
          COUNT(*) FILTER (WHERE status = 'ready' AND "isHidden")::int AS hidden,
          COUNT(*) FILTER (WHERE status = 'ready' AND "uploaderRole" = 'parent')::int AS "fromParents",
          COUNT(*) FILTER (WHERE status = 'ready' AND "uploaderRole" = 'teacher')::int AS "fromTeacher",
-         COUNT(*) FILTER (WHERE status = 'ready' AND kind = 'image'
-                            AND "faceStatus" IN ('pending','failed','skipped'))::int AS unanalyzed,
+         COUNT(*) FILTER (WHERE status = 'ready' AND ${needsFaceAnalysisSql()})::int AS unanalyzed,
          COALESCE(SUM(size) FILTER (WHERE status = 'ready'), 0)::bigint AS "totalSize"
        FROM event_media WHERE "eventId" = $1`,
       [eventId]
@@ -294,14 +305,17 @@ class EventMedia {
     return out;
   }
 
-  /** 재분석 대상 (사진 중 분석되지 않은 것) */
-  static async listUnanalyzed(eventId, limit = 5) {
+  /**
+   * 재분석 대상 (needsFaceAnalysisSql). afterId 보다 큰 id 만 — 브라우저는 받은 마지막 id 를 넘겨
+   * 한 바퀴를 돈다. 실패한 사진은 대상에 그대로 남으므로 커서가 없으면 같은 사진을 끝없이 다시 받는다.
+   */
+  static async listUnanalyzed(eventId, limit = 5, afterId = 0) {
     const result = await pool.query(
       `SELECT * FROM event_media
-        WHERE "eventId" = $1 AND status = 'ready' AND kind = 'image'
-          AND "faceStatus" IN ('pending','failed','skipped')
+        WHERE "eventId" = $1 AND status = 'ready' AND ${needsFaceAnalysisSql()}
+          AND id > $3
         ORDER BY id ASC LIMIT $2`,
-      [eventId, limit]
+      [eventId, limit, afterId]
     );
     return result.rows;
   }

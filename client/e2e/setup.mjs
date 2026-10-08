@@ -115,17 +115,18 @@ await pool.query(
 );
 
 // 사진 4장(선생님 3, 학부모 1) + 영상 1개
-const mkMedia = async ({ i, kind, uploaderRole, uploaderUserId, hidden = false, eventId = albumEventId }) => {
+const mkMedia = async ({ i, kind, uploaderRole, uploaderUserId, hidden = false, eventId = albumEventId, faceStatus = 'done' }) => {
   const row = await pool.query(
     `INSERT INTO event_media ("eventId","driveFileId",kind,"originalName","driveName","mimeType",size,
                               "takenAt","uploaderUserId","uploaderRole",status,"isHidden","faceStatus",
                               "faceCount","createdAt","updatedAt")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'ready',$11,'done',1,$12,$12)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'ready',$11,$13,$14,$12,$12)
      RETURNING id`,
     [eventId, `e2e-file-${stamp}-${i}`, kind,
       kind === 'video' ? `VID_${i}.mp4` : `IMG_${i}.jpg`,
       `20260912_e2e_${i}`, kind === 'video' ? 'video/mp4' : 'image/jpeg',
-      100000 + i, `2026-09-12T1${i}:00:00.000Z`, uploaderUserId, uploaderRole, hidden, now]
+      100000 + i, `2026-09-12T1${i}:00:00.000Z`, uploaderUserId, uploaderRole, hidden, now,
+      faceStatus, faceStatus === 'done' ? 1 : 0]
   );
   return row.rows[0].id;
 };
@@ -140,6 +141,10 @@ await mkMedia({ i: 5, kind: 'image', uploaderRole: 'teacher', uploaderUserId: te
 await mkMedia({ i: 6, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: privateEventId });
 // 사진 전용 폴더에도 한 장
 await mkMedia({ i: 7, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: folderEventId });
+// 예전 방식(버전 기록 없음)으로 "얼굴 없음" 이 된 사진 두 장 — 선생님 [얼굴 찾기] 가 다시 찾아 저장하는지 본다
+const faceScanEventId = await mkEvent(`e2e얼굴찾기_${stamp}`, null, true, { type: 'special', published: false });
+await mkMedia({ i: 8, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: faceScanEventId, faceStatus: 'none' });
+await mkMedia({ i: 9, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: faceScanEventId, faceStatus: 'none' });
 
 // 첫째 아이 태그를 두 장에 붙인다 → "우리 아이만" 토글로 걸러지는지 확인한다.
 for (const mediaId of mediaIds.slice(0, 2)) {
@@ -245,7 +250,7 @@ const tinv = await pool.query(
 );
 
 const sessions = {
-  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, mediaIds, taggedCount: 2, totalCount: 4 },
+  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, faceScanEventId, mediaIds, taggedCount: 2, totalCount: 4 },
   teacher: { token: sign(teacher), user: { id: teacher.id, username: teacher.username, role: 'user' } },
   teacher2Token: sign(teacher2),
   parent: { token: sign(parent), user: { id: parent.id, username: parent.username, role: 'parent' } },

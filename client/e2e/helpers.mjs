@@ -51,3 +51,13 @@ export const stubPortraitThumbnails = (page) =>
     contentType: 'image/svg+xml',
     body: '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="711"><rect width="400" height="711" fill="#8a8"/></svg>'
   }));
+
+/** 얼굴이 없는 64×64 PNG — 브라우저가 읽을 수는 있는 사진 (얼굴 등록 · 얼굴 찾기 테스트) */
+export const FACELESS_PNG = {
+  name: 'no-face.png',
+  mimeType: 'image/png',
+  buffer: Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAu0lEQVR42u3PBUEYAAAAQWLj7u6y4bLh+kCFj0UECvw1uAEZlCEZlhEZlTEZlwmZlCmZlhmZlTmZlwVZlCVZlhVZlTVZlw3ZlC3Zlh3ZlT3ZlwM5lCP5I3/lWE7kVM7kXC7kUq7kWm7kn/yXW7mTe3mQR3mSZ3mRV3mTd/kQ5FO+5HugQIECBQoUKFCgQIECBQoUKFCgQIECBQoUKFCgQIECBQoUKFCgQIECBQoUKFCgQIECBQoUKPBb4Acwdznwjg4iTgAAAABJRU5ErkJggg==',
+    'base64'
+  )
+};

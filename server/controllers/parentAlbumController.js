@@ -272,7 +272,8 @@ export const completeUpload = async (req, res) => {
     const result = await albumService.completeUpload(event.userId, event, media, {
       driveFileId,
       takenAt: req.body?.takenAt,
-      faces: req.body?.faces
+      faces: req.body?.faces,
+      analyzerVersion: req.body?.analyzerVersion
     });
 
     res.json({

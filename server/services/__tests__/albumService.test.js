@@ -96,7 +96,7 @@ beforeEach(() => {
 
 describe('getThresholds', () => {
   it('설정이 없으면 기본값을 쓴다', async () => {
-    await expect(albumService.getThresholds()).resolves.toEqual({ match: 0.5, candidate: 0.6 });
+    await expect(albumService.getThresholds()).resolves.toEqual({ match: 0.55, candidate: 0.65 });
   });
 
   it('관리자가 바꾼 값을 따른다', async () => {
@@ -108,7 +108,7 @@ describe('getThresholds', () => {
   it('설정 조회가 실패해도 기본값으로 계속 간다', async () => {
     AppSetting.getMany.mockRejectedValue(new Error('DB 오류'));
 
-    await expect(albumService.getThresholds()).resolves.toEqual({ match: 0.5, candidate: 0.6 });
+    await expect(albumService.getThresholds()).resolves.toEqual({ match: 0.55, candidate: 0.65 });
   });
 });
 
@@ -197,11 +197,14 @@ describe('completeUpload', () => {
 
     const result = await albumService.completeUpload(7, event(), media, {
       driveFileId: 'f1',
-      faces: [{ box: { x: 0.1, y: 0.2, w: 0.1, h: 0.12 }, score: 0.9, descriptor: arr(0.1) }]
+      faces: [{ box: { x: 0.1, y: 0.2, w: 0.1, h: 0.12 }, score: 0.9, descriptor: arr(0.1) }],
+      analyzerVersion: 2
     });
 
     expect(EventMedia.markReady).toHaveBeenCalledWith(55, expect.objectContaining({ driveFileId: 'f1', width: 4032 }));
     expect(MediaFace.replaceForMedia).toHaveBeenCalled();
+    expect(EventMedia.setFaceStatus).toHaveBeenCalledWith(55,
+      expect.objectContaining({ faceStatus: 'done', faceCount: 1, analyzerVersion: 2 }), expect.anything());
     expect(result.faceStatus).toBe('done');
     expect(result.faceCount).toBe(1);
   });
@@ -221,6 +224,21 @@ describe('indexFaces — 얼굴 특징값 저장', () => {
     const result = await albumService.indexFaces(event(), media, undefined);
 
     expect(result.faceStatus).toBe('skipped');
+  });
+
+  it('찾은 방식의 버전을 함께 저장한다 — 예전 버전이면 나중에 다시 찾을 대상이 된다', async () => {
+    await albumService.indexFaces(event(), media, [], { analyzerVersion: 2 });
+    expect(EventMedia.setFaceStatus).toHaveBeenLastCalledWith(55,
+      expect.objectContaining({ faceStatus: 'none', analyzerVersion: 2 }), expect.anything());
+
+    await albumService.indexFaces(event(), media, [], { analyzerVersion: 'garbage' });
+    expect(EventMedia.setFaceStatus).toHaveBeenLastCalledWith(55,
+      expect.objectContaining({ faceStatus: 'none', analyzerVersion: null }), expect.anything());
+
+    // 예전 브라우저(버전을 안 보냄)
+    await albumService.indexFaces(event(), media, []);
+    expect(EventMedia.setFaceStatus).toHaveBeenLastCalledWith(55,
+      expect.objectContaining({ analyzerVersion: null }), expect.anything());
   });
 
   it('얼굴이 없으면 none 이다', async () => {

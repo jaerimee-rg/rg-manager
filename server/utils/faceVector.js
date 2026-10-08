@@ -10,9 +10,29 @@
 
 export const DESCRIPTOR_LENGTH = 128;
 
-/** 기본 임계값. 관리자가 app_settings 로 조정할 수 있다. */
-export const DEFAULT_MATCH_THRESHOLD = 0.5;
-export const DEFAULT_CANDIDATE_THRESHOLD = 0.6;
+/**
+ * 얼굴을 찾는 방식(브라우저 client/src/utils/faceClient.js)의 버전 — **두 파일의 값이 같아야 한다.**
+ * 찾는 방식이 바뀌어 예전 결과를 다시 봐야 하면 올린다. 이보다 낮은(또는 기록이 없는) 버전으로
+ * 분석한 사진은 "얼굴 없음" 이었어도 다시 찾을 목록에 들어간다.
+ *   1 — 1280px 축소본 · 검출 입력 512 (기록 없음 = 1)
+ *   2 — 1920px 축소본 · 검출 입력 512 + 1024 (작은 얼굴, 2026-10)
+ */
+export const FACE_ANALYZER_VERSION = 2;
+
+/** 브라우저가 보낸 버전 → 양의 정수, 아니면 null (기록 없음 = 예전 방식으로 취급된다) */
+export const parseAnalyzerVersion = (value) => {
+  const version = Number(value);
+  return Number.isInteger(version) && version > 0 && version < 1000 ? version : null;
+};
+
+/**
+ * 기본 임계값. 관리자가 app_settings 로 조정할 수 있다.
+ * 처음엔 0.50 / 0.60 이었는데 "어느 정도만 비슷해도 보이게" 로 넓혔다(2026-10) — 놓치는 것보다
+ * 학부모가 [맞아요/아니에요] 로 고르는 편이 낫다. 확인한 태그(parent_confirmed·excluded)는 다시 매칭해도
+ * 바뀌지 않는다(faceMatch.js).
+ */
+export const DEFAULT_MATCH_THRESHOLD = 0.55;
+export const DEFAULT_CANDIDATE_THRESHOLD = 0.65;
 
 /**
  * 배열이 쓸 수 있는 얼굴 벡터인지 본다.
@@ -107,6 +127,8 @@ export const bestPerStudent = (faces, profiles) => {
 };
 
 export default {
+  FACE_ANALYZER_VERSION,
+  parseAnalyzerVersion,
   DESCRIPTOR_LENGTH,
   DEFAULT_MATCH_THRESHOLD,
   DEFAULT_CANDIDATE_THRESHOLD,
