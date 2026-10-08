@@ -25,9 +25,9 @@ export const nextTagSource = (current, incoming) => {
   // 사람이 정한 태그는 사람만 바꾼다.
   if (isHumanSource(current) && !isHumanSource(incoming)) return 'keep';
 
-  // 이미 자동 태그인데 후보로 내려오는 경우는 유지한다 (임계값 근처에서 깜빡이지 않게).
-  if (current === 'face' && incoming === 'candidate') return 'keep';
-
+  // 자동 태그(face)가 후보로 내려오면 후보로 내린다. 예전에는 "깜빡이지 않게" 그대로 두었는데, 그러면 임계값을
+  // 좁혀도 틀린 자동 태그가 남았다(2026-10: 0.50 에서 붙은 0.378 태그가 0.35 기준에서도 자동 태그로 남음).
+  // 같은 얼굴 · 같은 기준 얼굴이면 거리가 같아 다시 매칭해도 오가지 않는다.
   return incoming;
 };
 

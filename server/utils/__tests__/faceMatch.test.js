@@ -16,7 +16,7 @@ describe('nextTagSource — 02 문서 §1.6 전이표', () => {
     ['candidate', 'excluded', 'excluded'],
 
     ['face', 'face', 'face'],
-    ['face', 'candidate', 'keep'],
+    ['face', 'candidate', 'candidate'],   // 임계값을 좁히면 자동 태그도 후보로 내려간다
     ['face', 'manual', 'manual'],
     ['face', 'parent_confirmed', 'parent_confirmed'],
     ['face', 'excluded', 'excluded'],
@@ -68,6 +68,14 @@ describe('mergeMatches', () => {
     const { upsert, remove } = mergeMatches(existing, [{ studentId: 1, source: 'face', distance: 0.2, faceId: 3 }]);
 
     expect(upsert).toEqual([]);
+    expect(remove).toEqual([]);
+  });
+
+  it('임계값을 좁히면 예전 자동 태그는 후보로 내려간다 — 틀린 자동 태그가 남지 않게', () => {
+    const existing = [{ studentId: 41, source: 'face', distance: 0.378, faceId: 1 }];
+    const { upsert, remove } = mergeMatches(existing, [{ studentId: 41, source: 'candidate', distance: 0.378, faceId: 1 }]);
+
+    expect(upsert).toEqual([{ studentId: 41, source: 'candidate', distance: 0.378, faceId: 1 }]);
     expect(remove).toEqual([]);
   });
 
