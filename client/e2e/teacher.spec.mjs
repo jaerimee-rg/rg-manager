@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'fs';
-import { loginAs, api } from './helpers.mjs';
+import { loginAs, api, stubPortraitThumbnails } from './helpers.mjs';
 import { FAKE_PLACE, stubKakaoMaps } from './kakao-fakes.mjs';
 
 const sessions = JSON.parse(readFileSync(new URL('./.sessions.json', import.meta.url)));
@@ -273,6 +273,22 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     await expect(published.getByText('공개', { exact: true })).toBeVisible();
     const privateCard = page.getByRole('button', { name: new RegExp(sessions.album.privateTitle) });
     await expect(privateCard.getByText('비공개', { exact: true })).toBeVisible();
+  });
+
+  test('휴대폰 사진 목록 — 세로 썸네일이어도 앨범 카드 표지가 16:10 을 지킨다', async ({ page }) => {
+    await stubPortraitThumbnails(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/photos');
+
+    const card = page.getByRole('button', { name: new RegExp(`e2e확정대회_`) }).first();
+    const cover = card.locator('.ui-album-card__cover');
+    await expect.poll(() => cover.locator('img').first().evaluate((img) => img.naturalHeight)).toBe(711);
+
+    // 넘침을 자르지 않으면 Chrome 이 세로 사진 높이만큼 표지를 늘렸다(224px → 630px)
+    const box = await cover.boundingBox();
+    expect(Math.abs(box.height - box.width * 10 / 16)).toBeLessThan(3);
+    const titleBox = await card.locator('.ui-album-card__title').boundingBox();
+    expect(titleBox.y).toBeGreaterThanOrEqual(box.y + box.height);
   });
 
   test('Google 이 준비되지 않으면 [사진 올리기] 가 잠기고 안내가 나온다', async ({ page }) => {

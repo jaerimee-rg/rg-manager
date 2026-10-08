@@ -40,3 +40,14 @@ export const api = async (request, session, method, path, body) => {
 export const expectVisible = async (locator) => {
   await expect(locator).toBeVisible();
 };
+
+/**
+ * Drive 썸네일을 세로로 긴 그림(400×711 — 휴대폰으로 찍은 영상 비율)으로 바꿔 끼운다.
+ * 픽스처의 파일 id 는 Drive 에 없어서 진짜 썸네일이 안 뜨는데, 미리보기 칸이 세로 사진에 늘어나
+ * 글자를 덮는지(2026-10-08 학부모 사진 탭) 보려면 세로 그림이 실제로 그려져야 한다.
+ */
+export const stubPortraitThumbnails = (page) =>
+  page.route('https://drive.google.com/thumbnail**', (route) => route.fulfill({
+    contentType: 'image/svg+xml',
+    body: '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="711"><rect width="400" height="711" fill="#8a8"/></svg>'
+  }));
