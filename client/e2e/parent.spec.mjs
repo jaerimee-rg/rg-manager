@@ -295,6 +295,54 @@ test.describe('학부모 — 사진', () => {
     await expect(viewer).toHaveCount(0);
   });
 
+  test('휴대폰에서 사진을 누르면 화면 전체에 뜨고, 저장은 위쪽 아이콘 버튼, 날짜·올린 사람은 사진 아래쪽에 겹쳐 보인다', async ({ page }) => {
+    await stubPortraitThumbnails(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/parent/photos/${sessions.album.eventId}`);
+    await page.getByRole('button', { name: '사진 열기' }).first().click();
+
+    const viewer = page.getByRole('dialog', { name: '사진 보기' });
+    const photo = viewer.getByRole('img');
+    await expect.poll(() => photo.evaluate((img) => img.naturalHeight)).toBe(711);
+
+    // 사진 칸이 화면 전체다 — 위·아래 막대가 자리를 떼어 가지 않는다
+    expect(await photo.boundingBox()).toEqual({ x: 0, y: 0, width: 390, height: 844 });
+
+    // 저장: 오른쪽 위의 작은 동그란 아이콘 버튼, 별 노랑 위에 잉크
+    const save = viewer.getByRole('link', { name: '저장' });
+    await expect(save).toHaveAttribute('href', /drive\.google\.com\/uc\?export=download/);
+    await expect(save).toHaveText('');
+    const saveBox = await save.boundingBox();
+    expect(saveBox.width).toBeLessThanOrEqual(44);
+    expect(saveBox.height).toBe(saveBox.width);
+    expect(saveBox.y).toBeLessThan(60);
+    expect(saveBox.x + saveBox.width).toBeGreaterThan(390 - 20);
+    const colors = await save.evaluate((el) => {
+      const probe = document.createElement('span');
+      probe.style.cssText = 'background-color: var(--star); color: var(--ink)';
+      document.body.appendChild(probe);
+      const want = getComputedStyle(probe);
+      const got = getComputedStyle(el);
+      const result = { bg: got.backgroundColor === want.backgroundColor, ink: got.color === want.color, radius: got.borderRadius };
+      probe.remove();
+      return result;
+    });
+    expect(colors).toEqual({ bg: true, ink: true, radius: '50%' });
+
+    // 날짜와 올린 사람: 사진 아래쪽에 겹친다(화면 맨 아래까지), 터치는 사진으로 지나간다
+    const info = viewer.getByTestId('media-info');
+    await expect(info).toContainText(/\d+\/\d+\(.\) \d+:\d+/);
+    await expect(info).toContainText(/선생님|내가 올림|학부모/);
+    const infoBox = await info.boundingBox();
+    expect(infoBox.y + infoBox.height).toBe(844);
+    expect(infoBox.y).toBeGreaterThan(844 / 2);
+    expect(await info.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe('none');
+
+    // 아래쪽 버튼 줄은 없다
+    await expect(viewer.getByText('원본 보기')).toHaveCount(0);
+    await expect(viewer.getByRole('link')).toHaveCount(1);
+  });
+
   test('휴대폰에서 영상을 누르면 Drive 플레이어가 화면을 채우고, 컨트롤이 아래 막대로 가는 폭으로 그려진다', async ({ page }) => {
     // 진짜 Drive 플레이어 대신 빈 페이지 — 픽스처 파일 id 는 Drive 에 없다
     await page.route('https://drive.google.com/file/d/**', (route) =>
@@ -324,9 +372,14 @@ test.describe('학부모 — 사진', () => {
       expect(overlaps(button, box)).toBe(false);
     }
 
-    // 원본 보기 버튼은 없다 — 아래에는 저장만
-    await expect(viewer.getByRole('link', { name: /저장/ })).toBeVisible();
+    // 원본 보기 버튼은 없다 — 저장은 위쪽 아이콘 버튼
+    await expect(viewer.getByRole('link', { name: '저장' })).toBeVisible();
     await expect(viewer.getByText('원본 보기')).toHaveCount(0);
+
+    // 영상일 때 날짜·올린 사람은 플레이어에 겹치지 않고 바로 아래 한 줄 — 겹치면 맨 아래 Drive 컨트롤을 가린다
+    const info = await viewer.getByTestId('media-info').boundingBox();
+    expect(info.y).toBeGreaterThanOrEqual(box.y + box.height - 0.5);
+    expect(overlaps(await viewer.getByRole('link', { name: '저장' }).boundingBox(), box)).toBe(false);
 
     // 넓은 화면으로 바뀌면(휴대폰을 돌리거나 태블릿) 줄이지 않고 그대로 채운다
     await page.setViewportSize({ width: 1024, height: 768 });
