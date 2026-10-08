@@ -229,6 +229,7 @@ const endOfYear = (today) => `${today.slice(0, 4)}-12-31`;
 /**
  * 일정 화면: 오늘부터 올해 말까지의 공개 이벤트 + 내 자녀들의 신청 상태.
  * 달력 없이 카드로 보여주므로 한 번의 호출로 끝난다.
+ * `?view=past` 면 대신 끝난 이벤트를 최근 것부터 준다 (화면의 "지난 일정 보기").
  */
 export const getEvents = async (req, res) => {
   try {
@@ -241,7 +242,9 @@ export const getEvents = async (req, res) => {
 
     const today = todayKst();
     const children = await ParentChild.listByParent(req.user.id);
-    const events = await Event.listUpcomingForParent(scope, today, endOfYear(today));
+    const events = req.query.view === 'past'
+      ? await Event.listPastForParent(scope, today)
+      : await Event.listUpcomingForParent(scope, today, endOfYear(today));
 
     const studentIds = children.filter((c) => c.studentId).map((c) => c.studentId);
     const registrations = await EventRegistration.listForStudents(

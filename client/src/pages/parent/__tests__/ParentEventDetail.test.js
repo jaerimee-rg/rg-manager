@@ -43,14 +43,14 @@ const EVENT = {
 
 const ok = (body, status = 200) => Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) });
 
-const renderDetail = async (event = EVENT, { status = 200 } = {}) => {
+const renderDetail = async (event = EVENT, { status = 200, entry = '/parent/events/12' } = {}) => {
   fetchWithAuth.mockImplementation((url, options = {}) => {
     if (options.method === 'PUT' || options.method === 'DELETE') return ok({ ok: true });
     return ok(event, status);
   });
   await act(async () => {
     render(
-      <MemoryRouter initialEntries={['/parent/events/12']}>
+      <MemoryRouter initialEntries={[entry]}>
         <Routes>
           <Route path="/parent/events/:eventId" element={<ParentEventDetail />} />
         </Routes>
@@ -80,6 +80,23 @@ describe('ParentEventDetail — 전체 화면 상세', () => {
     fireEvent.click(screen.getByRole('button', { name: '뒤로' }));
 
     expect(mockNavigate).toHaveBeenCalledWith('/parent/schedule');
+  });
+
+  it('지난 일정에서 들어왔으면 뒤로 가기가 지난 일정으로 간다', async () => {
+    await renderDetail(EVENT, {
+      entry: { pathname: '/parent/events/12', state: { back: '/parent/schedule?view=past' } }
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '뒤로' }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/parent/schedule?view=past');
+  });
+
+  it('끝난 일정은 일시 옆에 종료라고 쓴다', async () => {
+    await renderDetail({ ...EVENT, date: '2026-08-20', children: [] });
+
+    expect(screen.getByText('종료')).toBeInTheDocument();
+    expect(screen.queryByText('진행 중')).not.toBeInTheDocument();
   });
 
   it('옵션 선택이 위, 신청한 학생 명단이 아래에 온다', async () => {

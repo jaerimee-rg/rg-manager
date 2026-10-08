@@ -39,8 +39,9 @@ function TabLink({ link, active }) {
  *
  * @param {string} [back] 있으면 제목 왼쪽에 뒤로 가기 버튼이 붙고, 누르면 그 주소로 간다.
  *   (상세 화면처럼 한 단계 안으로 들어온 페이지가 쓴다)
+ * @param {React.ReactNode} [action] 제목 줄 오른쪽 끝에 붙는 것 (일정의 "지난 일정 보기" 링크)
  */
-function ParentLayout({ title, subtitle, back, children }) {
+function ParentLayout({ title, subtitle, back, action, children }) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -56,6 +57,7 @@ function ParentLayout({ title, subtitle, back, children }) {
             <h1 className="ui-mobile-app__title">{title}</h1>
             {subtitle && <div className="ui-mobile-app__subtitle">{subtitle}</div>}
           </div>
+          {action && <div className="ui-mobile-app__head-action">{action}</div>}
         </div>
       </header>
 

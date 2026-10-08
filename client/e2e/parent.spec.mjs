@@ -163,6 +163,58 @@ test.describe('학부모 — 가입부터 신청까지', () => {
     await expect(page).toHaveURL(/\/parent\/schedule$/);
   });
 
+  test('지난 일정 보기 — 링크 모양 버튼으로 끝난 일정을 보고, 상세에서 돌아와도 그 목록이다', async ({ page, request }) => {
+    // 오늘(KST, 서버와 같은 기준) 상대 날짜 — 고정 날짜는 언젠가 "지난" 쪽으로 넘어가 테스트가 썩는다.
+    // 다가올 일정은 오늘로 둔다: 오늘 일정은 남은 일정이고, 연말에도 "올해" 밖으로 넘어가지 않는다.
+    const kstDay = (days) => new Date(Date.now() + 9 * 3600000 + days * 86400000).toISOString().slice(0, 10);
+    const pastTitle = `e2e 지난행사 ${run}`;
+    const upcomingTitle = `e2e 다가올행사 ${run}`;
+    for (const [title, date] of [[pastTitle, kstDay(-30)], [upcomingTitle, kstDay(0)]]) {
+      const created = await api(request, sessions.teacher, 'POST', '/api/events', {
+        type: 'special', title, date, location: 'e2e 체육관'
+      });
+      expect(created.status).toBe(201);
+    }
+
+    await loginAs(page, sessions.parent);
+    await page.goto('/parent/schedule');
+    await expect(page.getByRole('button', { name: new RegExp(upcomingTitle) })).toBeVisible();
+    await expect(page.getByRole('button', { name: new RegExp(pastTitle) })).toHaveCount(0);
+
+    // 채운 버튼이 아니라 링크처럼 보인다 — 배경 없음 · 테두리 없음 · 밑줄
+    const toggle = page.getByRole('banner').getByRole('button', { name: '지난 일정 보기' });
+    await expect(toggle).toBeVisible();
+    const look = await toggle.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { bg: s.backgroundColor, border: s.borderTopWidth, underline: s.textDecorationLine };
+    });
+    expect(look.bg).toBe('rgba(0, 0, 0, 0)');
+    expect(look.border).toBe('0px');
+    expect(look.underline).toContain('underline');
+
+    await toggle.click();
+    await expect(page).toHaveURL(/\/parent\/schedule\?view=past$/);
+    await expect(page.getByText('지난 일정', { exact: true })).toBeVisible();
+    const pastCard = page.getByRole('button', { name: new RegExp(pastTitle) });
+    await expect(pastCard).toBeVisible();
+    await expect(pastCard).toContainText('종료');
+    await expect(page.getByRole('button', { name: new RegExp(upcomingTitle) })).toHaveCount(0);
+
+    // 상세에 갔다가 뒤로 오면 지난 일정 목록으로 돌아온다
+    await pastCard.click();
+    await expect(page).toHaveURL(/\/parent\/events\/\d+$/);
+    await page.getByRole('button', { name: '뒤로' }).click();
+    await expect(page).toHaveURL(/\/parent\/schedule\?view=past$/);
+    await expect(page.getByRole('button', { name: new RegExp(pastTitle) })).toBeVisible();
+
+    // 남은 일정 보기로 처음 화면에 돌아간다
+    await page.getByRole('button', { name: '남은 일정 보기' }).click();
+    await expect(page).toHaveURL(/\/parent\/schedule$/);
+    await expect(page.getByText(/년 남은 일정/)).toBeVisible();
+    await expect(page.getByRole('button', { name: new RegExp(upcomingTitle) })).toBeVisible();
+    await expect(page.getByRole('button', { name: new RegExp(pastTitle) })).toHaveCount(0);
+  });
+
   test('학부모 토큰으로는 선생님 API 에 닿지 않는다', async ({ request }) => {
     for (const path of ['/api/students', '/api/events', '/api/parents', '/api/competitions',
       '/api/drive/account', `/api/events/${sessions.album.eventId}/album`,

@@ -2140,6 +2140,13 @@ html { font-synthesis: none; }
 }
 .ui-mobile-app__head-row { display: flex; align-items: center; gap: var(--space-2); }
 .ui-mobile-app__titles { min-width: 0; }
+/* 제목 줄 오른쪽 끝 — 링크처럼 생긴 글자 버튼도 손가락으로 누를 만큼 키운다 */
+.ui-mobile-app__head-action {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: var(--text-sm);
+}
+.ui-mobile-app__head-action .ui-link { min-height: var(--control-md); }
 .ui-mobile-app__title {
   margin: 0;
   font-family: var(--font-display);
