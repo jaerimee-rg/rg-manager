@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Icon } from '../ui';
 import { formatDuration } from '../../utils/mediaUrls';
 import { drivePlayerFrame } from '../../utils/drivePlayer';
 import { formatTime, formatDayLabel, dayKeyOf, uploaderLabel } from '../../utils/albumFilter';
@@ -17,6 +18,11 @@ import { formatTime, formatDayLabel, dayKeyOf, uploaderLabel } from '../../utils
  *
  * 좁은 화면에서는 플레이어를 넓게 그린 뒤 줄여 보여 준다(DrivePlayer, utils/drivePlayer.js) —
  * 그래야 Drive 가 컨트롤을 영상 한가운데가 아니라 맨 아래 막대로 그린다.
+ *
+ * 배치: 사진은 화면 전체를 쓰고, 위쪽 막대(닫기 · 몇 번째 · 저장)와 아래 정보(날짜 · 올린 사람)는
+ * 사진 위에 겹쳐 뜬다. 영상은 겹치지 않는다 — 위쪽 막대는 플레이어 위에, 정보는 플레이어 아래에
+ * 자리를 잡는다(겹치면 맨 아래 Drive 컨트롤과 오른쪽 위 Drive 버튼을 가린다).
+ * 저장·삭제는 위쪽 막대 오른쪽의 동그란 아이콘 버튼이다.
  */
 function MediaViewer({ items = [], startId, onClose, onDelete }) {
   const [index, setIndex] = useState(() => {
@@ -46,7 +52,6 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
   const move = (step) => setIndex((i) => (i + step + items.length) % items.length);
   const isVideo = item.kind === 'video';
   const hasNav = items.length > 1;
-  const duration = formatDuration(item.durationMs);
 
   return (
     <div
@@ -57,25 +62,39 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
         display: 'flex', flexDirection: 'column'
       }}
     >
-      <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '8px', color: '#fff' }}>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="닫기"
-          style={{
-            background: 'rgba(255,255,255,.16)', border: 'none', color: '#fff', width: '36px', height: '36px',
-            borderRadius: '50%', fontSize: '1rem', cursor: 'pointer', fontFamily: 'inherit'
-          }}
-        >✕</button>
-        <div style={{
-          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
-          fontSize: '0.8125rem', fontWeight: 600
-        }}>
+      <div
+        data-testid="viewer-top"
+        style={{
+          ...(isVideo ? {} : {
+            position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2,
+            background: 'linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,0))'
+          }),
+          padding: 'calc(12px + env(safe-area-inset-top)) 14px 12px',
+          display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '8px', color: '#fff'
+        }}
+      >
+        <div style={{ justifySelf: 'start', display: 'flex' }}>
+          <RoundButton label="닫기" icon="x" onClick={onClose} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.8125rem', fontWeight: 600 }}>
           {isVideo && hasNav && <NavButton side="left" inline onClick={() => move(-1)} />}
-          <span style={{ opacity: 0.85 }}>{index + 1} / {items.length}</span>
+          <span style={{ opacity: 0.85, textShadow: '0 1px 3px rgba(0,0,0,.6)' }}>{index + 1} / {items.length}</span>
           {isVideo && hasNav && <NavButton side="right" inline onClick={() => move(1)} />}
         </div>
-        <span style={{ width: '36px' }} />
+        <div style={{ justifySelf: 'end', display: 'flex', gap: '8px' }}>
+          {item.canDelete && onDelete && (
+            <RoundButton label="삭제" icon="trash" tone="danger" onClick={() => onDelete(item)} />
+          )}
+          <RoundButton
+            as="a"
+            label="저장"
+            icon="download"
+            tone="accent"
+            href={item.downloadUrl || item.originalUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          />
+        </div>
       </div>
 
       <div style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
@@ -85,16 +104,17 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
             style={{ alignSelf: 'stretch', width: '100%', maxWidth: '900px', display: 'flex', flexDirection: 'column' }}
           >
             <DrivePlayer key={item.id} src={item.previewUrl} title={item.fileName || '영상'} />
-            <div style={{ color: 'rgba(255,255,255,.7)', fontSize: '0.75rem', textAlign: 'center', padding: '8px 16px 0' }}>
-              Google Drive 플레이어로 재생{duration ? ` · ${duration}` : ''}
-            </div>
+            <MediaInfo item={item} />
           </div>
         ) : (
-          <img
-            src={item.largeUrl || item.thumbnailUrl}
-            alt={item.fileName || '사진'}
-            style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-          />
+          <>
+            <img
+              src={item.largeUrl || item.thumbnailUrl}
+              alt={item.fileName || '사진'}
+              style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
+            />
+            <MediaInfo item={item} overlay />
+          </>
         )}
 
         {!isVideo && hasNav && (
@@ -104,52 +124,58 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
           </>
         )}
       </div>
+    </div>
+  );
+}
 
-      <div style={{
-        padding: '12px 16px calc(14px + env(safe-area-inset-bottom))',
-        background: 'rgba(0,0,0,.62)', color: '#fff'
-      }}>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', fontSize: '0.8125rem', marginBottom: '10px' }}>
-          <span style={{ opacity: 0.6 }}>📅</span>
-          <span>{formatDayLabel(dayKeyOf(item.takenAt))} {formatTime(item.takenAt)}</span>
-          <span style={{ opacity: 0.6, marginLeft: '4px' }}>👤</span>
-          {/* 선생님 화면은 학부모가 올린 사진에 그 학부모의 이름이 온다(uploaderName). 학부모 화면에는 이름이 오지 않는다 */}
-          <span>{item.uploaderRole === 'parent' && item.uploaderName ? item.uploaderName : uploaderLabel(item.uploader)}</span>
-          {(item.myTags || []).filter((tag) => tag.source !== 'candidate').map((tag) => (
-            <span
-              key={tag.studentId}
-              style={{
-                background: 'var(--star)', color: 'var(--ink)', fontSize: '0.6875rem', fontWeight: 800,
-                padding: '3px 9px', borderRadius: 'var(--shape-tag)'
-              }}
-            >{tag.name || '우리 아이'}</span>
-          ))}
-        </div>
+/**
+ * 날짜 · 올린 사람 · (영상 길이) · 우리 아이 태그.
+ * overlay 면 사진 아래쪽에 겹쳐 뜬다 — 누를 것이 없으므로 터치는 그대로 사진으로 지나간다.
+ */
+function MediaInfo({ item, overlay = false }) {
+  const duration = formatDuration(item.durationMs);
+  const entry = { display: 'inline-flex', alignItems: 'center', gap: '5px' };
 
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <a
-            className="btn"
-            href={item.downloadUrl || item.originalUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              flex: 1, background: 'var(--star)', color: 'var(--ink)', minHeight: '42px',
-              fontSize: '0.875rem', textDecoration: 'none'
-            }}
-          >⬇ 저장</a>
-          {item.canDelete && onDelete && (
-            <button
-              type="button"
-              className="btn"
-              onClick={() => onDelete(item)}
-              style={{
-                background: 'rgba(255,72,72,.22)', color: 'var(--alert-soft)', minHeight: '42px',
-                fontSize: '0.875rem', padding: '0 14px', border: 'none', fontFamily: 'inherit'
-              }}
-            >삭제</button>
-          )}
-        </div>
-      </div>
+  return (
+    <div
+      data-testid="media-info"
+      style={{
+        ...(overlay ? {
+          position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 1, pointerEvents: 'none',
+          padding: '40px 16px calc(14px + env(safe-area-inset-bottom))',
+          background: 'linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.7))',
+          textShadow: '0 1px 3px rgba(0,0,0,.6)'
+        } : {
+          padding: '10px 16px calc(12px + env(safe-area-inset-bottom))'
+        }),
+        display: 'flex', gap: '6px 12px', alignItems: 'center', flexWrap: 'wrap',
+        color: '#fff', fontSize: '0.8125rem'
+      }}
+    >
+      <span style={entry}>
+        <Icon name="calendar" size={14} />
+        {formatDayLabel(dayKeyOf(item.takenAt))} {formatTime(item.takenAt)}
+      </span>
+      <span style={entry}>
+        <Icon name="user" size={14} />
+        {/* 선생님 화면은 학부모가 올린 사진에 그 학부모의 이름이 온다(uploaderName). 학부모 화면에는 이름이 오지 않는다 */}
+        {item.uploaderRole === 'parent' && item.uploaderName ? item.uploaderName : uploaderLabel(item.uploader)}
+      </span>
+      {duration && (
+        <span style={entry}>
+          <Icon name="clock" size={14} />
+          {duration}
+        </span>
+      )}
+      {(item.myTags || []).filter((tag) => tag.source !== 'candidate').map((tag) => (
+        <span
+          key={tag.studentId}
+          style={{
+            background: 'var(--star)', color: 'var(--ink)', fontSize: '0.6875rem', fontWeight: 800,
+            padding: '3px 9px', borderRadius: 'var(--shape-tag)', textShadow: 'none'
+          }}
+        >{tag.name || '우리 아이'}</span>
+      ))}
     </div>
   );
 }
@@ -203,22 +229,48 @@ function DrivePlayer({ src, title }) {
   );
 }
 
+const ROUND_TONES = {
+  plain: { background: 'rgba(255,255,255,.16)', color: '#fff' },
+  // 사진 위에 떠 있을 때 — 밝은 사진에서도 보이게 어둡게
+  floating: { background: 'rgba(0,0,0,.35)', color: '#fff' },
+  // 저장 — 앱의 단 하나뿐인 강조색(별 노랑) 위에 잉크
+  accent: { background: 'var(--star)', color: 'var(--ink)' },
+  danger: { background: 'rgba(255,72,72,.22)', color: 'var(--alert-soft)' }
+};
+
+/** 뷰어의 동그란 아이콘 버튼. label 은 스크린리더용 이름이자 툴팁이다. */
+function RoundButton({ as: As = 'button', label, icon, tone = 'plain', size = 36, style, ...rest }) {
+  return (
+    <As
+      type={As === 'button' ? 'button' : undefined}
+      aria-label={label}
+      title={label}
+      data-tone={tone}
+      style={{
+        ...ROUND_TONES[tone],
+        width: `${size}px`, height: `${size}px`, borderRadius: '50%', border: 'none', padding: 0, flexShrink: 0,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        cursor: 'pointer', textDecoration: 'none', fontFamily: 'inherit',
+        ...style
+      }}
+      {...rest}
+    >
+      <Icon name={icon} size={18} />
+    </As>
+  );
+}
+
 /** 사진 위 양옆에 떠 있는 버튼. inline 이면 위쪽 막대 안에 자리를 차지한다(영상). */
 function NavButton({ side, onClick, inline = false }) {
   return (
-    <button
-      type="button"
+    <RoundButton
+      label={side === 'left' ? '이전 사진' : '다음 사진'}
+      icon={side === 'left' ? 'chevronLeft' : 'chevronRight'}
+      tone={inline ? 'plain' : 'floating'}
+      size={38}
       onClick={onClick}
-      aria-label={side === 'left' ? '이전 사진' : '다음 사진'}
-      style={{
-        ...(inline
-          ? { flexShrink: 0, background: 'rgba(255,255,255,.16)' }
-          : { position: 'absolute', top: '50%', transform: 'translateY(-50%)', [side]: '8px', background: 'rgba(0,0,0,.35)' }),
-        border: 'none', color: '#fff',
-        width: '38px', height: '38px', borderRadius: '50%', fontSize: '1.1rem',
-        cursor: 'pointer', fontFamily: 'inherit'
-      }}
-    >{side === 'left' ? '‹' : '›'}</button>
+      style={inline ? undefined : { position: 'absolute', top: '50%', transform: 'translateY(-50%)', [side]: '8px', zIndex: 1 }}
+    />
   );
 }
 
