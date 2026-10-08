@@ -146,6 +146,7 @@
 |---|---|
 | `GET /api/parent/me` | `{ user: { id, username }, teacher: { name, channelName }, children: [{ id, childName, childBirthdate, status, studentId, studentName }] }` |
 | `POST /api/parent/children` `{ children: [{ name, birthdate }] }` | 온보딩·추가. 각 항목 매칭 후 `status` 와 함께 반환 (FR-30~33) |
+| `DELETE /api/parent/children/:childId` | 내가 등록한 아이 삭제 (FR-34a). 학생·신청은 남기고, 이 학부모가 올린 기준 얼굴만 함께 지운다. 200 `{ deleted: { id, childName }, facesRemoved, children }`, 내 아이가 아니면 404 |
 | `GET /api/parent/events?upcoming=1` | **오늘(KST)~올해 12/31** 의 공개 이벤트 + 내 자녀별 신청 상태. 응답 항목: `{ id, type, title, date, endDate, startTime, location, hasOptions, registrationState: 'open'|'closed'|'none', registrations: [{ childId, studentName, status, optionIds }] }` (FR-42~46). `?includeNextYear=1` 은 FR-49 용 선택 |
 | `GET /api/parent/events/:id` | 상세: 설명·옵션 전체·신청 가능 여부와 사유(`canRegister`, `reason`) (FR-50~53) |
 | `PUT /api/parent/events/:id/registrations/:childId` `{ optionIds }` | 신청 또는 옵션 변경(upsert). 서버가 `canRegister` 재검증, `requireOption` 검증. 200 `{ status: 'registered', optionIds }` (FR-52~54, 57) |

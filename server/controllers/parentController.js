@@ -209,6 +209,58 @@ export const addChildren = async (req, res) => {
 };
 
 /**
+ * 내 정보에서 아이 삭제 (docs/parent-portal FR-34a).
+ *
+ * 지우는 것은 **이 학부모 계정에 등록한 아이**뿐이다. 선생님 명단의 학생과 이미 넣은 신청은
+ * 그대로 둔다 — 신청은 학생의 것이고(같은 학생에 엄마·아빠가 함께 연결될 수 있다),
+ * 선생님이 연결을 해제할 때도 신청은 남긴다 (FR-85).
+ * 이 학부모가 올린 기준 얼굴은 함께 지운다 — 아이가 목록에서 사라지면 본인이 다시
+ * 지울 길이 없어지기 때문이다 (FR-128).
+ */
+export const deleteChild = async (req, res) => {
+  try {
+    const children = await ParentChild.listByParent(req.user.id);
+    const child = children.find((row) => String(row.id) === String(req.params.childId));
+    // 다른 집 아이의 id 는 없는 것으로 답한다
+    if (!child) return res.status(404).json({ error: '아이를 찾을 수 없어요.' });
+
+    // 얼굴을 먼저 지운다. 순서가 반대면 중간에 실패했을 때 지울 길 없는 얼굴이 남는다.
+    const facesRemoved = child.studentId
+      ? await ChildFaceProfile.deleteByParentAndStudent(req.user.id, child.studentId)
+      : 0;
+
+    await ParentChild.deleteOwned(child.id, req.user.id);
+
+    /* 기준 얼굴이 빠졌으니 자동 태그를 맞춘다 (얼굴 한 장을 지울 때와 같은 규칙 — FR-263).
+       아이는 이미 지워졌으므로 여기가 실패해도 응답을 막지 않는다. */
+    if (facesRemoved > 0) {
+      // 지운 얼굴에 붙어 있던 사진이 다른 아이에게 더 가까울 수 있다 — 앨범을 다음에 열 때 다시 매칭한다.
+      // 먼저 표시해 두면 아래 즉시 정리가 실패해도 다음에 열 때 바로잡힌다 (이 호출은 던지지 않는다).
+      await albumService.markAlbumsStale(child.teacherId);
+      try {
+        const remaining = await ChildFaceProfile.countByStudent(child.studentId);
+        if (remaining === 0) {
+          await MediaTag.removeAutoTagsForStudent(child.studentId);
+        } else {
+          await albumService.matchStudentAcrossAlbums(child.teacherId, child.studentId);
+        }
+      } catch (error) {
+        console.error('아이 삭제 뒤 자동 태그 정리 실패(생략하고 계속):', error?.message || error);
+      }
+    }
+
+    res.json({
+      deleted: { id: child.id, childName: child.childName },
+      facesRemoved,
+      children: children.filter((row) => row.id !== child.id).map(presentChild)
+    });
+  } catch (error) {
+    console.error('학부모 처리 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/**
  * 내 정보에서 학부모명 바꾸기.
  * users.username 은 카카오 닉네임(식별용)이라 건드리지 않고 별명만 바꾼다.
  */
@@ -548,4 +600,4 @@ export const addTeacher = async (req, res) => {
   }
 };
 
-export default { getMe, addChildren, getEvents, getEvent, registerChild, cancelChild, addTeacher };
+export default { getMe, addChildren, deleteChild, getEvents, getEvent, registerChild, cancelChild, addTeacher };

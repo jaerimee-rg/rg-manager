@@ -74,6 +74,102 @@ test.describe('학부모 — 가입부터 신청까지', () => {
     }
   });
 
+  test('내 아이 줄에는 생년월일과 선생님 이름만 보인다 — 연결된 학생 이름은 적지 않는다', async ({ page, request }) => {
+    await loginAs(page, sessions.parent);
+    await page.goto('/parent/settings');
+
+    const me = await api(request, sessions.parent, 'GET', '/api/parent/me');
+    const child = me.body.children.find((c) => c.childName === childName);
+    expect(child.teacherName).toBeTruthy();
+
+    // 선생님이 한 명이어도 이름이 붙는다. 줄 전체가 정확히 이 글자라 학생 이름이 끼어 있지 않다.
+    await expect(
+      page.getByText(`${child.childBirthdate} · ${child.teacherName} 선생님`, { exact: true })
+    ).toBeVisible();
+  });
+
+  test('내 정보에서 아이를 추가했다가 삭제한다 — 확인 창을 거치고 다른 아이는 그대로다', async ({ page, request }) => {
+    await loginAs(page, sessions.parent);
+    await page.goto('/parent/settings');
+
+    // 학생 명단에 없는 이름이라 확인 대기로 들어간다 (입력칸은 20자까지)
+    const extra = `삭제${run.slice(-5)}`;
+    await page.getByRole('button', { name: '+ 아이 추가' }).click();
+    await page.getByLabel('아이 이름').fill(extra);
+    await page.getByLabel('생년월일').fill('2019-01-01');
+    await page.getByRole('button', { name: '추가', exact: true }).click();
+
+    const remove = page.getByRole('button', { name: `${extra} 삭제` });
+    await expect(remove).toBeVisible();
+    const before = await api(request, sessions.parent, 'GET', '/api/parent/me');
+
+    // 확인 창에서 취소하면 그대로 남는다
+    await remove.click();
+    const dialog = page.getByRole('dialog', { name: '아이를 삭제할까요?' });
+    await expect(dialog).toContainText(`${extra} 정보를 내 정보에서 삭제해요.`);
+    await dialog.getByRole('button', { name: '취소' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(remove).toBeVisible();
+
+    // 삭제하면 그 아이만 사라진다
+    await remove.click();
+    await dialog.getByRole('button', { name: '삭제', exact: true }).click();
+    await expect(page.getByText(`${extra} 정보를 삭제했어요.`)).toBeVisible();
+    await expect(remove).toHaveCount(0);
+    await expect(page.getByRole('button', { name: `${childName} 삭제` })).toBeVisible();
+
+    const after = await api(request, sessions.parent, 'GET', '/api/parent/me');
+    expect(after.body.children.map((c) => c.childName)).not.toContain(extra);
+    expect(after.body.children).toHaveLength(before.body.children.length - 1);
+    // 남은 아이의 학생 연결은 그대로다
+    expect(after.body.children.find((c) => c.childName === childName).status).toBe('linked');
+  });
+
+  test('마지막 아이를 삭제하면 등록 화면으로 가고, 정해 둔 학부모명과 나갈 길이 있다 — 다시 등록하면 그 이름 그대로다', async ({ page, request }) => {
+    // 전용 학부모를 쓴다 — 공용 학부모의 아이를 지우면 그 학부모의 얼굴 사진·태그가 사라져 뒤의 사진 테스트가 깨진다
+    const solo = sessions.parentSolo;
+    await loginAs(page, solo);
+    await page.goto('/parent/settings');
+
+    await page.getByRole('button', { name: `${solo.child.name} 삭제` }).click();
+    const dialog = page.getByRole('dialog', { name: '아이를 삭제할까요?' });
+    await expect(dialog).toContainText('마지막 아이라서, 삭제하면 아이를 다시 등록하는 화면으로 이동해요.');
+    await dialog.getByRole('button', { name: '삭제', exact: true }).click();
+
+    // 아이가 없으면 일정·내 정보가 닫히고 등록 화면만 남는다
+    await expect(page.getByRole('heading', { name: '아이 정보를 알려 주세요' })).toBeVisible();
+    await expect(page).toHaveURL(/\/parent\/onboarding$/);
+    expect((await api(request, solo, 'GET', '/api/parent/me')).body.children).toHaveLength(0);
+
+    // 아이 이름에서 만든 제안값이 정해 둔 이름을 덮어쓰지 않고, 여기서 나갈 수도 있다
+    const nameField = page.getByRole('textbox', { name: /학부모명/ });
+    await expect(nameField).toHaveValue(solo.displayName);
+    await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
+
+    await page.getByLabel('이름').first().fill(solo.child.name);
+    await page.getByLabel('생년월일').first().fill(solo.child.birthdate);
+    await expect(nameField).toHaveValue(solo.displayName);
+    await page.getByRole('button', { name: '시작하기' }).click();
+    // 떠나온 화면(내 정보)으로 돌아온다
+    await expect(page).toHaveURL(/\/parent\/settings$/);
+    await expect(page.getByRole('button', { name: `${solo.child.name} 삭제` })).toBeVisible();
+
+    const after = await api(request, solo, 'GET', '/api/parent/me');
+    expect(after.body.user.displayName).toBe(solo.displayName);
+    expect(after.body.children.map((c) => c.childName)).toEqual([solo.child.name]);
+  });
+
+  test('다른 학부모의 아이는 삭제할 수 없다 (404, 지워지지 않는다)', async ({ request }) => {
+    const theirs = await api(request, sessions.parentMulti, 'GET', '/api/parent/me');
+    const target = theirs.body.children[0];
+
+    const res = await api(request, sessions.parent, 'DELETE', `/api/parent/children/${target.id}`);
+    expect(res.status).toBe(404);
+
+    const again = await api(request, sessions.parentMulti, 'GET', '/api/parent/me');
+    expect(again.body.children.map((c) => c.id)).toContain(target.id);
+  });
+
   test('대회를 신청하고 옵션을 바꾸고 취소한다', async ({ page, request }) => {
     // 신청할 대회를 선생님 쪽에서 하나 만들어 둔다
     const created = await api(request, sessions.teacher, 'POST', '/api/events', {
