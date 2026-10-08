@@ -385,6 +385,10 @@ Parents get their own accounts and a separate app under `/parent/*`. Design docs
   stay), then auto tags are cleaned as in a single face delete — that cleanup never fails the response.
   Deleting the last child sends the parent back to onboarding (`ParentSettings onChildrenChanged` →
   `ParentApp.loadMe`); the confirm dialog says so beforehand (`deleteChildMessage`).
+- **내 아이 row = `생년월일 · ○○○ 선생님` only.** The linked student's name is deliberately **not** shown
+  (owner's call, 2026-10-08): a hand-linked child can carry a different name than the roster student
+  ("이쵸파" ↔ "윤해서"), and the extra name read as a mystery. The teacher name shows even with one teacher.
+  `GET /api/parent/me` still returns `studentName` — it is just not rendered there.
 - **Parent display name** (`parent_accounts.displayName`, e.g. "예림엄마"): what every screen
   shows for a parent. `users.username` stays the Kakao nickname and is **identity only** — it is
   UNIQUE, so two "지우엄마" would collide into `지우엄마_2`; `displayName` is not. Captured in

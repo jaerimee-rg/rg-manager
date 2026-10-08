@@ -33,11 +33,11 @@ const PENDING = {
 const json = (body, okFlag = true) => Promise.resolve({ ok: okFlag, json: () => Promise.resolve(body) });
 
 /** 서버 흉내 — 삭제가 성공하면 다음 /me 부터 그 아이가 빠진다. */
-const serve = (children, { deleteFails = false } = {}) => {
+const serve = (children, { deleteFails = false, teachers = TEACHERS } = {}) => {
   let current = children;
   fetchWithAuth.mockImplementation((url, options = {}) => {
     if (url === '/api/parent/me') {
-      return json({ user: { id: 13, username: '카카오_1', displayName: '칸쵸엄마' }, teachers: TEACHERS, children: current });
+      return json({ user: { id: 13, username: '카카오_1', displayName: '칸쵸엄마' }, teachers, children: current });
     }
     if (options.method === 'DELETE') {
       if (deleteFails) return json({ error: '서버 오류가 발생했습니다.' }, false);
@@ -156,12 +156,41 @@ describe('ParentSettings — 내 아이 삭제', () => {
 });
 
 describe('ParentSettings — 내 아이 줄에 보이는 정보', () => {
-  it('생년월일 · 연결된 학생 이름 · (선생님이 여럿이면) 선생님 이름 순으로 보인다', async () => {
+  it('생년월일과 선생님 이름만 보인다', async () => {
     serve([CHOPA, KANCHO]);
     await renderSettings();
 
-    expect(screen.getByText('2015-08-30 · 윤해서 · 이재림 선생님')).toBeInTheDocument();
-    expect(screen.getByText('2024-07-30 · 이칸쵸 · 최재웅 선생님')).toBeInTheDocument();
+    expect(screen.getByText('2015-08-30 · 이재림 선생님')).toBeInTheDocument();
+    expect(screen.getByText('2024-07-30 · 최재웅 선생님')).toBeInTheDocument();
+  });
+
+  it('연결된 학생 이름은 보이지 않는다 — 입력한 이름과 달라도 아이 이름만 나온다', async () => {
+    serve([CHOPA, KANCHO]);
+    await renderSettings();
+
+    expect(screen.getByText('이쵸파')).toBeInTheDocument();
+    expect(screen.queryByText(/윤해서/)).not.toBeInTheDocument();
+  });
+
+  it('선생님이 한 명이어도 선생님 이름이 보인다', async () => {
+    serve([KANCHO], { teachers: [TEACHERS[0]] });
+    await renderSettings();
+
+    expect(screen.getByText('2024-07-30 · 최재웅 선생님')).toBeInTheDocument();
+  });
+
+  it('확인 대기 중인 아이도 생년월일과 선생님 이름이 보인다', async () => {
+    serve([PENDING]);
+    await renderSettings();
+
+    expect(screen.getByText('2019-01-01 · 이재림 선생님')).toBeInTheDocument();
+  });
+
+  it('선생님 이름을 모르면 생년월일만 보인다', async () => {
+    serve([{ ...PENDING, teacherName: null }]);
+    await renderSettings();
+
+    expect(screen.getByText('2019-01-01')).toBeInTheDocument();
   });
 });
 

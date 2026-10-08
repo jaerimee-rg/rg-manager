@@ -74,6 +74,20 @@ test.describe('학부모 — 가입부터 신청까지', () => {
     }
   });
 
+  test('내 아이 줄에는 생년월일과 선생님 이름만 보인다 — 연결된 학생 이름은 적지 않는다', async ({ page, request }) => {
+    await loginAs(page, sessions.parent);
+    await page.goto('/parent/settings');
+
+    const me = await api(request, sessions.parent, 'GET', '/api/parent/me');
+    const child = me.body.children.find((c) => c.childName === childName);
+    expect(child.teacherName).toBeTruthy();
+
+    // 선생님이 한 명이어도 이름이 붙는다. 줄 전체가 정확히 이 글자라 학생 이름이 끼어 있지 않다.
+    await expect(
+      page.getByText(`${child.childBirthdate} · ${child.teacherName} 선생님`, { exact: true })
+    ).toBeVisible();
+  });
+
   test('내 정보에서 아이를 추가했다가 삭제한다 — 확인 창을 거치고 다른 아이는 그대로다', async ({ page, request }) => {
     await loginAs(page, sessions.parent);
     await page.goto('/parent/settings');

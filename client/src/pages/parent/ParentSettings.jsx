@@ -239,9 +239,9 @@ function ParentSettings({ onChildrenChanged }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 700, fontSize: '0.9375rem' }}>{c.childName}</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)' }}>
-                  {c.childBirthdate}{c.studentName ? ` · ${c.studentName}` : ''}
-                  {/* 선생님이 여럿이면 어느 학원 아이인지 알아야 한다 */}
-                  {(me?.teachers || []).length > 1 && c.teacherName ? ` · ${c.teacherName} 선생님` : ''}
+                  {/* 생년월일 · 선생님만. 연결된 학생 이름은 적지 않는다 — 입력한 아이 이름과 다르면
+                      (선생님이 손으로 연결한 경우) 누구 이름인지 헷갈린다. */}
+                  {c.childBirthdate}{c.teacherName ? ` · ${c.teacherName} 선생님` : ''}
                 </div>
               </div>
               <span className={`badge ${status.className}`}>{status.label}</span>
