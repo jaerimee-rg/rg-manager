@@ -7,6 +7,9 @@
 ## 0. 한 줄 요약
 
 새로 짜는 것은 **선생님 화면 3개**(사진 목록, 앨범, 설정 카드 정리)와 **공개 단계 하나**(`albumPublished` 와 공개 범위)다.
+여기에 **학부모 이벤트 상세의 사진 칸** 하나가 더해진다.
+선생님은 **[사진 올리기] → "어느 이벤트 사진인가요?"** 로 사진을 이벤트에 연결한다. 앨범이 없던 이벤트면 그때 이벤트 이름 폴더가 생긴다.
+연결된 사진은 공개하면 학부모 **사진 탭**과 **그 이벤트 상세** 두 곳에 보인다(요청 ⑤).
 Drive 연결, 폴더 생성, 업로드 세션, 학부모 갤러리는 이미 동작하는 코드를 그대로 다시 쓴다.
 
 ---
@@ -83,16 +86,17 @@ OAuth 클라이언트를 만든 Google 계정은 기록에 없다. 찾는 방법
 | FR-504 | 해제해도 Drive 의 파일은 남는다. 앱의 앨범은 **조회만** 된다(새 업로드 불가, 기존 규칙). 해제 확인은 `window.confirm` 대신 디자인 시스템 `Modal` 로 바꾼다 |
 | FR-505 | 연결 화면에는 "사진은 선생님 Google Drive 용량을 씁니다. 학부모가 올린 사진도 마찬가지예요" 를 한 줄로 알린다 |
 
-### 2.2 사진 메뉴 — 목록 `/photos` (요청 ②③)
+### 2.2 사진 메뉴 — 목록과 사진 올리기 `/photos` (요청 ②③⑤)
 
 | ID | 요구사항 |
 |---|---|
 | FR-510 | 선생님 사이드 메뉴의 **이벤트 관리 바로 아래**에 **사진**(아이콘 `image`)을 둔다 |
 | FR-511 | 앨범 카드를 **이벤트 날짜 최근순**으로 보여 준다. 카드에는 썸네일 최대 4장, 이벤트명·날짜, 사진 수·영상 수, **공개 상태 배지(공개 / 비공개)**, 학부모가 올린 수를 넣는다 |
-| FR-512 | Google 이 연결되지 않았으면 목록 위에 안내 카드를 띄운다: "사진은 선생님 Google Drive 에 저장돼요. 설정에서 Google 계정을 연결해 주세요" **[설정으로 가기]**. 이때 [앨범 추가]는 막는다. 연결이 끊긴 경우(`status='error'`)도 같다 |
-| FR-513 | **[앨범 추가]** 를 누르면 이벤트 고르기 시트가 뜬다. 내 이벤트 중 **대회·스페셜**이면서 **아직 앨범이 없는 것**을 최근순으로 보여 주고, 지난 이벤트도 포함한다. 하나를 고르면 **폴더 이름 미리보기**(`2026-10-12 회장배 대회`)와 **[만들기]** 가 나온다 |
-| FR-514 | 만들면 Drive 에 `RG Manager/<폴더 이름>` 이 생긴다. 앨범은 **비공개**로 시작하고, 화면은 바로 그 앨범으로 넘어간다 |
-| FR-515 | 앨범이 없으면 EmptyState 를 보여 준다: "이벤트를 골라 앨범을 만들면 사진을 올릴 수 있어요" |
+| FR-512 | Google 이 연결되지 않았으면 목록 위에 안내 카드를 띄운다: "사진은 선생님 Google Drive 에 저장돼요. 설정에서 Google 계정을 연결해 주세요" **[설정으로 가기]**. 이때 [사진 올리기]는 막는다. 연결이 끊긴 경우(`status='error'`)도 같다 |
+| FR-513 | 목록 위 **[사진 올리기]** 를 누르면 업로드 시트의 첫 단계 **"어느 이벤트 사진인가요?"** 가 뜬다(요청 ⑤). 내 이벤트 중 **대회·스페셜**을 날짜 최근순으로 보여 준다(예정 포함, 휴관일 제외). 앨범이 있는 이벤트에는 사진 수와 공개 상태를, 없는 이벤트에는 "새 폴더가 만들어져요"를 붙인다. 고르면 올라갈 폴더(`RG Manager / 2026-10-12 회장배 대회`)를 보여 준다 |
+| FR-514 | 이벤트를 고르고 **[사진 고르기]** 로 파일을 고르면 그 이벤트의 앨범으로 올라간다. 앨범이 없던 이벤트면 **이때 Drive 폴더를 만든다**(이벤트 이름 폴더, 비공개로 시작). 다 올리면 그 앨범 화면으로 간다. 이벤트를 고르지 않고는 올릴 수 없다(D-8) |
+| FR-515 | 시트에 **"다 올리면 바로 학부모에게 공개"** 체크를 둔다(기본 꺼짐). 이미 공개된 앨범을 고르면 체크 대신 "공개 중인 앨범이라 올리면 바로 학부모에게 보여요" 를 쓴다(D-7) |
+| FR-516 | 앨범이 하나도 없으면 EmptyState 를 보여 준다: "사진을 올릴 때 이벤트를 고르면, 그 이벤트 이름으로 앨범이 생겨요" + [사진 올리기] |
 
 ### 2.3 사진 메뉴 — 앨범 `/photos/:eventId`
 
@@ -101,11 +105,12 @@ OAuth 클라이언트를 만든 Google 계정은 기록에 없다. 찾는 방법
 | FR-520 | 머리에는 이벤트명·날짜, Drive 폴더 이름과 **[Drive 에서 열기]**(새 탭), 사진·영상 수와 총용량을 둔다 |
 | FR-521 | **공개 패널**에는 지금 상태를 한 줄로 쓴다. 비공개면 "학부모에게 보이지 않아요", 공개면 "참가 확정 학부모 7명이 볼 수 있어요" 처럼 쓰고, 버튼은 **[학부모에게 공개]** / **[비공개로 전환]** 을 둔다 |
 | FR-522 | **공개 범위**는 "참가 확정 학부모"(기본)와 "모든 학부모" 중에 고른다(D-2). "참가 확정" 범위인데 볼 수 있는 학부모가 0명이면 경고를 띄운다: "확정된 학생이 없어 아무도 볼 수 없어요 — 모든 학부모에게 공개할까요?" |
-| FR-523 | **[사진 올리기]** 를 누르면 기존 `UploadSheet` 가 열린다. 한 번에 30개, 사진 25MB, 영상 500MB, 브라우저에서 Drive 로 직접 전송하고 진행률을 보여 준다. 비공개 상태에서도 선생님은 올릴 수 있다 |
+| FR-523 | 앨범 화면의 **[사진 올리기]** 는 이벤트 고르기 단계 없이 **이 앨범(이벤트)으로 바로** 올린다. 기존 `UploadSheet` 를 쓴다. 한 번에 30개, 사진 25MB, 영상 500MB, 브라우저에서 Drive 로 직접 전송하고 진행률을 보여 준다. 비공개 상태에서도 선생님은 올릴 수 있다 |
 | FR-524 | 그리드 필터는 **전체 / 선생님 / 학부모 / 숨김**이다. 누르면 `MediaViewer` 가 열린다 |
 | FR-525 | **선택 모드**에서 **숨기기 / 다시 보이기 / 삭제**를 한다. 삭제는 Drive 휴지통으로 보내므로 30일 안에 복구할 수 있다. 숨긴 사진은 공개 앨범에서도 학부모에게 보이지 않는다 |
 | FR-526 | **학부모 업로드 받기** 토글(기존 `albumUploadOpen`, 기본 ON)을 둔다. 비공개일 때는 꺼진 것처럼 흐리게 보여 주고 "공개하면 적용돼요" 를 붙인다 |
 | FR-527 | 앨범에 이상이 있으면(폴더가 사라짐, 링크 공유 꺼짐, Google 연결 끊김) 배너와 **[새로고침]** 을 띄운다. 읽기는 계속되고 쓰기 버튼만 막는다 |
+| FR-529 | 공개 패널에 **"공개하면 보이는 곳"** 을 적는다: 학부모 **사진 탭**, 그리고 **'회장배 리듬체조 대회' 이벤트 상세**. 사진이 이벤트에 연결돼 있다는 것을 선생님이 여기서 확인한다 |
 | FR-528 | 얼굴 태그 관리(확인 필요, 태그 없음, 다시 매칭, 미분석 재분석)는 **이번 범위 밖**이다. 업로드할 때 브라우저가 얼굴 특징값을 뽑아 저장하는 것은 기존대로 계속하므로, 학부모의 "우리 아이 사진만 보기"는 동작한다 |
 
 ### 2.4 이벤트 화면 (요청 ③)
@@ -121,10 +126,11 @@ OAuth 클라이언트를 만든 Google 계정은 기록에 없다. 찾는 방법
 | ID | 요구사항 |
 |---|---|
 | FR-540 | **사진** 탭(`/parent/photos`)에는 **공개된 앨범** 중 **공개 범위에 드는** 것만 나온다. 이벤트가 비공개(`isPublished=false`)이면 앨범도 보이지 않는다(기존) |
-| FR-541 | 선생님이 비공개로 돌리면 목록, 갤러리, 이벤트 상세 미리보기에서 **바로 사라진다.** 주소로 직접 들어오면 403 `album_private` 와 "선생님이 아직 공개하지 않은 앨범이에요" 를 돌려준다 |
+| FR-541 | 선생님이 비공개로 돌리면 목록, 갤러리, 이벤트 상세 사진 칸에서 **바로 사라진다.** 주소로 직접 들어오면 403 `album_private` 와 "선생님이 아직 공개하지 않은 앨범이에요" 를 돌려준다 |
 | FR-542 | 학부모는 **공개 + 업로드 받기 ON + 범위 안**일 때만 올린다. 올리는 곳은 **사진 탭의 앨범 화면 [＋ 올리기]** 하나뿐이고, 이벤트 상세에는 업로드가 없다(D-4) |
 | FR-543 | 학부모가 올린 사진은 바로 보인다(D-5). 선생님은 숨기거나 지울 수 있다 |
 | FR-544 | 학부모는 **자기가 올린 것만** 지운다(기존 `canDeleteMedia`) |
+| FR-545 | 학부모 **이벤트 상세**(`/parent/events/:id`)에 그 이벤트에 연결된 사진을 **바로 보여 준다**(요청 ⑤). 조건은 사진 탭과 같다(공개 + 범위 안). 최근 사진 **6장(3×2)** 과 **"사진 44장 모두 보기 →"**(사진 탭의 그 앨범으로)를 둔다. 사진을 누르면 그 앨범 갤러리에서 그 사진이 크게 열린다. 숨긴 사진은 빠지고, 업로드 버튼은 없다(D-4) |
 
 ---
 
@@ -233,8 +239,11 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumPublishedAt" TEXT;   -- ISO �
       "counts": { "images": 42, "videos": 3, "fromParents": 5, "hidden": 1 },
       "previews": ["<driveFileId>", "..."] }
   ],
-  "candidates": [   // [앨범 추가] 시트 — 대회·스페셜 중 앨범이 없는 이벤트
-    { "eventId": 35, "title": "스페셜 클래스", "date": "2026-11-02", "type": "special", "folderName": "2026-11-02 스페셜 클래스" }
+  "targets": [   // [사진 올리기] 첫 단계 — 대회·스페셜 전부(앨범 유무와 상관없이), 날짜 최근순
+    { "eventId": 35, "title": "스페셜 클래스", "date": "2026-11-02", "type": "special",
+      "folderName": "2026-11-02 스페셜 클래스", "hasAlbum": false, "published": false, "count": 0 },
+    { "eventId": 31, "title": "회장배 대회", "date": "2026-10-12", "type": "competition",
+      "folderName": "2026-10-12 회장배 대회", "hasAlbum": true, "published": true, "count": 45 }
   ]
 }
 ```
@@ -249,6 +258,10 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumPublishedAt" TEXT;   -- ISO �
 | `POST` | body 없이 불러도 된다. 이름은 `folderNameFromEvent(event)`. **비공개로 만든다.** 응답에 `published:false` 를 넣는다 |
 | `PATCH` | `published`(bool), `audience`(`participants`/`all`)를 받는다. 공개로 바꿀 때 `albumStatus='missing'` 이면 400 `album_missing`. 처음 공개할 때만 `albumPublishedAt` 을 찍는다 |
 | `GET` | `published`, `audience`, `publishedAt`, `expectedFolderName`, **`viewerCounts: { participants, all }`** 를 더한다. 이 값이 공개 패널 문구(FR-521)와 0명 경고(FR-522)에 쓰인다 |
+| `POST /media/uploads` | **선생님이 앨범 없는 이벤트로 올리면 먼저 폴더를 만든다**(`albumService.ensureAlbum` — 있으면 그대로, 없으면 `createAlbumFolder` 후 비공개). 휴관일이면 400. 학부모 경로(`/api/parent/...`)는 지금처럼 앨범이 있어야 한다 |
+
+"다 올리면 바로 공개"(FR-515)는 서버에 따로 두지 않는다. 클라이언트가 업로드를 다 마친 뒤 `PATCH {published:true}` 를 한 번 더 부른다.
+업로드가 하나도 성공하지 못하면 부르지 않는다.
 
 `viewerCounts` 는 학부모 **계정 수**다. `participants` 는 이 이벤트의 확정·참가 학생에 연결된 학부모, `all` 은 이 선생님과 연결된(`parent_teachers`) 학부모를 센다.
 
@@ -263,7 +276,7 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumPublishedAt" TEXT;   -- ISO �
 | `Event.listWithAlbumsForParent` | `AND e."albumPublished"` 를 더한다 |
 | `parentAlbumController.listAlbums` | 확정 필터를 `audience` 에 맞춘다(`all` 이면 건너뛴다) |
 | `parentAlbumController.loadAlbumContext` (갤러리·업로드·완료·확인·삭제가 모두 거침) | `canViewAlbum({ albumPublished, audience, ... })` |
-| `parentController.getEvent` 의 `album` 블록 | 공개 + 범위 안일 때만 `available:true`. 비공개면 `album:null` 이다. 앨범이 있다는 사실도 알리지 않는다 |
+| `parentController.getEvent` 의 `album` 블록 | 공개 + 범위 안일 때만 `available:true`. 비공개면 `album:null` 이다. 앨범이 있다는 사실도 알리지 않는다. **`items` 를 더한다**: 숨김을 뺀 최근 6개를 `toParentMedia` 그대로(FR-545). 지금의 `previews`(썸네일 주소 4개)는 `items` 로 대체한다 |
 | 업로드 파일 이름의 자녀 | §3.4 마지막 문단 |
 
 `mediaSerializer.toParentMedia` 의 화이트리스트는 **바꾸지 않는다.** 필드 목록을 고정한 테스트가 그대로 지켜야 한다.
@@ -283,7 +296,7 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumPublishedAt" TEXT;   -- ISO �
 ### 6.2 `/photos` — 사진 목록
 
 ```
-┌ 사진 ★★★ ───────────────────────────────────── [＋ 앨범 추가] ┐
+┌ 사진 ★★★ ─────────────────────────────────── [⇪ 사진 올리기] ┐
 │ ⚠ 사진은 선생님 Google Drive 에 저장돼요.                     │  ← 미연결일 때만 (Callout)
 │   설정에서 Google 계정을 연결해 주세요.        [설정으로 가기] │
 ├───────────────────────────────────────────────────────────────┤
@@ -295,12 +308,15 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumPublishedAt" TEXT;   -- ISO �
 │ │ [공개]  학부모 5│ │ [비공개]      │ │ [비공개]      │         │  ← Badge
 │ └───────────────┘ └───────────────┘ └───────────────┘         │
 └───────────────────────────────────────────────────────────────┘
-[＋ 앨범 추가] → Modal(모바일 바텀시트):
-   이벤트 고르기 (대회·스페셜 · 앨범 없는 것 · 최근순)
-   ○ 2026-11-02 스페셜 클래스
-   ● 2026-10-12 회장배 대회
-   Drive 에 만들 폴더: RG Manager / 2026-10-12 회장배 대회
-   앨범은 비공개로 시작해요. 사진을 올린 뒤 공개하세요.      [만들기]
+[⇪ 사진 올리기] → Modal(모바일 바텀시트) 1단계 "어느 이벤트 사진인가요?":
+   ○ 11.20 (금) 전국 꿈나무 대회   [예정] 새 폴더가 만들어져요
+   ● 10.12 (월) 회장배 대회        사진 45 · 공개
+   ○ 10.05 (월) 가을 공개 수업      사진 0 · 비공개
+   ○ 08.30 (일) 여름 합동 공연      새 폴더가 만들어져요
+   올라갈 폴더: RG Manager / 2026-10-12 회장배 대회
+   (비공개 앨범이면) □ 다 올리면 바로 학부모에게 공개
+   (공개 앨범이면)   공개 중인 앨범이라 올리면 바로 학부모에게 보여요   [사진 고르기]
+→ 2단계: 파일별 진행률(기존 UploadSheet). 다 올리면 그 앨범 화면으로
 ```
 
 ### 6.3 `/photos/:eventId` — 앨범
@@ -313,6 +329,7 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumPublishedAt" TEXT;   -- ISO �
 │ ● 비공개 — 학부모에게 보이지 않아요                          │
 │ 공개 범위  (•) 참가 확정 학부모 (7명)  ( ) 모든 학부모 (33명) │
 │ [학부모에게 공개]                                             │
+│ 공개하면 보이는 곳: 학부모 사진 탭 · '회장배 대회' 이벤트 상세  │
 │ 학부모 업로드 받기  [ON]  (공개하면 적용돼요)                 │
 ├──────────────────────────────────────────────────────────────┤
 │ 전체 42 · 선생님 37 · 학부모 5 · 숨김 1      [선택] [＋ 사진 올리기] │
@@ -335,7 +352,9 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumPublishedAt" TEXT;   -- ISO �
 
 화면 코드는 거의 그대로다. 서버가 비공개 앨범을 주지 않는 것으로 끝난다.
 - `ParentAlbum` 이 403 `album_private` 를 받으면 "선생님이 아직 공개하지 않은 앨범이에요" EmptyState 와 [사진 목록으로] 를 보여 준다(링크를 갖고 있던 학부모를 위한 처리).
-- 이벤트 상세의 미리보기 카드는 서버가 `album:null` 을 주면 지금처럼 그리지 않는다(D-4).
+- **이벤트 상세의 "사진 · 영상" 칸**(`ParentEventDetail.jsx`)은 지금의 미리보기 카드(썸네일 4장 + 앨범 열기)를
+  **사진 6장 그리드 + "사진 N장 모두 보기"** 로 바꾼다(FR-545). 사진을 누르면 `/parent/photos/:eventId?open=<mediaId>` 로 가서 그 사진이 크게 열린다.
+  서버가 `album:null` 을 주면(비공개·범위 밖·앨범 없음) 칸 자체를 그리지 않는다. 업로드 버튼은 두지 않는다(D-4).
 
 ---
 
@@ -354,10 +373,12 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumPublishedAt" TEXT;   -- ISO �
 | | `server/server.js` | `app.use('/api/albums', rejectParents, albumRoutes)` |
 | 서버 신규 | `server/routes/albums.js`, `server/controllers/albumListController.js` | §5.1 |
 | 클라이언트 수정 | `client/src/App.jsx` | 메뉴와 라우트 |
+| | `client/src/pages/parent/ParentEventDetail.jsx` | 사진 칸을 6장 그리드 + 모두 보기로(FR-545) |
+| | `client/src/components/album/UploadSheet.jsx` | 앞에 "이벤트 고르기" 단계를 붙일 수 있게(`target` 이 없으면 1단계부터), "다 올리면 바로 공개" 체크 |
 | | `client/src/pages/Settings/DriveAccountCard.jsx` | 디자인 시스템 이전(§6.4) |
 | | `client/src/pages/parent/ParentAlbum.jsx` | `album_private` 처리 |
 | | `client/src/styles/ui.css` | `.ui-album-card`, `.ui-publish-panel` 등 블록(토큰만 사용) |
-| 클라이언트 신규 | `client/src/pages/Photos/PhotoAlbums.jsx`, `PhotoAlbum.jsx`, `AddAlbumModal.jsx`, `PublishPanel.jsx` | §6.2~6.3 |
+| 클라이언트 신규 | `client/src/pages/Photos/PhotoAlbums.jsx`, `PhotoAlbum.jsx`, `UploadTargetStep.jsx`(이벤트 고르기), `PublishPanel.jsx` | §6.2~6.3 |
 | | `client/src/pages/Photos/albumState.js` | 순수 함수: 배지 문구, 공개 패널 문구, 0명 경고, 버튼 활성 조건 |
 | 문서 | `CLAUDE.md` "Event Photo Albums" | "There is no teacher-facing album screen right now" 문단을 사진 메뉴와 공개 규칙 설명으로 바꾼다 |
 | 그대로 | `components/album/*`, `utils/driveUpload.js`, `utils/faceClient.js`, `mediaSerializer.js`, `pages/Events/*` | 이벤트 화면은 **건드리지 않는다**(FR-530). 삭제 확인 문구 한 줄(FR-532)만 예외 |
@@ -374,9 +395,9 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumPublishedAt" TEXT;   -- ISO �
 | S1 규칙 | 스키마 3칸, `albumAccess` 공개·범위, `folderNameFromEvent` | §3.4 표 전체가 단위 테스트로 고정됨 |
 | S2 서버 | `GET /api/albums`, POST/PATCH/GET 변경, 이벤트 수정 동기화, 학부모 판정 | 컨트롤러 테스트 통과(Drive 는 목) |
 | S3 설정 카드 | `DriveAccountCard` 디자인 시스템 이전 | 기존 연결 흐름이 바뀌지 않음 |
-| S4 사진 목록 | 메뉴, `/photos`, 앨범 추가 모달 | 미연결 안내, 후보 목록, 만들기 후 이동 |
+| S4 사진 목록 | 메뉴, `/photos`, [사진 올리기] 1단계(이벤트 고르기) | 미연결 안내, 이벤트 목록, 앨범 없는 이벤트로 올리면 폴더가 생기고 그 앨범으로 이동 |
 | S5 앨범 화면 | 공개 패널, 업로드, 그리드, 선택 동작, 이상 배너 | 공개/비공개 전환이 학부모 쪽에 반영됨 |
-| S6 학부모 | `album_private` 처리, e2e | §9.3 통과 |
+| S6 학부모 | `album_private` 처리, **이벤트 상세 사진 칸**, e2e | §9.3 통과 |
 | S7 마무리 | CLAUDE.md, 스크린샷, PR | §9 전부 통과, PR 설명에 결과 첨부 |
 
 ---
@@ -396,7 +417,8 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumPublishedAt" TEXT;   -- ISO �
 ### 9.2 클라이언트 단위 (Jest, `cd client && npm test`)
 
 - `albumState.js`: 배지, 공개 패널 문구(인원 수 포함), 0명 경고, 버튼 활성 조건(Drive 끊김, 앨범 missing)을 순수 함수 테스트로 확인한다.
-- `PhotoAlbums` · `PhotoAlbum` · `AddAlbumModal`: fetch 를 목으로 두고 렌더링한다. 미연결 안내, 후보 0개, 공개 전환 요청 body 를 확인한다.
+- `PhotoAlbums` · `PhotoAlbum` · `UploadTargetStep`: fetch 를 목으로 두고 렌더링한다. 미연결 안내, 이벤트 0개, 앨범 없는 이벤트의 "새 폴더" 표시, "바로 공개" 체크 뒤 `PATCH` body, 공개 전환 요청 body 를 확인한다.
+- `ParentEventDetail`: `album.items` 가 있으면 6장 그리드와 "모두 보기", `album:null` 이면 사진 칸이 없음.
 - 내비게이션 테스트에 `사진` 이 이벤트 관리 다음에 있는지 넣는다.
 
 ### 9.3 e2e (Playwright, `client/e2e/`)
@@ -410,8 +432,9 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumPublishedAt" TEXT;   -- ISO �
 4. 선생님: 앨범 → [학부모에게 공개] → 배지가 **공개**로 바뀐다.
 5. 학부모: `/parent/photos` 에 앨범이 **있고** 사진 3장이 보인다.
 6. 선생님: [비공개로 전환] → 학부모 새로고침 시 목록에서 사라지고, 직접 주소는 "아직 공개하지 않은 앨범" 이다.
-7. 이벤트 관리 화면에 사진 버튼이나 섹션이 **없다**(FR-530 회귀 방지).
-8. 실제 업로드: `E2E_GOOGLE_DRIVE=1` 일 때만 돈다(기본 skip). 테스트용 Google 계정 토큰이 필요하다.
+7. 학부모: 공개된 상태에서 **이벤트 상세**(`/parent/events/<id>`)에 사진 칸과 "모두 보기"가 있고, 비공개로 돌리면 칸이 사라진다(FR-545).
+8. 이벤트 관리 화면에 사진 버튼이나 섹션이 **없다**(FR-530 회귀 방지).
+9. 실제 업로드: `E2E_GOOGLE_DRIVE=1` 일 때만 돈다(기본 skip). 테스트용 Google 계정 토큰이 필요하다.
 
 실행 조건은 메모와 TESTING.md 를 따른다: `JWT_SECRET=local-dev-secret`, 레이트리밋 상향, 매번 `test:e2e:setup`.
 
@@ -419,7 +442,7 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumPublishedAt" TEXT;   -- ISO �
 
 prod 테스트 선생님 계정(12번)으로 한다.
 1. 설정에서 연결한다.
-2. 사진 → 앨범 추가로 지난 이벤트 하나를 고른다.
+2. 사진 → [사진 올리기] → 앨범이 없는 지난 이벤트 하나를 고른다(폴더가 이때 생기는지 확인).
 3. 사진 2장과 짧은 영상 1개를 올리고, Drive 폴더에 `YYYYMMDD_선생님_*.jpg` 가 생겼는지 본다.
 4. 공개한다.
 5. 연결된 학부모 계정으로 사진 탭에서 보이는지, 학부모 업로드가 되는지 본다.
@@ -479,4 +502,5 @@ prod 테스트 선생님 계정(12번)으로 한다.
 - 썸네일 프록시와 "공개 시에만 Drive 링크 공유"(R-1).
 - refresh token 암호화 저장(R-2).
 - 공개 알림. 학부모는 카카오 메시지를 받지 않으므로(2026-08 결정) 사진 탭의 "새 사진" 점 표시 정도.
-- 이벤트에 묶이지 않은 앨범(예: "2026 봄 연습").
+- 이벤트에 묶이지 않은 앨범(예: "2026 봄 연습"). 이번에는 모든 사진이 이벤트에 연결된다(D-8).
+- **이벤트 연결 바꾸기**: 잘못 고른 이벤트에 올린 사진을 다른 이벤트로 옮기기(Drive `files.update` 로 부모 폴더 변경). 이번에는 지우고 다시 올린다.

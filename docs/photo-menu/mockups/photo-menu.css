@@ -226,14 +226,15 @@
 .ui-upload-row__state { font-size: var(--text-sm); font-weight: var(--weight-bold); white-space: nowrap; }
 
 /* ---------------------------------------------------------------- *
- * 이벤트 고르기 (앨범 추가 모달) — Choice 를 줄로 쌓는다
+ * 이벤트 고르기 (사진 올리기 1단계) — Choice 를 줄로 쌓는다
  * ---------------------------------------------------------------- */
-.ui-event-pick { display: flex; flex-direction: column; gap: var(--space-2); max-height: 300px; overflow: auto; padding: 2px; }
+.ui-event-pick { display: flex; flex-direction: column; gap: var(--space-2); max-height: 340px; overflow: auto; padding: 2px; }
 .ui-event-pick .ui-choice { justify-content: flex-start; }
 .ui-event-pick .ui-choice__mark { border-radius: var(--shape-blob); }
 .ui-event-pick__date { font-variant-numeric: tabular-nums; color: var(--ink-700); font-weight: var(--weight-semibold); min-width: 52px; }
 .ui-event-pick .ui-choice[aria-pressed="true"] .ui-event-pick__date { color: var(--ink-900); }
 .ui-event-pick__title { flex: 1; min-width: 0; }
+.ui-event-pick .ui-choice > .ui-text-sm { white-space: nowrap; }
 
 /* ---------------------------------------------------------------- *
  * Google 마크 — 파랑·초록을 쓰지 않는 규칙 때문에 잉크로 그린 G

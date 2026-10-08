@@ -18,7 +18,7 @@
 <!--
   화면 하나를 ?s=<이름> 으로 골라 그린다. 직접 열기보다 teacher-desktop.html / teacher-mobile.html 에서 보는 것을 권한다.
   s: settings-off | settings-on | settings-error | settings-disconnect
-     photos-nodrive | photos-empty | photos | add
+     photos-nodrive | photos-empty | photos | pick | pick-new
      album-new | album-private | album-public | upload | select | delete | album-error | menu
 -->
 
@@ -187,10 +187,10 @@
 
   var photosPage = function (state) {
     var connected = state !== 'nodrive';
-    var actions = btn('앨범 추가', { variant: 'primary', icon: 'plus', disabled: !connected });
+    var actions = btn('사진 올리기', { variant: 'primary', icon: 'upload', disabled: !connected });
     var head = pageHeader({
       title: '사진',
-      description: '이벤트마다 앨범을 만들어 사진을 올리고, 공개한 앨범만 학부모 ‘사진’ 탭에 보여요.',
+      description: '사진을 올릴 때 이벤트를 고르면 그 이벤트에 연결돼요. 공개한 앨범만 학부모 ‘사진’ 탭과 이벤트 상세에 보여요.',
       actions: actions
     });
     var notice = connected ? '' :
@@ -203,31 +203,45 @@
     return head + notice +
       '<div class="ui-card" data-padding="lg"><div class="ui-empty"><span class="ui-empty__icon">' + icon('image', 28) + '</span>' +
       '<p class="ui-empty__title">아직 앨범이 없어요</p>' +
-      '<p class="ui-empty__description">이벤트를 골라 앨범을 만들면 Drive 에 그 이벤트 이름의 폴더가 생기고, 바로 사진을 올릴 수 있어요.</p>' +
-      '<div class="ui-empty__actions">' + btn('앨범 추가', { variant: connected ? 'primary' : 'outline', icon: 'plus', disabled: !connected }) + '</div></div></div>';
+      '<p class="ui-empty__description">사진을 올릴 때 이벤트를 고르면, Drive 에 그 이벤트 이름의 폴더가 생기고 앨범이 만들어져요.</p>' +
+      '<div class="ui-empty__actions">' + btn('사진 올리기', { variant: connected ? 'primary' : 'outline', icon: 'upload', disabled: !connected }) + '</div></div></div>';
   };
 
-  // ---------- 앨범 추가 모달 ----------
-  var addModal = function () {
-    var picked = 2;
-    var rows = CANDIDATES.map(function (ev, i) {
+  // ---------- 사진 올리기 1단계 — 어느 이벤트 사진인가요? ----------
+  // 대회·스페셜 전부(앨범 유무와 상관없이) 날짜 최근순. 앨범이 없으면 올릴 때 폴더가 생긴다.
+  var TARGETS = ALBUMS.map(function (a) { return { title: a.title, date: a.date, type: a.type, album: a }; })
+    .concat(CANDIDATES.map(function (c) { return { title: c.title, date: c.date, type: c.type, upcoming: c.upcoming, album: null }; }))
+    .sort(function (x, y) { return x.date < y.date ? 1 : -1; });
+
+  var targetState = function (t) {
+    if (!t.album) return '<span class="ui-text-sm ui-text-muted">새 폴더</span>';
+    return '<span class="ui-text-sm ui-text-muted">사진 ' + (t.album.photos + t.album.videos) + '</span>' +
+      (t.album.published ? badge('공개', 'success', true) : badge('비공개', 'muted', true));
+  };
+  var pickFoot = function (t) {
+    var line = '<div class="ui-text-xs ui-text-muted ui-mb-2">' + (t.album ? '올라갈 폴더' : 'Drive 에 새로 만들 폴더') + '</div>' + folderLine(folderName(t));
+    var publish = t.album && t.album.published
+      ? '<p class="ui-text-sm ui-mt-3" style="margin-bottom: 0;">' + icon('eye', 16) + ' 공개 중인 앨범이라 올리면 바로 학부모에게 보여요 — 사진 탭과 이 이벤트 상세.</p>'
+      : '<label class="ui-check ui-mt-3"><input type="checkbox"><span>다 올리면 바로 학부모에게 공개 <span class="ui-text-muted ui-text-sm">(사진 탭 · 이 이벤트 상세)</span></span></label>';
+    return line + publish;
+  };
+  var uploadPick = function (picked) {
+    var rows = TARGETS.map(function (t, i) {
       return '<button type="button" class="ui-choice" aria-pressed="' + (i === picked) + '" data-pick="' + i + '">' +
         '<span class="ui-choice__mark"' + (i === picked ? ' data-on' : '') + '>' + icon('check', 14) + '</span>' +
-        '<span class="ui-event-pick__date">' + shortDate(ev.date) + ' (' + dayOf(ev.date) + ')</span>' +
-        '<span class="ui-event-pick__title">' + esc(ev.title) + '</span>' +
-        (ev.upcoming ? badge('예정', 'warning') : '') + badge(typeLabel(ev.type), 'neutral') + '</button>';
+        '<span class="ui-event-pick__date">' + shortDate(t.date) + ' (' + dayOf(t.date) + ')</span>' +
+        '<span class="ui-event-pick__title">' + esc(t.title) + (t.upcoming ? ' ' + badge('예정', 'warning') : '') + '</span>' +
+        targetState(t) + '</button>';
     }).join('');
     return '<div class="ui-scrim"></div>' +
-      '<div class="ui-overlay" data-mode="sheet" data-size="md" role="dialog" aria-label="앨범 추가">' +
+      '<div class="ui-overlay" data-mode="sheet" data-size="md" role="dialog" aria-label="사진 올리기">' +
       '<div class="ui-overlay__grip"></div>' +
-      '<div class="ui-overlay__header"><div><h2 class="ui-overlay__title">앨범 추가</h2>' +
-      '<p class="ui-overlay__description">어느 이벤트의 사진인가요? 대회·스페셜 중 아직 앨범이 없는 것만 보여요.</p></div>' +
+      '<div class="ui-overlay__header"><div><h2 class="ui-overlay__title">사진 올리기</h2>' +
+      '<p class="ui-overlay__description">어느 이벤트 사진인가요? 고른 이벤트에 연결돼요.</p></div>' +
       '<button type="button" class="ui-callout__dismiss" aria-label="닫기">' + icon('x', 20) + '</button></div>' +
       '<div class="ui-overlay__body"><div class="ui-event-pick" id="event-pick">' + rows + '</div>' +
-      '<div class="ui-card ui-mt-4" data-padding="sm" style="background: var(--surface-muted);">' +
-      '<div class="ui-text-xs ui-text-muted ui-mb-2">Drive 에 만들 폴더</div><div id="pick-folder">' + folderLine(folderName(CANDIDATES[picked])) + '</div></div>' +
-      '<p class="ui-hand ui-mt-3">앨범은 비공개로 시작해요. 사진을 올린 뒤 공개하세요.</p></div>' +
-      '<div class="ui-overlay__footer">' + btn('취소') + btn('만들기', { variant: 'primary' }) + '</div></div>';
+      '<div class="ui-card ui-mt-4" data-padding="sm" style="background: var(--surface-muted);" id="pick-foot">' + pickFoot(TARGETS[picked]) + '</div></div>' +
+      '<div class="ui-overlay__footer">' + btn('취소') + btn('사진 고르기', { variant: 'primary', icon: 'image' }) + '</div></div>';
   };
 
   // ---------- 앨범 ----------
@@ -268,11 +282,15 @@
       '<div><div class="ui-field__label ui-mb-2">공개 범위</div><div class="ui-publish__audience">' +
       choice('participants', '참가 확정 학부모 · ' + opt.participants + '명', a.type === 'competition' ? '이 대회에 확정된 학생의 학부모' : '이 이벤트에 신청이 확정된 학생의 학부모') +
       choice('all', '모든 학부모 · ' + VIEWERS.all + '명', '선생님과 연결된 학부모 전체') + '</div></div>' +
+      '<div><div class="ui-field__label ui-mb-2">' + (on ? '보이는 곳' : '공개하면 보이는 곳') + '</div>' +
+      '<div class="ui-row ui-text-sm" data-gap="4" style="flex-wrap: wrap;">' +
+      '<span class="ui-row" data-gap="1">' + icon('image', 16) + '학부모 ‘사진’ 탭</span>' +
+      '<span class="ui-row" data-gap="1">' + icon('calendar', 16) + '‘' + esc(a.title) + '’ 이벤트 상세</span></div></div>' +
       (zero ? callout('warning', '<b>이 이벤트에는 확정된 학생이 없어요.</b> 지금 공개하면 아무도 볼 수 없어요. 공개 범위를 ‘모든 학부모’로 바꿔 주세요.') : '') +
       '<div class="ui-publish__actions">' +
       (on ? btn('비공개로 전환', { icon: 'lock', disabled: opt.locked })
           : btn('학부모에게 공개', { variant: 'primary', icon: 'eye', disabled: opt.locked })) +
-      '<span class="ui-text-sm ui-text-muted">' + (on ? '비공개로 돌리면 학부모 화면에서 바로 사라져요.' : '공개하면 학부모 ‘사진’ 탭에 바로 나타나요.') + '</span></div>' +
+      '<span class="ui-text-sm ui-text-muted">' + (on ? '비공개로 돌리면 두 곳 모두에서 바로 사라져요.' : '누르면 위 두 곳에 바로 나타나요.') + '</span></div>' +
       '<hr class="ui-publish__divider">' +
       '<div class="ui-switch-field"><label class="ui-switch"><input type="checkbox" role="switch" checked' + (on && !opt.locked ? '' : ' disabled') + '>' +
       '<span class="ui-switch__track"><span class="ui-switch__thumb"></span></span><span>학부모도 사진 올리기</span></label>' +
@@ -361,7 +379,7 @@
       '<div class="ui-overlay" data-mode="sheet" data-size="md" role="dialog" aria-label="사진 올리기">' +
       '<div class="ui-overlay__grip"></div>' +
       '<div class="ui-overlay__header"><div><h2 class="ui-overlay__title">사진 올리기</h2>' +
-      '<p class="ui-overlay__description">' + esc(a.title) + ' · Drive 의 앨범 폴더로 바로 올라가요</p></div></div>' +
+      '<p class="ui-overlay__description">‘' + esc(a.title) + '’ 에 연결 · Drive 의 앨범 폴더로 바로 올라가요</p></div></div>' +
       '<div class="ui-overlay__body">' +
       '<div class="ui-row ui-mb-2" data-justify="between"><b>5개 중 2개 올림</b><span class="ui-text-sm ui-text-muted">198MB 남음</span></div>' +
       '<div class="ui-progress ui-mb-4"><div class="ui-progress__bar" style="width: 46%;"></div></div>' +
@@ -393,7 +411,8 @@
     'photos-nodrive':      { nav: '사진', html: function () { return photosPage('nodrive'); } },
     'photos-empty':        { nav: '사진', html: function () { return photosPage('empty'); } },
     photos:                { nav: '사진', html: function () { return photosPage('photos'); } },
-    add:                   { nav: '사진', html: function () { return photosPage('photos'); }, overlay: addModal },
+    pick:                  { nav: '사진', html: function () { return photosPage('photos'); }, overlay: function () { return uploadPick(2); } },
+    'pick-new':            { nav: '사진', html: function () { return photosPage('photos'); }, overlay: function () { return uploadPick(6); } },
     'album-new':           { nav: '사진', html: function () { return albumPage(NEW, { participants: 0 }); } },
     'album-private':       { nav: '사진', html: function () { return albumPage(priv, { participants: 7 }); } },
     'album-public':        { nav: '사진', html: function () { return albumPage(A, { participants: 7 }); } },
@@ -438,9 +457,13 @@
 
   window.renderMockIcons();
   window.renderMockPhotos();
+  // 고른 이벤트가 목록 안에서 보이도록 그 줄까지 내린다(목록만 스크롤 — 바깥 갤러리는 건드리지 않는다)
+  var pickList = document.getElementById('event-pick');
+  var pickedRow = pickList && pickList.querySelector('[aria-pressed="true"]');
+  if (pickedRow) pickList.scrollTop = Math.max(0, pickedRow.offsetTop - pickList.offsetTop - pickList.clientHeight / 2 + pickedRow.offsetHeight / 2);
 
   // ── 목업 안에서 눌러 볼 수 있는 것 ─────────────────────────────
-  // 앨범 추가: 이벤트를 고르면 폴더 이름 미리보기가 바뀐다
+  // 사진 올리기 1단계: 이벤트를 고르면 올라갈 폴더와 공개 안내가 바뀐다
   document.addEventListener('click', function (e) {
     var pick = e.target.closest('[data-pick]');
     if (pick) {
@@ -450,8 +473,8 @@
         var mark = b.querySelector('.ui-choice__mark');
         if (on) mark.setAttribute('data-on', ''); else mark.removeAttribute('data-on');
       });
-      document.getElementById('pick-folder').innerHTML = folderLine(folderName(CANDIDATES[Number(pick.getAttribute('data-pick'))]));
-      window.renderMockIcons(document.getElementById('pick-folder'));
+      document.getElementById('pick-foot').innerHTML = pickFoot(TARGETS[Number(pick.getAttribute('data-pick'))]);
+      window.renderMockIcons(document.getElementById('pick-foot'));
     }
     // 공개 범위
     var aud = e.target.closest('[data-audience]');
