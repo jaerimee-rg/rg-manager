@@ -1,6 +1,7 @@
 import {
   publishSummary, zeroAudienceWarning, driveNotice, canUploadWith, albumProblem, filterChips,
-  targetState, uploadPublishNote, formatPublishedDate, formatEventDate, formatShortDate, toViewerItem, publishLocked
+  targetState, uploadPublishNote, formatPublishedDate, formatEventDate, formatShortDate, toViewerItem, publishLocked,
+  folderNameFrom, newFolderProblem
 } from '../albumState';
 
 describe('publishSummary (docs/photo-menu FR-521)', () => {
@@ -69,8 +70,8 @@ describe('filterChips (FR-524)', () => {
 });
 
 describe('이벤트 고르기 (FR-513, 515)', () => {
-  it('앨범이 없으면 새 폴더, 있으면 사진 수와 공개 상태', () => {
-    expect(targetState({ hasAlbum: false })).toEqual({ text: '새 폴더', badge: null });
+  it('앨범이 없으면 사진 없음, 있으면 사진 수와 공개 상태', () => {
+    expect(targetState({ hasAlbum: false })).toEqual({ text: '사진 없음', badge: null });
     expect(targetState({ hasAlbum: true, count: 45, published: true })).toEqual({ text: '사진 45', badge: 'published' });
     expect(targetState({ hasAlbum: true, count: 0, published: false }).badge).toBe('private');
   });
@@ -79,6 +80,23 @@ describe('이벤트 고르기 (FR-513, 515)', () => {
     expect(uploadPublishNote({ hasAlbum: true, published: true }).kind).toBe('already');
     expect(uploadPublishNote({ hasAlbum: false }).kind).toBe('option');
     expect(uploadPublishNote({ hasAlbum: true, published: false }).kind).toBe('option');
+  });
+});
+
+describe('새 폴더(이벤트) 만들기 (FR-517)', () => {
+  it('폴더 이름은 서버와 같은 규칙 — 날짜 + 이름, Drive 금지 문자는 공백', () => {
+    expect(folderNameFrom({ date: '2026-09-27', title: '가을 소풍' })).toBe('2026-09-27 가을 소풍');
+    expect(folderNameFrom({ date: '2026-09-27', title: '  스페셜: 리본/곤봉  ' })).toBe('2026-09-27 스페셜 리본 곤봉');
+    expect(folderNameFrom({ date: '2026-09-27', title: '' })).toBe('2026-09-27');
+    expect(folderNameFrom({})).toBe('앨범');
+    expect(folderNameFrom({ date: '2026-09-27', title: '가'.repeat(120) })).toHaveLength(100);
+  });
+
+  it('이름과 날짜가 있어야 만들 수 있다', () => {
+    expect(newFolderProblem({ title: '가을 소풍', date: '2026-09-27' })).toBeNull();
+    expect(newFolderProblem({ title: '   ', date: '2026-09-27' })).toBe('이름을 입력해 주세요.');
+    expect(newFolderProblem({ title: '가'.repeat(101), date: '2026-09-27' })).toBe('이름은 100자 이내로 입력해 주세요.');
+    expect(newFolderProblem({ title: '가을 소풍', date: '' })).toBe('날짜를 선택해 주세요.');
   });
 });
 

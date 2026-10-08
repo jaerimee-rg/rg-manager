@@ -56,7 +56,8 @@ describe('PhotoAlbums — 사진 목록 (docs/photo-menu FR-510~516)', () => {
   it('[사진 올리기] 는 이벤트 고르기부터 연다', async () => {
     await renderList();
     await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: '사진 올리기' })[0]); });
-    expect(screen.getByText('어느 이벤트 사진인가요? 고른 이벤트에 연결돼요.')).toBeInTheDocument();
+    expect(screen.getByText('어느 이벤트 사진인가요? 고른 이벤트에 연결돼요. 없으면 새로 만들어요.')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /새 폴더\(이벤트\) 만들기/ })).toBeInTheDocument();
   });
 
   it('Google 연결 전이면 설정으로 보내고 [사진 올리기] 를 막는다', async () => {

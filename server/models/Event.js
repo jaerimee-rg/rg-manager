@@ -258,6 +258,25 @@ class Event {
   }
 
   /**
+   * 사진 메뉴의 "새 폴더(이벤트) 만들기"(docs/photo-menu FR-517): 사진을 묶을 이벤트가 아직 없을 때
+   * 이름과 날짜만으로 스페셜 이벤트를 만든다. 신청은 받지 않고(registrationOpen=false),
+   * 신청한 학생이 없어 "참가 확정" 범위로는 볼 사람이 0명이므로 앨범 공개 범위는 처음부터 모든 학부모다.
+   * 앨범 공개는 따로 — 처음에는 비공개이고, 폴더는 첫 업로드 때 만든다(albumService.ensureAlbum).
+   */
+  static async createForPhotos({ userId, title, date }) {
+    const now = new Date().toISOString();
+    const result = await pool.query(
+      `INSERT INTO events
+         ("userId", type, title, date, options, "requireOption", "isPublished", "registrationOpen",
+          "albumAudience", "createdAt", "updatedAt")
+       VALUES ($1, 'special', $2, $3, '[]', FALSE, TRUE, FALSE, 'all', $4, $4)
+       RETURNING *`,
+      [userId, title, date, now]
+    );
+    return hydrate(result.rows[0]);
+  }
+
+  /**
    * 공개하면 몇 명이 보게 되는지 (공개 패널 문구 · 0명 경고, photo-menu FR-521~522).
    * participants = 이 이벤트에 확정됐거나 참가 학생으로 들어간 학생과 연결된 학부모 계정 수
    * all          = 이 선생님과 연결된 학부모 계정 수

@@ -318,6 +318,79 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     await expect(page.getByText(/사진 · 영상/)).toHaveCount(0);
   });
 
+  // FR-517 — 맞는 이벤트가 없으면 올리는 시트에서 이름·날짜로 새 폴더(이벤트)를 만든다
+  test('사진을 올릴 때 이벤트가 없으면 새 폴더(이벤트)를 만든다 — [올리기] 를 누를 때 한 번만', async ({ page, request }) => {
+    const title = `e2e 새폴더 ${run}`;
+    const findMade = async () => {
+      const list = await api(request, sessions.teacher, 'GET', '/api/albums');
+      return list.body.targets.filter((t) => t.title === title);
+    };
+
+    // e2e 서버에는 Google 키가 없어 [사진 올리기] 가 잠긴다 — 목록 응답의 연결 상태만 '연결됨' 으로 바꿔 시트를 연다.
+    // 이벤트 만들기(POST)와 업로드 요청은 진짜 서버로 간다.
+    await page.route('**/api/albums', async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      const response = await route.fetch();
+      const body = await response.json();
+      await route.fulfill({ response, json: { ...body, drive: { ...body.drive, configured: true, connected: true, status: 'connected' } } });
+    });
+
+    await page.goto('/photos');
+    await page.getByRole('button', { name: '사진 올리기' }).first().click();
+    const sheet = page.getByRole('dialog');
+
+    await sheet.getByRole('radio', { name: /새 폴더\(이벤트\) 만들기/ }).click();
+    await expect(sheet.getByRole('button', { name: '사진 고르기' })).toBeDisabled();
+    await sheet.getByLabel('이름').fill(title);
+    await sheet.getByLabel('날짜').fill('2026-09-27');
+    await expect(sheet.getByText(`2026-09-27 ${title}`)).toBeVisible();
+    await expect(sheet.getByText('Drive 에 새로 만들 폴더')).toBeVisible();
+
+    const chooser = page.waitForEvent('filechooser');
+    await sheet.getByRole('button', { name: '사진 고르기' }).click();
+    await (await chooser).setFiles({ name: 'a.jpg', mimeType: 'image/jpeg', buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) });
+    await expect(sheet.getByText(`${title} 앨범에 올려요`)).toBeVisible();
+
+    // 파일을 고른 것만으로는 이벤트가 생기지 않는다
+    expect(await findMade()).toHaveLength(0);
+
+    // [올리기] — 이벤트를 만든 뒤 업로드를 시작한다. Google 이 없으니 업로드는 서버에서 멈추고 안내가 뜬다.
+    await sheet.getByRole('button', { name: '1개 올리기' }).click();
+    await expect(sheet.getByRole('alert')).toBeVisible();
+
+    const made = await findMade();
+    expect(made).toHaveLength(1);
+    expect(made[0]).toMatchObject({ type: 'special', date: '2026-09-27', hasAlbum: false, folderName: `2026-09-27 ${title}` });
+
+    // 다시 눌러도 이벤트는 하나 — 만든 이벤트로 다시 올린다
+    await sheet.getByRole('button', { name: '1개 올리기' }).click();
+    await expect(sheet.getByRole('alert')).toBeVisible();
+    expect(await findMade()).toHaveLength(1);
+
+    // 신청을 받지 않는 공개 스페셜 이벤트, 앨범은 비공개 · 공개 범위는 모든 학부모
+    const event = await api(request, sessions.teacher, 'GET', `/api/events/${made[0].eventId}`);
+    expect(event.body).toMatchObject({
+      type: 'special', isPublished: true, registrationOpen: false, albumPublished: false, albumAudience: 'all'
+    });
+
+    // 시트의 이벤트 목록에도 골라진 채로 들어가 있다
+    await sheet.getByRole('button', { name: /이벤트 다시 고르기/ }).click();
+    await expect(sheet.getByRole('radio', { name: new RegExp(title) })).toHaveAttribute('aria-checked', 'true');
+
+    // 학부모 일정(지난 일정)에 섞이지 않게 지운다
+    const removed = await api(request, sessions.teacher, 'DELETE', `/api/events/${made[0].eventId}`);
+    expect(removed.status).toBeLessThan(300);
+  });
+
+  test('새 폴더(이벤트) API — 학부모는 막히고, 이름·날짜가 없으면 400', async ({ request }) => {
+    const asParent = await api(request, sessions.parent, 'POST', '/api/albums', { title: 'x', date: '2026-09-27' });
+    expect(asParent.status).toBe(403);
+    const noTitle = await api(request, sessions.teacher, 'POST', '/api/albums', { title: ' ', date: '2026-09-27' });
+    expect(noTitle.status).toBe(400);
+    const badDate = await api(request, sessions.teacher, 'POST', '/api/albums', { title: 'x', date: '2026-02-31' });
+    expect(badDate.status).toBe(400);
+  });
+
   test('사진 목록 API 는 학부모에게 막혀 있다', async ({ request }) => {
     const asParent = await api(request, sessions.parent, 'GET', '/api/albums');
     expect(asParent.status).toBe(403);

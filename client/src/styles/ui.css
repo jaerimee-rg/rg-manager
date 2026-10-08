@@ -3583,11 +3583,13 @@ a.ui-btn { text-decoration: none; }
  * 이벤트 고르기 (사진 올리기 1단계) — Choice 를 줄로 쌓는다
  * ---------------------------------------------------------------- */
 .ui-event-pick { display: flex; flex-direction: column; gap: var(--space-2); max-height: 340px; overflow: auto; padding: 2px; }
-.ui-event-pick .ui-choice { justify-content: flex-start; }
+/* 줄은 줄어들지 않는다 — 높이가 막힌 세로 flex 안이라 기본값이면 긴 이름 줄이 눌려 글자가 겹친다 */
+.ui-event-pick .ui-choice { justify-content: flex-start; flex-shrink: 0; }
 .ui-event-pick .ui-choice__mark { border-radius: var(--shape-blob); }
 .ui-event-pick__date { font-variant-numeric: tabular-nums; color: var(--ink-700); font-weight: var(--weight-semibold); min-width: 52px; }
 .ui-event-pick .ui-choice[aria-pressed="true"] .ui-event-pick__date { color: var(--ink-900); }
-.ui-event-pick__title { flex: 1; min-width: 0; }
+.ui-event-pick__title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 480px) { .ui-event-pick__hint { display: none; } }
 .ui-event-pick .ui-choice > .ui-text-sm { white-space: nowrap; }
 
 /* ---------------------------------------------------------------- *
@@ -3619,6 +3621,9 @@ a.ui-btn { text-decoration: none; }
   border-radius: var(--shape-box);
 }
 .ui-event-pick__foot p { margin: 0; }
+/* 새 폴더(이벤트) 만들기 — 이름은 넓게, 날짜는 내용만큼. 좁은 화면에서는 위아래로 */
+.ui-event-pick__new { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); }
+@media (max-width: 480px) { .ui-event-pick__new { grid-template-columns: minmax(0, 1fr); } }
 
 /* 앨범 화면의 필터 칩 줄 — [고르기] 버튼 옆에서 남는 폭만 쓰고 넘치면 가로로 민다 */
 .ui-photo-filters { flex: 1; min-width: 0; }
