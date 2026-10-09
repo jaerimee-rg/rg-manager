@@ -8,7 +8,7 @@ import albumService from '../services/albumService.js';
 import { DriveError, isDriveConfigured, getStorageQuota } from '../utils/googleDrive.js';
 import { getAccessToken } from '../services/driveAccess.js';
 import {
-  sanitizeFolderName, folderNameFromEvent, normalizeCaption, MAX_FILES_PER_UPLOAD, MAX_ALBUM_COVERS
+  sanitizeFolderName, folderNameFromEvent, normalizeCaption, normalizeCoverCrop, MAX_FILES_PER_UPLOAD, MAX_ALBUM_COVERS
 } from '../utils/mediaValidation.js';
 import { canUpload, canManageAlbum, canDeleteMedia, reasonMessage, isValidAudience, isPhotoFolder } from '../utils/albumAccess.js';
 import { toTeacherMedia, thumbnailUrl } from '../utils/mediaSerializer.js';
@@ -88,9 +88,16 @@ export const getAlbum = async (req, res) => {
       audience: event.albumAudience || 'participants',
       publishedAt: event.albumPublishedAt || null,
       // 대표 사진(사진 목록 카드의 표지)으로 고른 사진 id 들, 고른 순서. 숨겼거나 지운 것은 빠진 지금 목록이다.
-      // covers 는 같은 순서의 썸네일 — 대표 사진 칸이 순서를 바꿀 때 그린다(지금 불러온 사진 칸에 없을 수도 있다)
+      // covers 는 같은 순서의 썸네일 — 대표 사진 칸이 순서를 바꿀 때 그린다(지금 불러온 사진 칸에 없을 수도 있다).
+      // crop 은 선생님이 고른 보일 부분(없으면 null), driveFileId 는 카드 표지 미리 보기가 자르지 않은 사진을 받는 데 쓴다
       coverMediaIds: coverRows.map((row) => row.id),
-      covers: coverRows.map((row) => ({ id: row.id, kind: row.kind, thumbnailUrl: thumbnailUrl(row.driveFileId, 400) })),
+      covers: coverRows.map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        driveFileId: row.driveFileId,
+        thumbnailUrl: thumbnailUrl(row.driveFileId, 400),
+        crop: row.coverCrop || null
+      })),
       maxCovers: MAX_ALBUM_COVERS,
       // 학부모에게 보낼 링크 (FR-518) — 앨범 주소 + 이 선생님의 학부모 초대 토큰 (services/albumShare)
       sharePath,
@@ -232,7 +239,30 @@ const nextCovers = async (event, body) => {
   return { ids: [...ids, media.id] };
 };
 
-/** PATCH /api/events/:id/album — 이름 변경 · 업로드 받기 토글 · 공개 · 공개 범위 · 대표 사진(더하기·빼기·통째로 바꾸기) */
+const INVALID_COVER_CROP = (error = '보일 부분을 다시 골라 주세요.') => ({ status: 400, body: { error, reason: 'invalid_cover_crop' } });
+
+/**
+ * 대표 사진마다 보일 부분 — { coverCrops: { [mediaId]: { x, y, zoom } | null } }. 대표 사진을 통째로 바꿀 때(coverMediaIds)만
+ * 함께 받고, 그 목록에 든 사진의 것만 받는다(앨범 화면의 [저장하기] 가 목록과 보일 부분을 한 번에 보낸다).
+ * → null(안 왔다) | { crops } | { status, body }
+ */
+const parseCoverCrops = (body, covers) => {
+  if (body.coverCrops === undefined) return null;
+  if (body.coverMediaIds === undefined || !covers?.ids) return INVALID_COVER_CROP('보일 부분은 대표 사진 목록과 함께 보내 주세요.');
+  const raw = body.coverCrops;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return INVALID_COVER_CROP();
+  const crops = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const id = Number(key);
+    if (!covers.ids.includes(id)) return INVALID_COVER_CROP('대표 사진으로 고른 사진의 보일 부분만 정할 수 있어요.');
+    const result = normalizeCoverCrop(value);
+    if (!result.ok) return INVALID_COVER_CROP(result.message);
+    crops[id] = result.crop;
+  }
+  return { crops };
+};
+
+/** PATCH /api/events/:id/album — 이름 변경 · 업로드 받기 토글 · 공개 · 공개 범위 · 대표 사진(더하기·빼기·통째로 바꾸기, 보일 부분) */
 export const updateAlbum = async (req, res) => {
   try {
     const event = await loadEvent(req);
@@ -243,6 +273,8 @@ export const updateAlbum = async (req, res) => {
     // 대표 사진은 앱 안의 값이라 Google 연결이 끊겨도 바꿀 수 있다. Drive 를 건드리는 폴더 이름 바꾸기보다 먼저 확인한다
     const covers = await nextCovers(event, body);
     if (covers?.status) return res.status(covers.status).json(covers.body);
+    const coverCrops = parseCoverCrops(body, covers);
+    if (coverCrops?.status) return res.status(coverCrops.status).json(coverCrops.body);
     if (body.audience !== undefined && !isValidAudience(body.audience)) {
       return res.status(400).json({ error: '공개 범위를 다시 골라 주세요.', reason: 'invalid_audience' });
     }
@@ -274,6 +306,7 @@ export const updateAlbum = async (req, res) => {
     if (Object.keys(fields).length) {
       updated = (await Event.updateAlbum(event.id, fields)) || updated;
     }
+    if (coverCrops) await EventMedia.setCoverCrops(event.id, coverCrops.crops);
 
     res.json({
       driveFolderName: updated.driveFolderName,

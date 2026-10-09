@@ -141,6 +141,17 @@ describe('PhotoAlbums — 대표 사진 표지', () => {
       .toEqual(['https://lh3/c3', 'https://lh3/c1', 'https://lh3/c2']);
   });
 
+  it('선생님이 고른 보일 부분대로 그린다 — 사진마다 따로', async () => {
+    await renderList({ ...withCovers(['https://lh3/c3', 'https://lh3/c1']), albums: [{
+      ...withCovers(['https://lh3/c3', 'https://lh3/c1']).albums[0], coverCrops: [{ x: 15, y: 85, zoom: 1.8 }, null]
+    }] });
+
+    const images = coverOf().querySelectorAll('img');
+    expect(images[0].style.objectPosition).toBe('15% 85%');
+    expect(images[0].style.transform).toBe('scale(1.8)');
+    expect(images[1].style.objectPosition).toBe('');
+  });
+
   it('고르지 않았으면 예전처럼 최근 사진들', async () => {
     await renderList(withCovers([]));
 
@@ -415,17 +426,21 @@ describe('PhotoAlbum — 대표 사진 고르기 (4장까지)', () => {
   const VIDEO = { id: 4, kind: 'video', thumbnailUrl: 'https://t/4', previewUrl: 'https://drive/v4/preview', uploaderRole: 'teacher', isHidden: false };
 
   // 앨범의 대표 사진을 서버처럼 기억한다 — PATCH {add|removeCoverMediaId} 로 바뀌고, 다시 읽으면 바뀐 목록이 온다
-  const renderCover = async ({ covers = [], media = MEDIA, album = ALBUM, patch } = {}) => {
+  const renderCover = async ({ covers = [], crops = {}, media = MEDIA, album = ALBUM, patch } = {}) => {
     let current = [...covers];
+    let savedCrops = { ...crops };
     fetchWithAuth.mockImplementation((url, options = {}) => {
       if (url === '/api/events/31/album' && !options.method) {
-        const covers = current.map((id) => ({ id, kind: 'image', thumbnailUrl: `https://t/${id}` }));
+        const covers = current.map((id) => ({
+          id, kind: 'image', driveFileId: `f${id}`, thumbnailUrl: `https://t/${id}`, crop: savedCrops[id] || null
+        }));
         return ok({ ...album, coverMediaIds: current, covers, maxCovers: 4 });
       }
       if (url === '/api/events/31/album' && options.method === 'PATCH') {
         const body = JSON.parse(options.body);
         if (patch) return patch(body);
         if (body.coverMediaIds) current = [...body.coverMediaIds];
+        if (body.coverCrops) savedCrops = { ...savedCrops, ...body.coverCrops };
         if (body.removeCoverMediaId) current = current.filter((id) => id !== body.removeCoverMediaId);
         if (body.addCoverMediaId) current = [...current, body.addCoverMediaId];
         return ok({ coverMediaIds: current });
@@ -483,7 +498,7 @@ describe('PhotoAlbum — 대표 사진 고르기 (4장까지)', () => {
     await act(async () => { fireEvent.click(saveButton()); });
 
     expect(patches()).toHaveLength(1);
-    expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaIds: [1, 2] });
+    expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaIds: [1, 2], coverCrops: { 1: null, 2: null } });
     expect(screen.getByText('대표 사진 2장을 저장했어요 · 사진 목록 카드에 반영돼요')).toBeInTheDocument();
     expect(saveBar()).toBeNull();
     expect(screen.queryByText('수정 중')).not.toBeInTheDocument();
@@ -501,7 +516,7 @@ describe('PhotoAlbum — 대표 사진 고르기 (4장까지)', () => {
 
     await closeViewer(viewer);
     await act(async () => { fireEvent.click(saveButton()); });
-    expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaIds: [2] });
+    expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaIds: [2], coverCrops: { 2: null } });
   });
 
   it('4장이 다 찼으면 다른 사진의 버튼이 잠긴다', async () => {
@@ -520,7 +535,7 @@ describe('PhotoAlbum — 대표 사진 고르기 (4장까지)', () => {
 
     await closeViewer(viewer);
     await act(async () => { fireEvent.click(saveButton()); });
-    expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaIds: [4] });
+    expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaIds: [4], coverCrops: { 4: null } });
   });
 
   it('서버가 저장을 거절하면 이유를 알리고 고치던 초안은 그대로 남는다', async () => {
@@ -576,7 +591,7 @@ describe('PhotoAlbum — 대표 사진 고르기 (4장까지)', () => {
       await act(async () => { fireEvent.click(saveButton()); });
 
       expect(patches()).toHaveLength(1);
-      expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaIds: [2, 1] });
+      expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaIds: [2, 1], coverCrops: { 2: null, 1: null } });
       expect(screen.getByText('대표 사진 2장을 저장했어요 · 사진 목록 카드에 반영돼요')).toBeInTheDocument();
       expect(panelOrder()).toEqual(['2', '1']);   // 다시 읽은 저장된 목록
       expect(within(panel()).queryByText('수정 중')).not.toBeInTheDocument();
@@ -632,7 +647,7 @@ describe('PhotoAlbum — 대표 사진 고르기 (4장까지)', () => {
       expect(within(tiles()[1]).getByText('대표 1')).toBeInTheDocument();
       await act(async () => { fireEvent.click(saveButton()); });
 
-      expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaIds: [2, 1] });
+      expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaIds: [2, 1], coverCrops: { 2: null, 1: null } });
       expect(saveBar()).toBeNull();
     });
 
@@ -657,7 +672,7 @@ describe('PhotoAlbum — 대표 사진 고르기 (4장까지)', () => {
       await act(async () => { fireEvent.click(within(panel()).getByRole('button', { name: '1번 대표 사진 빼기' })); });
       await act(async () => { fireEvent.click(saveButton()); });
 
-      expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaIds: [] });
+      expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaIds: [], coverCrops: {} });
       expect(screen.getByText('대표 사진을 모두 뺐어요 · 사진 목록 카드에는 최근 사진이 보여요')).toBeInTheDocument();
     });
 
@@ -692,6 +707,81 @@ describe('PhotoAlbum — 대표 사진 고르기 (4장까지)', () => {
     it('대표 사진이 없으면 정하는 방법을 알려 준다', async () => {
       await renderCover();
       expect(within(panel()).getByText(/\[고르기\] 로 4장까지/)).toBeInTheDocument();
+    });
+  });
+
+  describe('보일 부분 — "사진 목록에서 이렇게 보여요" 의 사진을 눌러 고른다', () => {
+    const preview = () => within(panel()).getByTestId('cover-preview');
+    const previewImages = () => [...preview().querySelectorAll('img')];
+    const openCrop = async (n) => {
+      await act(async () => { fireEvent.click(within(panel()).getByRole('button', { name: `${n}번 사진 보일 부분 고르기` })); });
+      return screen.getByRole('dialog', { name: `대표 사진 ${n} — 보일 부분` });
+    };
+
+    it('미리 보기는 사진 목록 카드와 같은 주소(자르지 않은 사진)와 저장된 보일 부분으로 그린다', async () => {
+      await renderCover({ covers: [1, 2], crops: { 2: { x: 20, y: 80, zoom: 1.5 } } });
+
+      expect(previewImages().map((img) => img.getAttribute('src'))).toEqual([
+        'https://lh3.googleusercontent.com/d/f1=s800-rw',
+        'https://lh3.googleusercontent.com/d/f2=s1200-rw'
+      ]);
+      expect(previewImages()[1].style.objectPosition).toBe('20% 80%');
+      expect(previewImages()[1].style.transform).toBe('scale(1.5)');
+      expect(within(panel()).getByText(/사진을 누르면 보일 부분을 골라요/)).toBeInTheDocument();
+    });
+
+    it('사진을 눌러 확대하고 [적용] → 고치는 중이 되고, [저장하기] 를 눌러야 PATCH {coverMediaIds, coverCrops}', async () => {
+      await renderCover({ covers: [1, 2] });
+
+      const dialog = await openCrop(1);
+      expect(within(panel()).getByText('수정 중')).toBeInTheDocument();   // 누르면 고치기가 시작된다
+      await act(async () => { fireEvent.change(within(dialog).getByRole('slider', { name: '확대' }), { target: { value: '2' } }); });
+      await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: '적용' })); });
+
+      expect(screen.queryByRole('dialog', { name: /보일 부분/ })).not.toBeInTheDocument();
+      expect(patches()).toHaveLength(0);
+      expect(previewImages()[0].style.transform).toBe('scale(2)');
+      expect(saveBar()).toHaveTextContent('[저장하기] 를 눌러야 사진 목록에 반영돼요');
+      await act(async () => { fireEvent.click(saveButton()); });
+
+      expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaIds: [1, 2], coverCrops: { 1: { x: 50, y: 50, zoom: 2 }, 2: null } });
+      expect(saveBar()).toBeNull();
+      // 다시 읽은 저장된 보일 부분
+      expect(previewImages()[0].style.transform).toBe('scale(2)');
+    });
+
+    it('[취소] 하면 보일 부분은 그대로고, 바꾼 것이 없으니 [저장하기] 는 잠겨 있다', async () => {
+      await renderCover({ covers: [1] });
+
+      const dialog = await openCrop(1);
+      await act(async () => { fireEvent.change(within(dialog).getByRole('slider', { name: '확대' }), { target: { value: '2' } }); });
+      await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: '취소' })); });
+
+      expect(previewImages()[0].style.transform).toBe('');
+      expect(saveButton()).toBeDisabled();
+    });
+
+    it('순서를 바꿔도 보일 부분은 그 사진을 따라간다', async () => {
+      await renderCover({ covers: [1, 2], crops: { 1: { x: 10, y: 10, zoom: 1 } } });
+
+      await act(async () => { fireEvent.click(within(panel()).getByRole('button', { name: '수정' })); });
+      await act(async () => {
+        fireEvent.keyDown(within(panel()).getAllByRole('button', { name: /^대표 사진 \d/ })[0], { key: 'ArrowRight' });
+      });
+      await act(async () => { fireEvent.click(saveButton()); });
+
+      expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaIds: [2, 1], coverCrops: { 2: null, 1: { x: 10, y: 10, zoom: 1 } } });
+    });
+
+    it('새로 고른 사진은 가운데부터 — 예전에 정해 둔 보일 부분을 몰래 되살리지 않는다', async () => {
+      await renderCover({ covers: [1] });
+
+      const viewer = await openTile(1);
+      await act(async () => { fireEvent.click(within(viewer).getByRole('button', { name: '대표 사진으로' })); });
+      await closeViewer(viewer);
+      await act(async () => { fireEvent.click(saveButton()); });
+
+      expect(JSON.parse(patches()[0][1].body).coverCrops).toEqual({ 1: null, 2: null });
     });
   });
 

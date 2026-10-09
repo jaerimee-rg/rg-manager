@@ -15,7 +15,8 @@ import PublishPanel from './PublishPanel';
 import FolderEditDialog from './FolderEditDialog';
 import FaceScanPanel from './FaceScanPanel';
 import CoverOrderPanel from './CoverOrderPanel';
-import { coversFromPicks, dropCovers, sameCovers, toggleCover } from './coverDraft';
+import CoverCropDialog from './CoverCropDialog';
+import { coverCropsBody, coversFromPicks, dropCovers, sameCovers, setCoverCrop, toggleCover } from './coverDraft';
 import ViewStatsPanel from './ViewStatsPanel';
 import PhotoGrid from './PhotoGrid';
 import {
@@ -30,7 +31,8 @@ const PAGE = 60;
  *
  * 위: 학부모 공개 패널 + Drive 폴더 카드. 아래: 얼굴 목록(누르면 그 사람 사진만), 필터 칩과 사진 칸,
  * 고르기 모드(숨기기 · 다시 보이기 · 지우기 · 대표 사진 만들기). 사진을 열어 [대표 사진으로] 를 눌러도 표지로 고른다(4장까지).
- * 대표 사진 칸의 [수정] 에서 끌어서 놓아 순서를 바꾸고 ✕ 로 뺀다. 대표 사진은 이 세 곳 어디서 고쳐도 **[저장하기] 를 눌러야**
+ * 대표 사진 칸의 [수정] 에서 끌어서 놓아 순서를 바꾸고 ✕ 로 빼며, 미리 보기의 사진을 눌러 보일 부분을 고른다(CoverCropDialog).
+ * 대표 사진은 어디서 고쳐도 **[저장하기] 를 눌러야**
  * 반영된다 — 그 전까지는 화면의 초안(coverDraft)일 뿐이다.
  * Google 연결이 끊기거나 폴더가 사라져도 읽기는 계속되고 쓰기 버튼만 막힌다.
  */
@@ -58,6 +60,7 @@ function PhotoAlbum() {
   const [viewerId, setViewerId] = useState(null);
   // 대표 사진 고치기 초안 — null 이면 고치는 중이 아니다. [저장하기] 를 누르기 전까지 서버에 보내지 않는다
   const [coverDraft, setCoverDraft] = useState(null);
+  const [cropIndex, setCropIndex] = useState(null);   // 보일 부분을 고르는 대표 사진(초안의 몇 번째)
   const coverPanelRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState('');
@@ -253,8 +256,18 @@ function PhotoAlbum() {
     coverPanelRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
   };
 
+  // 미리 보기의 사진을 누르면 — 고치는 중이 아니었으면 지금 대표 사진에서 시작하고, 그 사진의 보일 부분 고르기를 연다
+  const openCrop = (index) => {
+    setCoverDraft((prev) => prev ?? savedCovers);
+    setCropIndex(index);
+  };
+  const applyCrop = (crop) => {
+    setCoverDraft((prev) => setCoverCrop(prev ?? savedCovers, cropIndex, crop));
+    setCropIndex(null);
+  };
+
   const saveCovers = async () => {
-    const ok = await patchAlbum({ coverMediaIds: shownCoverIds }, shownCoverIds.length
+    const ok = await patchAlbum({ coverMediaIds: shownCoverIds, coverCrops: coverCropsBody(shownCovers) }, shownCoverIds.length
       ? `대표 사진 ${shownCoverIds.length}장을 저장했어요 · 사진 목록 카드에 반영돼요`
       : '대표 사진을 모두 뺐어요 · 사진 목록 카드에는 최근 사진이 보여요');
     if (ok) setCoverDraft(null);
@@ -467,6 +480,7 @@ function PhotoAlbum() {
               disabled={busy}
               onEdit={() => setCoverDraft(savedCovers)}
               onChange={setCoverDraft}
+              onCrop={openCrop}
             />
           </div>
 
@@ -582,6 +596,16 @@ function PhotoAlbum() {
         onCancel={() => setConfirmFolderDelete(false)}
         onConfirm={deleteFolder}
       />
+
+      {cropIndex !== null && shownCovers[cropIndex] && (
+        <CoverCropDialog
+          key={shownCovers[cropIndex].id}
+          covers={shownCovers}
+          index={cropIndex}
+          onApply={applyCrop}
+          onClose={() => setCropIndex(null)}
+        />
+      )}
 
       {viewerId && (
         <MediaViewer

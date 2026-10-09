@@ -151,6 +151,27 @@ export const normalizeCaption = (value) => {
   return { ok: true, caption };
 };
 
+export const MAX_COVER_ZOOM = 3;
+
+/**
+ * 대표 사진의 보일 부분 { x, y, zoom } — 앨범 카드 표지 칸에서 사진을 object-fit: cover 로 채운 뒤
+ * object-position x% y% 로 맞추고 그 점을 중심으로 zoom 배 키운다(칸 모양이 달라도 같은 값이 통한다).
+ * x·y 는 0~100, zoom 은 1~MAX_COVER_ZOOM. 가운데·확대 없음(50, 50, 1)이나 null 은 "고르지 않음" 이라 null 로 저장한다.
+ * 같은 규칙: client/src/utils/coverCrop.js normalizeCrop. → { ok, crop } | { ok: false, message }
+ */
+export const normalizeCoverCrop = (value) => {
+  if (value === null || value === undefined) return { ok: true, crop: null };
+  if (typeof value !== 'object' || Array.isArray(value)) return { ok: false, message: '보일 부분을 다시 골라 주세요.' };
+  const { x, y, zoom = 1 } = value;
+  const inRange = (n, min, max) => typeof n === 'number' && Number.isFinite(n) && n >= min && n <= max;
+  if (!inRange(x, 0, 100) || !inRange(y, 0, 100) || !inRange(zoom, 1, MAX_COVER_ZOOM)) {
+    return { ok: false, message: '보일 부분을 다시 골라 주세요.' };
+  }
+  const crop = { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10, zoom: Math.round(zoom * 100) / 100 };
+  if (crop.x === 50 && crop.y === 50 && crop.zoom === 1) return { ok: true, crop: null };
+  return { ok: true, crop };
+};
+
 export default {
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
@@ -167,5 +188,7 @@ export default {
   defaultFolderName,
   folderNameFromEvent,
   CAPTION_MAX,
-  normalizeCaption
+  normalizeCaption,
+  MAX_COVER_ZOOM,
+  normalizeCoverCrop
 };

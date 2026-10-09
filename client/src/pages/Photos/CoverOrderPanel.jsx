@@ -3,6 +3,7 @@ import { Badge, Button, Card, Icon } from '../../components/ui';
 import RetryImage from '../../components/album/RetryImage';
 import AlbumCovers from '../../components/album/AlbumCovers';
 import { dropIndex, dropMarker, moveItem } from '../../utils/reorder';
+import { coverImageUrl } from '../../utils/coverCrop';
 
 const DRAG_SLOP = 6; // 이만큼은 움직여야 끌기다 — 누르기만 한 손가락이 순서를 바꾸지 않게
 
@@ -16,9 +17,10 @@ const DRAG_SLOP = 6; // 이만큼은 움직여야 끌기다 — 누르기만 한
  * covers   — [{ id, kind, thumbnailUrl }] 보여 줄 대표 사진, 순서대로 (고치는 중이면 초안, 아니면 GET …/album 의 covers)
  * editing  — 고치는 중인지. 아닐 때는 칸을 끌 수 없고 [수정] 버튼만 있다
  * onEdit() — [수정] · onChange(covers) — 순서를 바꾸거나 뺀 새 목록
+ * onCrop(index) — 미리 보기("사진 목록에서 이렇게 보여요")의 사진을 누르면 — 그 사진의 보일 부분을 고른다(CoverCropDialog)
  * 끌 자리 계산은 추천 상품 순서 바꾸기와 같다(utils/reorder.js) — 세로 대신 가로 가운데를 잰다.
  */
-function CoverOrderPanel({ covers = [], max = 4, editing = false, disabled = false, onEdit, onChange, className }) {
+function CoverOrderPanel({ covers = [], max = 4, editing = false, disabled = false, onEdit, onChange, onCrop, className }) {
   const order = covers;
   const [drag, setDrag] = useState(null);       // { from, to, dx } — 끄는 중
   // 포인터 이벤트 사이에 쓰는 값 — { from, to, startX, pointerX, minDx, maxDx, moved }
@@ -187,9 +189,19 @@ function CoverOrderPanel({ covers = [], max = 4, editing = false, disabled = fal
             </ol>
             <figure className="ui-cover-order__preview">
               <div className="ui-cover-order__preview-box">
-                <AlbumCovers urls={order.map((cover) => cover.thumbnailUrl)} data-testid="cover-preview" />
+                {/* 사진 목록 카드와 같은 주소(자르지 않은 사진)와 보일 부분 — 누르면 그 사진의 보일 부분을 고른다 */}
+                <AlbumCovers
+                  urls={order.map((cover) => coverImageUrl(cover.driveFileId, { single: order.length === 1, zoom: cover.crop?.zoom })
+                    || cover.thumbnailUrl)}
+                  crops={order.map((cover) => cover.crop)}
+                  onSelect={onCrop && !disabled ? onCrop : undefined}
+                  slotLabel={(index) => `${index + 1}번 사진 보일 부분 고르기`}
+                  data-testid="cover-preview"
+                />
               </div>
-              <figcaption className="ui-cover-order__hint">사진 목록에서 이렇게 보여요</figcaption>
+              <figcaption className="ui-cover-order__hint">
+                사진 목록에서 이렇게 보여요{onCrop ? ' · 사진을 누르면 보일 부분을 골라요' : ''}
+              </figcaption>
             </figure>
           </div>
         )}

@@ -11,6 +11,8 @@ import {
   MAX_VIDEO_BYTES,
   CAPTION_MAX,
   normalizeCaption,
+  normalizeCoverCrop,
+  MAX_COVER_ZOOM,
   sameFileKey
 } from '../mediaValidation.js';
 
@@ -224,5 +226,35 @@ describe('normalizeCaption — 사진·영상 설명', () => {
   it('글자가 아니면 거절한다', () => {
     expect(normalizeCaption(42).ok).toBe(false);
     expect(normalizeCaption({ text: '무대' }).ok).toBe(false);
+  });
+});
+
+describe('normalizeCoverCrop — 대표 사진의 보일 부분 { x, y, zoom }', () => {
+  it('0~100 % 위치와 1~3 배 확대를 받고, 알맞게 반올림한다', () => {
+    expect(MAX_COVER_ZOOM).toBe(3);
+    expect(normalizeCoverCrop({ x: 12.345, y: 99.99, zoom: 1.256 })).toEqual({ ok: true, crop: { x: 12.3, y: 100, zoom: 1.26 } });
+    expect(normalizeCoverCrop({ x: 0, y: 100, zoom: 3 })).toEqual({ ok: true, crop: { x: 0, y: 100, zoom: 3 } });
+    expect(normalizeCoverCrop({ x: 30, y: 40 })).toEqual({ ok: true, crop: { x: 30, y: 40, zoom: 1 } });
+  });
+
+  it('가운데·확대 없음과 null 은 "고르지 않음" — null 로 저장한다', () => {
+    expect(normalizeCoverCrop({ x: 50, y: 50, zoom: 1 })).toEqual({ ok: true, crop: null });
+    expect(normalizeCoverCrop({ x: 50.02, y: 49.98, zoom: 1.001 })).toEqual({ ok: true, crop: null });
+    expect(normalizeCoverCrop(null)).toEqual({ ok: true, crop: null });
+    expect(normalizeCoverCrop(undefined)).toEqual({ ok: true, crop: null });
+  });
+
+  it.each([
+    ['범위 밖 위치', { x: -1, y: 50, zoom: 1 }],
+    ['범위 밖 위치', { x: 50, y: 101, zoom: 1 }],
+    ['1 보다 작은 확대', { x: 50, y: 50, zoom: 0.5 }],
+    ['3 보다 큰 확대', { x: 50, y: 50, zoom: 3.5 }],
+    ['숫자가 아님', { x: '50', y: 50, zoom: 1 }],
+    ['위치가 없음', { zoom: 2 }],
+    ['NaN', { x: NaN, y: 50 }],
+    ['배열', [50, 50, 1]],
+    ['글자', '50,50']
+  ])('%s 이면 거절한다', (_label, value) => {
+    expect(normalizeCoverCrop(value)).toMatchObject({ ok: false, message: expect.any(String) });
   });
 });

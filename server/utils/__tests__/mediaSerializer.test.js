@@ -1,5 +1,5 @@
 import {
-  toParentMedia, toTeacherMedia, toParentAlbum, thumbnailUrl, coverImageUrl, coverUrls, largeImageUrl, downloadUrl
+  toParentMedia, toTeacherMedia, toParentAlbum, thumbnailUrl, coverImageUrl, coverUrls, coverCropsOf, largeImageUrl, downloadUrl
 } from '../mediaSerializer.js';
 
 const media = {
@@ -162,14 +162,18 @@ describe('toParentAlbum', () => {
     expect(toParentAlbum({ id: 1 }).counts).toEqual({ images: 0, videos: 0, mine: 0 });
   });
 
-  it('선생님이 고른 대표 사진이 있으면 그 주소들을 싣는다 — 학부모 카드는 이것만 보여 준다', () => {
-    expect(toParentAlbum({ id: 3 }, { previews: ['c1', 'd1'], covers: ['c1'] }).covers).toEqual([coverImageUrl('c1')]);
-    expect(toParentAlbum({ id: 3 }, { previews: ['d1'] }).covers).toEqual([]);
+  it('선생님이 고른 대표 사진이 있으면 그 주소들과 보일 부분을 싣는다 — 학부모 카드는 이것만 보여 준다', () => {
+    const album = toParentAlbum({ id: 3 }, {
+      previews: ['c1', 'd1'], covers: [{ driveFileId: 'c1', crop: { x: 30, y: 70, zoom: 1.5 } }]
+    });
+    expect(album.covers).toEqual([coverImageUrl('c1', { zoom: 1.5 })]);
+    expect(album.coverCrops).toEqual([{ x: 30, y: 70, zoom: 1.5 }]);
+    expect(toParentAlbum({ id: 3 }, { previews: ['d1'] })).toMatchObject({ covers: [], coverCrops: [] });
   });
 
   it('학부모 카드에 나가는 칸은 정해져 있다 — 대표 사진 id 같은 선생님 값은 나가지 않는다', () => {
-    expect(Object.keys(toParentAlbum({ id: 3 }, { covers: ['c1'] })).sort()).toEqual([
-      'albumStatus', 'counts', 'covers', 'date', 'eventId', 'location', 'previews', 'title', 'type', 'uploadOpen'
+    expect(Object.keys(toParentAlbum({ id: 3 }, { covers: [{ driveFileId: 'c1', crop: null }] })).sort()).toEqual([
+      'albumStatus', 'counts', 'coverCrops', 'covers', 'date', 'eventId', 'location', 'previews', 'title', 'type', 'uploadOpen'
     ]);
   });
 });
@@ -190,15 +194,31 @@ describe('URL 만들기', () => {
     expect(thumbnailUrl('f1', 200)).toBe('https://lh3.googleusercontent.com/d/f1=w200-h200-c-rw');
   });
 
-  it('앨범 카드의 대표 사진은 표지 칸과 같은 16:10 으로 잘라 받는다', () => {
-    expect(coverImageUrl('f1')).toBe('https://lh3.googleusercontent.com/d/f1=w800-h500-c-rw');
+  it('앨범 카드의 대표 사진은 자르지 않고 받는다 — 보일 부분은 화면이 정한다. 한 장이면 폭 1000, 여러 장이면 긴 변 800', () => {
+    expect(coverImageUrl('f1')).toBe('https://lh3.googleusercontent.com/d/f1=w1000-rw');
+    expect(coverImageUrl('f1', { single: false })).toBe('https://lh3.googleusercontent.com/d/f1=s800-rw');
+    // Google 이 자르면(-c) 다른 부분을 보여 줄 수 없다
+    expect(coverImageUrl('f1')).not.toMatch(/-c-/);
     expect(coverImageUrl('a b')).toContain('/d/a%20b=');
     expect(coverImageUrl(null)).toBeNull();
   });
 
-  it('표지 주소들: 한 장이면 16:10, 여러 장이면 정사각형 썸네일 — 고른 순서 그대로', () => {
+  it('확대한 만큼 크게 받는다 — 100 단위로 올리고 1600 까지', () => {
+    expect(coverImageUrl('f1', { zoom: 1.5 })).toBe('https://lh3.googleusercontent.com/d/f1=w1500-rw');
+    expect(coverImageUrl('f1', { single: false, zoom: 1.33 })).toBe('https://lh3.googleusercontent.com/d/f1=s1100-rw');
+    expect(coverImageUrl('f1', { zoom: 3 })).toBe('https://lh3.googleusercontent.com/d/f1=w1600-rw');
+    expect(coverImageUrl('f1', { zoom: null })).toBe('https://lh3.googleusercontent.com/d/f1=w1000-rw');
+  });
+
+  it('표지 주소들과 보일 부분: 고른 순서 그대로 — 한 장이면 표지 전체 크기, 여러 장이면 칸 크기', () => {
+    const crop = { x: 10, y: 20, zoom: 2 };
+    expect(coverUrls([{ driveFileId: 'a', crop: null }])).toEqual([coverImageUrl('a')]);
+    expect(coverUrls([{ driveFileId: 'b', crop }, { driveFileId: 'a', crop: null }]))
+      .toEqual([coverImageUrl('b', { single: false, zoom: 2 }), coverImageUrl('a', { single: false })]);
+    expect(coverCropsOf([{ driveFileId: 'b', crop }, { driveFileId: 'a', crop: null }])).toEqual([crop, null]);
+    // 예전처럼 파일 id 만 와도 된다
     expect(coverUrls(['a'])).toEqual([coverImageUrl('a')]);
-    expect(coverUrls(['b', 'a'])).toEqual([thumbnailUrl('b'), thumbnailUrl('a')]);
+    expect(coverCropsOf(['a'])).toEqual([null]);
     expect(coverUrls([])).toEqual([]);
   });
 
