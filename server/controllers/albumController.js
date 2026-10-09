@@ -83,6 +83,8 @@ export const getAlbum = async (req, res) => {
       published: event.albumPublished === true,
       audience: event.albumAudience || 'participants',
       publishedAt: event.albumPublishedAt || null,
+      // 대표 사진(사진 목록 카드의 표지)으로 고른 사진 id. 숨기거나 지우면 표지에는 안 쓰인다(EventMedia.summaries*)
+      coverMediaId: event.albumCoverMediaId ?? null,
       // 학부모에게 보낼 링크 (FR-518) — 앨범 주소 + 이 선생님의 학부모 초대 토큰 (services/albumShare)
       sharePath,
       defaultFolderName: folderNameFromEvent(event),
@@ -154,7 +156,23 @@ export const createAlbum = async (req, res) => {
   }
 };
 
-/** PATCH /api/events/:id/album — 이름 변경 · 업로드 받기 토글 · 공개 · 공개 범위 */
+/**
+ * 대표 사진으로 고른 값 확인 — null 은 "고른 것 풀기". 이 앨범의 준비된(ready) 사진·영상이어야 하고(영상은 Drive 가 만든 장면이 표지),
+ * 숨긴 것은 안 된다(표지는 학부모 카드에도 쓰인다). → { id } | { status, body }
+ */
+const checkCover = async (event, value) => {
+  if (value === null) return { id: null };
+  const invalid = { status: 400, body: { error: '이 앨범의 사진만 대표 사진으로 고를 수 있어요.', reason: 'invalid_cover' } };
+  if (!Number.isInteger(value) || value <= 0) return invalid;
+  const media = await EventMedia.getById(value);
+  if (!media || Number(media.eventId) !== Number(event.id) || media.status !== 'ready' || !media.driveFileId) return invalid;
+  if (media.isHidden) {
+    return { status: 400, body: { error: '숨긴 사진은 대표 사진으로 고를 수 없어요. 먼저 다시 보이게 해 주세요.', reason: 'hidden_cover' } };
+  }
+  return { id: media.id };
+};
+
+/** PATCH /api/events/:id/album — 이름 변경 · 업로드 받기 토글 · 공개 · 공개 범위 · 대표 사진 */
 export const updateAlbum = async (req, res) => {
   try {
     const event = await loadEvent(req);
@@ -162,6 +180,9 @@ export const updateAlbum = async (req, res) => {
     if (!event.driveFolderId) return res.status(400).json({ error: '아직 앨범이 없습니다.', reason: 'no_album' });
 
     const body = req.body || {};
+    // 대표 사진은 앱 안의 값이라 Google 연결이 끊겨도 바꿀 수 있다. Drive 를 건드리는 폴더 이름 바꾸기보다 먼저 확인한다
+    const cover = body.coverMediaId !== undefined ? await checkCover(event, body.coverMediaId) : null;
+    if (cover?.status) return res.status(cover.status).json(cover.body);
     if (body.audience !== undefined && !isValidAudience(body.audience)) {
       return res.status(400).json({ error: '공개 범위를 다시 골라 주세요.', reason: 'invalid_audience' });
     }
@@ -189,6 +210,7 @@ export const updateAlbum = async (req, res) => {
       // "몇 월 며칠 공개" 는 처음 공개한 날을 남긴다
       if (fields.albumPublished && !event.albumPublishedAt) fields.albumPublishedAt = new Date().toISOString();
     }
+    if (cover) fields.albumCoverMediaId = cover.id;
     if (Object.keys(fields).length) {
       updated = (await Event.updateAlbum(event.id, fields)) || updated;
     }
@@ -199,7 +221,8 @@ export const updateAlbum = async (req, res) => {
       albumStatus: updated.albumStatus,
       published: updated.albumPublished === true,
       audience: updated.albumAudience || 'participants',
-      publishedAt: updated.albumPublishedAt || null
+      publishedAt: updated.albumPublishedAt || null,
+      coverMediaId: updated.albumCoverMediaId ?? null
     });
   } catch (error) {
     driveErrorResponse(res, error, '앨범을 수정하지 못했습니다.');

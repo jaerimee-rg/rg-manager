@@ -1,4 +1,6 @@
-import { toParentMedia, toTeacherMedia, toParentAlbum, thumbnailUrl, largeImageUrl, downloadUrl } from '../mediaSerializer.js';
+import {
+  toParentMedia, toTeacherMedia, toParentAlbum, thumbnailUrl, coverImageUrl, largeImageUrl, downloadUrl
+} from '../mediaSerializer.js';
 
 const media = {
   id: 11,
@@ -175,6 +177,12 @@ describe('URL 만들기', () => {
   it('썸네일은 lh3 를 바로 부른다 — drive.google.com/thumbnail 의 302 를 한 번 덜 오간다. 정사각형으로 잘라 WebP 로', () => {
     expect(thumbnailUrl('f1')).toBe('https://lh3.googleusercontent.com/d/f1=w400-h400-c-rw');
     expect(thumbnailUrl('f1', 200)).toBe('https://lh3.googleusercontent.com/d/f1=w200-h200-c-rw');
+  });
+
+  it('앨범 카드의 대표 사진은 표지 칸과 같은 16:10 으로 잘라 받는다', () => {
+    expect(coverImageUrl('f1')).toBe('https://lh3.googleusercontent.com/d/f1=w800-h500-c-rw');
+    expect(coverImageUrl('a b')).toContain('/d/a%20b=');
+    expect(coverImageUrl(null)).toBeNull();
   });
 
   it('뷰어용 큰 사진은 자르지 않고 폭 1600 — 원래 비율 그대로', () => {

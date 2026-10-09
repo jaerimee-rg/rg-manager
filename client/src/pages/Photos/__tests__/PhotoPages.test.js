@@ -109,6 +109,31 @@ const renderAlbum = async (album = ALBUM, media = MEDIA) => {
   });
 };
 
+describe('PhotoAlbums — 대표 사진 표지', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const withCover = (album) => ({ ...LIST, albums: [{ ...LIST.albums[0], previews: ['https://drive/t1', 'https://drive/t2'], ...album }] });
+  const coverOf = () => screen.getByRole('button', { name: /회장배 대회/ }).querySelector('.ui-album-card__cover');
+
+  it('대표 사진을 골랐으면 그 한 장이 표지를 채운다 — 최근 사진 4장 대신', async () => {
+    await renderList(withCover({ cover: 'https://lh3/c1=w800-h500-c-rw' }));
+
+    const cover = coverOf();
+    expect(cover).toHaveAttribute('data-single');
+    const images = cover.querySelectorAll('img');
+    expect(images).toHaveLength(1);
+    expect(images[0]).toHaveAttribute('src', 'https://lh3/c1=w800-h500-c-rw');
+  });
+
+  it('고르지 않았으면 예전처럼 최근 사진들', async () => {
+    await renderList(withCover({ cover: null }));
+
+    const cover = coverOf();
+    expect(cover).not.toHaveAttribute('data-single');
+    expect(cover.querySelectorAll('img')).toHaveLength(2);
+  });
+});
+
 describe('PhotoAlbum — 앨범 (docs/photo-menu FR-520~529)', () => {
   beforeEach(() => jest.clearAllMocks());
 
@@ -365,6 +390,103 @@ describe('PhotoAlbum — 사진 설명', () => {
     expect(within(viewer).getByRole('button', { name: '설명 추가' })).toBeEnabled();
     // 지우기(Drive 를 거친다)는 그대로 막혀 있다
     expect(within(viewer).queryByRole('button', { name: '삭제' })).not.toBeInTheDocument();
+  });
+});
+
+describe('PhotoAlbum — 대표 사진 고르기', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const VIDEO = { id: 4, kind: 'video', thumbnailUrl: 'https://t/4', previewUrl: 'https://drive/v4/preview', uploaderRole: 'teacher', isHidden: false };
+
+  // 앨범의 대표 사진을 서버처럼 기억한다 — PATCH {coverMediaId} 로 바뀌고, 다시 읽으면 바뀐 값이 온다
+  const renderCover = async ({ coverMediaId = null, media = MEDIA, album = ALBUM, patch } = {}) => {
+    let current = coverMediaId;
+    fetchWithAuth.mockImplementation((url, options = {}) => {
+      if (url === '/api/events/31/album' && !options.method) return ok({ ...album, coverMediaId: current });
+      if (url === '/api/events/31/album' && options.method === 'PATCH') {
+        const body = JSON.parse(options.body);
+        if (patch) return patch(body);
+        current = body.coverMediaId;
+        return ok({ coverMediaId: current });
+      }
+      if (url.startsWith('/api/events/31/media?')) return ok({ items: media, nextCursor: null });
+      return ok({});
+    });
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={['/photos/31']}>
+          <Routes><Route path="/photos/:eventId" element={<PhotoAlbum />} /></Routes>
+        </MemoryRouter>
+      );
+    });
+  };
+  const openTile = async (index) => {
+    await act(async () => { fireEvent.click(document.querySelectorAll('.ui-media-tile')[index]); });
+    return screen.getByRole('dialog', { name: '사진 보기' });
+  };
+  const patches = () => fetchWithAuth.mock.calls.filter(([url, options]) => url === '/api/events/31/album' && options?.method === 'PATCH');
+
+  it('대표 사진 칸에 [대표] 표시 — 숨긴 사진이면 표지로 안 쓰이니 표시도 없다', async () => {
+    await renderCover({ coverMediaId: 1 });
+
+    const tiles = document.querySelectorAll('.ui-media-tile');
+    expect(within(tiles[0]).getByText('대표')).toBeInTheDocument();
+    expect(tiles[0]).toHaveAccessibleName(/대표 사진/);
+    expect(within(tiles[1]).queryByText('대표')).not.toBeInTheDocument();
+
+    cleanup();
+    await renderCover({ coverMediaId: 3 });
+    expect(within(document.querySelectorAll('.ui-media-tile')[2]).queryByText('대표')).not.toBeInTheDocument();
+  });
+
+  it('사진을 열어 [대표 사진으로] → PATCH {coverMediaId}, 칸과 버튼이 바로 바뀐다 — 토스트로 버튼을 덮지 않는다', async () => {
+    await renderCover();
+
+    const viewer = await openTile(1);
+    await act(async () => { fireEvent.click(within(viewer).getByRole('button', { name: '대표 사진으로' })); });
+
+    expect(patches()).toHaveLength(1);
+    expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaId: 2 });
+    expect(document.querySelector('.ui-toast')).toBeNull();
+    expect(within(viewer).getByRole('button', { name: '대표 사진' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(document.querySelectorAll('.ui-media-tile')[1]).getByText('대표')).toBeInTheDocument();
+  });
+
+  it('[대표 사진] 을 다시 누르면 PATCH {coverMediaId: null} 로 푼다', async () => {
+    await renderCover({ coverMediaId: 1 });
+
+    const viewer = await openTile(0);
+    await act(async () => { fireEvent.click(within(viewer).getByRole('button', { name: '대표 사진' })); });
+
+    expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaId: null });
+    expect(within(viewer).getByRole('button', { name: '대표 사진으로' })).toBeInTheDocument();
+  });
+
+  it('영상도 대표로 고를 수 있다', async () => {
+    await renderCover({ media: [MEDIA[0], VIDEO] });
+
+    const viewer = await openTile(1);
+    await act(async () => { fireEvent.click(within(viewer).getByRole('button', { name: '대표 사진으로' })); });
+
+    expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaId: 4 });
+    expect(within(document.querySelectorAll('.ui-media-tile')[1]).getByText('대표')).toBeInTheDocument();
+  });
+
+  it('서버가 거절하면 그 이유를 알리고 버튼은 그대로', async () => {
+    await renderCover({ patch: () => ok({ error: '숨긴 사진은 대표 사진으로 고를 수 없어요.', reason: 'hidden_cover' }, 400) });
+
+    const viewer = await openTile(0);
+    await act(async () => { fireEvent.click(within(viewer).getByRole('button', { name: '대표 사진으로' })); });
+
+    expect(screen.getByText('숨긴 사진은 대표 사진으로 고를 수 없어요.')).toBeInTheDocument();
+    expect(within(viewer).getByRole('button', { name: '대표 사진으로' })).toBeEnabled();
+  });
+
+  it('Google 연결이 끊겨도 고를 수 있다 — 앱 안의 값이다', async () => {
+    await renderCover({ album: { ...ALBUM, drive: { ...DRIVE, status: 'error' } } });
+
+    const viewer = await openTile(0);
+    expect(within(viewer).getByRole('button', { name: '대표 사진으로' })).toBeEnabled();
   });
 });
 

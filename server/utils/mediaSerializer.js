@@ -25,6 +25,13 @@ const FILE_BASE = 'https://drive.google.com/file/d';
 export const thumbnailUrl = (driveFileId, size = 400) =>
   (driveFileId ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=w${size}-h${size}-c-rw` : null);
 
+/**
+ * 선생님 사진 목록 카드의 대표 사진 — 표지 칸(16:10)과 같은 비율로 가운데를 잘라 받는다(800×500 WebP, 2026-10-09 운영 사진으로 확인).
+ * 정사각형 썸네일을 늘려 쓰면 위아래가 한 번 더 잘리고 흐려진다.
+ */
+export const coverImageUrl = (driveFileId) =>
+  (driveFileId ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=w800-h500-c-rw` : null);
+
 /** 뷰어용 큰 사진 — 폭 기준, 원래 비율 그대로 */
 export const largeImageUrl = (driveFileId, width = 1600) =>
   (driveFileId ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=w${width}` : null);
@@ -163,6 +170,7 @@ export const toTeacherMedia = (media, { studentNames = {} } = {}) => ({
 
 export default {
   thumbnailUrl,
+  coverImageUrl,
   largeImageUrl,
   originalUrl,
   previewUrl,

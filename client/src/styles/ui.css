@@ -3422,6 +3422,8 @@ a.ui-btn { text-decoration: none; }
   border-bottom: var(--stroke);
 }
 .ui-album-card__cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* 선생님이 고른 대표 사진(영상이면 그 한 장면) 한 장이 표지 전체를 채운다 */
+.ui-album-card__cover[data-single] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
 .ui-album-card__cover[data-empty] {
   display: flex;
   align-items: center;
@@ -3629,6 +3631,22 @@ a.ui-btn { text-decoration: none; }
   border-radius: var(--shape-tag);
 }
 .ui-media-tile__who { left: 6px; background: var(--sheet); border: var(--stroke-thin); color: var(--ink-900); }
+/* 대표 사진 — 사진 목록 카드의 표지 (고르기 체크는 오른쪽 위라 왼쪽 위에 둔다) */
+.ui-media-tile__cover {
+  position: absolute;
+  top: 6px; left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px;
+  font-size: var(--text-2xs);
+  line-height: 18px;
+  font-weight: var(--weight-bold);
+  border-radius: var(--shape-tag);
+  border: var(--stroke-thin);
+  background: var(--star);
+  color: var(--ink);
+}
 .ui-media-tile__video { right: 6px; background: var(--ink); color: var(--paper); }
 
 /* 숨긴 사진 — 학부모에게는 안 보인다 */

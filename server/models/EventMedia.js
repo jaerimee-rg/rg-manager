@@ -14,6 +14,37 @@ export const needsFaceAnalysisSql = (prefix = '') => (
 );
 
 /**
+ * 앨범 카드 미리보기 — 앨범마다 숨기지 않은 준비된 사진 4장. 선생님이 고른 대표 사진(events."albumCoverMediaId")이
+ * 그 조건을 지키면 맨 앞에 오고 isCover 가 참이다(사진도 영상도 된다 — 영상은 Drive 가 만든 한 장면). 숨겼거나 지웠거나 다른 앨범의 사진이면 조건에서 빠져 최근 순 4장이 된다
+ * — 대표 사진은 학부모에게 보이는 사진일 때만 쓴다(선생님 카드와 학부모 카드가 같은 표지).
+ * CASE 로 순서를 매긴다: `m.id = NULL` 은 NULL 이고 DESC 정렬에서 NULL 이 맨 앞에 와 버린다.
+ */
+const previewRows = async (eventIds) => (await pool.query(
+  `SELECT "eventId", "driveFileId", "isCover" FROM (
+     SELECT m."eventId", m."driveFileId", (m.id = e."albumCoverMediaId") IS TRUE AS "isCover",
+            ROW_NUMBER() OVER (
+              PARTITION BY m."eventId"
+              ORDER BY CASE WHEN m.id = e."albumCoverMediaId" THEN 0 ELSE 1 END, m."takenAt" DESC, m.id DESC
+            ) AS rn
+       FROM event_media m
+       JOIN events e ON e.id = m."eventId"
+      WHERE m."eventId" = ANY($1::int[]) AND m.status = 'ready' AND NOT m."isHidden" AND m."driveFileId" IS NOT NULL
+   ) ranked WHERE rn <= 4
+   ORDER BY "eventId", rn`,
+  [eventIds]
+)).rows;
+
+/** previewRows 를 요약(out[eventId])의 previews · cover 에 싣는다 */
+const addPreviews = (out, rows) => {
+  for (const row of rows) {
+    const summary = out[row.eventId];
+    if (!summary) continue;
+    summary.previews.push(row.driveFileId);
+    if (row.isCover) summary.cover = row.driveFileId;
+  }
+};
+
+/**
  * 앨범의 사진·영상 한 건. 바이트는 Drive 에 있고 여기에는 파일 id 와 메타만 둔다.
  * 갤러리 조회는 커서(takenAt, id) 로 페이지를 넘긴다.
  */
@@ -289,28 +320,21 @@ class EventMedia {
       )
       : { rows: [] };
 
-    // 앨범 카드에 보여줄 썸네일 4장
-    const previews = await pool.query(
-      `SELECT "eventId", "driveFileId" FROM (
-         SELECT "eventId", "driveFileId",
-                ROW_NUMBER() OVER (PARTITION BY "eventId" ORDER BY "takenAt" DESC, id DESC) AS rn
-           FROM event_media
-          WHERE "eventId" = ANY($1::int[]) AND status = 'ready' AND NOT "isHidden" AND "driveFileId" IS NOT NULL
-       ) ranked WHERE rn <= 4`,
-      [eventIds]
-    );
+    // 앨범 카드에 보여줄 썸네일 4장 — 대표 사진이 있으면 맨 앞
+    const previews = await previewRows(eventIds);
 
     const out = {};
-    for (const id of eventIds) out[id] = { images: 0, videos: 0, mine: 0, previews: [] };
+    for (const id of eventIds) out[id] = { images: 0, videos: 0, mine: 0, previews: [], cover: null };
     for (const row of counts.rows) Object.assign(out[row.eventId], { images: row.images, videos: row.videos });
     for (const row of mine.rows) out[row.eventId].mine = row.mine;
-    for (const row of previews.rows) out[row.eventId].previews.push(row.driveFileId);
+    addPreviews(out, previews);
     return out;
   }
 
   /**
    * 선생님 사진 목록의 카드 요약 (docs/photo-menu 5.1).
-   * 학부모용 summaries 와 달리 숨긴 수·학부모가 올린 수를 함께 센다. 썸네일은 숨기지 않은 것 4장.
+   * 학부모용 summaries 와 달리 숨긴 수·학부모가 올린 수를 함께 센다. 썸네일은 숨기지 않은 것 4장(대표 사진이 맨 앞),
+   * cover 는 쓸 수 있는 대표 사진의 Drive 파일 id(없으면 null).
    */
   static async summariesForTeacher(eventIds) {
     if (!eventIds?.length) return {};
@@ -327,22 +351,14 @@ class EventMedia {
       [eventIds]
     );
 
-    const previews = await pool.query(
-      `SELECT "eventId", "driveFileId" FROM (
-         SELECT "eventId", "driveFileId",
-                ROW_NUMBER() OVER (PARTITION BY "eventId" ORDER BY "takenAt" DESC, id DESC) AS rn
-           FROM event_media
-          WHERE "eventId" = ANY($1::int[]) AND status = 'ready' AND NOT "isHidden" AND "driveFileId" IS NOT NULL
-       ) ranked WHERE rn <= 4`,
-      [eventIds]
-    );
+    const previews = await previewRows(eventIds);
 
     const out = {};
-    for (const id of eventIds) out[id] = { images: 0, videos: 0, hidden: 0, fromParents: 0, previews: [] };
+    for (const id of eventIds) out[id] = { images: 0, videos: 0, hidden: 0, fromParents: 0, previews: [], cover: null };
     for (const row of counts.rows) {
       Object.assign(out[row.eventId], { images: row.images, videos: row.videos, hidden: row.hidden, fromParents: row.fromParents });
     }
-    for (const row of previews.rows) out[row.eventId].previews.push(row.driveFileId);
+    addPreviews(out, previews);
     return out;
   }
 

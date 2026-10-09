@@ -130,12 +130,17 @@ function PhotoAlbums() {
   );
 }
 
+/** 앨범 카드 — 표지는 선생님이 고른 대표 사진·영상 한 장(cover, 영상도 표시 없이 그 장면만), 없으면 최근 사진 4장 */
 function AlbumCard({ album, onOpen }) {
   const counts = album.counts || {};
   const previews = (album.previews || []).slice(0, 4);
   return (
     <button type="button" className="ui-album-card" onClick={onOpen}>
-      {previews.length ? (
+      {album.cover ? (
+        <div className="ui-album-card__cover" data-single>
+          <RetryImage src={album.cover} loading="lazy" />
+        </div>
+      ) : previews.length ? (
         <div className="ui-album-card__cover">
           {previews.map((url) => <RetryImage key={url} src={url} loading="lazy" />)}
         </div>

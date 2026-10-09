@@ -803,3 +803,71 @@ describe('MediaViewer — 선생님이 붙인 설명', () => {
     });
   });
 });
+
+describe('MediaViewer — 대표 사진 (사진 목록 카드의 표지)', () => {
+  const photo = (id, overrides = {}) => media({ id, fileName: `IMG_${id}.jpg`, ...overrides });
+  const open = (items, extra = {}) => {
+    const onCoverChange = extra.onCoverChange || jest.fn().mockResolvedValue(undefined);
+    render(<MediaViewer items={items} startId={items[0].id} onClose={jest.fn()} {...extra} onCoverChange={onCoverChange} />);
+    return onCoverChange;
+  };
+
+  it('학부모 화면(onCoverChange 없음)에는 버튼이 없다', () => {
+    render(<MediaViewer items={[photo(1)]} startId={1} onClose={jest.fn()} />);
+    expect(screen.queryByRole('button', { name: /대표 사진/ })).not.toBeInTheDocument();
+  });
+
+  it('대표가 아닌 사진: [대표 사진으로] — 누르면 (그 사진, true), 사진 위에 겹쳐도 눌린다', async () => {
+    const item = photo(1);
+    const onCoverChange = open([item]);
+
+    const button = screen.getByRole('button', { name: '대표 사진으로' });
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByTestId('media-info')).toContainElement(button);
+    expect(button.style.pointerEvents).toBe('auto');
+
+    await act(async () => { fireEvent.click(button); });
+    expect(onCoverChange).toHaveBeenCalledWith(item, true);
+  });
+
+  it('지금 대표인 사진: 눌린 [대표 사진] — 다시 누르면 (그 사진, false) 로 푼다', async () => {
+    const item = photo(1);
+    const onCoverChange = open([item, photo(2)], { coverId: 1 });
+
+    const button = screen.getByRole('button', { name: '대표 사진' });
+    expect(button).toHaveAttribute('aria-pressed', 'true');
+    await act(async () => { fireEvent.click(button); });
+    expect(onCoverChange).toHaveBeenCalledWith(item, false);
+
+    // 옆 장은 대표가 아니다
+    fireEvent.keyDown(document, { key: 'ArrowRight' });
+    expect(screen.getByRole('button', { name: '대표 사진으로' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('영상도 고를 수 있다 — 플레이어 아래 정보 줄에 버튼', async () => {
+    const item = video(5);
+    const onCoverChange = open([item]);
+
+    const button = screen.getByRole('button', { name: '대표 사진으로' });
+    expect(within(screen.getByTestId('video-stage')).getByTestId('media-info')).toContainElement(button);
+    await act(async () => { fireEvent.click(button); });
+    expect(onCoverChange).toHaveBeenCalledWith(item, true);
+  });
+
+  it('숨긴 사진에는 버튼이 없다 — 숨긴 사진은 표지로 쓰이지 않는다', () => {
+    open([photo(1, { isHidden: true })]);
+    expect(screen.queryByRole('button', { name: /대표 사진/ })).not.toBeInTheDocument();
+  });
+
+  it('저장하는 동안에는 버튼이 잠기고, 끝나면(실패해도) 다시 풀린다', async () => {
+    let finish;
+    open([photo(1)], { onCoverChange: jest.fn(() => new Promise((resolve) => { finish = resolve; })) });
+
+    const button = screen.getByRole('button', { name: '대표 사진으로' });
+    await act(async () => { fireEvent.click(button); });
+    expect(button).toBeDisabled();
+
+    await act(async () => { finish(); });
+    expect(button).toBeEnabled();
+  });
+});
