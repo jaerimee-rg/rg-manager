@@ -35,14 +35,32 @@ export const checkFile = ({ name, size }) => {
   return { ok: true, kind };
 };
 
-/** 고른 파일들을 통과·거절로 나눈다. */
+/**
+ * "같은 파일" 의 열쇠 — 원래 이름(NFC) + 크기. 서버 mediaValidation.js sameFileKey 와 같은 규칙이다.
+ * 앨범에 이미 있는 파일은 서버가 알려 주고(건너뜀), 한 번에 같은 파일을 두 번 고른 것은 여기서 거른다.
+ */
+export const sameFileKey = (name, size) => `${String(name ?? '').normalize('NFC')}\u0000${Number(size)}`;
+
+export const DUPLICATE_PICK_MESSAGE = '같은 파일을 두 번 골랐어요';
+
+/** 고른 파일들을 통과·거절로 나눈다. 같은 파일(이름·크기)을 두 번 골랐으면 두 번째부터 거절한다. */
 export const partitionFiles = (files) => {
   const accepted = [];
   const rejected = [];
+  const picked = new Set();
   for (const file of Array.from(files || []).slice(0, MAX_FILES)) {
     const check = checkFile(file);
-    if (check.ok) accepted.push({ file, kind: check.kind });
-    else rejected.push({ file, message: check.message });
+    if (!check.ok) {
+      rejected.push({ file, message: check.message });
+      continue;
+    }
+    const key = sameFileKey(file.name, file.size);
+    if (picked.has(key)) {
+      rejected.push({ file, message: DUPLICATE_PICK_MESSAGE });
+      continue;
+    }
+    picked.add(key);
+    accepted.push({ file, kind: check.kind });
   }
   return { accepted, rejected };
 };
@@ -157,5 +175,5 @@ export const makePreview = async (file, maxSide = 1280) => {
 
 export default {
   MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_FILES,
-  extensionOf, kindOf, checkFile, partitionFiles, readTakenAt, parseExifDate, makePreview
+  extensionOf, kindOf, checkFile, sameFileKey, partitionFiles, readTakenAt, parseExifDate, makePreview
 };

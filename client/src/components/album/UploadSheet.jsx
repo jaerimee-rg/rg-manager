@@ -27,6 +27,9 @@ const NEW_FOLDER = 'new';
  *      실패한 사진은 다 올린 뒤 **자동으로 한 번 더** 찾아 POST .../media/:id/faces 로 저장한다 — 분석 서버가 쉬다
  *      깨어나느라 첫 요청이 실패했거나, 브라우저가 못 읽는 형식(안드로이드 HEIC)이면 Drive 가 만든 JPEG 로 본다.
  *      그래도 안 되면 선생님이 앨범을 열 때 자동으로 다시 찾는다(FaceScanPanel autoStart).
+ *      앨범에 이미 있는 파일(같은 이름·크기)은 서버가 세션 대신 { skipped: true, reason: 'duplicate' } 를 돌려준다 —
+ *      올리지 않고 "이미 있어요" 로 표시하고, 다 올린 뒤 건너뛴 파일을 따로 알려 준다.
+ *      한 번에 같은 파일을 두 번 고른 것은 고를 때 거른다(imagePrep.partitionFiles).
  *
  * apiBase 예) '/api/events/3'  또는  '/api/parent/events/3'
  *
@@ -77,6 +80,7 @@ function UploadSheet({
   const [rejected, setRejected] = useState([]);
   const [progress, setProgress] = useState({});     // index → 0~100
   const [failed, setFailed] = useState({});         // index → 메시지
+  const [duplicates, setDuplicates] = useState({});  // index → true — 앨범에 이미 있어 건너뛴 파일
   const [summary, setSummary] = useState(null);
   const [retrying, setRetrying] = useState(null);   // { done, total } — 얼굴을 다시 찾는 중
   const [error, setError] = useState('');
@@ -147,15 +151,24 @@ function UploadSheet({
         return;
       }
 
+      // 앨범에 이미 있는 파일 — 올리지 않는다. 앞 파일이 올라가는 동안에도 "이미 있어요" 가 보이게 먼저 표시한다.
+      const isDuplicate = (i) => Boolean(data.items?.[i]?.skipped);
+      const duplicateIndexes = accepted.map((_, i) => i).filter(isDuplicate);
+      const alreadyThere = duplicateIndexes.map((i) => accepted[i]);
+      setDuplicates(Object.fromEntries(duplicateIndexes.map((i) => [i, true])));
+
       // 2) 파일마다 Drive 로 직접 전송 → 3) 얼굴 계산 → 4) 완료 보고
       let uploaded = 0;
       let analyzed = 0;
       let skipped = 0;
+      const uploadedKinds = { image: 0, video: 0 };
       const retry = [];   // 올라갔지만 얼굴 계산이 실패한 사진 — 다 올린 뒤 한 번 더
 
       for (let i = 0; i < accepted.length; i += 1) {
         const entry = accepted[i];
         const session = data.items?.[i];
+
+        if (isDuplicate(i)) continue;
 
         if (!session?.sessionUri) {
           setFailed((prev) => ({ ...prev, [i]: session?.error || '올릴 수 없는 파일이에요' }));
@@ -193,6 +206,7 @@ function UploadSheet({
 
         if (completed.ok) {
           uploaded += 1;
+          uploadedKinds[entry.kind] += 1;
           if (entry.kind === 'image' && !faces) {
             retry.push({ mediaId: session.mediaId, file: entry.file, driveFileId: result.file?.id, unreadable });
           }
@@ -246,8 +260,9 @@ function UploadSheet({
         skipped,
         publishedNow,
         publishFailed,
-        images: accepted.filter((entry) => entry.kind === 'image').length,
-        videos: accepted.filter((entry) => entry.kind === 'video').length
+        images: uploadedKinds.image,
+        videos: uploadedKinds.video,
+        alreadyThere
       });
       setPhase('done');
       onDone?.({
@@ -309,7 +324,7 @@ function UploadSheet({
       open
       onClose={phase === 'busy' ? undefined : onClose}
       closeOnScrim={phase !== 'busy'}
-      title={phase === 'done' ? '다 올렸어요' : phase === 'busy' ? '올리는 중…' : '사진 · 영상 올리기'}
+      title={phase === 'done' ? doneTitle(summary) : phase === 'busy' ? '올리는 중…' : '사진 · 영상 올리기'}
       description={phase === 'target' ? '어느 이벤트 사진인가요? 이벤트가 없으면 새 폴더를 만들어 올려요.' : undefined}
       aria-label="사진 영상 올리기"
       footer={footer}
@@ -473,9 +488,9 @@ function UploadSheet({
                 name={entry.file.name}
                 size={entry.file.size}
                 kind={entry.kind}
-                status={failed[i] || (progress[i] === 100 ? '완료' : `${progress[i] || 0}%`)}
+                status={duplicates[i] ? ALREADY_THERE : failed[i] || (progress[i] === 100 ? '완료' : `${progress[i] || 0}%`)}
                 error={Boolean(failed[i])}
-                progress={progress[i] || 0}
+                progress={duplicates[i] ? undefined : progress[i] || 0}
               />
             ))}
           </List>
@@ -484,13 +499,30 @@ function UploadSheet({
 
       {phase === 'done' && summary && (
         <Stack gap={4}>
-          <Callout tone="success">
-            {summary.images ? `사진 ${summary.images}장` : ''}
-            {summary.images && summary.videos ? ' · ' : ''}
-            {summary.videos ? `영상 ${summary.videos}개` : ''}
-            {' '}올렸어요.
-            {summary.publishedNow && ' 학부모에게 공개했어요.'}
-          </Callout>
+          {summary.uploaded > 0 && (
+            <Callout tone="success">
+              {summary.images ? `사진 ${summary.images}장` : ''}
+              {summary.images && summary.videos ? ' · ' : ''}
+              {summary.videos ? `영상 ${summary.videos}개` : ''}
+              {' '}올렸어요.
+              {summary.publishedNow && ' 학부모에게 공개했어요.'}
+            </Callout>
+          )}
+          {summary.alreadyThere.length > 0 && (
+            <Stack gap={2}>
+              <Callout tone="neutral">
+                {summary.alreadyThere.length === accepted.length
+                  ? `고른 파일 ${accepted.length}개가 모두 이미 앨범에 있어서 새로 올리지 않았어요.`
+                  : `이미 앨범에 있는 파일 ${summary.alreadyThere.length}개는 건너뛰었어요.`}
+                {' '}<span className="ui-text-muted">같은 이름·크기의 파일이 있어요.</span>
+              </Callout>
+              <List>
+                {summary.alreadyThere.map((entry, i) => (
+                  <FileRow key={`dup-${i}`} name={entry.file.name} size={entry.file.size} kind={entry.kind} status={ALREADY_THERE} />
+                ))}
+              </List>
+            </Stack>
+          )}
           {summary.publishFailed && (
             <Callout tone="warning">
               사진은 올라갔지만 <b>공개하지 못했어요.</b> 앨범은 아직 비공개예요.
@@ -510,6 +542,13 @@ function UploadSheet({
     </Modal>
   );
 }
+
+const ALREADY_THERE = '이미 있어요';
+
+// 하나도 안 올라갔는데 그게 전부 이미 있는 파일 탓이면 "다 올렸어요" 가 틀린 말이다
+const doneTitle = (summary) => (
+  summary && summary.uploaded === 0 && summary.alreadyThere.length > 0 ? '이미 앨범에 있어요' : '다 올렸어요'
+);
 
 function FileRow({ name, size, kind, status, error, progress }) {
   return (

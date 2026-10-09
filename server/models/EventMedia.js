@@ -371,6 +371,22 @@ class EventMedia {
     return result.rows.length;
   }
 
+  /**
+   * 앨범에 올라가 있는 파일의 원래 이름·크기 — 크기가 sizes 중 하나인 것만(같은 파일 건너뛰기용).
+   * 숨긴 사진도 폴더에는 있으니 넣고, Drive 에서 사라진(missing)·올리다 만(uploading) 것은 뺀다.
+   * size 는 BIGINT 라 문자열로 온다.
+   */
+  static async listReadyNamesBySize(eventId, sizes) {
+    const wanted = [...new Set((sizes || []).map(Number).filter((n) => Number.isSafeInteger(n) && n > 0))];
+    if (!wanted.length) return [];
+    const result = await pool.query(
+      `SELECT "originalName", size FROM event_media
+        WHERE "eventId" = $1 AND status = 'ready' AND size = ANY($2::bigint[])`,
+      [eventId, wanted]
+    );
+    return result.rows;
+  }
+
   static async listReadyIds(eventId) {
     const result = await pool.query(
       `SELECT id, "driveFileId", kind, "durationMs" FROM event_media

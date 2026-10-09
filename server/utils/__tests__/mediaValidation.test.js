@@ -10,7 +10,8 @@ import {
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
   CAPTION_MAX,
-  normalizeCaption
+  normalizeCaption,
+  sameFileKey
 } from '../mediaValidation.js';
 
 describe('getExtension / lookupType', () => {
@@ -95,6 +96,28 @@ describe('buildDriveName', () => {
 
   it('빈 입력에도 이름을 만든다', () => {
     expect(buildDriveName({})).toBe('unknown_학부모_file');
+  });
+});
+
+describe('sameFileKey — 앨범에 이미 있는 파일 알아보기', () => {
+  it('이름과 크기가 둘 다 같아야 같은 파일이다', () => {
+    expect(sameFileKey('IMG_1234.jpg', 1000)).toBe(sameFileKey('IMG_1234.jpg', 1000));
+    expect(sameFileKey('IMG_1234.jpg', 1000)).not.toBe(sameFileKey('IMG_1234.jpg', 1001));
+    expect(sameFileKey('IMG_1234.jpg', 1000)).not.toBe(sameFileKey('IMG_1235.jpg', 1000));
+  });
+
+  it('DB 의 BIGINT 는 문자열로 와도 숫자와 같게 본다', () => {
+    expect(sameFileKey('a.jpg', '1000')).toBe(sameFileKey('a.jpg', 1000));
+  });
+
+  it('맥이 주는 자모 분리(NFD) 한글 이름도 휴대폰(NFC) 이름과 같게 본다', () => {
+    const nfd = '대회.jpg'.normalize('NFD');
+    expect(nfd).not.toBe('대회.jpg');
+    expect(sameFileKey(nfd, 5)).toBe(sameFileKey('대회.jpg', 5));
+  });
+
+  it('대소문자가 다르면 다른 파일로 본다 (Drive 도 다른 이름으로 둔다)', () => {
+    expect(sameFileKey('a.JPG', 5)).not.toBe(sameFileKey('a.jpg', 5));
   });
 });
 

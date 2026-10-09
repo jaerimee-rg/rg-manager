@@ -508,6 +508,15 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   in 8MB chunks with progress and resume (`utils/driveUpload.js`). `POST .../media/:id/complete`
   re-reads the file from Drive and **verifies it landed in this album's folder** before marking it
   `ready` — a leaked session URI cannot inject files elsewhere.
+- **A file already in the album is skipped, not uploaded again.** "Same file" = same original name (NFC — macOS hands
+  Korean names over decomposed) **and** same byte size (`mediaValidation.sameFileKey`; the client copy is
+  `imagePrep.sameFileKey`) against the album's `ready` rows, hidden ones included (`EventMedia.listReadyNamesBySize`). No
+  content hash — the browser would have to read a 500MB video. `POST .../media/uploads` answers such a file with
+  `{ skipped: true, reason: 'duplicate' }` in its slot (items stay index-aligned with `files`) and creates no session or
+  row; when nothing needs a session it does not touch Drive at all. `UploadSheet` marks those rows "이미 있어요" from the
+  start and lists them on the done screen ("이미 앨범에 있는 파일 N개는 건너뛰었어요", or title "이미 앨범에 있어요" when every
+  file was one); "N장 올렸어요" counts only files that really went up. The same file picked twice in one go is rejected
+  at pick time (`partitionFiles`).
 - **Who can see an album** (`utils/albumAccess.js`, order matters): no album → event private
   (`not_published`) → **album private (`album_private`, checked before any confirmation)** → audience. With
   `participants`, the parent's child must be **confirmed** — `event_registrations.status='confirmed'` or in

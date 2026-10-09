@@ -1,4 +1,6 @@
-import { kindOf, extensionOf, checkFile, partitionFiles, parseExifDate, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES } from '../imagePrep';
+import {
+  kindOf, extensionOf, checkFile, partitionFiles, parseExifDate, sameFileKey, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES
+} from '../imagePrep';
 
 const file = (name, size) => ({ name, size });
 
@@ -38,6 +40,18 @@ describe('checkFile — 서버와 같은 규칙으로 미리 거른다', () => {
   });
 });
 
+describe('sameFileKey — 서버(mediaValidation.js)와 같은 규칙', () => {
+  it('이름과 크기가 둘 다 같아야 같은 파일이다', () => {
+    expect(sameFileKey('a.jpg', 1000)).toBe(sameFileKey('a.jpg', 1000));
+    expect(sameFileKey('a.jpg', 1000)).not.toBe(sameFileKey('a.jpg', 1001));
+    expect(sameFileKey('a.jpg', 1000)).not.toBe(sameFileKey('b.jpg', 1000));
+  });
+
+  it('자모가 나뉜(NFD) 한글 이름도 같게 본다', () => {
+    expect(sameFileKey('대회.jpg'.normalize('NFD'), 5)).toBe(sameFileKey('대회.jpg', 5));
+  });
+});
+
 describe('partitionFiles', () => {
   it('통과와 거절을 나눈다', () => {
     const { accepted, rejected } = partitionFiles([
@@ -47,6 +61,15 @@ describe('partitionFiles', () => {
     expect(accepted.map((entry) => entry.file.name)).toEqual(['a.jpg', 'v.mov']);
     expect(rejected).toHaveLength(1);
     expect(rejected[0].message).toContain('사진·영상');
+  });
+
+  it('같은 파일(이름·크기)을 두 번 고르면 두 번째는 거절한다 — 이름만 같거나 크기만 같으면 다른 파일', () => {
+    const { accepted, rejected } = partitionFiles([
+      file('a.jpg', 1000), file('a.jpg', 1000), file('a.jpg', 999), file('b.jpg', 1000)
+    ]);
+
+    expect(accepted.map((entry) => [entry.file.name, entry.file.size])).toEqual([['a.jpg', 1000], ['a.jpg', 999], ['b.jpg', 1000]]);
+    expect(rejected).toEqual([{ file: file('a.jpg', 1000), message: '같은 파일을 두 번 골랐어요' }]);
   });
 
   it('한 번에 30개까지만 받는다', () => {

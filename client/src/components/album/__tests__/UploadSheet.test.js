@@ -14,6 +14,7 @@ jest.mock('../../../utils/imagePrep', () => ({
 }));
 
 import { fetchWithAuth } from '../../../utils/api';
+import { uploadToDrive } from '../../../utils/driveUpload';
 import UploadSheet from '../UploadSheet';
 
 const TARGETS = [
@@ -316,5 +317,88 @@ describe('UploadSheet — 학부모(기존 사용법)', () => {
     expect(screen.getByText('회장배 대회 앨범에 올려요')).toBeInTheDocument();
     expect(screen.queryByRole('radio')).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+});
+
+describe('UploadSheet — 앨범에 이미 있는 파일은 건너뛴다', () => {
+  const DUPLICATE = { skipped: true, reason: 'duplicate' };
+
+  const answerUploads = (items) => {
+    fetchWithAuth.mockImplementation((url, options = {}) => {
+      if (url.endsWith('/media/uploads')) return ok({ items });
+      if (url.includes('/complete')) return ok({ media: {} });
+      if (options.method === 'PATCH') return ok({ published: true });
+      return ok({});
+    });
+  };
+
+  const pickAndUpload = async (names) => {
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('album-file-input'), {
+        target: { files: names.map((name) => new File(['x'], name, { type: 'image/jpeg' })) }
+      });
+    });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: `${names.length}개 올리기` })); });
+  };
+
+  it('이미 있는 파일은 Drive 로 보내지 않고, 다 올린 뒤 건너뛴 파일을 이름과 함께 알려 준다', async () => {
+    answerUploads([{ name: 'a.jpg', ...DUPLICATE }, { name: 'b.jpg', mediaId: 9, sessionUri: 'https://upload' }]);
+    const onDone = jest.fn();
+    render(<UploadSheet apiBase="/api/events/31" eventTitle="회장배 대회" onClose={() => {}} onDone={onDone} />);
+
+    await pickAndUpload(['a.jpg', 'b.jpg']);
+
+    expect(uploadToDrive).toHaveBeenCalledTimes(1);
+    expect(uploadToDrive.mock.calls[0][0].name).toBe('b.jpg');
+    expect(fetchWithAuth.mock.calls.filter(([url]) => url.includes('/complete'))).toHaveLength(1);
+    expect(screen.getByRole('heading', { name: '다 올렸어요' })).toBeInTheDocument();
+    // 올린 것만 센다 — 건너뛴 파일은 "올렸어요" 에 들어가지 않는다
+    expect(screen.getByText(/사진 1장 올렸어요/)).toBeInTheDocument();
+    expect(screen.getByText(/이미 앨범에 있는 파일 1개는 건너뛰었어요/)).toBeInTheDocument();
+    expect(screen.getByText('a.jpg')).toBeInTheDocument();
+    expect(screen.getByText('이미 있어요')).toBeInTheDocument();
+    expect(screen.queryByText(/올리지 못했어요/)).not.toBeInTheDocument();
+    expect(onDone).toHaveBeenCalledWith({ eventId: null, uploaded: 1, published: false });
+  });
+
+  it('고른 파일이 모두 이미 있으면 "이미 앨범에 있어요" — 올렸다고 하지 않고, 바로 공개도 하지 않는다', async () => {
+    answerUploads([{ name: 'a.jpg', ...DUPLICATE }, { name: 'b.jpg', ...DUPLICATE }]);
+    const onDone = jest.fn();
+    render(<UploadSheet apiBase="/api/events/40" eventTitle="전국 꿈나무 대회" allowPublish onClose={() => {}} onDone={onDone} />);
+
+    await act(async () => { fireEvent.click(screen.getByRole('checkbox', { name: /다 올리면 바로 학부모에게 공개/ })); });
+    await pickAndUpload(['a.jpg', 'b.jpg']);
+
+    expect(uploadToDrive).not.toHaveBeenCalled();
+    expect(fetchWithAuth.mock.calls.some(([, options]) => options?.method === 'PATCH')).toBe(false);
+    expect(screen.getByRole('heading', { name: '이미 앨범에 있어요' })).toBeInTheDocument();
+    expect(screen.getByText(/고른 파일 2개가 모두 이미 앨범에 있어서 새로 올리지 않았어요/)).toBeInTheDocument();
+    expect(screen.queryByText(/올렸어요/)).not.toBeInTheDocument();
+    expect(screen.getAllByText('이미 있어요')).toHaveLength(2);
+    expect(onDone).toHaveBeenCalledWith({ eventId: null, uploaded: 0, published: false });
+  });
+
+  it('올리는 동안에도 건너뛸 파일은 처음부터 "이미 있어요" 로 보인다 (진행률 막대 없이)', async () => {
+    answerUploads([{ name: 'a.jpg', mediaId: 9, sessionUri: 'https://upload' }, { name: 'b.jpg', ...DUPLICATE }]);
+    uploadToDrive.mockImplementationOnce(() => new Promise(() => {}));   // a.jpg 가 끝나지 않는다
+    render(<UploadSheet apiBase="/api/events/31" eventTitle="회장배 대회" onClose={() => {}} />);
+
+    await pickAndUpload(['a.jpg', 'b.jpg']);
+
+    expect(screen.getByRole('button', { name: /올리는 중/ })).toBeDisabled();
+    expect(screen.getByText('이미 있어요')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: 'a.jpg 업로드 진행률' })).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar', { name: 'b.jpg 업로드 진행률' })).not.toBeInTheDocument();
+  });
+
+  it('실패한 파일도 "올렸어요" 에 세지 않는다', async () => {
+    answerUploads([{ name: 'a.jpg', mediaId: 9, sessionUri: 'https://upload' }, { name: 'b.jpg', error: '사진·영상만 올릴 수 있어요.' }]);
+    render(<UploadSheet apiBase="/api/events/31" eventTitle="회장배 대회" onClose={() => {}} />);
+
+    await pickAndUpload(['a.jpg', 'b.jpg']);
+
+    expect(screen.getByText(/사진 1장 올렸어요/)).toBeInTheDocument();
+    expect(screen.getByText('1개는 올리지 못했어요')).toBeInTheDocument();
+    expect(screen.queryByText(/건너뛰었어요/)).not.toBeInTheDocument();
   });
 });

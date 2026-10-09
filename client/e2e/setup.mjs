@@ -400,6 +400,38 @@ const tinv = await pool.query(
    new Date(Date.now() + 14 * 86400000).toISOString(), now]
 );
 
+// 같은 파일 건너뛰기 — Google 이 연결된 것처럼 보이는 **따로 된** 선생님(다른 테스트의 '연결 안 됨' 전제를 건드리지 않게).
+// 연결 행의 토큰은 가짜다. 올릴 파일이 전부 앨범에 이미 있으면 서버는 Drive 를 부르지 않으므로 진짜 서버로 끝까지 돈다.
+const sameFileTeacher = (await pool.query(
+  `INSERT INTO users (username, password, role, "createdAt") VALUES ($1,$2,'user',$3) RETURNING id, username, role`,
+  [`e2e같은파일_${stamp}`, pw, now]
+)).rows[0];
+await pool.query(
+  `INSERT INTO google_drive_accounts ("userId", "googleSub", "googleEmail", "accessToken", "refreshToken", "tokenExpiresAt",
+                                      status, "connectedAt", "updatedAt")
+   VALUES ($1,$2,$3,'e2e-fake-access','e2e-fake-refresh',$4,'connected',$5,$5)`,
+  [sameFileTeacher.id, `e2e-sub-${stamp}`, `e2e-${stamp}@example.com`, new Date(Date.now() + 365 * 86400000).toISOString(), now]
+);
+const sameFileTitle = `e2e같은파일앨범_${stamp}`;
+const sameFileEventId = (await pool.query(
+  `INSERT INTO events ("userId", type, title, date, options, "isPublished", "registrationOpen",
+                       "driveFolderId", "driveFolderName", "albumStatus", "albumUploadOpen", "albumCreatedAt",
+                       "albumPublished", "albumAudience", "createdAt", "updatedAt")
+   VALUES ($1,'folder',$2,'2026-09-28','[]',TRUE,FALSE,$3,$4,'ready',TRUE,$5,FALSE,'all',$5,$5)
+   RETURNING id`,
+  [sameFileTeacher.id, sameFileTitle, `e2e-same-folder-${stamp}`, `2026-09-28 ${sameFileTitle}`, now]
+)).rows[0].id;
+// 이미 올라가 있는 두 파일 — 하나는 한글 이름(NFC 로 저장된다)
+const sameFiles = [{ name: 'IMG_dup.jpg', size: 4 }, { name: '대회사진.jpg', size: 5 }];
+for (const [i, file] of sameFiles.entries()) {
+  await pool.query(
+    `INSERT INTO event_media ("eventId","driveFileId",kind,"originalName","driveName","mimeType",size,
+                              "takenAt","uploaderUserId","uploaderRole",status,"faceStatus","faceAnalyzerVersion","createdAt","updatedAt")
+     VALUES ($1,$2,'image',$3,$4,'image/jpeg',$5,$6,$7,'teacher','ready','none',3,$6,$6)`,
+    [sameFileEventId, `e2e-same-file-${stamp}-${i}`, file.name, `20260928_선생님_${file.name}`, file.size, now, sameFileTeacher.id]
+  );
+}
+
 const sessions = {
   album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, doomedFolderEventId, doomedFolderTitle, faceScanEventId, faceThumbEventId, peopleEventId, removeFaceEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
   teacher: { token: sign(teacher), user: { id: teacher.id, username: teacher.username, role: 'user' } },
@@ -414,6 +446,12 @@ const sessions = {
   admin: { token: sign(adminUser), user: { id: adminUser.id, username: adminUser.username, role: 'admin' } },
   teacher2: { id: teacher2.id, username: teacher2.username, displayName: teacher2DisplayName, invite: invB.rows[0].token, eventId: eventB.rows[0].id },
   teacherInvite: { id: tinv.rows[0].id, token: tinv.rows[0].token },
+  sameFile: {
+    teacher: { token: sign(sameFileTeacher), user: { id: sameFileTeacher.id, username: sameFileTeacher.username, role: 'user' } },
+    eventId: sameFileEventId,
+    title: sameFileTitle,
+    files: sameFiles
+  },
   sharedKakao,
   invite: inv.rows[0].token,
   students,

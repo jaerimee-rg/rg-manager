@@ -19,6 +19,7 @@ jest.unstable_mockModule('../../models/EventMedia.js', () => ({
     markReady: jest.fn(),
     createPending: jest.fn(),
     listReadyIds: jest.fn().mockResolvedValue([]),
+    listReadyNamesBySize: jest.fn().mockResolvedValue([]),
     markMissing: jest.fn(),
     cleanupStale: jest.fn().mockResolvedValue(0),
     updateVideoMeta: jest.fn(),
@@ -79,6 +80,7 @@ const ChildFaceProfile = (await import('../../models/ChildFaceProfile.js')).defa
 const AppSetting = (await import('../../models/AppSetting.js')).default;
 const { createFolder, shareAnyoneReader, getFile, createResumableSession, trashFile, renameFile, DriveError } =
   await import('../../utils/googleDrive.js');
+const { runWithDrive } = await import('../driveAccess.js');
 const albumService = (await import('../albumService.js')).default;
 
 /** 앞 두 칸만 쓰는 512차원 단위 벡터 — D(0) 과의 코사인 거리가 정확히 d 가 된다(0 같은 얼굴 · 1 전혀 다른 얼굴). */
@@ -183,6 +185,90 @@ describe('createUploadSessions', () => {
 
     expect(items[0].reason).toBe('quota');
     expect(items[1].mediaId).toBe(56);
+  });
+
+  it('앨범에 같은 이름·크기의 파일이 있으면 세션을 만들지 않고 건너뛴다 — 결과 순서는 그대로', async () => {
+    EventMedia.listReadyNamesBySize.mockResolvedValueOnce([{ originalName: 'a.jpg', size: '1000' }]);
+    createResumableSession.mockResolvedValue('https://upload/session-3');
+    EventMedia.createPending.mockResolvedValue({ id: 57 });
+
+    const items = await albumService.createUploadSessions(7, event(),
+      [{ name: 'a.jpg', size: 1000 }, { name: 'b.jpg', size: 1000 }, { name: 'a.jpg', size: 999 }],
+      { userId: 42, role: 'teacher', label: '선생님' });
+
+    expect(EventMedia.listReadyNamesBySize).toHaveBeenCalledWith(3, [1000, 1000, 999]);
+    expect(items).toHaveLength(3);
+    expect(items[0]).toEqual({ name: 'a.jpg', skipped: true, reason: 'duplicate' });
+    // 이름만 같거나 크기만 같으면 다른 파일이다
+    expect(items[1]).toMatchObject({ name: 'b.jpg', mediaId: 57 });
+    expect(items[2]).toMatchObject({ name: 'a.jpg', mediaId: 57 });
+    expect(createResumableSession).toHaveBeenCalledTimes(2);
+    expect(EventMedia.createPending).toHaveBeenCalledTimes(2);
+  });
+
+  it('한 번에 같은 파일을 두 번 보내면 두 번째는 건너뛴다', async () => {
+    createResumableSession.mockResolvedValue('https://upload/session-4');
+    EventMedia.createPending.mockResolvedValue({ id: 58 });
+
+    const items = await albumService.createUploadSessions(7, event(),
+      [{ name: 'a.jpg', size: 1000 }, { name: 'a.jpg', size: 1000 }],
+      { userId: 42, role: 'parent', label: '하은' });
+
+    expect(items[0]).toMatchObject({ mediaId: 58 });
+    expect(items[1]).toEqual({ name: 'a.jpg', skipped: true, reason: 'duplicate' });
+    expect(createResumableSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('세션을 못 만든 파일(용량 부족)은 건너뛰기 기준에 넣지 않는다', async () => {
+    createResumableSession
+      .mockRejectedValueOnce(new DriveError('quota', 'full'))
+      .mockResolvedValueOnce('https://upload/session-5');
+    EventMedia.createPending.mockResolvedValue({ id: 59 });
+
+    const items = await albumService.createUploadSessions(7, event(),
+      [{ name: 'a.jpg', size: 1000 }, { name: 'a.jpg', size: 1000 }],
+      { userId: 42, role: 'parent', label: '하은' });
+
+    expect(items[0].reason).toBe('quota');
+    expect(items[1]).toMatchObject({ mediaId: 59 });
+  });
+
+  it('전부 이미 있는 파일이면 Drive 토큰도 꺼내지 않는다', async () => {
+    EventMedia.listReadyNamesBySize.mockResolvedValueOnce([{ originalName: 'a.jpg', size: '1000' }]);
+
+    const items = await albumService.createUploadSessions(7, event(),
+      [{ name: 'a.jpg', size: 1000 }, { name: '문서.pdf', size: 1 }],
+      { userId: 42, role: 'teacher', label: '선생님' });
+
+    expect(items).toEqual([
+      { name: 'a.jpg', skipped: true, reason: 'duplicate' },
+      expect.objectContaining({ name: '문서.pdf', reason: 'type' })
+    ]);
+    expect(runWithDrive).not.toHaveBeenCalled();
+    expect(createResumableSession).not.toHaveBeenCalled();
+  });
+
+  it('올릴 파일이 하나라도 있으면 Drive 로 세션을 만든다', async () => {
+    EventMedia.listReadyNamesBySize.mockResolvedValueOnce([{ originalName: 'a.jpg', size: '1000' }]);
+    createResumableSession.mockResolvedValue('https://upload/session-6');
+    EventMedia.createPending.mockResolvedValue({ id: 60 });
+
+    await albumService.createUploadSessions(7, event(),
+      [{ name: 'a.jpg', size: 1000 }, { name: 'b.jpg', size: 1000 }],
+      { userId: 42, role: 'teacher', label: '선생님' });
+
+    expect(runWithDrive).toHaveBeenCalledWith(7, expect.any(Function));
+    expect(createResumableSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('형식이 안 맞는 파일은 같은 파일이어도 형식 이유가 먼저다', async () => {
+    EventMedia.listReadyNamesBySize.mockResolvedValueOnce([{ originalName: '문서.pdf', size: '100' }]);
+
+    const items = await albumService.createUploadSessions(7, event(), [{ name: '문서.pdf', size: 100 }], {
+      userId: 42, role: 'parent', label: '하은'
+    });
+
+    expect(items[0]).toMatchObject({ reason: 'type' });
   });
 });
 
