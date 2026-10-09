@@ -47,6 +47,8 @@ function AllPhotos() {
   const loadMedia = useCallback(async (nextCursor = null) => {
     latest.current += 1;
     const request = latest.current;
+    // 처음부터 다시 읽는 동안에는 [더 보기] 를 감춘다 — 얼굴을 바꾼 직후 누르면 앞 목록의 커서가 새 얼굴과 섞인다
+    if (!nextCursor) setCursor(null);
     const params = new URLSearchParams({ limit: String(PAGE) });
     if (person) params.set('person', person);
     if (nextCursor) {

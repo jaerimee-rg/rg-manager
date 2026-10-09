@@ -158,6 +158,17 @@ describe('AllPhotos — 전체 사진 (모든 폴더)', () => {
     expect(screen.queryByRole('button', { name: '더 보기' })).not.toBeInTheDocument();
   });
 
+  it('얼굴을 바꿔 다시 읽는 동안에는 [더 보기] 가 없다 — 앞 목록의 커서를 새 얼굴에 쓰지 않는다', async () => {
+    await renderPage({ nextCursor: { takenAt: '2026-10-10T01:00:00Z', id: 3 } });
+    expect(screen.getByRole('button', { name: '더 보기' })).toBeInTheDocument();
+    const base = fetchWithAuth.getMockImplementation();
+    fetchWithAuth.mockImplementation((url, options) => (url.includes('person=p11') ? new Promise(() => {}) : base(url, options)));
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '얼굴 1 · 사진 2장' })); });
+
+    expect(screen.queryByRole('button', { name: '더 보기' })).not.toBeInTheDocument();
+  });
+
   it('올린 사진이 하나도 없으면 안내하고 사진 목록으로 보낸다 — 얼굴 목록도 없다', async () => {
     await renderPage({ people: [], media: [] });
 
