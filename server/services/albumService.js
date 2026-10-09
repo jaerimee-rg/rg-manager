@@ -369,9 +369,13 @@ export const rematchAlbum = async (event) => {
   let removed = 0;
 
   // 태그는 한 번에 읽는다 — 앨범을 열 때도 부르므로(ensureAlbumMatched) 사진 수만큼 질의하지 않는다.
-  const tagsByMedia = await MediaTag.listByMediaIds([...facesByMedia.keys()]);
+  // 앨범 전체 태그를 읽는 이유: 얼굴 벡터를 읽을 수 없는 사진(예전 128차원 face-api 값만 남은 사진)에 붙은
+  // 자동 태그도 지워야 한다 — 남겨 두면 [얼굴 찾기] 전까지 예전 방식의 틀린 태그가 "우리 아이만 보기" 에 나온다.
+  const tagsByMedia = await MediaTag.listByEvent(event.id);
+  const mediaIds = new Set([...facesByMedia.keys(), ...Object.keys(tagsByMedia).map(Number)]);
 
-  for (const [mediaId, faces] of facesByMedia.entries()) {
+  for (const mediaId of mediaIds) {
+    const faces = facesByMedia.get(mediaId) || [];
     const existing = tagsByMedia[mediaId] || [];
     const matches = bestPerStudent(faces, profiles)
       .map((match) => ({ ...match, source: classifyDistance(match.distance, thresholds) }))
@@ -455,7 +459,11 @@ export const matchStudentAcrossAlbums = async (teacherUserId, studentId) => {
   let candidates = 0;
   const touched = [];
 
-  for (const [mediaId, faces] of facesByMedia.entries()) {
+  // 얼굴 벡터를 읽을 수 없는 사진(예전 128차원 값)에 남은 이 아이의 태그도 본다 — 자동 태그면 지운다.
+  const mediaIds = new Set([...facesByMedia.keys(), ...existingByMedia.keys()]);
+
+  for (const mediaId of mediaIds) {
+    const faces = facesByMedia.get(mediaId) || [];
     const match = bestPerStudent(faces, profiles).find((result) => result.studentId === studentId);
     const source = match ? classifyDistance(match.distance, thresholds) : null;
     const current = existingByMedia.has(mediaId) ? [existingByMedia.get(mediaId)] : [];

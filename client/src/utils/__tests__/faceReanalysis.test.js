@@ -1,5 +1,5 @@
 jest.mock('../api', () => ({ fetchWithAuth: jest.fn() }));
-jest.mock('../faceClient', () => ({ FACE_ANALYZER_VERSION: 2, detectFaces: jest.fn() }));
+jest.mock('../faceClient', () => ({ FACE_ANALYZER_VERSION: 3, detectFaces: jest.fn() }));
 
 import { fetchWithAuth } from '../api';
 import { detectFaces } from '../faceClient';
@@ -9,7 +9,7 @@ import { cropFaces } from '../faceCrops';
 jest.mock('../faceCrops', () => ({ cropFaces: jest.fn() }));   // jest.mock 은 파일 맨 위로 끌어올려진다
 
 const ok = (body) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
-const FACE = { box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 }, score: 0.9, descriptor: new Array(128).fill(0.1) };
+const FACE = { box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 }, score: 0.9, descriptor: new Array(512).fill(0.1) };
 const item = (id) => ({ id, driveFileId: `f${id}`, largeUrl: `https://lh3.googleusercontent.com/d/f${id}=s1920` });
 
 /** afterId 로 페이지를 넘기는 가짜 서버. 저장에 실패한 사진도 목록에는 남는다(서버와 같다). */
@@ -50,7 +50,7 @@ describe('reanalyzeAlbum', () => {
 
     const save = fetchWithAuth.mock.calls.find(([url]) => url === '/api/events/31/media/7/faces');
     expect(save[1].method).toBe('POST');
-    expect(JSON.parse(save[1].body)).toEqual({ faces: [], analyzerVersion: 2 });
+    expect(JSON.parse(save[1].body)).toEqual({ faces: [], analyzerVersion: 3 });
     expect(onProgress).toHaveBeenLastCalledWith({ done: 3, total: 3 });
   });
 

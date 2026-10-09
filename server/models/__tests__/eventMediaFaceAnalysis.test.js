@@ -16,9 +16,9 @@ beforeEach(() => {
 });
 
 describe('needsFaceAnalysisSql', () => {
-  it('사진만 — 못 찾았거나(pending·failed·skipped) 예전 방식(버전 2 미만·기록 없음)으로 찾은 것', () => {
+  it('사진만 — 못 찾았거나(pending·failed·skipped) 예전 방식(버전 3 미만·기록 없음)으로 찾은 것 — 브라우저 face-api 로 찾은 사진도 다시 찾는다', () => {
     expect(squash(needsFaceAnalysisSql('m.'))).toBe(
-      `m.kind = 'image' AND (m."faceStatus" IN ('pending','failed','skipped') OR COALESCE(m."faceAnalyzerVersion", 1) < 2)`
+      `m.kind = 'image' AND (m."faceStatus" IN ('pending','failed','skipped') OR COALESCE(m."faceAnalyzerVersion", 1) < 3)`
     );
   });
 

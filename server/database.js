@@ -1002,21 +1002,26 @@ const initDatabase = async () => {
       [process.env.AI_PROVIDER || 'gemini', new Date().toISOString()]
     );
 
-    // 얼굴 매칭 임계값. 관리자가 나중에 조정할 수 있도록 설정으로 둔다 (기본값과 이유: utils/faceVector.js).
+    // 얼굴 매칭 임계값(코사인 거리). 관리자가 나중에 조정할 수 있도록 설정으로 둔다 (기본값과 이유: utils/faceVector.js).
     await client.query(
       `INSERT INTO app_settings (key, value, "updatedAt")
-       VALUES ('face_match_threshold', '0.35', $1), ('face_candidate_threshold', '0.40', $1)
+       VALUES ('face_match_threshold', '0.35', $1), ('face_candidate_threshold', '0.50', $1)
        ON CONFLICT (key) DO NOTHING`,
       [new Date().toISOString()]
     );
-    // 예전 기본값(0.50 / 0.60, 잠깐 쓴 0.55 / 0.65)이 그대로 남은 행만 새 기본값으로 좁힌다(2026-10, 틀린 자동 태그).
+    // 예전 face-api(유클리드 거리) 시절 기본값이 그대로 남은 행만 지금 기본값으로 옮긴다 — 자동 태그 0.50·0.55 → 0.35,
+    // 후보 0.40·0.60·0.65 → 0.50 (2026-10, InsightFace 로 바꾸며 거리의 뜻이 바뀌었다).
     // 관리자가 고른 다른 값은 두고, 다시 실행해도 바뀌는 것이 없다.
     await client.query(
-      `UPDATE app_settings SET value = CASE key WHEN 'face_match_threshold' THEN '0.35' ELSE '0.40' END, "updatedAt" = $1
+      `UPDATE app_settings SET value = CASE key WHEN 'face_match_threshold' THEN '0.35' ELSE '0.50' END, "updatedAt" = $1
         WHERE (key = 'face_match_threshold' AND value IN ('0.50', '0.55'))
-           OR (key = 'face_candidate_threshold' AND value IN ('0.60', '0.65'))`,
+           OR (key = 'face_candidate_threshold' AND value IN ('0.40', '0.60', '0.65'))`,
       [new Date().toISOString()]
     );
+    // 예전 face-api 로 등록한 기준 얼굴(128차원 = base64 684자)은 지금 특징값(512차원)과 비교할 수 없어 매칭에서 빠진다.
+    // 남겨 두면 등록 장수 제한만 차지하므로 지운다 — 학부모는 내 정보에서 다시 등록한다. 앨범 사진의 예전 얼굴은
+    // [얼굴 찾기] 로 다시 분석할 때 바뀌므로 두고(FACE_ANALYZER_VERSION), 여기서는 기준 얼굴만 지운다.
+    await client.query('DELETE FROM child_face_profiles WHERE length(descriptor) = 684');
 
     // 기존 대회를 학부모 일정(events)으로 옮긴다.
     // 매 부팅마다 실행되므로 이미 옮긴 대회는 건너뛴다(멱등).

@@ -744,8 +744,8 @@ test.describe('학부모 — 사진', () => {
     await chooser.setFiles(FACELESS_PNG);
   };
 
-  test('얼굴 분석 모델을 못 받으면 "얼굴이 없다" 가 아니라 분석하지 못했다고 알린다', async ({ page }) => {
-    await page.route('**/models/**', (route) => route.abort());
+  test('얼굴 분석 서버에 닿지 못하면 "얼굴이 없다" 가 아니라 분석하지 못했다고 알린다', async ({ page }) => {
+    await page.route('**/api/face-engine/**', (route) => route.abort());
 
     await pickFacePhoto(page);
 
@@ -754,13 +754,19 @@ test.describe('학부모 — 사진', () => {
     await expect(status).not.toContainText('얼굴이 보이지 않아요');
   });
 
-  test('얼굴이 없는 사진은 실제 모델로 분석한 뒤 정면 사진을 달라고 한다', async ({ page }) => {
-    test.setTimeout(90_000);   // 첫 계산은 WebGL 셰이더를 데우느라 오래 걸린다
+  test('얼굴이 없는 사진은 분석 서버를 거쳐 "얼굴 없음" 을 받고 정면 사진을 달라고 한다', async ({ page, request }) => {
+    const engine = await request.get('/api/face-engine/health');
+    test.skip(!engine.ok(), '얼굴 분석 서버가 없다 — e2e/fake-face-engine.mjs 를 띄우고 서버에 FACE_ENGINE_URL 을 주면 돈다');
 
+    // 브라우저가 로그인 토큰과 함께 JPEG 로 보내는지 본다(Express 가 분석 서버로 그대로 넘긴다)
+    const sent = page.waitForRequest((req) => req.url().endsWith('/api/face-engine/detect') && req.method() === 'POST');
     await pickFacePhoto(page);
+    const detect = await sent;
+    expect(detect.headers()['content-type']).toBe('image/jpeg');
+    expect(detect.headers().authorization).toMatch(/^Bearer /);
 
     const status = page.getByRole('status');
-    await expect(status).toContainText('얼굴이 보이지 않아요', { timeout: 45_000 });
+    await expect(status).toContainText('얼굴이 보이지 않아요', { timeout: 20_000 });
     await expect(status).not.toContainText('분석하지 못했어요');
   });
 });
