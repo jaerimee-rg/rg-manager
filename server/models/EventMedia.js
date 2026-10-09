@@ -138,9 +138,10 @@ class EventMedia {
    * 갤러리 목록. 태그는 한 번에 붙여 N+1 을 피한다.
    *
    * filter: all | photo | video | uploaded(내가 올린 것) | untagged | candidates | unanalyzed | hidden
+   * mediaIds: 이 사진들만 — 얼굴 목록에서 한 사람을 골랐을 때(services/albumPeople.js 가 묶은 그 사람의 사진)
    */
   static async list(eventId, {
-    filter = 'all', studentIds = null, uploaderUserId = null,
+    filter = 'all', studentIds = null, uploaderUserId = null, mediaIds = null,
     includeHidden = false, limit = 60, cursor = null
   } = {}) {
     const params = [eventId];
@@ -169,6 +170,10 @@ class EventMedia {
       where.push(`EXISTS (SELECT 1 FROM media_tags t WHERE t."mediaId" = m.id
                     AND t."studentId" = ANY($${params.length}::int[])
                     AND t.source IN ('face','manual','parent_confirmed'))`);
+    }
+    if (mediaIds) {
+      params.push(mediaIds);
+      where.push(`m.id = ANY($${params.length}::int[])`);
     }
     if (cursor?.takenAt && cursor?.id) {
       params.push(cursor.takenAt, cursor.id);

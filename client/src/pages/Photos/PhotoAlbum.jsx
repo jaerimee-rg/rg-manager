@@ -6,6 +6,7 @@ import { copyToClipboard } from '../../utils/copyToClipboard';
 import { albumShareUrl, albumShareToast, canShareAlbum, ALBUM_SHARE_DISABLED_HINT } from '../../utils/albumShare';
 import UploadSheet from '../../components/album/UploadSheet';
 import MediaViewer from '../../components/album/MediaViewer';
+import FacePeopleStrip from '../../components/album/FacePeopleStrip';
 import {
   Button, Callout, Card, Chip, ConfirmDialog, EmptyState, Icon, IconButton, Menu, MenuItem, PageHeader, SkeletonList,
   StickyActions, Toast, Toolbar
@@ -24,7 +25,8 @@ const PAGE = 60;
 /**
  * 선생님 사진 메뉴 — 앨범 하나 (docs/photo-menu FR-520~529).
  *
- * 위: 학부모 공개 패널 + Drive 폴더 카드. 아래: 필터 칩과 사진 칸, 고르기 모드(숨기기 · 다시 보이기 · 지우기).
+ * 위: 학부모 공개 패널 + Drive 폴더 카드. 아래: 얼굴 목록(누르면 그 사람 사진만), 필터 칩과 사진 칸,
+ * 고르기 모드(숨기기 · 다시 보이기 · 지우기).
  * Google 연결이 끊기거나 폴더가 사라져도 읽기는 계속되고 쓰기 버튼만 막힌다.
  */
 function PhotoAlbum() {
@@ -35,6 +37,8 @@ function PhotoAlbum() {
   const [album, setAlbum] = useState(null);
   const [notFound, setNotFound] = useState(false);
   const [filter, setFilter] = useState('all');
+  const [people, setPeople] = useState([]);       // 얼굴 목록 — 앨범에 나온 사람마다 얼굴 하나
+  const [person, setPerson] = useState(null);     // 고른 사람의 key — 그 사람이 나온 사진만
   const [items, setItems] = useState([]);
   const [cursor, setCursor] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -71,8 +75,23 @@ function PhotoAlbum() {
     }
   }, [apiBase]);
 
+  const loadPeople = useCallback(async () => {
+    try {
+      const response = await fetchWithAuth(`${apiBase}/album/people`);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) return;
+      const next = payload.people || [];
+      setPeople(next);
+      // 고른 사람이 묶음에서 사라졌으면(사진을 지웠거나 얼굴을 다시 찾았다) 고른 것을 푼다
+      setPerson((prev) => (prev && !next.some((one) => one.key === prev) ? null : prev));
+    } catch (error) {
+      console.error('얼굴 목록 조회 실패:', error);
+    }
+  }, [apiBase]);
+
   const loadMedia = useCallback(async (nextCursor = null) => {
     const params = new URLSearchParams({ filter, limit: String(PAGE) });
+    if (person) params.set('person', person);
     if (nextCursor) {
       params.set('cursorTakenAt', nextCursor.takenAt);
       params.set('cursorId', String(nextCursor.id));
@@ -81,19 +100,23 @@ function PhotoAlbum() {
       const response = await fetchWithAuth(`${apiBase}/media?${params.toString()}`);
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) return;
+      if (payload.personMissing) { setPerson(null); loadPeople(); return; }
       setItems((prev) => (nextCursor ? [...prev, ...(payload.items || [])] : payload.items || []));
       setCursor(payload.nextCursor || null);
     } catch (error) {
       console.error('사진 목록 조회 실패:', error);
     }
-  }, [apiBase, filter]);
+  }, [apiBase, filter, person, loadPeople]);
 
   useEffect(() => { loadAlbum(); }, [loadAlbum]);
   useEffect(() => {
     if (album?.driveFolderId) loadMedia();
   }, [album?.driveFolderId, loadMedia]);
+  useEffect(() => {
+    if (album?.driveFolderId) loadPeople();
+  }, [album?.driveFolderId, loadPeople]);
 
-  const reloadAll = () => { loadAlbum(); loadMedia(); };
+  const reloadAll = () => { loadAlbum(); loadMedia(); loadPeople(); };
 
   const patchAlbum = async (body, message) => {
     setBusy(true);
@@ -353,7 +376,9 @@ function PhotoAlbum() {
             </Card>
           </div>
 
-          <div className="ui-row ui-mt-5 ui-mb-3" data-gap="2" data-justify="between">
+          <FacePeopleStrip className="ui-mt-5" people={people} selected={person} onSelect={setPerson} />
+
+          <div className={`ui-row ${people.length ? 'ui-mt-3' : 'ui-mt-5'} ui-mb-3`} data-gap="2" data-justify="between">
             {selecting ? (
               <>
                 <b>{selected.length}장 골랐어요</b>
@@ -379,8 +404,8 @@ function PhotoAlbum() {
           {items.length === 0 ? (
             <div className="ui-dropzone">
               <Icon name="upload" size={28} />
-              <p className="ui-dropzone__title">{filter === 'all' ? '아직 사진이 없어요' : '이 조건의 사진이 없어요'}</p>
-              {filter === 'all' && (
+              <p className="ui-dropzone__title">{filter === 'all' && !person ? '아직 사진이 없어요' : '이 조건의 사진이 없어요'}</p>
+              {filter === 'all' && !person && (
                 <p className="ui-dropzone__hint">[사진 올리기] 로 한 번에 30개까지 올릴 수 있어요. 사진 25MB · 영상 500MB 까지.</p>
               )}
             </div>

@@ -1271,3 +1271,53 @@ test.describe('사진 설명 — 선생님이 쓰고 학부모가 본다', () =>
     expect((await parentItem(request, photoId)).caption).toBeNull();
   });
 });
+
+/**
+ * 앨범 위 얼굴 목록 — 학부모도 앨범의 모든 얼굴을 본다(2026-10-09 결정). 대신 받는 값은 얼굴을 잘라 그릴 사진 주소·상자와
+ * 사진 수뿐이다 — 이름·학생 id·특징값은 없다.
+ */
+test.describe('학부모 — 앨범 얼굴 목록', () => {
+  // 아이가 이미 연결된 학부모로 — sessions.parent 는 앞쪽 가입 테스트가 아이를 등록해야 앨범을 연다(순서에 기대지 않게)
+  test.beforeEach(async ({ page }) => {
+    await loginAs(page, sessions.parentMulti);
+    await page.route('https://lh3.googleusercontent.com/**', (route) => route.fulfill({
+      contentType: 'image/png', body: FACELESS_PNG.buffer, headers: { 'Access-Control-Allow-Origin': '*' }
+    }));
+  });
+
+  test('맨 위 얼굴을 누르면 그 사람이 나온 사진만, [모든 사진] 이면 다시 전부', async ({ page }) => {
+    await page.goto(`/parent/photos/${sessions.album.peopleEventId}`);
+    const tiles = page.getByRole('button', { name: /사진 열기/ });
+    await expect(tiles).toHaveCount(3);
+
+    const faces = page.getByRole('group', { name: '얼굴로 사진 찾기' });
+    await expect(faces.getByRole('button', { name: /^얼굴 \d+ · 사진 2장$/ })).toHaveCount(2);
+    await expect(faces.locator('img')).toHaveCount(2);
+
+    await faces.getByRole('button', { name: '얼굴 2 · 사진 2장' }).click();
+    await expect(tiles).toHaveCount(2);
+    await expect(page.getByRole('button', { name: /우리 아이 사진만 보기/ })).toHaveAttribute('aria-pressed', 'false');
+
+    await faces.getByRole('button', { name: '모든 사진' }).click();
+    await expect(tiles).toHaveCount(3);
+  });
+
+  test('얼굴 목록 API 는 화이트리스트 — 이름·학생 id·특징값이 없다', async ({ request }) => {
+    const { status, body } = await api(request, sessions.parentMulti, 'GET', `/api/parent/events/${sessions.album.peopleEventId}/people`);
+
+    expect(status).toBe(200);
+    expect(body.people).toHaveLength(2);
+    for (const person of body.people) {
+      expect(Object.keys(person).sort()).toEqual(['cover', 'key', 'mine', 'photoCount']);
+      expect(Object.keys(person.cover).sort()).toEqual(['box', 'url']);
+    }
+    expect(JSON.stringify(body)).not.toMatch(/studentId|descriptor|faceIds|mediaIds|name/);
+  });
+
+  test('볼 수 없는 앨범의 얼굴 목록은 403', async ({ request }) => {
+    const { status, body } = await api(request, sessions.parentMulti, 'GET', `/api/parent/events/${sessions.album.lockedEventId}/people`);
+    expect(status).toBe(403);
+    expect(body.people).toBeUndefined();
+  });
+});
+

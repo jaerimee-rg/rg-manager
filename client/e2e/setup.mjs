@@ -163,6 +163,31 @@ await mkMedia({ i: 9, kind: 'image', uploaderRole: 'teacher', uploaderUserId: te
 const faceThumbEventId = await mkEvent(`e2e얼굴그림_${stamp}`, null, true, { type: 'special', published: false });
 await mkMedia({ i: 11, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: faceThumbEventId, faceStatus: 'none' });
 
+// 얼굴 목록(앨범 위 사람마다 얼굴 하나) — 사진 세 장에 두 사람: 가(사진 21·22), 나(22·23). 모든 학부모에게 공개한 사진 전용
+// 폴더라 학부모 화면에서도 본다(이벤트가 아니라 일정 화면에는 안 나온다). 두 특징값은 서로 직각이고, 학부모가 등록한 기준
+// 얼굴(0.1 로 채운 값)과도 직각이라 자동 태그가 붙지 않는다 — 순전히 얼굴끼리 닮은 것으로 묶인다.
+const peopleEventId = await mkEvent(`e2e얼굴목록_${stamp}`, null, true, { type: 'folder', published: true, audience: 'all' });
+const peopleVector = (sign) => Buffer.from(Float32Array.from({ length: 512 }, (_, k) => sign(k)).buffer).toString('base64');
+const personA = peopleVector((k) => (k % 2 ? -1 : 1));
+const personB = peopleVector((k) => (k % 4 < 2 ? 1 : -1));
+const peopleMediaIds = [];
+for (const i of [21, 22, 23]) {
+  peopleMediaIds.push(await mkMedia({ i, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: peopleEventId }));
+}
+// 지금 방식으로 찾은 것으로 — 아니면 [얼굴 찾기] 안내가 함께 뜬다
+await pool.query('UPDATE event_media SET "faceAnalyzerVersion" = 3 WHERE id = ANY($1::int[])', [peopleMediaIds]);
+for (const [mediaId, descriptor, box] of [
+  [peopleMediaIds[0], personA, { x: 0.2, y: 0.2, w: 0.2, h: 0.2 }],
+  [peopleMediaIds[1], personA, { x: 0.1, y: 0.3, w: 0.15, h: 0.15 }],
+  [peopleMediaIds[1], personB, { x: 0.6, y: 0.3, w: 0.15, h: 0.15 }],
+  [peopleMediaIds[2], personB, { x: 0.4, y: 0.4, w: 0.25, h: 0.25 }]
+]) {
+  await pool.query(
+    `INSERT INTO media_faces ("mediaId", box, score, descriptor, "createdAt") VALUES ($1,$2,0.9,$3,$4)`,
+    [mediaId, JSON.stringify(box), descriptor, now]
+  );
+}
+
 // 학부모가 첫째 아이에 등록해 둔 얼굴 사진 두 장(특징값만) → 내 정보에서 한 장을 지우는 흐름을 본다.
 // 두 장이 같은 값이라 한 장을 지워도 남은 한 장과 아래 태그 사진의 얼굴이 그대로 맞는다(태그가 유지된다).
 const faceVector = Buffer.from(new Float32Array(512).fill(0.1).buffer).toString('base64');   // ArcFace 512차원
@@ -345,7 +370,7 @@ const tinv = await pool.query(
 );
 
 const sessions = {
-  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, doomedFolderEventId, doomedFolderTitle, faceScanEventId, faceThumbEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
+  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, doomedFolderEventId, doomedFolderTitle, faceScanEventId, faceThumbEventId, peopleEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
   teacher: { token: sign(teacher), user: { id: teacher.id, username: teacher.username, role: 'user' } },
   teacher2Token: sign(teacher2),
   parent: { token: sign(parent), user: { id: parent.id, username: parent.username, role: 'parent' } },

@@ -29,6 +29,18 @@ export const thumbnailUrl = (driveFileId, size = 400) =>
 export const largeImageUrl = (driveFileId, width = 1600) =>
   (driveFileId ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=w${width}` : null);
 
+/**
+ * 얼굴 목록 표지용 사진 — 브라우저가 얼굴을 잘라 쓴다(client utils/faceCrops.js). 원래 비율 그대로(=sN, 긴 변 N)라
+ * 얼굴 상자(0~1)가 그대로 맞고, lh3 는 CORS 를 허락해 캔버스로 자를 수 있다. 얼굴이 작을수록 큰 사진이 필요하다:
+ * 얼굴 긴 변이 60px(잘라 낸 96px ÷ 여백 1.6) 이상 되게, 100 단위로 올려 같은 사진은 브라우저 캐시를 나눠 쓴다.
+ */
+export const faceCoverUrl = (driveFileId, box) => {
+  if (!driveFileId) return null;
+  const side = Math.max(Number(box?.w) || 0, Number(box?.h) || 0) || 0.05;
+  const size = Math.min(1920, Math.max(200, Math.ceil(60 / side / 100) * 100));
+  return `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=s${size}`;
+};
+
 export const originalUrl = (driveFileId) =>
   (driveFileId ? `${FILE_BASE}/${encodeURIComponent(driveFileId)}/view` : null);
 

@@ -11,6 +11,7 @@ import { sanitizeFolderName, folderNameFromEvent, normalizeCaption, MAX_FILES_PE
 import { canUpload, canManageAlbum, canDeleteMedia, reasonMessage, isValidAudience, isPhotoFolder } from '../utils/albumAccess.js';
 import { toTeacherMedia } from '../utils/mediaSerializer.js';
 import { sharePathFor } from '../services/albumShare.js';
+import { albumPeople, findPerson, toPersonView } from '../services/albumPeople.js';
 
 /**
  * 선생님의 앨범 관리. 이벤트 소유자만 들어온다.
@@ -250,18 +251,40 @@ export const listMedia = async (req, res) => {
       ? { takenAt: req.query.cursorTakenAt, id: parseInt(req.query.cursorId, 10) }
       : null;
 
+    // 얼굴 목록에서 한 사람을 골랐으면 그 사람이 나온 사진만. 그 사이 묶음이 바뀌어 없는 사람이면
+    // 빈 목록 + personMissing (화면이 고른 것을 풀고 목록을 다시 읽는다)
+    const personKey = req.query.person ? String(req.query.person) : null;
+    const person = personKey ? findPerson(await albumPeople(event.id, { includeHidden: true }), personKey) : null;
+    const mediaIds = personKey ? (person?.mediaIds || []) : null;
+
     const rows = await EventMedia.list(event.id, {
-      filter, limit, cursor, includeHidden: true, uploaderUserId: req.user.id
+      filter, limit, cursor, includeHidden: true, uploaderUserId: req.user.id, mediaIds
     });
     const items = await decorate(rows, req.user.id, req.user.role);
     const last = rows[rows.length - 1];
 
     res.json({
       items,
-      nextCursor: rows.length === limit && last ? { takenAt: last.takenAt, id: last.id } : null
+      nextCursor: rows.length === limit && last ? { takenAt: last.takenAt, id: last.id } : null,
+      ...(personKey && !person ? { personMissing: true } : {})
     });
   } catch (error) {
     console.error('앨범 목록 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/** GET /api/events/:id/album/people — 앨범 위 얼굴 목록(한 사람에 얼굴 하나). 숨긴 사진까지 본다. */
+export const listPeople = async (req, res) => {
+  try {
+    const event = await loadEvent(req);
+    if (!event) return notFound(res);
+    await albumService.ensureAlbumsMatched(event);
+
+    const people = await albumPeople(event.id, { includeHidden: true });
+    res.json({ people: people.map((person) => toPersonView(person)) });
+  } catch (error) {
+    console.error('앨범 얼굴 목록 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
   }
 };
@@ -573,7 +596,7 @@ export const deleteMedia = async (req, res) => {
 };
 
 export default {
-  getAlbum, createAlbum, updateAlbum, refreshAlbum,
+  getAlbum, listPeople, createAlbum, updateAlbum, refreshAlbum,
   listMedia, createUploads, completeUpload, bulkAction,
   addTag, removeTag, listUnanalyzed, saveFaces, rematch, updateMedia, deleteMedia
 };

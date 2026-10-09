@@ -10,6 +10,7 @@ import ChildFaceProfile, { MAX_PER_PARENT, MAX_PER_STUDENT } from '../models/Chi
 import GoogleDriveAccount from '../models/GoogleDriveAccount.js';
 import albumService from '../services/albumService.js';
 import { sharePathFor } from '../services/albumShare.js';
+import { albumPeople, findPerson, toPersonView, parentPeopleOrder } from '../services/albumPeople.js';
 import { DriveError } from '../utils/googleDrive.js';
 import { isConfirmedParent, confirmedChildIds, canViewAlbum, canUpload, canDeleteMedia, reasonMessage } from '../utils/albumAccess.js';
 import { toParentMedia, toParentAlbum } from '../utils/mediaSerializer.js';
@@ -143,7 +144,11 @@ export const listMedia = async (req, res) => {
     await albumService.ensureAlbumsMatched(event);
 
     const filter = String(req.query.filter || 'all');
-    const mineOnly = String(req.query.mine || '') === '1';
+    // 얼굴 목록에서 한 사람을 골랐으면 그 사람이 나온 사진만 — "우리 아이만" 과 함께 쓰지 않는다(화면이 하나만 켠다).
+    // 그 사이 묶음이 바뀌어 없는 사람이면 빈 목록 + personMissing (화면이 고른 것을 풀고 목록을 다시 읽는다)
+    const personKey = req.query.person ? String(req.query.person) : null;
+    const person = personKey ? findPerson(await albumPeople(event.id), personKey) : null;
+    const mineOnly = !personKey && String(req.query.mine || '') === '1';
     const childStudentId = req.query.studentId ? parseInt(req.query.studentId, 10) : null;
 
     // "우리 아이만" — 자녀를 고르면 그 아이만, 아니면 내 아이 전부
@@ -159,6 +164,7 @@ export const listMedia = async (req, res) => {
     const rows = await EventMedia.list(event.id, {
       filter, limit, cursor,
       studentIds: targetIds,
+      mediaIds: personKey ? (person?.mediaIds || []) : null,
       uploaderUserId: req.user.id
     });
 
@@ -199,13 +205,36 @@ export const listMedia = async (req, res) => {
       })),
       items,
       candidates,
-      nextCursor: rows.length === limit && last ? { takenAt: last.takenAt, id: last.id } : null
+      nextCursor: rows.length === limit && last ? { takenAt: last.takenAt, id: last.id } : null,
+      ...(personKey && !person ? { personMissing: true } : {})
     });
   } catch (error) {
     console.error('학부모 앨범 조회 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
   }
 };
+
+/**
+ * GET /api/parent/events/:id/people — 앨범 위 얼굴 목록(한 사람에 얼굴 하나, 우리 아이 먼저).
+ * 볼 수 있는 앨범에서만(loadAlbumContext), 숨긴 사진은 빼고 묶는다. 모양은 services/albumPeople.js toPersonView —
+ * 이름·학생 id·특징값은 없다.
+ */
+export const listPeople = async (req, res) => {
+  try {
+    const context = await loadAlbumContext(req);
+    if (context.error) return context.error(res);
+
+    const { event, studentIds } = context;
+    await albumService.ensureAlbumsMatched(event);
+
+    const people = await albumPeople(event.id);
+    res.json({ people: parentPeopleOrder(people.map((person) => toPersonView(person, { myStudentIds: studentIds }))) });
+  } catch (error) {
+    console.error('학부모 앨범 얼굴 목록 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
 
 /** POST /api/parent/events/:id/media/uploads */
 export const createUploads = async (req, res) => {
@@ -472,6 +501,6 @@ export const deleteFace = async (req, res) => {
 };
 
 export default {
-  listAlbums, listMedia, createUploads, completeUpload, deleteMedia, confirmTag,
+  listAlbums, listMedia, listPeople, createUploads, completeUpload, deleteMedia, confirmTag,
   listFaces, addFace, deleteFace
 };

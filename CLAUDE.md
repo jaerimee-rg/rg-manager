@@ -517,7 +517,10 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   6 newest non-hidden photos in `album.items`. Everything parent-facing goes through
   `utils/mediaSerializer.js:toParentMedia`, a **whitelist** — other children's tags, face boxes,
   descriptors, uploader names and Drive filenames never leave the server. A test pins the exact
-  field list so a new column cannot leak by accident.
+  field list so a new column cannot leak by accident. **One deliberate exception (owner's call, 2026-10-09):** the
+  album face list (below) sends parents **one cover face box per person in the album, other children included** —
+  only `{key, photoCount, mine, cover: {url, box}}`, never names, student ids, descriptors or media-id lists
+  (`services/albumPeople.js:toPersonView`, keys pinned by a unit test and an e2e).
 - **Face indexing runs on Vercel, in a Python function** (`face_engine/`, 2026-10) — InsightFace **buffalo_l**:
   SCRFD `det_10g` at 640 + ArcFace `w600k_r50` (**512-dim**, unit length). It replaced the in-browser face-api
   (TinyFaceDetector + 128-dim), which on the 102 production photos found faces in 51 and mixed different children
@@ -588,6 +591,23 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   result line — first 30, then "+N" (`FaceScanPanel` `FoundFaces`). `utils/faceCrops.js` cuts them in the browser
   from the same lh3 photo using only the saved `box` (0–1), so it does not care how the faces were detected. Crops
   are JPEG data URLs that live in React state only — never sent to the server, never stored; reloading clears them.
+- **Album face list — 얼굴로 사진 찾기** (teacher album above the filter chips, parent album at the very top):
+  every person in the album once, as a round crop; pressing one shows only the photos that person is in, pressing it
+  again or [전체] clears it. Both sides share `components/album/FacePeopleStrip.jsx` (crops via `utils/faceCrops.js`,
+  one image load per cover photo, cached across list refreshes). **Grouping is computed on every read, never stored**
+  (`server/utils/facePeople.js:groupFaces`, pure + unit-tested; loaded by `services/albumPeople.js`): faces with a
+  `face`/`manual`/`parent_confirmed` tag seed that student's group, the rest join the group whose mean is within
+  cosine distance **0.5** (`PERSON_JOIN_DISTANCE`) or start a new one, then close groups merge. Hard rules: two faces
+  in one photo are never one person, a photo the parent marked `excluded` never joins that student, two student groups
+  never merge. 0.5 comes from production (2026-10-09, 38 faces): cross-photo pairs split into < 0.4 and > 0.5
+  similarity with none between; faces in the same photo never exceeded 0.4. The person `key` is `p<smallest face id>`,
+  so `?person=<key>` on `GET /api/events/:id/media` (teacher, hidden photos included) or
+  `GET /api/parent/events/:id/media` (parent, hidden photos excluded from grouping and covers) regroups and finds the same
+  person; a key that vanished meanwhile answers an empty list + `personMissing:true` (never the whole album) and the
+  screen drops the selection and reloads the list. Lists: `GET /api/events/:id/album/people`,
+  `GET /api/parent/events/:id/people` (own children first, `mine:true`, labelled "우리 아이"; no other names anywhere —
+  grouping can be wrong). The cover image is `lh3 …=s<N>` sized so the face is ≥ 60 px (`mediaSerializer.faceCoverUrl`).
+  On the parent page a picked face turns 우리 아이만 off and vice versa.
 - **Parents**: 사진 tab (`/parent/photos`, published albums only), gallery (`/parent/photos/:eventId`) with the
   **우리 아이 사진만 보기** toggle and `?open=<mediaId>` to open one photo, a full-screen viewer whose 저장 button
   opens the Drive download URL and which **swipes sideways** to the previous/next photo or video
