@@ -11,7 +11,7 @@ import { sanitizeFolderName, folderNameFromEvent, normalizeCaption, MAX_FILES_PE
 import { canUpload, canManageAlbum, canDeleteMedia, reasonMessage, isValidAudience, isPhotoFolder } from '../utils/albumAccess.js';
 import { toTeacherMedia } from '../utils/mediaSerializer.js';
 import { sharePathFor } from '../services/albumShare.js';
-import { albumPeople, findPerson, toPersonView } from '../services/albumPeople.js';
+import { albumPeople, findPerson, removePerson, toPersonView } from '../services/albumPeople.js';
 
 /**
  * 선생님의 앨범 관리. 이벤트 소유자만 들어온다.
@@ -282,9 +282,37 @@ export const listPeople = async (req, res) => {
     await albumService.ensureAlbumsMatched(event);
 
     const people = await albumPeople(event.id, { includeHidden: true });
-    res.json({ people: people.map((person) => toPersonView(person)) });
+    res.json({ people: people.map((person) => toPersonView(person, { teacher: true })) });
   } catch (error) {
     console.error('앨범 얼굴 목록 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/**
+ * DELETE /api/events/:id/album/people/:key — 얼굴 목록에서 관계없는 사람을 뺀다(선생님만).
+ * 사진은 지우지 않고 그 사람의 얼굴과 그 얼굴로 붙은 자동 태그만 지운다(services/albumPeople.js removePerson).
+ * Drive 를 건드리지 않으므로 Google 연결이 끊겨도 된다. 그 사이 묶음이 바뀌어 없는 사람이면 404 + personMissing.
+ * ?photoCount= 는 화면이 본 그 사람의 사진 수 — 지금 다시 묶은 것과 다르면 409 person_changed(아무것도 지우지 않는다).
+ * 등록된 아이로 묶인 사람은 409 student_person.
+ */
+export const deletePerson = async (req, res) => {
+  try {
+    const event = await loadEvent(req);
+    if (!event) return notFound(res);
+
+    const seenPhotoCount = req.query.photoCount === undefined ? undefined : Number(req.query.photoCount);
+    const result = await removePerson(event.id, req.params.key, { seenPhotoCount });
+    if (!result) return res.status(404).json({ error: '얼굴 목록이 바뀌었어요. 새로고침해 주세요.', personMissing: true });
+    if (result.blocked === 'student_person') {
+      return res.status(409).json({ error: '등록된 아이 얼굴은 목록에서 뺄 수 없어요.', reason: 'student_person' });
+    }
+    if (result.blocked === 'person_changed') {
+      return res.status(409).json({ error: '얼굴 목록이 바뀌었어요. 다시 확인해 주세요.', reason: 'person_changed' });
+    }
+    res.json(result);
+  } catch (error) {
+    console.error('얼굴 목록에서 빼기 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
   }
 };
@@ -596,7 +624,7 @@ export const deleteMedia = async (req, res) => {
 };
 
 export default {
-  getAlbum, listPeople, createAlbum, updateAlbum, refreshAlbum,
+  getAlbum, listPeople, deletePerson, createAlbum, updateAlbum, refreshAlbum,
   listMedia, createUploads, completeUpload, bulkAction,
   addTag, removeTag, listUnanalyzed, saveFaces, rematch, updateMedia, deleteMedia
 };

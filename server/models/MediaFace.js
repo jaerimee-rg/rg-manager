@@ -91,6 +91,22 @@ class MediaFace {
     return result.rows.map((row) => ({ ...hydrate(row), descriptor: decodeDescriptor(row.descriptor) }));
   }
 
+  /**
+   * 얼굴 목록에서 뺀 사람의 얼굴을 지운다(선생님이 관계없는 사람을 빼면). 이 앨범의 얼굴만 — 다른 앨범의 id 가 섞여도
+   * 건드리지 않는다. → 지운 얼굴들의 사진 id (얼굴마다 하나, 같은 사진이 여러 번 나올 수 있다)
+   */
+  static async deleteForAlbum(faceIds, eventId, client = pool) {
+    if (!faceIds?.length) return [];
+    const result = await client.query(
+      `DELETE FROM media_faces f
+        USING event_media m
+        WHERE f.id = ANY($1::int[]) AND m.id = f."mediaId" AND m."eventId" = $2
+        RETURNING f."mediaId"`,
+      [faceIds, eventId]
+    );
+    return result.rows.map((row) => row.mediaId);
+  }
+
   /** 사진마다 몇 개의 얼굴이 있는지 (선생님 화면 배지) */
   static async countsByMedia(mediaIds) {
     if (!mediaIds?.length) return {};

@@ -58,6 +58,20 @@ class MediaTag {
     return result.rows;
   }
 
+  /**
+   * 이 얼굴들로 붙은 자동 태그(face · candidate)를 지운다 — 얼굴을 지우기 **전에** 불러야 한다:
+   * media_tags."faceId" 는 ON DELETE SET NULL 이라 얼굴을 먼저 지우면 어느 태그였는지 잃는다.
+   * 선생님이 붙인 것(manual)·학부모가 맞다고 한 것(parent_confirmed)·아니라고 한 것(excluded)은 남긴다.
+   */
+  static async removeAutoTagsForFaces(faceIds, client = pool) {
+    if (!faceIds?.length) return 0;
+    const result = await client.query(
+      `DELETE FROM media_tags WHERE "faceId" = ANY($1::int[]) AND source IN ('face', 'candidate')`,
+      [faceIds]
+    );
+    return result.rowCount;
+  }
+
   /** 태그 하나를 넣거나 갱신한다. */
   static async upsert({ mediaId, studentId, source, distance = null, faceId = null, createdByUserId = null }, client = pool) {
     const now = new Date().toISOString();

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Avatar } from '../ui';
+import { Avatar, Icon } from '../ui';
 import { cropFaces } from '../../utils/faceCrops';
 
 const coverId = (cover) => `${cover?.url}|${cover?.box?.x},${cover?.box?.y},${cover?.box?.w},${cover?.box?.h}`;
@@ -42,40 +42,141 @@ const useFaceCovers = (people) => {
   return (person) => cache.current.get(coverId(person.cover));
 };
 
+/** 이만큼 누르고 있으면 "빼기" 상태 — 버튼 위 X 가 나온다(선생님만) */
+export const LONG_PRESS_MS = 500;
+/** 누른 채 이만큼 움직이면 목록을 옆으로 미는 것이지 길게 누르기가 아니다 */
+const LONG_PRESS_SLOP_PX = 10;
+
 /**
  * 앨범 위 얼굴 목록 — 앨범에 나온 사람마다 얼굴 하나(같은 아이는 하나로 묶여 온다, server utils/facePeople.js).
  * 누르면 그 사람이 나온 사진만 보고, 다시 누르거나 [전체] 를 누르면 푼다. 선생님 앨범과 학부모 앨범이 같이 쓴다.
  *
  * people: [{ key, photoCount, cover: { url, box }, mine? }] · selected: key | null · onSelect(key | null)
  * 이름은 쓰지 않는다 — 얼굴 묶음은 틀릴 수 있다(사진 위 이름을 그리지 않는 것과 같은 이유). 학부모의 우리 아이만 "우리 아이".
+ *
+ * onRemove(key) — 주면(선생님 앨범만) 얼굴을 **길게 누르면**(마우스 오른쪽 클릭 · 키보드 Delete 도) 그 얼굴에 X 가 나오고,
+ * X 를 누르면 관계없는 사람으로 목록에서 뺀다. 두 번 눌러야 지워지는 것이 확인 창을 대신한다.
+ * X 가 떠 있는 동안 다른 얼굴·[전체]·바깥을 누르거나 Esc 면 X 만 사라진다(고르지 않는다).
+ * removable === false 인 사람(등록된 아이로 묶인 사람 — 서버가 선생님에게만 알려 준다)은 길게 눌러도 X 가 없다.
  */
-function FacePeopleStrip({ people = [], selected = null, onSelect, className }) {
+function FacePeopleStrip({ people = [], selected = null, onSelect, onRemove, className }) {
   const coverOf = useFaceCovers(people);
+  const [removing, setRemoving] = useState(null);   // X 가 떠 있는 얼굴의 key
+  const root = useRef(null);
+  const removeButton = useRef(null);
+  const press = useRef({ timer: null, x: 0, y: 0, long: false });
+
+  const cancelPress = () => {
+    clearTimeout(press.current.timer);
+    press.current.timer = null;
+  };
+  useEffect(() => cancelPress, []);
+
+  // X 가 떠 있는 동안: Esc · 목록 바깥을 누르면 닫는다. X 로 포커스를 옮겨 키보드로도 바로 뺄 수 있게 한다.
+  useEffect(() => {
+    if (!removing) return undefined;
+    removeButton.current?.focus();
+    const onKey = (event) => { if (event.key === 'Escape') setRemoving(null); };
+    const onOutside = (event) => { if (!root.current?.contains(event.target)) setRemoving(null); };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onOutside);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onOutside);
+    };
+  }, [removing]);
+
+  // 묶음이 바뀌어 그 얼굴이 사라졌으면 X 도 닫는다
+  useEffect(() => {
+    if (removing && !people.some((person) => person.key === removing)) setRemoving(null);
+  }, [people, removing]);
+
   if (!people.length) return null;
 
+  const pressHandlers = (person) => (onRemove && person.removable !== false ? {
+    onPointerDown: (event) => {
+      press.current.long = false;
+      cancelPress();
+      press.current.x = event.clientX;
+      press.current.y = event.clientY;
+      press.current.timer = setTimeout(() => {
+        press.current.long = true;
+        press.current.timer = null;
+        setRemoving(person.key);
+      }, LONG_PRESS_MS);
+    },
+    onPointerMove: (event) => {
+      if (!press.current.timer) return;
+      if (Math.hypot(event.clientX - press.current.x, event.clientY - press.current.y) > LONG_PRESS_SLOP_PX) cancelPress();
+    },
+    onPointerUp: cancelPress,
+    onPointerCancel: cancelPress,
+    onPointerLeave: cancelPress,
+    // 휴대폰 길게 누르기 메뉴 · 마우스 오른쪽 클릭 → 그 메뉴 대신 X
+    onContextMenu: (event) => {
+      event.preventDefault();
+      setRemoving(person.key);
+    },
+    onKeyDown: (event) => {
+      if (event.key === 'Delete') {
+        event.preventDefault();
+        setRemoving(person.key);
+      }
+    }
+  } : {});
+
+  // 길게 눌러 X 를 띄운 뒤 손을 떼면 오는 click, 또는 X 가 떠 있을 때의 click 은 고르지 않고 X 만 닫는다
+  const clickGuard = (action) => () => {
+    if (press.current.long) { press.current.long = false; return; }
+    if (removing) { setRemoving(null); return; }
+    action();
+  };
+
   return (
-    <div className={['ui-face-people', className].filter(Boolean).join(' ')} role="group" aria-label="얼굴로 사진 찾기">
-      <button type="button" className="ui-face-people__item" aria-pressed={!selected} onClick={() => onSelect?.(null)}>
-        <span className="ui-avatar ui-face-people__all" data-size="xl" aria-hidden="true">전체</span>
-        <span className="ui-face-people__label">모든 사진</span>
-      </button>
+    <div
+      ref={root}
+      className={['ui-face-people', className].filter(Boolean).join(' ')}
+      role="group"
+      aria-label="얼굴로 사진 찾기"
+      data-removing={removing ? 'true' : undefined}
+    >
+      <div className="ui-face-people__cell">
+        <button type="button" className="ui-face-people__item" aria-pressed={!selected} onClick={clickGuard(() => onSelect?.(null))}>
+          <span className="ui-avatar ui-face-people__all" data-size="xl" aria-hidden="true">전체</span>
+          <span className="ui-face-people__label">모든 사진</span>
+        </button>
+      </div>
       {people.map((person, index) => {
         const src = coverOf(person);
+        const name = person.mine ? '우리 아이' : `얼굴 ${index + 1}`;
         const label = person.mine ? '우리 아이' : `${person.photoCount}장`;
         return (
-          <button
-            key={person.key}
-            type="button"
-            className="ui-face-people__item"
-            aria-pressed={selected === person.key}
-            aria-label={`${person.mine ? '우리 아이' : `얼굴 ${index + 1}`} · 사진 ${person.photoCount}장`}
-            onClick={() => onSelect?.(selected === person.key ? null : person.key)}
-          >
-            {src
-              ? <Avatar src={src} size="xl" />
-              : <span className="ui-avatar ui-face-people__pending" data-size="xl" data-failed={src === null ? 'true' : undefined} aria-hidden="true" />}
-            <span className="ui-face-people__label">{label}</span>
-          </button>
+          <div key={person.key} className="ui-face-people__cell">
+            <button
+              type="button"
+              className="ui-face-people__item"
+              aria-pressed={selected === person.key}
+              aria-label={`${name} · 사진 ${person.photoCount}장`}
+              onClick={clickGuard(() => onSelect?.(selected === person.key ? null : person.key))}
+              {...pressHandlers(person)}
+            >
+              {src
+                ? <Avatar src={src} size="xl" />
+                : <span className="ui-avatar ui-face-people__pending" data-size="xl" data-failed={src === null ? 'true' : undefined} aria-hidden="true" />}
+              <span className="ui-face-people__label">{label}</span>
+            </button>
+            {removing === person.key && (
+              <button
+                ref={removeButton}
+                type="button"
+                className="ui-face-people__remove"
+                aria-label={`${name} 목록에서 빼기`}
+                onClick={() => { setRemoving(null); onRemove?.(person.key); }}
+              >
+                <Icon name="x" size={14} />
+              </button>
+            )}
+          </div>
         );
       })}
     </div>

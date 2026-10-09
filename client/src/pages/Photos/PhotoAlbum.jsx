@@ -118,6 +118,37 @@ function PhotoAlbum() {
 
   const reloadAll = () => { loadAlbum(); loadMedia(); loadPeople(); };
 
+  // 얼굴 목록에서 관계없는 사람을 뺀다(길게 눌러 X). 사진은 그대로 — 그 사람의 얼굴과 자동 태그만 지운다.
+  // 화면이 본 사진 수를 함께 보내 서버가 "같은 사람" 인지 확인한다 — 그 사이 묶음이 바뀌었으면 409 로 아무것도 지우지 않는다.
+  const removePerson = async (key) => {
+    const seen = people.find((one) => one.key === key);
+    try {
+      const response = await fetchWithAuth(
+        `${apiBase}/album/people/${encodeURIComponent(key)}?photoCount=${seen?.photoCount ?? ''}`,
+        { method: 'DELETE' }
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const changed = payload.personMissing || payload.reason === 'person_changed';
+        showToast(changed ? '얼굴 목록이 바뀌었어요. 다시 확인해 주세요.' : (payload.error || '얼굴을 빼지 못했어요.'));
+        if (changed) loadPeople();
+        return;
+      }
+      showToast('얼굴을 목록에서 뺐어요 · 사진은 그대로 있어요');
+      if (person === key) {
+        // 고른 것을 풀면 사진 목록은 그 변화로 다시 읽는다
+        setPerson(null);
+        loadAlbum();
+        loadPeople();
+      } else {
+        reloadAll();
+      }
+    } catch (error) {
+      console.error('얼굴 빼기 실패:', error);
+      showToast('얼굴을 빼지 못했어요.');
+    }
+  };
+
   const patchAlbum = async (body, message) => {
     setBusy(true);
     try {
@@ -376,7 +407,7 @@ function PhotoAlbum() {
             </Card>
           </div>
 
-          <FacePeopleStrip className="ui-mt-5" people={people} selected={person} onSelect={setPerson} />
+          <FacePeopleStrip className="ui-mt-5" people={people} selected={person} onSelect={setPerson} onRemove={removePerson} />
 
           <div className={`ui-row ${people.length ? 'ui-mt-3' : 'ui-mt-5'} ui-mb-3`} data-gap="2" data-justify="between">
             {selecting ? (

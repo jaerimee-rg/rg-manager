@@ -70,3 +70,50 @@ describe('묶을 얼굴 · 태그 읽기', () => {
     expect(sql).toContain(`WHERE m."eventId" = $1 AND m.status = 'ready' AND m."isHidden" = FALSE`);
   });
 });
+
+describe('얼굴 목록에서 사람 빼기', () => {
+  const client = { query: jest.fn() };
+
+  beforeEach(() => {
+    client.query.mockReset();
+  });
+
+  it('MediaTag.removeAutoTagsForFaces — 그 얼굴로 붙은 자동 태그(face·candidate)만, 트랜잭션 클라이언트로', async () => {
+    client.query.mockResolvedValue({ rowCount: 2 });
+
+    await expect(MediaTag.removeAutoTagsForFaces([11, 12], client)).resolves.toBe(2);
+
+    const [sql, params] = client.query.mock.calls[0];
+    expect(squash(sql)).toBe(`DELETE FROM media_tags WHERE "faceId" = ANY($1::int[]) AND source IN ('face', 'candidate')`);
+    expect(params).toEqual([[11, 12]]);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('MediaFace.deleteForAlbum — 이 앨범의 얼굴만 지우고, 지운 얼굴의 사진 id 를 돌려준다', async () => {
+    client.query.mockResolvedValue({ rows: [{ mediaId: 4 }, { mediaId: 4 }, { mediaId: 7 }] });
+
+    await expect(MediaFace.deleteForAlbum([11, 12, 13], 3, client)).resolves.toEqual([4, 4, 7]);
+
+    const [sql, params] = client.query.mock.calls[0];
+    expect(squash(sql)).toContain(`WHERE f.id = ANY($1::int[]) AND m.id = f."mediaId" AND m."eventId" = $2 RETURNING f."mediaId"`);
+    expect(params).toEqual([[11, 12, 13], 3]);
+  });
+
+  it('EventMedia.refreshFaceCounts — 얼굴 수를 다시 세고, 0 이면 none, 분석 버전은 건드리지 않는다', async () => {
+    client.query.mockResolvedValue({ rowCount: 2 });
+
+    await expect(EventMedia.refreshFaceCounts([4, 7], client)).resolves.toBe(2);
+
+    const [sql, params] = client.query.mock.calls[0];
+    expect(squash(sql)).toContain(`SET "faceCount" = c.n, "faceStatus" = CASE WHEN c.n = 0 THEN 'none' ELSE m."faceStatus" END`);
+    expect(sql).not.toContain('faceAnalyzerVersion');
+    expect(params[0]).toEqual([4, 7]);
+  });
+
+  it('빈 목록이면 아무 쿼리도 보내지 않는다', async () => {
+    await expect(MediaTag.removeAutoTagsForFaces([], client)).resolves.toBe(0);
+    await expect(MediaFace.deleteForAlbum([], 3, client)).resolves.toEqual([]);
+    await expect(EventMedia.refreshFaceCounts([], client)).resolves.toBe(0);
+    expect(client.query).not.toHaveBeenCalled();
+  });
+});
