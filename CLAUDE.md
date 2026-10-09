@@ -565,8 +565,12 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   **우리 아이 사진만 보기** toggle and `?open=<mediaId>` to open one photo, a full-screen viewer whose 저장 button
   opens the Drive download URL and which **swipes sideways** to the previous/next photo or video
   (`hooks/useSwipeToPage.js`, rules in `utils/viewerSwipe.js`; both neighbours are pre-rendered off-screen so they
-  follow the finger — touches inside the Drive player iframe never reach us, so on a video you swipe the top bar or
-  the info line), child face registration in 내 정보 (`ChildFaceCard`: registered photos are listed
+  follow the finger). Touches inside the Drive player iframe never reach us, so on touch devices a transparent
+  **swipe cover** (`utils/drivePlayer.js:swipeBands`, four bands around a hole) sits over the player and leaves Drive's
+  own controls uncovered: a 120 px centre hole (play button, the ready-state tap), the bottom `132 × scale` px
+  (seek bar ~102 player-px up + the button row) and the top `64 × scale` px (pop-out button) — `scale` is the
+  `drivePlayerFrame` shrink, measured on a real video 2026-10-09 (play, seek and swipe all checked). Mouse devices get no
+  cover, child face registration in 내 정보 (`ChildFaceCard`: registered photos are listed
   by date — only the vector is stored, so there is no thumbnail — and a parent can **delete the ones they
   registered**; deleting re-matches that child and `matchStudentAcrossAlbums` now also **removes auto tags that no
   longer match**, while 맞아요/아니에요 answers stay), and a **6-photo grid on the event detail**

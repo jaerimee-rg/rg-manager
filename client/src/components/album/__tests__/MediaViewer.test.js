@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, within, act } from '@testing-library/react';
+import { render, screen, fireEvent, createEvent, within, act } from '@testing-library/react';
 import MediaViewer from '../MediaViewer';
 
 const media = (overrides = {}) => ({
@@ -347,15 +347,25 @@ describe('MediaViewer — 옆으로 밀어 넘기기 (휴대폰)', () => {
   const clip = (id) => video(id, { largeUrl: `https://lh3.googleusercontent.com/d/v${id}=w1600` });
   const counter = () => within(screen.getByTestId('viewer-top')).getByText(/\d+ \/ \d+/).textContent;
 
-  // 한 손가락(또는 fingers 개)으로 (200, 400) 에서 dx·dy 만큼 나눠 움직이고 뗀다. touchmove 마다 기본 동작을 막았는지 돌려준다
-  const drag = (target, { dx, dy = 0, steps = 4, fingers = 1, release = true }) => {
+  // 터치 이벤트의 시각(timeStamp)을 정해 보낸다 — 놓는 순간의 속도로 '튕기기' 를 가르므로, 실제 시계에 맡기면
+  // 테스트 기계가 빠르냐 느리냐에 따라 같은 손짓이 튕기기가 되기도 한다
+  const fire = (type, target, touches, timeStamp) => {
+    const event = createEvent[type](target, { touches });
+    Object.defineProperty(event, 'timeStamp', { value: timeStamp });
+    return fireEvent(target, event);
+  };
+  // 한 손가락(또는 fingers 개)으로 (200, 400) 에서 dx·dy 만큼 steps 번에 나눠, 한 번에 stepMs 씩 움직이고 뗀다.
+  // 기본은 천천히(50ms 마다) — 거리로만 넘어가는지 본다. touchmove 마다 기본 동작을 막았는지 돌려준다
+  const drag = (target, { dx, dy = 0, steps = 4, stepMs = 50, fingers = 1, release = true }) => {
     const at = (x, y) => Array.from({ length: fingers }, () => ({ clientX: x, clientY: y }));
-    fireEvent.touchStart(target, { touches: at(200, 400) });
+    let t = 1000;
+    fire('touchStart', target, at(200, 400), t);
     const prevented = [];
     for (let i = 1; i <= steps; i += 1) {
-      prevented.push(!fireEvent.touchMove(target, { touches: at(200 + (dx * i) / steps, 400 + (dy * i) / steps) }));
+      t += stepMs;
+      prevented.push(!fire('touchMove', target, at(200 + (dx * i) / steps, 400 + (dy * i) / steps), t));
     }
-    if (release) fireEvent.touchEnd(target, { touches: [] });
+    if (release) fire('touchEnd', target, [], t);
     return prevented;
   };
   const settle = () => act(() => { jest.advanceTimersByTime(200); });
@@ -396,13 +406,21 @@ describe('MediaViewer — 옆으로 밀어 넘기기 (휴대폰)', () => {
     expect(prevented.every(Boolean)).toBe(true);
   });
 
-  it('조금만 밀고 놓으면 제자리로 돌아간다', () => {
+  it('조금만 밀고 천천히 놓으면 제자리로 돌아간다', () => {
     render(<MediaViewer items={[photo(1), photo(2)]} startId={1} onClose={jest.fn()} />);
 
     drag(screen.getByRole('dialog'), { dx: -40 });
     settle();
     expect(counter()).toBe('1 / 2');
     expect(screen.getByTestId('viewer-track').style.transform).toBe('');
+  });
+
+  it('같은 거리라도 빠르게 튕기면 넘어간다', () => {
+    render(<MediaViewer items={[photo(1), photo(2)]} startId={1} onClose={jest.fn()} />);
+
+    drag(screen.getByRole('dialog'), { dx: -40, stepMs: 10 });
+    settle();
+    expect(counter()).toBe('2 / 2');
   });
 
   it('위아래로 움직인 것은 넘기지 않고 막지도 않는다', () => {
@@ -451,6 +469,67 @@ describe('MediaViewer — 옆으로 밀어 넘기기 (휴대폰)', () => {
     } finally {
       delete window.matchMedia;
     }
+  });
+
+  describe('영상 위에서 밀기 (손가락 기기)', () => {
+    const setTouch = (matches) => { window.matchMedia = jest.fn(() => ({ matches })); };
+    afterEach(() => { delete window.matchMedia; });
+
+    it('플레이어 위에 넘기기 판을 덮고, 그 위에서 밀면 다음 장으로 간다', () => {
+      setTouch(true);
+      render(<MediaViewer items={[clip(1), photo(2)]} startId={1} onClose={jest.fn()} />);
+
+      const player = screen.getByTitle('VID_1.mov');
+      const cover = screen.getByTestId('video-swipe-cover');
+      // 플레이어 칸 안, iframe 뒤(위)에 놓인다 — 판 자체는 터치를 받지 않고 네 조각만 받는다
+      expect(cover.parentElement).toBe(player.parentElement);
+      expect(player.compareDocumentPosition(cover) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(cover.style.pointerEvents).toBe('none');
+      const bands = cover.querySelectorAll('[data-band]');
+      expect([...bands].map((band) => band.dataset.band)).toEqual(['above', 'below', 'left', 'right']);
+      bands.forEach((band) => expect(band.style.pointerEvents).toBe('auto'));
+
+      drag(cover.querySelector('[data-band="right"]'), { dx: -150 });
+      settle();
+      expect(screen.queryByTestId('video-stage')).toBeNull();
+      expect(screen.getByRole('img', { name: 'IMG_2.jpg' })).toBeInTheDocument();
+    });
+
+    it('판 위를 조금 누르거나 위아래로 밀면 그대로 — 영상이 남는다', () => {
+      setTouch(true);
+      render(<MediaViewer items={[clip(1), photo(2)]} startId={1} onClose={jest.fn()} />);
+      const band = screen.getByTestId('video-swipe-cover').querySelector('[data-band="above"]');
+
+      drag(band, { dx: 3, steps: 1 });
+      drag(band, { dx: -20, dy: 200 });
+      settle();
+      expect(screen.getByTitle('VID_1.mov')).toBeInTheDocument();
+    });
+
+    it('준비 상태 미리보기 사진과 함께 쓴다 — 사진 위에 판이 있고, 가운데 재생 표시는 비어 있다', () => {
+      setTouch(true);
+      window.localStorage.setItem('rg.drivePlayer.tapSignal', '1');
+      try {
+        render(<MediaViewer items={[clip(1), photo(2)]} startId={1} onClose={jest.fn()} />);
+        const poster = screen.getByTestId('video-poster');
+        const cover = screen.getByTestId('video-swipe-cover');
+        expect(poster.compareDocumentPosition(cover) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(poster.style.pointerEvents).toBe('none');
+      } finally {
+        window.localStorage.clear();
+      }
+    });
+
+    it('마우스 기기(PC)나 영상이 하나뿐이면 덮지 않는다 — Drive 화면 어디든 눌린다', () => {
+      setTouch(false);
+      const { unmount } = render(<MediaViewer items={[clip(1), photo(2)]} startId={1} onClose={jest.fn()} />);
+      expect(screen.queryByTestId('video-swipe-cover')).toBeNull();
+      unmount();
+
+      setTouch(true);
+      render(<MediaViewer items={[clip(1)]} startId={1} onClose={jest.fn()} />);
+      expect(screen.queryByTestId('video-swipe-cover')).toBeNull();
+    });
   });
 
   it('양옆 장을 화면 밖에 미리 그려 둔다 — 화면 읽기에는 지금 장만 보인다', () => {

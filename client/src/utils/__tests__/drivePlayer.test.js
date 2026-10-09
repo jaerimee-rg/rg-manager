@@ -105,3 +105,65 @@ describe('누르는 즉시 재생 — 준비 상태', () => {
     expect(shouldPrewarm(input)).toBe(expected);
   });
 });
+
+describe('영상 위에서도 밀어 넘기기 — 넘기기 판', () => {
+  const { swipeBands, shouldCoverForSwipe, SWIPE_TOP, SWIPE_BOTTOM, SWIPE_HOLE } = require('../drivePlayer');
+
+  // 390×645 칸에서 각 조각이 차지하는 사각형 (CSS 의 calc 를 같은 식으로 푼다)
+  const solve = (value, size) => {
+    const m = /^calc\(50% ([+-]) (\d+)px\)$/.exec(value);
+    if (m) return size / 2 + (m[1] === '+' ? 1 : -1) * Number(m[2]);
+    return Number(value.replace('px', ''));
+  };
+  const rects = (width, height, scale = 1) => swipeBands({ scale }).map((band) => ({
+    key: band.key,
+    x1: solve(band.left, width), x2: width - solve(band.right, width),
+    y1: solve(band.top, height), y2: height - solve(band.bottom, height)
+  }));
+  const covered = (list, x, y) => list.some((r) => x >= r.x1 && x < r.x2 && y >= r.y1 && y < r.y2);
+
+  it('가운데 재생 버튼 자리 · 맨 위 · 맨 아래 막대는 비우고, 나머지는 덮는다', () => {
+    const list = rects(390, 645);
+    // Drive 의 재생 버튼(가운데)
+    expect(covered(list, 195, 322)).toBe(false);
+    expect(covered(list, 195 - SWIPE_HOLE / 2 + 1, 322 - SWIPE_HOLE / 2 + 1)).toBe(false);
+    // 아래 막대 · 오른쪽 위 버튼
+    expect(covered(list, 30, 645 - SWIPE_BOTTOM + 1)).toBe(false);
+    expect(covered(list, 370, SWIPE_TOP - 1)).toBe(false);
+    // 사람들이 흔히 미는 자리 — 오른쪽 · 왼쪽 · 위아래 가운데
+    [[330, 322], [60, 322], [195, 150], [195, 500], [20, SWIPE_TOP], [370, 645 - SWIPE_BOTTOM - 1]].forEach(([x, y]) => {
+      expect(covered(list, x, y)).toBe(true);
+    });
+  });
+
+  it('줄여 보인 플레이어(휴대폰)에서는 위·아래 비울 높이도 같은 비율로 준다 — 진행 막대가 판 밖에 있다', () => {
+    // 412px 폭 휴대폰: 520px 로 그려 0.79 배로 보인다. 진행 막대는 바닥에서 102px(플레이어 px) → 화면에서 약 81px 위
+    const scale = 412 / 520;
+    const list = rects(412, 731, scale);
+    expect(covered(list, 206, 731 - 81)).toBe(false);
+    expect(covered(list, 206, 731 - 81 - 16)).toBe(false); // 손끝 여유
+    expect(covered(list, 206, 731 - Math.round(SWIPE_BOTTOM * scale) - 1)).toBe(true);
+    // '새 창에서 열기' 버튼(화면에서 위 40px 안)
+    expect(covered(list, 390, 40)).toBe(false);
+    // 줄이지 않은 플레이어(scale 1 · 모르는 값)는 그대로
+    expect(swipeBands({ scale: 1 })).toEqual(swipeBands());
+    expect(swipeBands({ scale: 0 })).toEqual(swipeBands());
+  });
+
+  it('조각끼리 겹치거나 틈이 나지 않는다 — 구멍 둘레를 정확히 두른다', () => {
+    const [above, below, left, right] = rects(390, 645);
+    expect(above.y2).toBe(left.y1);
+    expect(left.y2).toBe(below.y1);
+    expect(left.x2).toBe(195 - SWIPE_HOLE / 2);
+    expect(right.x1).toBe(195 + SWIPE_HOLE / 2);
+    expect(right.y1).toBe(left.y1);
+  });
+
+  it.each([
+    [{ touch: true, canPage: true }, true],
+    [{ touch: false, canPage: true }, false],   // 마우스 기기 — Drive 화면 어디든 눌려야 한다
+    [{ touch: true, canPage: false }, false]    // 넘길 다른 장이 없다
+  ])('판을 덮을지 %j → %s', (input, expected) => {
+    expect(shouldCoverForSwipe(input)).toBe(expected);
+  });
+});
