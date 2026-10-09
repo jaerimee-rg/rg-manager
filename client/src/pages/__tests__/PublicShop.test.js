@@ -491,3 +491,92 @@ describe('PublicShop — 상품 예약 (05-reservations.md)', () => {
     }
   });
 });
+
+describe('PublicShop — 학부모 앱 [추천 상품] 탭에서 열 때의 [돌아가기]', () => {
+  // 탭은 공유 링크와 같은 주소로 오고, 돌아갈 학부모 화면은 주소가 아니라 기록 state 로만 넘긴다
+  const renderFromTab = async (entry) => {
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={[entry]}>
+          <Routes>
+            <Route path="/shop/:publicId" element={<><PublicShop /><LocationProbe /></>} />
+            <Route path="/parent/photos" element={<><div>사진 탭</div><LocationProbe /></>} />
+          </Routes>
+        </MemoryRouter>
+      );
+    });
+  };
+  const fromTab = (path = '/shop/pub123', backTo = '/parent/photos') => {
+    const [pathname, search = ''] = path.split('?');
+    return { pathname, search: search ? `?${search}` : '', state: { backTo } };
+  };
+
+  it('공유 링크로 바로 열면 [돌아가기] 가 없다 — 지금과 똑같다', async () => {
+    await renderShop();
+    expect(screen.queryByRole('button', { name: '돌아가기' })).not.toBeInTheDocument();
+  });
+
+  it('탭에서 열면 같은 공개 API·같은 주소의 전체 화면이고, 제목 위 [돌아가기] 가 탭 전 화면으로 보낸다', async () => {
+    await renderFromTab(fromTab());
+
+    expect(global.fetch).toHaveBeenCalledWith('/api/shop/public/pub123');
+    expect(currentLocation.pathname).toBe('/shop/pub123');
+    expect(screen.getByRole('heading', { name: '이재림 선생님 추천 상품' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '돌아가기' }));
+    expect(screen.getByText('사진 탭')).toBeInTheDocument();
+    expect(currentLocation.pathname).toBe('/parent/photos');
+  });
+
+  it('카테고리를 바꾸거나 상세를 열고 닫아도 [돌아가기] 는 남는다', async () => {
+    await renderFromTab(fromTab());
+
+    fireEvent.click(screen.getByRole('button', { name: '기구' }));
+    expect(currentLocation.search).toBe('?c=3');
+    expect(screen.getByRole('button', { name: '돌아가기' })).toBeInTheDocument();
+
+    // 카드로 연 상세 — 닫으면 기록을 되돌린다
+    fireEvent.click(screen.getByRole('link', { name: '사사키 리본 6m 자세히 보기' }));
+    expect(currentLocation.state).toEqual({ backTo: '/parent/photos', shopDetail: true });
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '닫기' }));
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '돌아가기' })).toBeInTheDocument();
+  });
+
+  it('?p= 로 바로 연 상세를 닫아도 [돌아가기] 는 남는다', async () => {
+    await renderFromTab(fromTab('/shop/pub123?p=12'));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '닫기' }));
+
+    expect(currentLocation.search).toBe('');
+    expect(currentLocation.state).toEqual({ backTo: '/parent/photos' });
+    expect(screen.getByRole('button', { name: '돌아가기' })).toBeInTheDocument();
+  });
+
+  it('학부모 화면이 아닌 곳으로는 돌아가지 않는다', async () => {
+    await renderFromTab(fromTab('/shop/pub123', 'https://evil.example/'));
+    expect(screen.queryByRole('button', { name: '돌아가기' })).not.toBeInTheDocument();
+  });
+
+  it('상점이 닫혔으면 안내 화면에도 [돌아가기] 가 있다', async () => {
+    global.fetch.mockImplementation(() => respond(404, { error: '페이지를 찾을 수 없습니다.' }));
+    await renderFromTab(fromTab());
+
+    expect(screen.getByText('지금은 볼 수 없는 페이지예요')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '돌아가기' }));
+    expect(currentLocation.pathname).toBe('/parent/photos');
+  });
+
+  it('공유 링크로 연 닫힌 상점에는 버튼이 하나도 없다 — 지금과 똑같다', async () => {
+    global.fetch.mockImplementation(() => respond(404, { error: '페이지를 찾을 수 없습니다.' }));
+    const { container } = render(
+      <MemoryRouter initialEntries={['/shop/pub123']}>
+        <Routes><Route path="/shop/:publicId" element={<PublicShop />} /></Routes>
+      </MemoryRouter>
+    );
+    await act(async () => {});
+    expect(screen.getByText('지금은 볼 수 없는 페이지예요')).toBeInTheDocument();
+    expect(container.querySelector('.ui-empty__actions')).toBeNull();
+  });
+});

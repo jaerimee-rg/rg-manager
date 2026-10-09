@@ -761,6 +761,11 @@ open **one public link `/shop/<publicId>` without logging in**; the teacher sees
   slides back instead of staying hidden. Touch listeners are native `{ passive: false }` because React's `touchmove` is passive.
   Off by default — don't turn it on for forms, where an accidental close loses input (the detail turns it off
   while its reservation form is showing: `swipeToClose={step !== 'reserve'}`).
+- **Parent app tab [추천 상품]** (`/parent/shop`, `pages/parent/ParentShop.jsx`) opens that **same** `/shop/<publicId>` page,
+  full screen. `GET /api/parent/shops` lists linked teachers' active shops (publicId · title · teacherName); one shop →
+  `Navigate replace`, several → a chooser. The tab passes the current parent path as router state `backTo` (never in the
+  URL, so the share link is unchanged); `PublicShop` then shows **[돌아가기]** (only for `/parent/…` paths) and carries
+  `backTo` through its own chip/detail navigations — anything it navigates with must pass `carry` or the button vanishes.
 - **API**: `/api/shop/*` is teacher-only (`rejectParents` in `server.js`, except `/api/shop/public/*`).
   Every teacher query is scoped by the token's user id; another teacher's ids return **404**. Public
   responses go through `utils/shopSerializer.js` (a whitelist — a test pins the exact keys), skip

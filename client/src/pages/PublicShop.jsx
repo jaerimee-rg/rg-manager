@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Button, Card, Chip, EmptyState, Skeleton, Toolbar } from '../components/ui';
+import { Button, Card, Chip, EmptyState, Icon, Skeleton, Toolbar } from '../components/ui';
 import ProductCard from '../components/shop/ProductCard';
 import ProductDetail from '../components/shop/ProductDetail';
 import { trackClick, trackViewOnce } from '../utils/shopTracking';
@@ -8,6 +8,8 @@ import { trackClick, trackViewOnce } from '../utils/shopTracking';
 /**
  * 공개 추천 상품 /shop/:publicId (docs/recommended-shop).
  * 로그인 없이 열리는 단독 화면 — 앱 헤더·학부모 하단 탭이 없고, 로그인한 사람이 열어도 같다(FR-404).
+ * 학부모 앱의 [추천 상품] 탭도 이 화면을 연다. 그때만 돌아갈 학부모 화면을 기록 state(backTo)로 받아
+ * 제목 위에 [돌아가기]를 붙인다 — 주소에는 싣지 않으므로 공유 링크는 그대로다.
  */
 function PublicShop() {
   const { publicId } = useParams();
@@ -15,6 +17,18 @@ function PublicShop() {
   const location = useLocation();
   const navigate = useNavigate();
   const [state, setState] = useState({ status: 'loading' });
+
+  // 학부모 화면으로만 돌아간다. 카테고리를 바꾸거나 상세를 여닫아도 잃지 않게 이동마다 같이 싣는다(carry)
+  const backTo = typeof location.state?.backTo === 'string' && location.state.backTo.startsWith('/parent/')
+    ? location.state.backTo
+    : null;
+  const carry = backTo ? { backTo } : undefined;
+  const backLink = backTo && (
+    <button type="button" className="ui-page-header__back" onClick={() => navigate(backTo)}>
+      <Icon name="arrowLeft" size={16} />
+      돌아가기
+    </button>
+  );
 
   const load = async () => {
     setState({ status: 'loading' });
@@ -53,7 +67,12 @@ function PublicShop() {
             description={closed
               ? '링크가 바뀌었거나 선생님이 상점을 잠시 닫았어요. 링크를 보낸 선생님께 확인해 주세요.'
               : '인터넷 연결을 확인하고 다시 시도해 주세요.'}
-            action={closed ? null : <Button icon="refresh" onClick={load}>다시 시도</Button>}
+            action={closed && !backTo ? null : (
+              <>
+                {!closed && <Button icon="refresh" onClick={load}>다시 시도</Button>}
+                {backTo && <Button icon="arrowLeft" onClick={() => navigate(backTo)}>돌아가기</Button>}
+              </>
+            )}
           />
         </div>
       </div>
@@ -66,6 +85,7 @@ function PublicShop() {
         <header className="shop-public__header">
           <div className="shop-public__inner">
             <div className="ui-page-header">
+              {backLink}
               <Skeleton width="58%" height={32} radius="var(--radius-sm)" />
               <Skeleton width="76%" height={14} />
             </div>
@@ -102,7 +122,7 @@ function PublicShop() {
     const next = new URLSearchParams(searchParams);
     if (categoryId == null) next.delete('c');
     else next.set('c', String(categoryId));
-    setSearchParams(next, { replace: true });
+    setSearchParams(next, { replace: true, state: carry });
   };
 
   // 상품 상세는 주소의 ?p= — 뒤로 가기로 닫히고, 그 주소를 보내면 상세가 바로 열린다
@@ -121,7 +141,7 @@ function PublicShop() {
     }
     const next = new URLSearchParams(searchParams);
     next.delete('p');
-    setSearchParams(next, { replace: true });
+    setSearchParams(next, { replace: true, state: carry });
   };
   // 목록에서 상품을 누른 것이 클릭이다(FR-440). 그렇게 연 상세의 쇼핑몰 버튼은 같은 클릭이라 다시 세지 않고,
   // 공유된 ?p= 주소로 바로 들어온 상세에서만 쇼핑몰 버튼을 센다
@@ -135,6 +155,7 @@ function PublicShop() {
       <header className="shop-public__header">
         <div className="shop-public__inner">
           <div className="ui-page-header">
+            {backLink}
             <div className="ui-page-header__top">
               <div>
                 <h1 className="ui-page-header__title">{shop.title}</h1>
@@ -168,7 +189,7 @@ function PublicShop() {
                     product={product}
                     categoryName={names.get(product.categoryId)}
                     to={detailSearch(product.id)}
-                    state={{ shopDetail: true }}
+                    state={{ ...carry, shopDetail: true }}
                     onOpen={countClick}
                   />
                 ))}

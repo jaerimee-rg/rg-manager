@@ -6,6 +6,7 @@ import ParentEventDetail from '../../pages/parent/ParentEventDetail';
 import ParentSettings from '../../pages/parent/ParentSettings';
 import ParentAlbumList from '../../pages/parent/ParentAlbumList';
 import ParentAlbum from '../../pages/parent/ParentAlbum';
+import ParentShop from '../../pages/parent/ParentShop';
 import ParentOnboarding from '../../pages/parent/ParentOnboarding';
 import InviteLanding from '../../pages/parent/InviteLanding';
 import RememberReturnTo from '../common/RememberReturnTo';
@@ -64,6 +65,8 @@ function ParentApp() {
           <Route path="/parent/events/:eventId" element={<ParentEventDetail />} />
           <Route path="/parent/photos" element={<ParentAlbumList />} />
           <Route path="/parent/photos/:eventId" element={<ParentAlbum />} />
+          {/* 추천 상품 — 공유 링크 /shop/:publicId 의 전체 화면으로 보낸다 (상점이 여럿이면 여기서 고른다) */}
+          <Route path="/parent/shop" element={<ParentShop />} />
           {/* 마지막 아이를 지우면 내 정보를 다시 읽어 위 가드가 온보딩으로 보낸다 */}
           <Route path="/parent/settings" element={<ParentSettings onChildrenChanged={loadMe} />} />
           <Route path="*" element={<Navigate to="/parent/schedule" replace />} />

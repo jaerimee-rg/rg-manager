@@ -8,7 +8,9 @@ import { Icon, IconButton } from '../ui';
 export const parentNavLinks = [
   // 공유 링크(/parent/events/12)로 열린 상세도 일정 화면 위에 뜨므로 같은 탭이다
   { path: '/parent/schedule', label: '일정', icon: 'calendar', alsoActive: ['/parent/events'] },
-  { path: '/parent/photos', label: '사진', icon: 'image' }
+  { path: '/parent/photos', label: '사진', icon: 'image' },
+  // 상품은 공유 링크와 같은 전체 화면(/shop/:publicId)으로 열린다. 지금 화면을 넘겨 그 화면의 [돌아가기]가 여기로 오게 한다
+  { path: '/parent/shop', label: '추천 상품', icon: 'bag', passesReturn: true }
 ];
 
 const SOON = [
@@ -19,10 +21,11 @@ const parentNavTail = [
   { path: '/parent/settings', label: '내 정보', icon: 'user' }
 ];
 
-function TabLink({ link, active }) {
+function TabLink({ link, active, here }) {
   return (
     <Link
       to={link.path}
+      state={link.passesReturn ? { backTo: here } : undefined}
       className="ui-tabbar__item"
       data-active={active || undefined}
       aria-current={active ? 'page' : undefined}
@@ -71,6 +74,7 @@ function ParentLayout({ title, subtitle, back, action, children }) {
             <TabLink
               key={link.path}
               link={link}
+              here={`${location.pathname}${location.search}`}
               active={[link.path, ...(link.alsoActive || [])].some((p) => location.pathname.startsWith(p))}
             />
           ))}

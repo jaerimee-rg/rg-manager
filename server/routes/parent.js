@@ -13,6 +13,7 @@ import {
   addFace,
   deleteFace
 } from '../controllers/parentAlbumController.js';
+import { listShops } from '../controllers/parentShopController.js';
 import { verifyToken } from '../middleware/auth.js';
 import { requireRole } from '../middleware/roles.js';
 import { logAction } from '../middleware/logger.js';
@@ -44,6 +45,9 @@ router.post('/events/:id/media/:mediaId/complete', completeUpload);
 router.post('/events/:id/media/:mediaId/faces', saveOwnFaces);
 router.post('/events/:id/media/:mediaId/confirm', confirmTag);
 router.delete('/events/:id/media/:mediaId', deleteMedia);
+
+// 추천 상품 탭 — 연결된 선생님의 공개 상점 (상품은 공유 링크 /shop/:publicId 화면이 보여 준다)
+router.get('/shops', listShops);
 
 // 자녀 기준 얼굴 (등록하면 우리 아이 사진을 자동으로 모아 준다)
 router.get('/children/:childId/faces', listFaces);

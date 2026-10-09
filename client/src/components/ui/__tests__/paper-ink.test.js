@@ -1,6 +1,6 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { Badge, Divider, Icon, PageHeader, Stat, iconNames } from '../index';
 import ParentLayout from '../../parent/ParentLayout';
 
@@ -130,6 +130,32 @@ describe('ParentLayout — 제목 줄 + 아래 탭 바', () => {
   it('공유 링크로 연 이벤트 상세는 일정 탭이 켜진다', () => {
     renderAt('/parent/events/7');
     expect(screen.getByRole('link', { name: '일정' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('추천 상품 탭은 사진 다음에 있고, 누르면 지금 화면을 돌아갈 곳으로 넘긴다', () => {
+    let seen;
+    const Probe = () => {
+      seen = useLocation();
+      return null;
+    };
+    render(
+      <MemoryRouter initialEntries={['/parent/photos/12?face=3']}>
+        <ParentLayout title="사진">본문</ParentLayout>
+        <Probe />
+      </MemoryRouter>
+    );
+
+    const nav = screen.getByRole('navigation', { name: '학부모 메뉴' });
+    const labels = Array.from(nav.querySelectorAll('.ui-tabbar__label')).map((el) => el.textContent);
+    expect(labels).toEqual(['일정', '사진', '추천 상품', '채팅', '내 정보']);
+
+    const shop = screen.getByRole('link', { name: '추천 상품' });
+    expect(shop).toHaveAttribute('href', '/parent/shop');
+    expect(shop.querySelector('svg')).not.toBeNull();
+
+    fireEvent.click(shop);
+    expect(seen.pathname).toBe('/parent/shop');
+    expect(seen.state).toEqual({ backTo: '/parent/photos/12?face=3' });
   });
 
   it('아직 없는 채팅 탭은 링크가 아니다', () => {
