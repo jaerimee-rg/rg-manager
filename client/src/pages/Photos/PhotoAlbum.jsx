@@ -16,8 +16,8 @@ import FolderEditDialog from './FolderEditDialog';
 import FaceScanPanel from './FaceScanPanel';
 import PhotoGrid from './PhotoGrid';
 import {
-  albumProblem, filterChips, folderDeleteMessage, formatEventDate, isPhotoFolder, publishLocked, typeLabel, toViewerItem,
-  PROBLEM_MESSAGES
+  albumProblem, filterChips, folderDeleteMessage, folderDeletedToast, folderDeleteTitle, formatEventDate, isPhotoFolder,
+  publishLocked, typeLabel, toViewerItem, PROBLEM_MESSAGES
 } from './albumState';
 
 const PAGE = 60;
@@ -46,7 +46,7 @@ function PhotoAlbum() {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState([]);
   const [confirmDelete, setConfirmDelete] = useState(null);   // 지울 id 배열
-  // 사진 전용 폴더 관리 (FR-519): 이름·날짜 수정 창 · 폴더 삭제 확인
+  // 폴더 관리 (FR-519): 이름·날짜 수정 창(사진 전용 폴더만) · 폴더 삭제 확인
   const [editingFolder, setEditingFolder] = useState(false);
   const [confirmFolderDelete, setConfirmFolderDelete] = useState(false);
   const [deletingFolder, setDeletingFolder] = useState(false);
@@ -254,9 +254,10 @@ function PhotoAlbum() {
     const ok = await copyToClipboard(url);
     showToast(ok ? albumShareToast(album) : url);
   };
-  /* 사진 전용 폴더는 여기서 이름·날짜를 고치고 지운다 (FR-519). 이벤트 앨범은 이벤트 관리가 맡는다 —
-     신청·참가 학생이 걸린 이벤트를 사진 메뉴에서 지우면 안 된다. */
+  /* 사진 전용 폴더는 여기서 이름·날짜를 고치고 지운다 (FR-519). 이벤트 앨범은 [폴더 삭제] 만 — 사진 폴더(앨범)만 지우고
+     이벤트는 남긴다. 이벤트의 이름·날짜와 이벤트 자체의 삭제는 이벤트 관리가 맡는다(신청·참가 학생이 걸려 있다). */
   const folder = isPhotoFolder(album.eventType);
+  const canDeleteFolder = folder || hasAlbum;
 
   const folderSaved = async (result) => {
     setEditingFolder(false);
@@ -276,10 +277,7 @@ function PhotoAlbum() {
         showToast(payload.error || '폴더를 지우지 못했어요.');
         return;
       }
-      navigate('/photos', {
-        replace: true,
-        state: { toast: payload.driveFolderKept ? '폴더를 지웠어요 · Google Drive 의 폴더는 그대로 있어요' : '폴더를 지웠어요' }
-      });
+      navigate('/photos', { replace: true, state: { toast: folderDeletedToast(payload) } });
     } catch (deleteError) {
       console.error('사진 폴더 삭제 실패:', deleteError);
       setConfirmFolderDelete(false);
@@ -291,10 +289,10 @@ function PhotoAlbum() {
 
   const headerActions = (
     <>
-      {folder && (
+      {canDeleteFolder && (
         <span className="ui-page-header__icon-action">
           <Menu label="폴더 관리" trigger={(props) => <IconButton icon="more" label="폴더 관리" {...props} />}>
-            <MenuItem icon="edit" onClick={() => setEditingFolder(true)}>이름 · 날짜 수정</MenuItem>
+            {folder && <MenuItem icon="edit" onClick={() => setEditingFolder(true)}>이름 · 날짜 수정</MenuItem>}
             <MenuItem icon="trash" tone="danger" onClick={() => setConfirmFolderDelete(true)}>폴더 삭제</MenuItem>
           </Menu>
         </span>
@@ -491,7 +489,7 @@ function PhotoAlbum() {
 
       <ConfirmDialog
         open={confirmFolderDelete}
-        title={`‘${album.eventTitle}’ 폴더를 지울까요?`}
+        title={folderDeleteTitle(album)}
         message={folderDeleteMessage(album)}
         confirmLabel="폴더 삭제"
         tone="danger"

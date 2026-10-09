@@ -669,16 +669,56 @@ describe('PhotoAlbum — 사진 폴더 관리 (FR-519)', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
-  it('사진 폴더에는 [폴더 관리] 메뉴가 있고, 이벤트 앨범에는 없다', async () => {
+  it('사진 폴더에는 [폴더 관리] 메뉴에 이름·날짜 수정과 폴더 삭제가 있다', async () => {
     await renderFolder();
     await openMenu();
     expect(screen.getByRole('menuitem', { name: /이름 · 날짜 수정/ })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /폴더 삭제/ })).toBeInTheDocument();
   });
 
-  it('이벤트 앨범에는 [폴더 관리] 가 없다 — 이벤트 관리에서 고치고 지운다', async () => {
-    await renderAlbum();
+  it('이벤트 앨범의 [폴더 관리] 에는 폴더 삭제만 있다 — 이름·날짜는 이벤트 관리에서 고친다', async () => {
+    await renderFolder({ album: ALBUM });
+    await openMenu();
+    expect(screen.getByRole('menuitem', { name: /폴더 삭제/ })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /이름 · 날짜 수정/ })).not.toBeInTheDocument();
+  });
+
+  it('앨범(Drive 폴더)이 아직 없는 이벤트에는 [폴더 관리] 가 없다 — 지울 것이 없다', async () => {
+    await renderAlbum({ ...ALBUM, driveFolderId: null, driveFolderName: null, albumStatus: 'none', counts: {} });
     expect(screen.queryByRole('button', { name: '폴더 관리' })).not.toBeInTheDocument();
+  });
+
+  it('이벤트 앨범의 [폴더 삭제] 는 사진 폴더만 지우고 이벤트는 남는다고 묻는다', async () => {
+    const EMPTY_EVENT = {
+      ...ALBUM, eventType: 'special', eventTitle: '우면산 무 장애 길 러닝', eventDate: '2026-09-05', published: true,
+      counts: { images: 0, videos: 0, hidden: 0, fromParents: 0, fromTeacher: 0 }
+    };
+    await renderFolder({ album: EMPTY_EVENT });
+    await openMenu();
+    await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: /폴더 삭제/ })); });
+
+    const dialog = screen.getByRole('dialog', { name: '‘우면산 무 장애 길 러닝’ 사진 폴더를 지울까요?' });
+    expect(dialog).toHaveTextContent('사진 폴더가 앱과 학부모 화면에서 사라지고, 되돌릴 수 없어요.');
+    expect(dialog).toHaveTextContent('이벤트와 신청·참가 학생은 이벤트 관리에 그대로 남아요.');
+    expect(fetchWithAuth.mock.calls.some(([, options]) => options?.method === 'DELETE')).toBe(false);
+  });
+
+  it('이벤트 앨범을 지우면 사진 목록으로 가서 이벤트와 Drive 폴더는 남았다고 알린다', async () => {
+    await renderFolder({
+      album: ALBUM,
+      del: () => ok({ deleted: true, eventKept: true, driveFolderKept: true, driveFolderName: '2026-10-12 회장배 대회' })
+    });
+    await openMenu();
+    await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: /폴더 삭제/ })); });
+    const dialog = screen.getByRole('dialog', { name: '‘회장배 대회’ 사진 폴더를 지울까요?' });
+
+    await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: '폴더 삭제' })); });
+
+    expect(fetchWithAuth).toHaveBeenCalledWith('/api/albums/31', { method: 'DELETE' });
+    expect(mockNavigate).toHaveBeenCalledWith('/photos', {
+      replace: true,
+      state: { toast: '사진 폴더를 지웠어요 · 이벤트와 Google Drive 의 폴더는 그대로 있어요' }
+    });
   });
 
   it('수정 창은 지금 이름·날짜로 시작하고, 고치면 바뀔 Drive 폴더 이름을 미리 보여 준다', async () => {

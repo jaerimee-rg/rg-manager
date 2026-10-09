@@ -1,7 +1,8 @@
 import {
   publishSummary, zeroAudienceWarning, driveNotice, canUploadWith, albumProblem, filterChips,
   targetState, uploadPublishNote, formatPublishedDate, formatEventDate, formatShortDate, toViewerItem, publishLocked,
-  folderNameFrom, newFolderProblem, typeLabel, isPhotoFolder, publishPlaces, folderDeleteMessage
+  folderNameFrom, newFolderProblem, typeLabel, isPhotoFolder, publishPlaces, folderDeleteMessage, folderDeleteTitle,
+  folderDeletedToast
 } from '../albumState';
 
 describe('publishSummary (docs/photo-menu FR-521)', () => {
@@ -138,5 +139,31 @@ describe('folderDeleteMessage — 사진 폴더를 지울 때 확인 문구 (FR-
   it('사진이 없고 Drive 폴더도 없으면 폴더만 말한다', () => {
     expect(folderDeleteMessage({ driveFolderId: null, counts: {} })).toBe('폴더가 앱에서 사라지고, 되돌릴 수 없어요.');
     expect(folderDeleteMessage(null)).toBe('폴더가 앱에서 사라지고, 되돌릴 수 없어요.');
+  });
+
+  it('이벤트 앨범은 사진 폴더만 사라지고 이벤트와 신청·참가 학생은 남는다고 알린다', () => {
+    const album = { eventType: 'special', driveFolderId: 'f', published: true, counts: { images: 3, videos: 1, hidden: 0 } };
+    expect(folderDeleteMessage(album)).toBe('사진 폴더와 사진·영상 4개가 앱과 학부모 화면에서 사라지고, 되돌릴 수 없어요.'
+      + ' 이벤트와 신청·참가 학생은 이벤트 관리에 그대로 남아요. Google Drive 의 폴더와 원본 파일은 그대로 남아요.');
+  });
+
+  it('사진을 다 지운 이벤트 앨범도 사진 폴더만 사라진다고 쓴다', () => {
+    expect(folderDeleteMessage({ eventType: 'competition', driveFolderId: 'f', published: false, counts: { images: 0 } }))
+      .toMatch(/^사진 폴더가 앱에서 사라지고, 되돌릴 수 없어요\. 이벤트와 신청·참가 학생은/);
+  });
+});
+
+describe('folderDeleteTitle · folderDeletedToast — 사진 폴더 / 이벤트 앨범 (FR-519)', () => {
+  it('이벤트 앨범의 확인 창 제목은 "사진 폴더" — 이벤트를 지우는 것으로 읽히지 않게', () => {
+    expect(folderDeleteTitle({ eventType: 'special', eventTitle: '우면산 무 장애 길 러닝' })).toBe('‘우면산 무 장애 길 러닝’ 사진 폴더를 지울까요?');
+    expect(folderDeleteTitle({ eventType: 'folder', eventTitle: '가을 소풍' })).toBe('‘가을 소풍’ 폴더를 지울까요?');
+  });
+
+  it('지운 뒤 알림 — 이벤트가 남았는지, Drive 폴더가 남았는지에 따라', () => {
+    expect(folderDeletedToast({ deleted: true, eventKept: true, driveFolderKept: true }))
+      .toBe('사진 폴더를 지웠어요 · 이벤트와 Google Drive 의 폴더는 그대로 있어요');
+    expect(folderDeletedToast({ deleted: true, driveFolderKept: true })).toBe('폴더를 지웠어요 · Google Drive 의 폴더는 그대로 있어요');
+    expect(folderDeletedToast({ deleted: true, driveFolderKept: false })).toBe('폴더를 지웠어요');
+    expect(folderDeletedToast(null)).toBe('폴더를 지웠어요');
   });
 });

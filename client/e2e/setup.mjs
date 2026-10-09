@@ -120,6 +120,14 @@ const doomedRow = await pool.query(
 );
 const doomedFolderEventId = doomedRow.rows[0].id;
 
+// 사진 폴더를 지울 이벤트 앨범 (FR-519, 이벤트 앨범) — 공개 중인 스페셜, 사진 한 장과 신청 한 건.
+// 선생님 테스트가 사진 메뉴에서 폴더를 지운 뒤 이벤트와 신청은 남는지 본다.
+const doomedEventTitle = `e2e지울이벤트앨범_${stamp}`;
+const doomedEventId = await mkEvent(doomedEventTitle, null, true, { type: 'special', audience: 'all' });
+// 날짜를 앞당겨 사진 목록에서 e2e확정대회 아래에 둔다 — 같은 날짜면 id 순으로 위에 서서, 휴대폰 화면의 표지 테스트가 보는
+// e2e확정대회 카드를 화면 밖(lazy 이미지가 안 뜬다)으로 밀어낸다
+await pool.query(`UPDATE events SET date = '2026-09-05' WHERE id = $1`, [doomedEventId]);
+
 // 첫째 아이를 이 대회의 참가 학생으로 넣어 "확정" 상태를 만든다.
 await pool.query(
   `INSERT INTO competition_students ("competitionId","studentId","createdAt") VALUES ($1,$2,$3)`,
@@ -153,6 +161,12 @@ await mkMedia({ i: 5, kind: 'image', uploaderRole: 'teacher', uploaderUserId: te
 await mkMedia({ i: 6, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: privateEventId });
 // 지울 폴더에도 한 장 — 폴더를 지우면 이 기록도 함께 사라져야 한다
 await mkMedia({ i: 40, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: doomedFolderEventId });
+await mkMedia({ i: 41, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: doomedEventId });
+await pool.query(
+  `INSERT INTO event_registrations ("eventId", "studentId", "parentUserId", status, "confirmedAt", "createdBy", "createdAt", "updatedAt")
+   VALUES ($1,$2,NULL,'confirmed',$3,'teacher',$3,$3)`,
+  [doomedEventId, students[0].id, now]
+);
 // 사진 전용 폴더에도 한 장
 await mkMedia({ i: 7, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: folderEventId });
 // 예전 방식(버전 기록 없음)으로 "얼굴 없음" 이 된 사진 두 장 — 선생님 [얼굴 찾기] 가 다시 찾아 저장하는지 본다
@@ -433,7 +447,7 @@ for (const [i, file] of sameFiles.entries()) {
 }
 
 const sessions = {
-  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, doomedFolderEventId, doomedFolderTitle, faceScanEventId, faceThumbEventId, peopleEventId, removeFaceEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
+  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, doomedFolderEventId, doomedFolderTitle, doomedEventId, doomedEventTitle, faceScanEventId, faceThumbEventId, peopleEventId, removeFaceEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
   teacher: { token: sign(teacher), user: { id: teacher.id, username: teacher.username, role: 'user' } },
   teacher2Token: sign(teacher2),
   parent: { token: sign(parent), user: { id: parent.id, username: parent.username, role: 'parent' } },

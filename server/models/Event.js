@@ -229,6 +229,41 @@ class Event {
   }
 
   /**
+   * 이벤트 앨범을 지운다 — **이벤트는 그대로 두고** 앨범만 비운다 (사진 메뉴 [폴더 삭제], photo-menu FR-519).
+   * 사진 기록을 지우면 얼굴·태그도 CASCADE 로 사라지고, 앨범 컬럼은 앨범을 만들기 전으로 돌아간다(비공개 · 참가 확정 범위 ·
+   * 업로드 받기 ON). 신청·참가 학생·대회 행은 건드리지 않는다. **Drive 는 건드리지 않는다** — 폴더와 원본은 Drive 에 남는다.
+   * 사진 전용 폴더(type='folder')는 행째 지우므로(delete) 여기서 다루지 않는다.
+   * → { event, mediaCount } | null(그런 이벤트 없음)
+   */
+  static async removeAlbum(id) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const updated = await client.query(
+        `UPDATE events SET "driveFolderId" = NULL, "driveFolderName" = NULL, "driveAccountId" = NULL,
+                "albumStatus" = 'none', "albumCreatedAt" = NULL, "albumCheckedAt" = NULL,
+                "albumPublished" = FALSE, "albumPublishedAt" = NULL, "albumAudience" = 'participants',
+                "albumUploadOpen" = TRUE, "albumCoverMediaIds" = NULL, "albumMatchRules" = NULL, "updatedAt" = $2
+          WHERE id = $1 AND type <> 'folder'
+          RETURNING *`,
+        [id, new Date().toISOString()]
+      );
+      if (!updated.rows.length) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      const media = await client.query('DELETE FROM event_media WHERE "eventId" = $1', [id]);
+      await client.query('COMMIT');
+      return { event: hydrate(updated.rows[0]), mediaCount: media.rowCount };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
    * 이 앨범의 자동 태그를 어떤 규칙으로 계산했는지 적는다 (albumService.ensureAlbumMatched).
    * 조회 요청에서 부르므로 updatedAt 은 건드리지 않는다 — 앨범을 열었다고 이벤트가 "수정" 된 것은 아니다.
    */
