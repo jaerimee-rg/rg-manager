@@ -78,6 +78,29 @@ class EventMedia {
     return result.rows[0] || null;
   }
 
+  /**
+   * 얼굴을 지운 뒤 사진마다 얼굴 수를 다시 센다. 남은 얼굴이 없으면 'none'(얼굴 없음) —
+   * 분석 버전("faceAnalyzerVersion")은 그대로 둬서 다시 분석할 목록(needsFaceAnalysisSql)에 들어가지 않게 한다.
+   */
+  static async refreshFaceCounts(ids, client = pool) {
+    if (!ids?.length) return 0;
+    const now = new Date().toISOString();
+    const result = await client.query(
+      `UPDATE event_media m
+          SET "faceCount" = c.n,
+              "faceStatus" = CASE WHEN c.n = 0 THEN 'none' ELSE m."faceStatus" END,
+              "updatedAt" = $2
+         FROM (SELECT x.id, COUNT(f.id)::int AS n
+                 FROM event_media x
+                 LEFT JOIN media_faces f ON f."mediaId" = x.id
+                WHERE x.id = ANY($1::int[])
+                GROUP BY x.id) c
+        WHERE m.id = c.id`,
+      [ids, now]
+    );
+    return result.rowCount;
+  }
+
   static async setHidden(ids, isHidden, eventId) {
     if (!ids?.length) return 0;
     const now = new Date().toISOString();

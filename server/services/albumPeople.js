@@ -1,3 +1,5 @@
+import pool from '../database.js';
+import EventMedia from '../models/EventMedia.js';
 import MediaFace from '../models/MediaFace.js';
 import MediaTag from '../models/MediaTag.js';
 import { groupFaces } from '../utils/facePeople.js';
@@ -28,12 +30,49 @@ export const albumPeople = async (eventId, { includeHidden = false } = {}) => {
 export const findPerson = (people, key) => (key ? people.find((person) => person.key === String(key)) || null : null);
 
 /**
+ * 얼굴 목록에서 한 사람을 뺀다 — 앨범 사진에 찍힌 관계없는 사람(관중·다른 팀 등)을 선생님이 지울 때.
+ * 그 사람의 얼굴(media_faces)과 그 얼굴로 붙은 자동 태그만 지운다. **사진은 그대로**, 선생님이 붙인 태그·학부모의
+ * 맞아요/아니에요도 그대로다. 얼굴이 하나도 안 남은 사진은 'none' 이 되고 분석 버전은 남겨 자동 분석이 다시 찾지 않는다.
+ * 분석 방식이 바뀌어(FACE_ANALYZER_VERSION 을 올려) 앨범을 다시 분석하면 그때는 이 얼굴들도 다시 나온다.
+ *
+ * **등록된 아이로 묶인 사람(studentId 가 있는 무리)은 빼지 않는다** — 빼면 그 아이의 "우리 아이만 보기" 가 말없이 줄고
+ * 되돌릴 길이 없다(blocked: 'student_person'). 선생님이 본 그 사람인지도 확인한다: 화면이 본 사진 수(seenPhotoCount)가
+ * 지금 다시 묶은 사진 수와 다르면 그 사이 묶음이 바뀐 것이라 아무것도 지우지 않는다(blocked: 'person_changed').
+ *
+ * 한 트랜잭션: 태그 → 얼굴 → 사진별 얼굴 수. 태그를 먼저 지운다(얼굴을 먼저 지우면 "faceId" 가 NULL 이 돼 못 찾는다).
+ * → { removedFaces, photos, removedTags } · { blocked } · 그 사이 묶음이 바뀌어 없는 사람이면 null
+ */
+export const removePerson = async (eventId, key, { seenPhotoCount } = {}) => {
+  const person = findPerson(await albumPeople(eventId, { includeHidden: true }), key);
+  if (!person) return null;
+  if (person.studentId != null) return { blocked: 'student_person' };
+  if (!Number.isInteger(seenPhotoCount) || seenPhotoCount !== person.photoCount) return { blocked: 'person_changed' };
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const removedTags = await MediaTag.removeAutoTagsForFaces(person.faceIds, client);
+    const mediaIds = await MediaFace.deleteForAlbum(person.faceIds, eventId, client);
+    const photos = [...new Set(mediaIds)];
+    await EventMedia.refreshFaceCounts(photos, client);
+    await client.query('COMMIT');
+    return { removedFaces: mediaIds.length, photos: photos.length, removedTags };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+/**
  * 화면으로 내보내는 한 사람 — **화이트리스트**. 선생님과 학부모가 같은 모양을 받는다.
  * 얼굴을 잘라 그릴 사진 주소와 상자, 사진 수만 — 이름·학생 id·특징값·사진 id 목록은 보내지 않는다
  * (학부모에게 다른 아이를 가리키는 값이 나가지 않게, 2026-10-09 앨범의 모든 얼굴을 학부모에게도 보여 주기로 하면서 정한 선).
  * mine 은 학부모 화면에서 "우리 아이" 를 앞에 세우는 데만 쓴다.
+ * removable 은 선생님 화면에만(teacher: true) — 등록된 아이로 묶인 사람은 목록에서 뺄 수 없다(removePerson).
  */
-export const toPersonView = (person, { myStudentIds = null } = {}) => ({
+export const toPersonView = (person, { myStudentIds = null, teacher = false } = {}) => ({
   key: person.key,
   photoCount: person.photoCount,
   cover: {
@@ -45,10 +84,11 @@ export const toPersonView = (person, { myStudentIds = null } = {}) => ({
       h: Number(person.cover.box?.h) || 0
     }
   },
-  ...(myStudentIds ? { mine: person.studentId != null && myStudentIds.includes(person.studentId) } : {})
+  ...(myStudentIds ? { mine: person.studentId != null && myStudentIds.includes(person.studentId) } : {}),
+  ...(teacher ? { removable: person.studentId == null } : {})
 });
 
 /** 학부모 목록 순서 — 우리 아이 먼저, 그다음 사진 많은 사람부터(groupFaces 순서 그대로) */
 export const parentPeopleOrder = (views) => [...views].sort((a, b) => Number(b.mine) - Number(a.mine));
 
-export default { albumPeople, findPerson, toPersonView, parentPeopleOrder };
+export default { albumPeople, findPerson, removePerson, toPersonView, parentPeopleOrder };

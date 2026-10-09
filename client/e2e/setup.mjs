@@ -188,6 +188,37 @@ for (const [mediaId, descriptor, box] of [
   );
 }
 
+// 얼굴 목록에서 사람 빼기 — 위 얼굴 목록 앨범과 같은 모양(사진 세 장, 가: 31·32, 나: 32·33)을 따로 둔다.
+// 선생님이 한 사람을 빼므로 학부모 얼굴 목록 테스트가 쓰는 앨범(peopleEventId)은 건드리지 않는다.
+const removeFaceEventId = await mkEvent(`e2e얼굴빼기_${stamp}`, null, true, { type: 'special', published: false });
+const removeFaceMediaIds = [];
+for (const i of [31, 32, 33]) {
+  removeFaceMediaIds.push(await mkMedia({ i, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: removeFaceEventId }));
+}
+await pool.query('UPDATE event_media SET "faceAnalyzerVersion" = 3 WHERE id = ANY($1::int[])', [removeFaceMediaIds]);
+for (const [mediaId, descriptor, box] of [
+  [removeFaceMediaIds[0], personA, { x: 0.2, y: 0.2, w: 0.2, h: 0.2 }],
+  [removeFaceMediaIds[1], personA, { x: 0.1, y: 0.3, w: 0.15, h: 0.15 }],
+  [removeFaceMediaIds[1], personB, { x: 0.6, y: 0.3, w: 0.15, h: 0.15 }],
+  [removeFaceMediaIds[2], personB, { x: 0.4, y: 0.4, w: 0.25, h: 0.25 }]
+]) {
+  await pool.query(
+    `INSERT INTO media_faces ("mediaId", box, score, descriptor, "createdAt") VALUES ($1,$2,0.9,$3,$4)`,
+    [mediaId, JSON.stringify(box), descriptor, now]
+  );
+}
+// 등록된 아이로 묶인 사람(다: 사진 33) — 선생님이 손으로 태그했다. 이 사람은 길게 눌러도 X 가 없어야 한다
+const personC = peopleVector((k) => (k % 8 < 4 ? 1 : -1));   // 가·나·기준 얼굴 모두와 직각
+const studentFace = await pool.query(
+  `INSERT INTO media_faces ("mediaId", box, score, descriptor, "createdAt") VALUES ($1,$2,0.9,$3,$4) RETURNING id`,
+  [removeFaceMediaIds[2], JSON.stringify({ x: 0.05, y: 0.1, w: 0.12, h: 0.12 }), personC, now]
+);
+await pool.query(
+  `INSERT INTO media_tags ("mediaId","studentId",source,"faceId","createdByUserId","createdAt","updatedAt")
+   VALUES ($1,$2,'manual',$3,$4,$5,$5)`,
+  [removeFaceMediaIds[2], students[0].id, studentFace.rows[0].id, teacher.id, now]
+);
+
 // 학부모가 첫째 아이에 등록해 둔 얼굴 사진 두 장(특징값만) → 내 정보에서 한 장을 지우는 흐름을 본다.
 // 두 장이 같은 값이라 한 장을 지워도 남은 한 장과 아래 태그 사진의 얼굴이 그대로 맞는다(태그가 유지된다).
 const faceVector = Buffer.from(new Float32Array(512).fill(0.1).buffer).toString('base64');   // ArcFace 512차원
@@ -370,7 +401,7 @@ const tinv = await pool.query(
 );
 
 const sessions = {
-  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, doomedFolderEventId, doomedFolderTitle, faceScanEventId, faceThumbEventId, peopleEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
+  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, doomedFolderEventId, doomedFolderTitle, faceScanEventId, faceThumbEventId, peopleEventId, removeFaceEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
   teacher: { token: sign(teacher), user: { id: teacher.id, username: teacher.username, role: 'user' } },
   teacher2Token: sign(teacher2),
   parent: { token: sign(parent), user: { id: parent.id, username: parent.username, role: 'parent' } },

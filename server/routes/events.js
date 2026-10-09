@@ -14,6 +14,7 @@ import {
 import {
   getAlbum,
   listPeople,
+  deletePerson,
   createAlbum,
   updateAlbum,
   refreshAlbum,
@@ -53,6 +54,7 @@ router.delete('/:id/registrations/student/:studentId', verifyToken, logAction('T
 // 앨범 (사진·영상). 리터럴 경로를 :mediaId 보다 먼저 둔다.
 router.get('/:id/album', verifyToken, getAlbum);
 router.get('/:id/album/people', verifyToken, listPeople);
+router.delete('/:id/album/people/:key', verifyToken, logAction('REMOVE_ALBUM_PERSON'), deletePerson);
 router.post('/:id/album', verifyToken, logAction('CREATE_ALBUM'), createAlbum);
 router.patch('/:id/album', verifyToken, logAction('UPDATE_ALBUM'), updateAlbum);
 router.post('/:id/album/refresh', verifyToken, refreshAlbum);

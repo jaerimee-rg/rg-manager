@@ -388,6 +388,55 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     await expect(tiles).toHaveCount(3);
   });
 
+  test('얼굴 목록 — 관계없는 사람은 길게 눌러 나온 X 로 뺀다 (사진은 그대로)', async ({ page, request }) => {
+    await page.route('https://lh3.googleusercontent.com/**', (route) => route.fulfill({
+      contentType: 'image/png', body: FACELESS_PNG.buffer, headers: { 'Access-Control-Allow-Origin': '*' }
+    }));
+    const id = sessions.album.removeFaceEventId;
+    await page.goto(`/photos/${id}`);
+    const tiles = page.locator('.ui-media-tile');
+    const faces = page.getByRole('group', { name: '얼굴로 사진 찾기' });
+    await expect(tiles).toHaveCount(3);
+    await expect(faces.getByRole('button', { name: /^얼굴 \d+ · 사진 2장$/ })).toHaveCount(2);
+
+    // 길게 누르기: 누른 채 0.7초 → X. 손을 뗄 때 오는 click 은 그 얼굴을 고르지 않는다
+    const longPress = async (button) => {
+      await button.scrollIntoViewIfNeeded();   // 마우스 좌표는 화면 기준 — 화면 밖이면 페이지 바탕을 누른다
+      const at = await button.boundingBox();
+      await page.mouse.move(at.x + at.width / 2, at.y + 20);
+      await page.mouse.down();
+      await page.waitForTimeout(700);
+      await page.mouse.up();
+    };
+
+    // 등록된 아이로 묶인 사람(다)은 길게 눌러도 X 가 없다
+    await longPress(faces.getByRole('button', { name: '얼굴 3 · 사진 1장' }));
+    await expect(faces.getByRole('button', { name: /목록에서 빼기/ })).toHaveCount(0);
+    await faces.getByRole('button', { name: '모든 사진' }).click();   // 뺄 수 없는 얼굴은 평소처럼 골라졌다 — 다시 전체로
+    await expect(tiles).toHaveCount(3);
+
+    const second = faces.getByRole('button', { name: '얼굴 2 · 사진 2장' });
+    await second.scrollIntoViewIfNeeded();
+    const box = await second.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + 20);
+    await page.mouse.down();
+    await page.waitForTimeout(700);
+    await page.mouse.up();
+    await expect(second).toHaveAttribute('aria-pressed', 'false');
+    await faces.getByRole('button', { name: '얼굴 2 목록에서 빼기' }).click();
+
+    await expect(page.getByText('얼굴을 목록에서 뺐어요', { exact: false })).toBeVisible();
+    await expect(faces.getByRole('button', { name: /^얼굴 \d+ · / })).toHaveCount(2);   // 가 + 등록된 아이(다)
+    await expect(tiles).toHaveCount(3);   // 사진은 그대로
+
+    // 서버에도: 남은 사람은 하나, 그 사람만 나온 사진은 '얼굴 없음' 이 됐고 다시 분석할 목록에는 안 들어간다
+    const people = await api(request, sessions.teacher, 'GET', `/api/events/${id}/album/people`);
+    expect(people.body.people).toHaveLength(2);
+    expect(people.body.people.map((one) => one.removable).sort()).toEqual([false, true]);
+    const album = await api(request, sessions.teacher, 'GET', `/api/events/${id}/album`);
+    expect(album.body.counts.unanalyzed).toBe(0);
+  });
+
   test('예전 규칙으로 붙은 자동 태그는 앨범을 열 때 다시 매칭돼 사라진다 (임계값·규칙이 바뀐 뒤)', async ({ request }) => {
     const id = sessions.album.staleEventId;
 

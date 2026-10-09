@@ -618,6 +618,20 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   `GET /api/parent/events/:id/people` (own children first, `mine:true`, labelled "우리 아이"; no other names anywhere —
   grouping can be wrong). The cover image is `lh3 …=s<N>` sized so the face is ≥ 60 px (`mediaSerializer.faceCoverUrl`).
   On the parent page a picked face turns 우리 아이만 off and vice versa.
+  **Teachers can remove an unrelated person** (spectators, another team): long-press a face (500 ms, or right-click /
+  Delete key) → an X appears on that face only → pressing X calls `DELETE /api/events/:id/album/people/:key`
+  (`albumController.deletePerson` → `services/albumPeople.js:removePerson`). The parent strip never gets the X (no
+  `onRemove`). **A person grouped with a registered child (any `manual`/`parent_confirmed`/`face` tag → `studentId`) can't
+  be removed** — that would silently shrink the child's 우리 아이만 보기: the teacher list carries a teacher-only
+  `removable:false` (the parent view shape is unchanged) so the strip shows no X, and the server answers 409
+  `student_person`. The client sends the `photoCount` it saw (`?photoCount=N`); the server regroups and answers 409
+  `person_changed` (nothing deleted) if it differs or is missing, and the screen reloads the list.
+  One transaction: that person's `face`/`candidate` tags **first** (`media_tags."faceId"` is ON DELETE SET NULL),
+  then their `media_faces` rows, then each photo's `faceCount` — a photo left with no faces becomes `none` and **keeps its
+  `faceAnalyzerVersion`**, so automatic re-analysis doesn't bring the faces back. Photos, `manual`/`parent_confirmed`
+  tags and parent "아니에요" answers stay. Bumping `FACE_ANALYZER_VERSION` re-analyses the album and would find those
+  faces again. While the X shows, tapping another face, [전체], outside or Esc only closes it (no selection); the
+  long-press release click never selects.
 - **Parents**: 사진 tab (`/parent/photos`, published albums only), gallery (`/parent/photos/:eventId`) with the
   **우리 아이 사진만 보기** toggle and `?open=<mediaId>` to open one photo, a full-screen viewer whose 저장 button
   opens the Drive download URL and which **swipes sideways** to the previous/next photo or video
