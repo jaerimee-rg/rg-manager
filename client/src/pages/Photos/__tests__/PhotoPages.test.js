@@ -990,6 +990,71 @@ describe('PhotoAlbum — 얼굴 목록으로 거르기', () => {
   });
 });
 
+describe('PhotoAlbum — 고른 얼굴에서 잘못 묶인 사진 빼기 · 다시 넣기', () => {
+  const cover = { url: 'https://lh3.googleusercontent.com/d/f1=s600', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } };
+  const PEOPLE = [{ key: 'p11', photoCount: 2, removedCount: 1, removable: true, cover }, { key: 'p21', photoCount: 1, removedCount: 0, removable: true, cover }];
+
+  const renderAlbumWithFaces = async (editResponse = () => ok({ removed: 1, key: 'p11' })) => {
+    fetchWithAuth.mockImplementation((url, options = {}) => {
+      if (options.method === 'POST' && url.startsWith('/api/events/31/album/people/')) return editResponse(url, JSON.parse(options.body));
+      if (url === '/api/events/31/album' && !options.method) return ok(ALBUM);
+      if (url === '/api/events/31/album/people') return ok({ people: PEOPLE });
+      if (url.includes('removed=1')) return ok({ items: [MEDIA[2]], nextCursor: null });
+      if (url.includes('person=p11')) return ok({ items: [MEDIA[0], MEDIA[1]], nextCursor: null });
+      if (url.startsWith('/api/events/31/media?')) return ok({ items: MEDIA, nextCursor: null });
+      return ok({});
+    });
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={['/photos/31']}>
+          <Routes><Route path="/photos/:eventId" element={<PhotoAlbum />} /></Routes>
+        </MemoryRouter>
+      );
+    });
+  };
+  const mediaUrls = () => fetchWithAuth.mock.calls.map(([url]) => url).filter((url) => url.startsWith('/api/events/31/media?'));
+  const editCalls = () => fetchWithAuth.mock.calls.filter(([url, options]) => options?.method === 'POST' && url.includes('/album/people/'));
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('얼굴을 고르지 않으면 고르기 줄에 [이 얼굴에서 빼기] 가 없다', async () => {
+    await renderAlbumWithFaces();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '고르기' })); });
+    expect(screen.queryByRole('button', { name: '이 얼굴에서 빼기' })).not.toBeInTheDocument();
+  });
+
+  it('얼굴을 고르고 [고르기] 한 장 → [이 얼굴에서 빼기] 는 그 앨범의 얼굴 주소로 보내고, 다른 고르기 버튼도 그대로 있다', async () => {
+    await renderAlbumWithFaces();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '얼굴 1 · 사진 2장' })); });
+    expect(screen.getByRole('toolbar', { name: '고른 얼굴의 사진' })).toBeInTheDocument();
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '고르기' })); });
+    expect(screen.queryByRole('toolbar', { name: '고른 얼굴의 사진' })).not.toBeInTheDocument();
+    await act(async () => { fireEvent.click(document.querySelectorAll('.ui-media-tile')[1]); });
+    expect(screen.getByRole('button', { name: '숨기기' })).toBeInTheDocument();
+    const exclude = screen.getByRole('button', { name: '이 얼굴에서 빼기' });
+    expect(exclude).toHaveClass('ui-photo-select-actions__wide');
+    await act(async () => { fireEvent.click(exclude); });
+
+    expect(editCalls()).toEqual([['/api/events/31/album/people/p11/exclude', { method: 'POST', body: JSON.stringify({ mediaIds: [2] }) }]]);
+    expect(screen.getByText('1장을 이 얼굴에서 뺐어요 · 사진은 그대로 있어요')).toBeInTheDocument();
+  });
+
+  it('[뺀 사진] 은 removed=1 로 읽고, 거기서 고르면 [이 얼굴에 다시 넣기]', async () => {
+    await renderAlbumWithFaces(() => ok({ restored: 1, key: 'p11' }));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '얼굴 1 · 사진 2장' })); });
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /뺀 사진/ })); });
+    expect(mediaUrls().at(-1)).toMatch(/person=p11&removed=1$/);
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '고르기' })); });
+    await act(async () => { fireEvent.click(document.querySelectorAll('.ui-media-tile')[0]); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '이 얼굴에 다시 넣기' })); });
+
+    expect(editCalls()).toEqual([['/api/events/31/album/people/p11/restore', { method: 'POST', body: JSON.stringify({ mediaIds: [3] }) }]]);
+  });
+});
+
 describe('PhotoAlbum — 사진 폴더 관리 (FR-519)', () => {
   const FOLDER = {
     ...ALBUM, eventType: 'folder', eventTitle: '가을 소풍', eventDate: '2026-09-27', audience: 'all',

@@ -29,6 +29,13 @@ jest.unstable_mockModule('../../models/MediaFace.js', () => ({
     deleteForAlbum: jest.fn().mockResolvedValue([])
   }
 }));
+jest.unstable_mockModule('../../models/FaceExclusion.js', () => ({
+  default: {
+    listForAlbums: jest.fn().mockResolvedValue([]),
+    addPairs: jest.fn().mockResolvedValue(0),
+    removePairs: jest.fn().mockResolvedValue(0)
+  }
+}));
 jest.unstable_mockModule('../../models/MediaTag.js', () => ({
   default: {
     listByMediaIds: jest.fn().mockResolvedValue({}),
@@ -92,9 +99,11 @@ const GoogleDriveAccount = (await import('../../models/GoogleDriveAccount.js')).
 const ParentInvite = (await import('../../models/ParentInvite.js')).default;
 const albumService = (await import('../../services/albumService.js')).default;
 const AlbumView = (await import('../../models/AlbumView.js')).default;
+const FaceExclusion = (await import('../../models/FaceExclusion.js')).default;
 const { DriveError } = await import('../../utils/googleDrive.js');
 const {
   getAlbum, createAlbum, updateAlbum, listMedia, listPeople, deletePerson, listAllMedia, listAllPeople, createUploads, completeUpload,
+  excludeAlbumPersonPhotos, restoreAlbumPersonPhotos, excludeAllPersonPhotos, restoreAllPersonPhotos,
   bulkAction, addTag, updateMedia, deleteMedia, listUnanalyzed, saveFaces, analysisImageUrl
 } = await import('../albumController.js');
 
@@ -1135,9 +1144,9 @@ describe('얼굴 목록 (앨범의 사람마다 얼굴 하나)', () => {
     expect(albumService.ensureAlbumsMatched).toHaveBeenCalled();
     expect(MediaFace.listForAlbum).toHaveBeenCalledWith(3, { includeHidden: true });
     expect(res.json.mock.calls[0][0].people).toEqual([
-      // removable 은 선생님에게만 — 등록된 아이(학생 9 태그)로 묶인 사람은 뺄 수 없다
-      { key: 'p11', photoCount: 2, removable: false, cover: { url: 'https://lh3.googleusercontent.com/d/file-1=s600', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } } },
-      { key: 'p21', photoCount: 1, removable: true, cover: { url: 'https://lh3.googleusercontent.com/d/file-2=s600', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } } }
+      // removable · removedCount 는 선생님에게만 — 등록된 아이(학생 9 태그)로 묶인 사람은 뺄 수 없다
+      { key: 'p11', photoCount: 2, removable: false, removedCount: 0, cover: { url: 'https://lh3.googleusercontent.com/d/file-1=s600', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } } },
+      { key: 'p21', photoCount: 1, removable: true, removedCount: 0, cover: { url: 'https://lh3.googleusercontent.com/d/file-2=s600', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } } }
     ]);
   });
 
@@ -1339,14 +1348,15 @@ describe('전체 사진 — 모든 폴더 (GET /api/albums/media · /people)', (
     expect(res.json.mock.calls[1][0]).toEqual({ people: [] });
   });
 
-  it('얼굴 목록 — 폴더가 달라도 같은 아이는 하나, 앨범 화면과 같은 모양(이름·학생 id 없이, 빼기 없음)', async () => {
+  it('얼굴 목록 — 폴더가 달라도 같은 아이는 하나, 앨범 화면과 같은 모양(이름·학생 id 없이, 선생님 칸 포함)', async () => {
     await listAllPeople(req, res);
 
     expect(albumService.ensureAlbumsMatched).toHaveBeenCalledWith([albums[0], albums[1]]);
     expect(MediaTag.listForAlbums).toHaveBeenCalledWith([3, 5], { includeHidden: true });
     const { people } = res.json.mock.calls[0][0];
     expect(people.map((one) => [one.key, one.photoCount])).toEqual([['p11', 2], ['p42', 1]]);
-    people.forEach((one) => expect(Object.keys(one).sort()).toEqual(['cover', 'key', 'photoCount']));
+    people.forEach((one) => expect(Object.keys(one).sort()).toEqual(['cover', 'key', 'photoCount', 'removable', 'removedCount']));
+    expect(people.map((one) => one.removable)).toEqual([false, true]);   // 등록된 아이로 묶인 사람(학생 9)은 통째로 못 뺀다
   });
 
   it('읽다 실패하면 500', async () => {
@@ -1357,6 +1367,143 @@ describe('전체 사진 — 모든 폴더 (GET /api/albums/media · /people)', (
 
     expect(res.status).toHaveBeenNthCalledWith(1, 500);
     expect(res.status).toHaveBeenNthCalledWith(2, 500);
+  });
+});
+
+describe('얼굴 목록 — 잘못 묶인 사진 빼기("이 얼굴 아님") · 다시 넣기 · 뺀 사진 보기', () => {
+  const axis = (i) => Float32Array.from({ length: 8 }, (_, k) => (k === i ? 1 : 0));
+  const face = (id, mediaId, descriptor) => ({
+    id, mediaId, box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 }, score: 0.9, descriptor, driveFileId: `file-${mediaId}`
+  });
+  // 가: 사진 1·2·3 (얼굴 11·12·13) · 나: 사진 2 (얼굴 21)
+  const FACES = [face(11, 1, axis(0)), face(12, 2, axis(0)), face(13, 3, axis(0)), face(21, 2, axis(3))];
+
+  beforeEach(() => {
+    Event.getById.mockResolvedValue(event());
+    MediaFace.listForAlbum.mockResolvedValue(FACES);
+    MediaTag.listForAlbum.mockResolvedValue([]);
+    MediaFace.listForAlbums.mockResolvedValue(FACES);
+    MediaTag.listForAlbums.mockResolvedValue([]);
+    FaceExclusion.listForAlbums.mockResolvedValue([]);
+    mockClient.query.mockClear();
+    req.params = { id: '3', key: 'p11' };
+  });
+
+  it('앨범 화면: 고른 사람의 사진 하나를 빼면 그 사진의 얼굴들과 남는 얼굴들을 쌍으로 적고, 바뀐(같은) key 를 준다', async () => {
+    req.body = { mediaIds: [2] };
+
+    await excludeAlbumPersonPhotos(req, res);
+
+    expect(Event.getById).toHaveBeenCalledWith(3, 7, 'user');
+    expect(FaceExclusion.addPairs).toHaveBeenCalledWith([
+      { faceId: 12, otherFaceId: 11 }, { faceId: 12, otherFaceId: 13 },
+      { faceId: 21, otherFaceId: 11 }, { faceId: 21, otherFaceId: 13 }
+    ], 7, mockClient);
+    expect(res.json).toHaveBeenCalledWith({ removed: 1, key: 'p11' });
+  });
+
+  it('남의 이벤트면 404 — 아무것도 적지 않는다', async () => {
+    Event.getById.mockResolvedValue(null);
+    req.body = { mediaIds: [2] };
+
+    await excludeAlbumPersonPhotos(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(FaceExclusion.addPairs).not.toHaveBeenCalled();
+  });
+
+  it('그 사람의 사진을 다 빼려 하면 409 all_photos, 그 사람 사진이 아니면 409 person_changed, 없는 사람이면 404 personMissing', async () => {
+    req.body = { mediaIds: [1, 2, 3] };
+    await excludeAlbumPersonPhotos(req, res);
+    expect(res.status).toHaveBeenLastCalledWith(409);
+    expect(res.json).toHaveBeenLastCalledWith(expect.objectContaining({ reason: 'all_photos' }));
+
+    req.body = { mediaIds: [99] };
+    await excludeAlbumPersonPhotos(req, res);
+    expect(res.json).toHaveBeenLastCalledWith(expect.objectContaining({ reason: 'person_changed' }));
+
+    req.params.key = 'p999';
+    req.body = { mediaIds: [1] };
+    await excludeAlbumPersonPhotos(req, res);
+    expect(res.status).toHaveBeenLastCalledWith(404);
+    expect(res.json).toHaveBeenLastCalledWith(expect.objectContaining({ personMissing: true }));
+    expect(FaceExclusion.addPairs).not.toHaveBeenCalled();
+  });
+
+  it('전체 사진: 내 앨범 전부를 함께 묶은 사람에서 뺀다 — 앨범이 없으면 그 사람도 없다(404)', async () => {
+    Event.listForPhotos.mockResolvedValue([event({ id: 3 }), event({ id: 5, driveFolderId: 'folder-5' }), event({ id: 6, driveFolderId: null })]);
+    req.params = { key: 'p11' };
+    req.body = { mediaIds: [3] };
+
+    await excludeAllPersonPhotos(req, res);
+
+    expect(Event.listForPhotos).toHaveBeenCalledWith(7);
+    expect(MediaFace.listForAlbums).toHaveBeenCalledWith([3, 5], { includeHidden: true });
+    expect(res.json).toHaveBeenCalledWith({ removed: 1, key: 'p11' });
+
+    Event.listForPhotos.mockResolvedValue([]);
+    await excludeAllPersonPhotos(req, res);
+    expect(res.status).toHaveBeenLastCalledWith(404);
+  });
+
+  it('다시 넣기: 등록된 아이의 뺀 사진은 선생님 태그(manual)로 — 앨범 화면 · 전체 사진 둘 다', async () => {
+    const tags = [
+      { mediaId: 1, studentId: 9, source: 'face', faceId: 11 },
+      { mediaId: 3, studentId: 9, source: 'excluded', faceId: 13 }
+    ];
+    MediaTag.listForAlbum.mockResolvedValue(tags);
+    MediaTag.listForAlbums.mockResolvedValue(tags);
+    req.body = { mediaIds: [3] };
+
+    await restoreAlbumPersonPhotos(req, res);
+
+    expect(MediaTag.upsert).toHaveBeenCalledWith(
+      { mediaId: 3, studentId: 9, source: 'manual', faceId: 13, createdByUserId: 7 }, mockClient
+    );
+    expect(res.json).toHaveBeenLastCalledWith({ restored: 1, key: 'p11' });
+
+    Event.listForPhotos.mockResolvedValue([event({ id: 3 })]);
+    req.params = { key: 'p11' };
+    await restoreAllPersonPhotos(req, res);
+    expect(MediaTag.upsert).toHaveBeenCalledTimes(2);
+    expect(res.json).toHaveBeenLastCalledWith({ restored: 1, key: 'p11' });
+  });
+
+  it('뺀 사진이 아니면 다시 넣기는 409 — 아무것도 쓰지 않는다', async () => {
+    req.body = { mediaIds: [1] };
+
+    await restoreAlbumPersonPhotos(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(MediaTag.upsert).not.toHaveBeenCalled();
+    expect(FaceExclusion.removePairs).not.toHaveBeenCalled();
+  });
+
+  it('?person=&removed=1 은 그 사람에게서 뺀 사진만 — 앨범 화면 · 전체 사진', async () => {
+    // 사진 2 의 얼굴 12 는 가와 쌍 → 가는 사진 1·3, 뺀 사진은 2
+    FaceExclusion.listForAlbums.mockResolvedValue([{ faceId: 12, otherFaceId: 11 }, { faceId: 12, otherFaceId: 13 }]);
+    req.query = { person: 'p11', removed: '1' };
+
+    await listMedia(req, res);
+    expect(EventMedia.list.mock.calls.at(-1)[1].mediaIds).toEqual([2]);
+
+    req.query = { person: 'p11' };
+    await listMedia(req, res);
+    expect(EventMedia.list.mock.calls.at(-1)[1].mediaIds).toEqual([1, 3]);
+
+    Event.listForPhotos.mockResolvedValue([event({ id: 3 })]);
+    req.query = { person: 'p11', removed: '1' };
+    await listAllMedia(req, res);
+    expect(EventMedia.listAcross.mock.calls.at(-1)[1].mediaIds).toEqual([2]);
+  });
+
+  it('선생님 얼굴 목록에는 사람마다 뺀 사진 수(removedCount)', async () => {
+    FaceExclusion.listForAlbums.mockResolvedValue([{ faceId: 12, otherFaceId: 11 }, { faceId: 12, otherFaceId: 13 }]);
+
+    await listPeople(req, res);
+
+    const ga = res.json.mock.calls[0][0].people.find((one) => one.key === 'p11');
+    expect(ga).toMatchObject({ photoCount: 2, removedCount: 1 });
   });
 });
 

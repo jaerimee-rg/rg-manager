@@ -28,7 +28,9 @@ import {
   saveFaces,
   rematch,
   updateMedia,
-  deleteMedia
+  deleteMedia,
+  excludeAlbumPersonPhotos,
+  restoreAlbumPersonPhotos
 } from '../controllers/albumController.js';
 import { verifyToken } from '../middleware/auth.js';
 import { logAction } from '../middleware/logger.js';
@@ -55,6 +57,9 @@ router.delete('/:id/registrations/student/:studentId', verifyToken, logAction('T
 router.get('/:id/album', verifyToken, getAlbum);
 router.get('/:id/album/people', verifyToken, listPeople);
 router.delete('/:id/album/people/:key', verifyToken, logAction('REMOVE_ALBUM_PERSON'), deletePerson);
+// 얼굴 목록에서 고른 사람의 잘못 묶인 사진을 빼고(이 얼굴 아님) 되돌린다 — 사진은 그대로
+router.post('/:id/album/people/:key/exclude', verifyToken, logAction('EXCLUDE_PERSON_PHOTOS'), excludeAlbumPersonPhotos);
+router.post('/:id/album/people/:key/restore', verifyToken, logAction('RESTORE_PERSON_PHOTOS'), restoreAlbumPersonPhotos);
 router.post('/:id/album', verifyToken, logAction('CREATE_ALBUM'), createAlbum);
 router.patch('/:id/album', verifyToken, logAction('UPDATE_ALBUM'), updateAlbum);
 router.post('/:id/album/refresh', verifyToken, refreshAlbum);

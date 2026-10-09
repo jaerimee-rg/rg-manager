@@ -18,7 +18,9 @@ import CoverOrderPanel from './CoverOrderPanel';
 import CoverCropDialog from './CoverCropDialog';
 import { coverCropsBody, coversFromPicks, dropCovers, sameCovers, setCoverCrops, toggleCover } from './coverDraft';
 import PhotoGrid from './PhotoGrid';
+import PersonPhotosBar from './PersonPhotosBar';
 import { saveMediaCaption } from './mediaCaptionSave';
+import { editPersonPhotos, excludeBlock, personPhotosToast } from './personPhotos';
 import {
   albumProblem, filterChips, folderDeleteMessage, folderDeletedToast, folderDeleteTitle, formatEventDate, isPhotoFolder,
   publishLocked, typeLabel, toViewerItem, PROBLEM_MESSAGES
@@ -30,7 +32,7 @@ const PAGE = 60;
  * 선생님 사진 메뉴 — 앨범 하나 (docs/photo-menu FR-520~529).
  *
  * 위: 학부모 공개 패널 + Drive 폴더 카드. 아래: 얼굴 목록(누르면 그 사람 사진만), 필터 칩과 사진 칸,
- * 고르기 모드(숨기기 · 다시 보이기 · 지우기 · 대표 사진 만들기). 사진을 열어 [대표 사진으로] 를 눌러도 표지로 고른다(4장까지).
+ * 고르기 모드(숨기기 · 다시 보이기 · 지우기 · 대표 사진 만들기 — 얼굴을 골랐으면 [이 얼굴에서 빼기], 뺀 사진에서는 [다시 넣기]). 사진을 열어 [대표 사진으로] 를 눌러도 표지로 고른다(4장까지).
  * 대표 사진 칸의 [수정] 에서 끌어서 놓아 순서를 바꾸고 ✕ 로 빼며, 미리 보기의 사진을 눌러 보일 부분을 고른다(CoverCropDialog).
  * 대표 사진은 어디서 고쳐도 **[저장하기] 를 눌러야**
  * 반영된다 — 그 전까지는 화면의 초안(coverDraft)일 뿐이다.
@@ -46,6 +48,7 @@ function PhotoAlbum() {
   const [filter, setFilter] = useState('all');
   const [people, setPeople] = useState([]);       // 얼굴 목록 — 앨범에 나온 사람마다 얼굴 하나
   const [person, setPerson] = useState(null);     // 고른 사람의 key — 그 사람이 나온 사진만
+  const [removedView, setRemovedView] = useState(false);   // 고른 얼굴에서 "이 얼굴 아님" 으로 뺀 사진 보기
   const [items, setItems] = useState([]);
   const [cursor, setCursor] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -103,6 +106,7 @@ function PhotoAlbum() {
   const loadMedia = useCallback(async (nextCursor = null) => {
     const params = new URLSearchParams({ filter, limit: String(PAGE) });
     if (person) params.set('person', person);
+    if (person && removedView) params.set('removed', '1');
     if (nextCursor) {
       params.set('cursorTakenAt', nextCursor.takenAt);
       params.set('cursorId', String(nextCursor.id));
@@ -117,7 +121,7 @@ function PhotoAlbum() {
     } catch (error) {
       console.error('사진 목록 조회 실패:', error);
     }
-  }, [apiBase, filter, person, loadPeople]);
+  }, [apiBase, filter, person, removedView, loadPeople]);
 
   useEffect(() => { loadAlbum(); }, [loadAlbum]);
   useEffect(() => {
@@ -128,6 +132,44 @@ function PhotoAlbum() {
   }, [album?.driveFolderId, loadPeople]);
 
   const reloadAll = () => { loadAlbum(); loadMedia(); loadPeople(); };
+
+  // 다른 얼굴을 고르면(또는 풀면) 그 얼굴의 사진부터 — 뺀 사진 보기와 고르던 것은 푼다
+  const choosePerson = (key) => {
+    setPerson(key);
+    setRemovedView(false);
+    setSelecting(false);
+    setSelected([]);
+  };
+  const chooseView = (removed) => {
+    setRemovedView(removed);
+    setSelecting(false);
+    setSelected([]);
+  };
+  const chosen = people.find((one) => one.key === person) || null;
+  // 다시 넣어 뺀 사진이 하나도 안 남으면 그 얼굴의 사진으로 돌아간다
+  useEffect(() => {
+    if (removedView && chosen && !chosen.removedCount) setRemovedView(false);
+  }, [removedView, chosen]);
+
+  // 고른 사진을 이 얼굴에서 빼거나(이 얼굴 아님) 다시 넣는다 — 사진은 그대로. 얼굴의 key 가 바뀌면 그 key 로 계속 본다
+  const editPersonSelected = async () => {
+    const action = removedView ? 'restore' : 'exclude';
+    setBusy(true);
+    const result = await editPersonPhotos(`${apiBase}/album`, person, action, selected);
+    setBusy(false);
+    if (!result.ok) {
+      showToast(result.message);
+      if (result.changed) loadPeople();
+      return;
+    }
+    showToast(personPhotosToast(action, result.count));
+    setSelecting(false);
+    setSelected([]);
+    if (result.key && result.key !== person) setPerson(result.key);
+    else if (!result.key) choosePerson(null);
+    else loadMedia();
+    loadPeople();
+  };
 
   // 얼굴 목록에서 관계없는 사람을 뺀다(길게 눌러 X). 사진은 그대로 — 그 사람의 얼굴과 자동 태그만 지운다.
   // 화면이 본 사진 수를 함께 보내 서버가 "같은 사람" 인지 확인한다 — 그 사이 묶음이 바뀌었으면 409 로 아무것도 지우지 않는다.
@@ -476,7 +518,10 @@ function PhotoAlbum() {
             />
           </div>
 
-          <FacePeopleStrip className="ui-mt-5" people={people} selected={person} onSelect={setPerson} onRemove={removePerson} />
+          <FacePeopleStrip className="ui-mt-5" people={people} selected={person} onSelect={choosePerson} onRemove={removePerson} />
+          {chosen && !selecting && (
+            <PersonPhotosBar className="ui-mt-3" person={chosen} removedView={removedView} onViewChange={chooseView} />
+          )}
 
           <div className={`ui-row ${people.length ? 'ui-mt-3' : 'ui-mt-5'} ui-mb-3`} data-gap="2" data-justify="between">
             {selecting ? (
@@ -507,7 +552,9 @@ function PhotoAlbum() {
           {items.length === 0 ? (
             <div className="ui-dropzone">
               <Icon name="upload" size={28} />
-              <p className="ui-dropzone__title">{filter === 'all' && !person ? '아직 사진이 없어요' : '이 조건의 사진이 없어요'}</p>
+              <p className="ui-dropzone__title">
+                {removedView ? '뺀 사진이 없어요' : filter === 'all' && !person ? '아직 사진이 없어요' : '이 조건의 사진이 없어요'}
+              </p>
               {filter === 'all' && !person && (
                 <p className="ui-dropzone__hint">[사진 올리기] 로 한 번에 30개까지 올릴 수 있어요. 사진 25MB · 영상 500MB 까지.</p>
               )}
@@ -535,6 +582,28 @@ function PhotoAlbum() {
 
           {selecting && (
             <StickyActions className="ui-photo-select-actions">
+              {chosen && (removedView ? (
+                <Button
+                  className="ui-photo-select-actions__wide"
+                  variant="primary"
+                  icon="refresh"
+                  disabled={busy || !selected.length}
+                  onClick={editPersonSelected}
+                >
+                  이 얼굴에 다시 넣기
+                </Button>
+              ) : (
+                <Button
+                  className="ui-photo-select-actions__wide"
+                  variant="primary"
+                  icon="x"
+                  disabled={busy || Boolean(excludeBlock(selected.length, chosen.photoCount))}
+                  title={excludeBlock(selected.length, chosen.photoCount) || '고른 사진을 이 얼굴의 사진에서 빼요 — 사진은 그대로예요'}
+                  onClick={editPersonSelected}
+                >
+                  이 얼굴에서 빼기
+                </Button>
+              ))}
               <Button icon="eyeOff" disabled={busy || !anyVisible} onClick={() => bulk('hide', selected)}>숨기기</Button>
               <Button icon="eye" disabled={busy || !anyHidden} onClick={() => bulk('show', selected)}>다시 보이기</Button>
               <Button variant="danger-quiet" icon="trash" disabled={busy || locked || !selected.length} onClick={() => setConfirmDelete(selected)}>지우기</Button>

@@ -1,7 +1,7 @@
 import express from 'express';
 import { getMe, addChildren, deleteChild, updateName, getEvents, getEvent, registerChild, cancelChild, addTeacher } from '../controllers/parentController.js';
 import {
-  listAlbums,
+  listAlbums, listAllMedia, listAllPeople,
   listMedia,
   listPeople,
   createUploads,
@@ -39,6 +39,9 @@ router.delete('/events/:id/registrations/:childId', cancelChild);
 
 // 사진 (앨범). 확정된 이벤트만 열리고, 응답은 화이트리스트를 거친다.
 router.get('/albums', listAlbums);
+// 전체 사진 — 볼 수 있는 모든 앨범의 사진 · 그 앨범들에 나온 사람마다 얼굴 하나
+router.get('/albums/media', listAllMedia);
+router.get('/albums/people', listAllPeople);
 router.get('/events/:id/media', listMedia);
 router.get('/events/:id/people', listPeople);
 router.post('/events/:id/media/uploads', createUploads);

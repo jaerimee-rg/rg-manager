@@ -25,14 +25,25 @@ jest.unstable_mockModule('../../models/Competition.js', () => ({
   default: { getStudentIds: jest.fn().mockResolvedValue([]) }
 }));
 jest.unstable_mockModule('../../models/EventMedia.js', () => ({
-  default: { list: jest.fn().mockResolvedValue([]), summaries: jest.fn().mockResolvedValue({}), getById: jest.fn() }
+  default: {
+    list: jest.fn().mockResolvedValue([]), listAcross: jest.fn().mockResolvedValue([]),
+    summaries: jest.fn().mockResolvedValue({}), getById: jest.fn()
+  }
 }));
 jest.unstable_mockModule('../../models/MediaFace.js', () => ({
-  default: { listForAlbum: jest.fn().mockResolvedValue([]) }
+  default: { listForAlbum: jest.fn().mockResolvedValue([]), listForAlbums: jest.fn().mockResolvedValue([]) }
+}));
+jest.unstable_mockModule('../../models/FaceExclusion.js', () => ({
+  default: {
+    listForAlbums: jest.fn().mockResolvedValue([]),
+    addPairs: jest.fn().mockResolvedValue(0),
+    removePairs: jest.fn().mockResolvedValue(0)
+  }
 }));
 jest.unstable_mockModule('../../models/MediaTag.js', () => ({
   default: {
     listForAlbum: jest.fn().mockResolvedValue([]),
+    listForAlbums: jest.fn().mockResolvedValue([]),
     listByMediaIds: jest.fn().mockResolvedValue({}),
     upsert: jest.fn().mockResolvedValue({ studentId: 5, source: 'parent_confirmed' }),
     removeAutoTagsForStudent: jest.fn().mockResolvedValue(0)
@@ -85,7 +96,7 @@ const GoogleDriveAccount = (await import('../../models/GoogleDriveAccount.js')).
 const ParentInvite = (await import('../../models/ParentInvite.js')).default;
 const albumService = (await import('../../services/albumService.js')).default;
 const {
-  listAlbums, listMedia, listPeople, createUploads, deleteMedia, confirmTag, addFace, deleteFace, uploadLabelChild,
+  listAlbums, listAllMedia, listAllPeople, listMedia, listPeople, createUploads, deleteMedia, confirmTag, addFace, deleteFace, uploadLabelChild,
   saveOwnFaces
 } = await import('../parentAlbumController.js');
 
@@ -783,3 +794,102 @@ describe('saveOwnFaces — 내가 올린 사진의 얼굴 다시 저장', () => 
   });
 });
 
+
+describe('전체 사진 — 볼 수 있는 모든 앨범 (GET /api/parent/albums/media · /people)', () => {
+  const axis = (i) => Float32Array.from({ length: 8 }, (_, k) => (k === i ? 1 : 0));
+  const face = (id, mediaId, descriptor) => ({
+    id, mediaId, box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 }, score: 0.9, descriptor, driveFileId: `file-${mediaId}`
+  });
+
+  beforeEach(() => {
+    ParentChild.listByParent.mockResolvedValue([child()]);
+    // 모든 학부모 공개(31) · 참가 확정 학부모 공개인데 우리 아이가 미확정(32) · 사진 폴더(33)
+    Event.listWithAlbumsForParent.mockResolvedValue([
+      event({ id: 31, title: '회장배 대회', albumAudience: 'all' }),
+      event({ id: 32, title: '미확정 대회' }),
+      event({ id: 33, title: '여름 합숙', type: 'folder', albumAudience: 'all', competitionId: null })
+    ]);
+    // 우리 아이(학생 5)가 사진 1·8 에, 다른 아이가 사진 8 에
+    MediaFace.listForAlbums.mockResolvedValue([face(11, 1, axis(0)), face(41, 8, axis(0)), face(42, 8, axis(4))]);
+    MediaTag.listForAlbums.mockResolvedValue([{ mediaId: 1, studentId: 5, source: 'face', faceId: 11 }]);
+  });
+
+  it('공개 범위에 드는 앨범만 — 미확정 대회 앨범은 빼고, 숨긴 사진 없이 최근 순으로, 사진마다 어느 앨범인지', async () => {
+    EventMedia.listAcross.mockResolvedValue([
+      { id: 8, eventId: 33, kind: 'image', driveFileId: 'd8', takenAt: '2026-08-01T01:00:00Z', uploaderRole: 'teacher', originalName: 'a.jpg', faceCount: 2 },
+      { id: 1, eventId: 31, kind: 'image', driveFileId: 'd1', takenAt: '2026-07-01T01:00:00Z', uploaderRole: 'teacher', originalName: 'b.jpg' }
+    ]);
+    MediaTag.listByMediaIds.mockResolvedValue({ 1: [{ mediaId: 1, studentId: 5, source: 'face' }], 8: [{ mediaId: 8, studentId: 6, source: 'face' }] });
+
+    await listAllMedia(req, res);
+
+    expect(albumService.ensureAlbumsMatched).toHaveBeenCalledWith([expect.objectContaining({ id: 31 }), expect.objectContaining({ id: 33 })]);
+    expect(EventMedia.listAcross).toHaveBeenCalledWith([31, 33], expect.objectContaining({ limit: 60, cursor: null, mediaIds: null }));
+    expect(EventMedia.listAcross.mock.calls[0][1].includeHidden).toBeUndefined();
+    const { items } = res.json.mock.calls[0][0];
+    expect(items.map((item) => [item.id, item.eventId, item.album.title, item.isMine])).toEqual([
+      [8, 33, '여름 합숙', false],
+      [1, 31, '회장배 대회', true]
+    ]);
+    // 다른 아이의 태그·얼굴·올린 사람 이름은 없다 — 앨범 갤러리와 같은 화이트리스트 + 앨범 정보만
+    expect(Object.keys(items[0]).sort()).toEqual([
+      'album', 'canDelete', 'caption', 'downloadUrl', 'durationMs', 'eventId', 'fileName', 'height', 'id', 'isCandidate', 'isMine',
+      'kind', 'largeUrl', 'myTags', 'originalUrl', 'previewUrl', 'takenAt', 'thumbnailUrl', 'uploader', 'width'
+    ]);
+    expect(items[0].myTags).toEqual([]);
+  });
+
+  it('?person= 은 모든 앨범을 함께 묶은 그 사람의 사진만 — 숨긴 사진은 묶음에도 쓰지 않는다', async () => {
+    req.query = { person: 'p11' };
+
+    await listAllMedia(req, res);
+
+    expect(MediaFace.listForAlbums).toHaveBeenCalledWith([31, 33], { includeHidden: false });
+    expect(EventMedia.listAcross.mock.calls[0][1].mediaIds).toEqual([1, 8]);
+  });
+
+  it('없어진 사람이면 빈 목록 + personMissing', async () => {
+    req.query = { person: 'p999' };
+
+    await listAllMedia(req, res);
+
+    expect(EventMedia.listAcross.mock.calls[0][1].mediaIds).toEqual([]);
+    expect(res.json.mock.calls[0][0].personMissing).toBe(true);
+  });
+
+  it('얼굴 목록 — 우리 아이 먼저, 앨범 하나와 같은 화이트리스트(이름·학생 id·뺀 사진 수 없이)', async () => {
+    MediaFace.listForAlbums.mockResolvedValue([face(42, 8, axis(4)), face(43, 9, axis(4)), face(11, 1, axis(0))]);
+
+    await listAllPeople(req, res);
+
+    const { people } = res.json.mock.calls[0][0];
+    expect(people.map((one) => [one.key, one.mine, one.photoCount])).toEqual([['p11', true, 1], ['p42', false, 2]]);
+    people.forEach((one) => expect(Object.keys(one).sort()).toEqual(['cover', 'key', 'mine', 'photoCount']));
+  });
+
+  it('볼 수 있는 앨범이 없으면 읽지 않고 빈 목록 — 연결된 선생님이 없어도', async () => {
+    Event.listWithAlbumsForParent.mockResolvedValue([event({ id: 32 })]);
+
+    await listAllMedia(req, res);
+    await listAllPeople(req, res);
+
+    expect(EventMedia.listAcross).not.toHaveBeenCalled();
+    expect(MediaFace.listForAlbums).not.toHaveBeenCalled();
+    expect(res.json.mock.calls[0][0]).toEqual({ items: [], nextCursor: null });
+    expect(res.json.mock.calls[1][0]).toEqual({ people: [] });
+
+    ParentTeacher.teacherIds.mockResolvedValueOnce([]);
+    await listAllMedia(req, res);
+    expect(res.json.mock.calls[2][0]).toEqual({ items: [], nextCursor: null });
+  });
+
+  it('읽다 실패하면 500', async () => {
+    Event.listWithAlbumsForParent.mockRejectedValue(new Error('db'));
+
+    await listAllMedia(req, res);
+    await listAllPeople(req, res);
+
+    expect(res.status).toHaveBeenNthCalledWith(1, 500);
+    expect(res.status).toHaveBeenNthCalledWith(2, 500);
+  });
+});

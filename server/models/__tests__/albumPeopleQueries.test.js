@@ -7,6 +7,7 @@ jest.unstable_mockModule('../../database.js', () => ({ default: { query } }));
 const { default: EventMedia } = await import('../EventMedia.js');
 const { default: MediaFace } = await import('../MediaFace.js');
 const { default: MediaTag } = await import('../MediaTag.js');
+const { default: FaceExclusion } = await import('../FaceExclusion.js');
 
 const squash = (sql) => sql.replace(/\s+/g, ' ').trim();
 const lastCall = () => query.mock.calls.at(-1);
@@ -162,5 +163,60 @@ describe('얼굴 목록에서 사람 빼기', () => {
     await expect(MediaFace.deleteForAlbum([], 3, client)).resolves.toEqual([]);
     await expect(EventMedia.refreshFaceCounts([], client)).resolves.toBe(0);
     expect(client.query).not.toHaveBeenCalled();
+  });
+});
+
+describe('FaceExclusion — "이 얼굴 아님" 쌍', () => {
+  it('listForAlbums — 뺀 얼굴이 이 앨범들에 있는 쌍만', async () => {
+    query.mockResolvedValue({ rows: [{ faceId: 22, otherFaceId: 21 }] });
+
+    await expect(FaceExclusion.listForAlbums([3, 5])).resolves.toEqual([{ faceId: 22, otherFaceId: 21 }]);
+
+    const [sql, params] = lastCall();
+    expect(squash(sql)).toContain('JOIN media_faces f ON f.id = x."faceId" JOIN event_media m ON m.id = f."mediaId"');
+    expect(squash(sql)).toContain('WHERE m."eventId" = ANY($1::int[])');
+    expect(params).toEqual([[3, 5]]);
+  });
+
+  it('표가 아직 없으면(운영 DDL 전) 빈 목록 — 얼굴 목록이 통째로 깨지지 않는다. 다른 오류는 던진다', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    query.mockRejectedValueOnce(Object.assign(new Error('relation "face_exclusions" does not exist'), { code: '42P01' }));
+    await expect(FaceExclusion.listForAlbums([3])).resolves.toEqual([]);
+
+    query.mockRejectedValueOnce(Object.assign(new Error('boom'), { code: '57P01' }));
+    await expect(FaceExclusion.listForAlbums([3])).rejects.toThrow('boom');
+  });
+
+  it('addPairs — 한 번에 넣고 이미 있는 쌍은 그대로, 트랜잭션 클라이언트로', async () => {
+    const client = { query: jest.fn().mockResolvedValue({ rowCount: 2 }) };
+
+    await expect(FaceExclusion.addPairs([{ faceId: 22, otherFaceId: 21 }, { faceId: 22, otherFaceId: 23 }], 7, client)).resolves.toBe(2);
+
+    const [sql, params] = client.query.mock.calls[0];
+    expect(squash(sql)).toContain('FROM jsonb_to_recordset($1::jsonb) AS p("faceId" int, "otherFaceId" int)');
+    expect(squash(sql)).toContain('ON CONFLICT ("faceId", "otherFaceId") DO NOTHING');
+    expect(JSON.parse(params[0])).toEqual([{ faceId: 22, otherFaceId: 21 }, { faceId: 22, otherFaceId: 23 }]);
+    expect(params[1]).toBe(7);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('removePairs — 뺀 얼굴들과 그 사람 얼굴들 사이의 쌍만', async () => {
+    const client = { query: jest.fn().mockResolvedValue({ rowCount: 1 }) };
+
+    await FaceExclusion.removePairs([22, 31], [21, 23], client);
+
+    const [sql, params] = client.query.mock.calls[0];
+    expect(squash(sql)).toBe('DELETE FROM face_exclusions WHERE "faceId" = ANY($1::int[]) AND "otherFaceId" = ANY($2::int[])');
+    expect(params).toEqual([[22, 31], [21, 23]]);
+  });
+
+  it('빈 목록이면 쿼리 없이', async () => {
+    const client = { query: jest.fn() };
+    await expect(FaceExclusion.listForAlbums([])).resolves.toEqual([]);
+    await expect(FaceExclusion.addPairs([], 7, client)).resolves.toBe(0);
+    await expect(FaceExclusion.removePairs([], [1], client)).resolves.toBe(0);
+    await expect(FaceExclusion.removePairs([1], [], client)).resolves.toBe(0);
+    expect(client.query).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
   });
 });

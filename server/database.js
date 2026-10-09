@@ -865,6 +865,24 @@ const initDatabase = async () => {
 
     await client.query('CREATE INDEX IF NOT EXISTS idx_media_tags_student ON media_tags ("studentId", source)');
 
+    // 얼굴 목록에서 "이 얼굴 아님" 으로 뺀 사진 — 두 얼굴은 같은 사람으로 묶지 않는다(utils/facePeople.js).
+    // faceId = 뺀 사진의 얼굴, otherFaceId = 그때 그 사람으로 묶여 있던 얼굴(하나씩 한 줄). 등록된 아이의 사진은 여기가 아니라
+    // media_tags 의 'excluded' 로 뺀다. 얼굴이 지워지면(사진 삭제·다시 분석) 함께 사라진다.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS face_exclusions (
+        id SERIAL PRIMARY KEY,
+        "faceId" INTEGER NOT NULL,
+        "otherFaceId" INTEGER NOT NULL,
+        "createdByUserId" INTEGER,
+        "createdAt" TEXT NOT NULL,
+        UNIQUE ("faceId", "otherFaceId"),
+        FOREIGN KEY ("faceId") REFERENCES media_faces(id) ON DELETE CASCADE,
+        FOREIGN KEY ("otherFaceId") REFERENCES media_faces(id) ON DELETE CASCADE,
+        FOREIGN KEY ("createdByUserId") REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+    await client.query('CREATE INDEX IF NOT EXISTS idx_face_exclusions_other ON face_exclusions ("otherFaceId")');
+
     // 추천 상품 (docs/recommended-shop) — 선생님당 상점 1개, 로그인 없이 /shop/:publicId 로 열린다
     await client.query(`
       CREATE TABLE IF NOT EXISTS shops (

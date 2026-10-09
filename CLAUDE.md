@@ -650,11 +650,33 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   exists) opens every folder's photos in one grid, newest `takenAt` first, hidden ones included: `GET /api/albums/media`
   (`albumController.listAllMedia` → `EventMedia.listAcross`, same filters/cursor as one album; each item also carries `eventId` +
   `album {eventId,title,date,type}`). The face strip above it is `GET /api/albums/people` (`listAllPeople` →
-  `services/albumPeople.js:teacherPeople`): **all of the teacher's albums grouped together**, so a child is one face whatever the
+  `services/albumPeople.js:peopleAcross`): **all of the teacher's albums grouped together**, so a child is one face whatever the
   folder, and `?person=<key>` regroups the same way. Scope is `Event.listForPhotos(req.user.id)` with a Drive folder (admins see
-  their own, like `GET /api/albums`); both routes sit under the `rejectParents` mount. The page is view + caption only — the
-  viewer shows the folder name (`item.albumTitle`) and saves captions to that photo's own album (`mediaCaptionSave.js`); hide,
-  delete, covers and removing a face stay on the album page (no X on this strip, no `removable` in its people).
+  their own, like `GET /api/albums`); both routes sit under the `rejectParents` mount. The viewer shows the folder name
+  (`item.albumTitle`) and saves captions to that photo's own album (`mediaCaptionSave.js`); hide, delete, covers and removing a whole
+  person stay on the album page (no X on this strip).
+- **전체 사진 (parent, `/parent/photos/all`, `pages/parent/ParentAllPhotos.jsx`)** — [전체 사진 보기] text link at the top right of the
+  사진 tab (only when there are albums). `GET /api/parent/albums/media` + `/people` (`parentAlbumController.listAllMedia/listAllPeople`)
+  use the **same visibility as the 사진 tab** (`visibleAlbums`: linked teachers' published albums inside their audience), hidden photos
+  excluded from both the list and the grouping. Items are `toParentMedia` (the whitelist) plus `eventId` and `album`; people are the album
+  face-list shape (`{key, photoCount, mine, cover}`, own children first). Opening a photo big records a **photo view on that photo's own
+  album** (`createViewTracker(item.eventId)`), never an album open. View + save only — upload, delete and 맞아요/아니에요 stay in the album.
+- **"이 얼굴 아님" — removing wrongly grouped photos from a face (teacher, 2026-10-10)**: with a face picked, the album page and 전체 사진
+  show `PersonPhotosBar` — **[이 얼굴 사진 N]** / **[뺀 사진 K]** (teacher-only `removedCount` in the people list) — and 고르기 gets
+  **[이 얼굴에서 빼기]** / **[이 얼굴에 다시 넣기]** (`pages/Photos/personPhotos.js`; full-width first button on phones,
+  `.ui-photo-select-actions__wide`). `POST /api/events/:id/album/people/:key/exclude|restore` and `POST /api/albums/people/:key/exclude|restore`
+  `{mediaIds}` → `services/albumPeople.js:excludePhotos/restorePhotos`; `?removed=1` on either media list shows a person's removed photos.
+  **The photo is never touched** — only the grouping: a person grouped with a registered child gets an `excluded` tag on that photo (same as
+  a parent's 아니에요, so 우리 아이만 보기 drops it too and re-matching never brings it back); anyone else gets **cannot-link pairs**
+  between every face in that photo and every remaining face of the person in **`face_exclusions`** (`faceId`, `otherFaceId`, both
+  FK → `media_faces` ON DELETE CASCADE) — every face so another face in the same photo can't slip in instead, every person face so the
+  rule also holds when one album is grouped alone. `groupFaces(..., { cannotLink })` never puts a pair in one group (step 1 seeds, step 2
+  joins, step 3 merges). Restore turns a child's `excluded` into a teacher `manual` tag (the teacher just said "yes, this child") and
+  deletes the pairs. Removing every photo of a person is refused (409 `all_photos` — remove the person instead); a stale selection is 409
+  `person_changed`. Removing the photo holding a person's smallest face changes their `key`, so both calls answer the new `key` and the
+  screen keeps following it. `FaceExclusion.listForAlbums` answers `[]` on `42P01` so a deploy that beat the DDL degrades instead of
+  breaking every face strip. **Schema change** — create `face_exclusions` (+ `idx_face_exclusions_other`) in production before merging,
+  `OWNER TO rg_app`, REVOKE the public grants on the table and `face_exclusions_id_seq` (see *Deployment*).
 - **Parents**: 사진 tab (`/parent/photos`, published albums only — and only those with at least one visible ready photo/video:
   an album whose photos were all deleted or hidden drops out of `GET /api/parent/albums` (owner's call 2026-10-09) but still opens
   from the event detail's [앨범 열기] and share links, so parents can still upload; the teacher list keeps showing it), gallery (`/parent/photos/:eventId`) with the

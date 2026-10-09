@@ -10,7 +10,7 @@ import ChildFaceProfile, { MAX_PER_PARENT, MAX_PER_STUDENT } from '../models/Chi
 import GoogleDriveAccount from '../models/GoogleDriveAccount.js';
 import albumService from '../services/albumService.js';
 import { sharePathFor } from '../services/albumShare.js';
-import { albumPeople, findPerson, toPersonView, parentPeopleOrder } from '../services/albumPeople.js';
+import { albumPeople, peopleAcross, findPerson, toPersonView, parentPeopleOrder } from '../services/albumPeople.js';
 import { DriveError } from '../utils/googleDrive.js';
 import { isConfirmedParent, confirmedChildIds, canViewAlbum, canUpload, canDeleteMedia, reasonMessage } from '../utils/albumAccess.js';
 import { toParentMedia, toParentAlbum } from '../utils/mediaSerializer.js';
@@ -105,28 +105,35 @@ export const uploadLabelChild = (children, confirmedIds, teacherId) =>
 const hasVisibleMedia = (summary) => ((summary?.images || 0) + (summary?.videos || 0)) > 0;
 
 /**
+ * 이 학부모가 볼 수 있는 앨범 전부 — 연결된 선생님들의 공개 앨범 중 공개 범위에 드는 것(사진 탭 · 전체 사진이 같이 쓴다).
+ * → { studentIds, albums }
+ */
+const visibleAlbums = async (parentUserId) => {
+  const teacherIds = await teachersOf(parentUserId);
+  if (!teacherIds.length) return { studentIds: [], albums: [] };
+
+  const children = await linkedChildren(parentUserId);
+  const studentIds = children.map((child) => child.studentId);
+
+  // 공개된 앨범만 온다(Event.listWithAlbumsForParent). 그중 공개 범위에 드는 것만 남긴다.
+  const events = await Event.listWithAlbumsForParent(teacherIds);
+  const albums = [];
+  for (const event of events) {
+    if (event.albumAudience === 'all') { albums.push(event); continue; }
+    const { confirmed } = await confirmationFor(event, studentIds);
+    if (confirmed) albums.push(event);
+  }
+  return { studentIds, albums };
+};
+
+/**
  * GET /api/parent/albums — 사진 탭.
  * 보일 사진·영상이 하나도 없는 앨범(다 지웠거나 다 숨겼다)은 빈 카드로 두지 않고 뺀다 (사용자 결정 2026-10-09).
  * 앨범 자체는 그대로라 이벤트 상세의 [앨범 열기]·공유 링크로는 열리고(학부모 업로드 입구), 사진이 생기면 다시 나온다.
  */
 export const listAlbums = async (req, res) => {
   try {
-    const teacherIds = await teachersOf(req.user.id);
-    if (!teacherIds.length) return res.json({ items: [] });
-
-    const children = await linkedChildren(req.user.id);
-    const studentIds = children.map((child) => child.studentId);
-
-    const events = await Event.listWithAlbumsForParent(teacherIds);
-    if (!events.length) return res.json({ items: [] });
-
-    // 공개된 앨범만 온다(Event.listWithAlbumsForParent). 그중 공개 범위에 드는 것만 남긴다.
-    const visible = [];
-    for (const event of events) {
-      if (event.albumAudience === 'all') { visible.push(event); continue; }
-      const { confirmed } = await confirmationFor(event, studentIds);
-      if (confirmed) visible.push(event);
-    }
+    const { studentIds, albums: visible } = await visibleAlbums(req.user.id);
     if (!visible.length) return res.json({ items: [] });
 
     // "우리 아이 N장" 이 예전 규칙으로 붙은 태그를 세지 않게, 낡은 앨범은 여기서 다시 매칭한다
@@ -137,6 +144,68 @@ export const listAlbums = async (req, res) => {
     res.json({ items: withMedia.map((event) => toParentAlbum(event, summaries[event.id])) });
   } catch (error) {
     console.error('학부모 앨범 목록 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/** 사진마다 어느 앨범(폴더)의 것인지 — 사진 탭 카드에 이미 보이는 것만(제목·날짜·종류) */
+const albumOf = (event) => ({ eventId: event.id, title: event.title, date: event.date, type: event.type });
+
+/**
+ * GET /api/parent/albums/media — 전체 사진: 볼 수 있는 모든 앨범의 사진을 찍은 순서(최근 먼저)로. 숨긴 사진은 없다.
+ * ?person=<key> 는 GET /api/parent/albums/people 의 사람 — 모든 앨범을 함께 다시 묶어 그 사람이 나온 사진만.
+ * 사진은 앨범 갤러리와 같은 화이트리스트(toParentMedia)를 거치고, 어느 앨범인지(album)와 그 id(eventId — 본 기록을 그 앨범에 남긴다)만 더한다.
+ */
+export const listAllMedia = async (req, res) => {
+  try {
+    const { studentIds, albums } = await visibleAlbums(req.user.id);
+    if (!albums.length) return res.json({ items: [], nextCursor: null });
+    await albumService.ensureAlbumsMatched(albums);
+
+    const eventIds = albums.map((event) => event.id);
+    const personKey = req.query.person ? String(req.query.person) : null;
+    const person = personKey ? findPerson(await peopleAcross(eventIds), personKey) : null;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 60, 120);
+    const cursor = req.query.cursorTakenAt && req.query.cursorId
+      ? { takenAt: req.query.cursorTakenAt, id: parseInt(req.query.cursorId, 10) }
+      : null;
+
+    const rows = await EventMedia.listAcross(eventIds, {
+      limit, cursor, mediaIds: personKey ? (person?.mediaIds || []) : null, uploaderUserId: req.user.id
+    });
+    const tagsByMedia = await MediaTag.listByMediaIds(rows.map((row) => row.id));
+    const byId = new Map(albums.map((event) => [event.id, event]));
+    const last = rows[rows.length - 1];
+
+    res.json({
+      items: rows.map((row) => ({
+        ...toParentMedia({ ...row, tags: tagsByMedia[row.id] || [] }, { myStudentIds: studentIds, myUserId: req.user.id }),
+        eventId: row.eventId,
+        album: albumOf(byId.get(row.eventId))
+      })),
+      nextCursor: rows.length === limit && last ? { takenAt: last.takenAt, id: last.id } : null,
+      ...(personKey && !person ? { personMissing: true } : {})
+    });
+  } catch (error) {
+    console.error('학부모 전체 사진 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/**
+ * GET /api/parent/albums/people — 볼 수 있는 모든 앨범에 나온 사람마다 얼굴 하나(우리 아이 먼저). 앨범 하나의 얼굴 목록과 같은
+ * 모양·같은 약속이다(이름·학생 id·특징값·사진 id 목록은 나가지 않는다, toPersonView). 숨긴 사진의 얼굴은 쓰지 않는다.
+ */
+export const listAllPeople = async (req, res) => {
+  try {
+    const { studentIds, albums } = await visibleAlbums(req.user.id);
+    if (!albums.length) return res.json({ people: [] });
+    await albumService.ensureAlbumsMatched(albums);
+
+    const people = await peopleAcross(albums.map((event) => event.id));
+    res.json({ people: parentPeopleOrder(people.map((person) => toPersonView(person, { myStudentIds: studentIds }))) });
+  } catch (error) {
+    console.error('학부모 전체 사진 얼굴 목록 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
   }
 };
@@ -545,6 +614,6 @@ export const deleteFace = async (req, res) => {
 };
 
 export default {
-  listAlbums, listMedia, listPeople, createUploads, completeUpload, saveOwnFaces, deleteMedia, confirmTag,
+  listAlbums, listAllMedia, listAllPeople, listMedia, listPeople, createUploads, completeUpload, saveOwnFaces, deleteMedia, confirmTag,
   listFaces, addFace, deleteFace
 };

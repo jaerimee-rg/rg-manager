@@ -186,3 +186,119 @@ describe('AllPhotos — 전체 사진 (모든 폴더)', () => {
     expect(screen.queryByText('아직 올린 사진이 없어요')).not.toBeInTheDocument();
   });
 });
+
+describe('AllPhotos — 고른 얼굴에서 잘못 묶인 사진 빼기 · 다시 넣기', () => {
+  // 얼굴 1(p11) 은 사진 8·1, 전에 뺀 사진 3 이 하나 있다
+  const FACES = [{ key: 'p11', photoCount: 2, removedCount: 1, cover }, { key: 'p42', photoCount: 1, removedCount: 0, cover }];
+
+  const renderWithEdits = async ({ editResponse = () => ok({ removed: 1, key: 'p11' }), people = FACES, peopleAfter = people } = {}) => {
+    const calls = { people: 0 };
+    let edited = false;
+    fetchWithAuth.mockImplementation((url, options = {}) => {
+      if (options.method === 'POST' && url.startsWith('/api/albums/people/')) { edited = true; return editResponse(url, JSON.parse(options.body)); }
+      if (url === '/api/albums/people') { calls.people += 1; return ok({ people: edited ? peopleAfter : people }); }
+      if (url.includes('removed=1')) return ok({ items: [MEDIA[2]], nextCursor: null });
+      if (url.includes('person=p11') || url.includes('person=p12')) return ok({ items: [MEDIA[0], MEDIA[1]], nextCursor: null });
+      if (url.startsWith('/api/albums/media?')) return ok({ items: MEDIA, nextCursor: null });
+      return ok({});
+    });
+    await act(async () => { render(<MemoryRouter><AllPhotos /></MemoryRouter>); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '얼굴 1 · 사진 2장' })); });
+    return calls;
+  };
+  const editCalls = () => fetchWithAuth.mock.calls.filter(([, options]) => options?.method === 'POST');
+
+  it('얼굴을 고르기 전에는 고르기·빼기가 없고, 고르면 [이 얼굴 사진 2] [뺀 사진 1] 과 [고르기]', async () => {
+    fetchWithAuth.mockImplementation((url) => (url === '/api/albums/people' ? ok({ people: FACES }) : ok({ items: MEDIA, nextCursor: null })));
+    await act(async () => { render(<MemoryRouter><AllPhotos /></MemoryRouter>); });
+    expect(screen.queryByRole('button', { name: '고르기' })).not.toBeInTheDocument();
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '얼굴 1 · 사진 2장' })); });
+
+    const bar = screen.getByRole('toolbar', { name: '고른 얼굴의 사진' });
+    expect(within(bar).getByRole('button', { name: /이 얼굴 사진/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(bar).getByRole('button', { name: /뺀 사진/ })).toHaveTextContent('1');
+    expect(screen.getByRole('button', { name: '고르기' })).toBeEnabled();
+    expect(screen.getByText(/다른 사람 사진이 섞여 있으면/)).toBeInTheDocument();
+  });
+
+  it('[고르기] → 한 장 → [이 얼굴에서 빼기] 는 그 얼굴에서만 빼고(사진은 그대로) 목록·얼굴을 다시 읽는다', async () => {
+    const calls = await renderWithEdits();
+    const before = calls.people;
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '고르기' })); });
+    await act(async () => { fireEvent.click(tiles()[0]); });
+    expect(screen.getByText('1장 골랐어요')).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '이 얼굴에서 빼기' })); });
+
+    expect(editCalls()).toEqual([['/api/albums/people/p11/exclude', { method: 'POST', body: JSON.stringify({ mediaIds: [8] }) }]]);
+    expect(screen.getByText('1장을 이 얼굴에서 뺐어요 · 사진은 그대로 있어요')).toBeInTheDocument();
+    expect(calls.people).toBeGreaterThan(before);
+    expect(mediaUrls().at(-1)).toBe('/api/albums/media?limit=60&person=p11');
+    expect(screen.queryByRole('button', { name: '이 얼굴에서 빼기' })).not.toBeInTheDocument();   // 고르기를 마쳤다
+  });
+
+  it('얼굴의 key 가 바뀌면(가장 작은 얼굴을 뺐다) 새 key 로 계속 본다', async () => {
+    await renderWithEdits({
+      editResponse: () => ok({ removed: 1, key: 'p12' }),
+      peopleAfter: [{ key: 'p12', photoCount: 1, removedCount: 1, cover }, { key: 'p11', photoCount: 1, removedCount: 0, cover }]
+    });
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '고르기' })); });
+    await act(async () => { fireEvent.click(tiles()[0]); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '이 얼굴에서 빼기' })); });
+
+    expect(mediaUrls().at(-1)).toBe('/api/albums/media?limit=60&person=p12');
+  });
+
+  it('그 얼굴의 사진을 다 고르면 [이 얼굴에서 빼기] 가 잠긴다 — 얼굴이 없어진다', async () => {
+    await renderWithEdits();
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '고르기' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '모두 고르기' })); });
+
+    const button = screen.getByRole('button', { name: '이 얼굴에서 빼기' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('title', '이 얼굴의 사진을 모두 뺄 수는 없어요');
+  });
+
+  it('[뺀 사진] 에서 골라 [이 얼굴에 다시 넣기]', async () => {
+    await renderWithEdits({ editResponse: () => ok({ restored: 1, key: 'p11' }) });
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /뺀 사진/ })); });
+    expect(mediaUrls().at(-1)).toBe('/api/albums/media?limit=60&person=p11&removed=1');
+    expect(tiles()).toHaveLength(1);
+    expect(screen.getByText(/뺀 사진이에요/)).toBeInTheDocument();
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '고르기' })); });
+    await act(async () => { fireEvent.click(tiles()[0]); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '이 얼굴에 다시 넣기' })); });
+
+    expect(editCalls()).toEqual([['/api/albums/people/p11/restore', { method: 'POST', body: JSON.stringify({ mediaIds: [3] }) }]]);
+    expect(screen.getByText('1장을 이 얼굴에 다시 넣었어요')).toBeInTheDocument();
+  });
+
+  it('다른 얼굴을 고르면 뺀 사진 보기와 고르던 것이 풀린다', async () => {
+    await renderWithEdits();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /뺀 사진/ })); });
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '얼굴 2 · 사진 1장' })); });
+
+    expect(mediaUrls().at(-1)).toBe('/api/albums/media?limit=60&person=p42');
+  });
+
+  it('그 사이 묶음이 바뀌었으면(409 person_changed) 서버의 안내를 보이고 얼굴 목록을 다시 읽는다', async () => {
+    const calls = await renderWithEdits({
+      editResponse: () => ok({ error: '얼굴 목록이 바뀌었어요. 다시 확인해 주세요.', reason: 'person_changed' }, 409)
+    });
+    const before = calls.people;
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '고르기' })); });
+    await act(async () => { fireEvent.click(tiles()[0]); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '이 얼굴에서 빼기' })); });
+
+    expect(screen.getByText('얼굴 목록이 바뀌었어요. 다시 확인해 주세요.')).toBeInTheDocument();
+    expect(calls.people).toBeGreaterThan(before);
+    expect(screen.getByRole('button', { name: '이 얼굴에서 빼기' })).toBeInTheDocument();   // 고른 것은 그대로
+  });
+});

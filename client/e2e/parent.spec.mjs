@@ -1357,6 +1357,51 @@ test.describe('학부모 — 앨범 얼굴 목록', () => {
 });
 
 
+test.describe('학부모 — 전체 사진 (모든 앨범)', () => {
+  test.beforeEach(async ({ page }) => {
+    await loginAs(page, sessions.parentMulti);
+    await page.route('https://lh3.googleusercontent.com/**', (route) => route.fulfill({
+      contentType: 'image/png', body: FACELESS_PNG.buffer, headers: { 'Access-Control-Allow-Origin': '*' }
+    }));
+  });
+
+  test('사진 탭의 [전체 사진 보기] — 볼 수 있는 앨범의 사진만 한 화면에, 얼굴로 거르고, 열면 어느 앨범인지', async ({ page, request }) => {
+    const all = await api(request, sessions.parentMulti, 'GET', '/api/parent/albums/media?limit=120');
+    const albums = await api(request, sessions.parentMulti, 'GET', '/api/parent/albums');
+    expect(all.status).toBe(200);
+    expect(all.body.items.length).toBeGreaterThan(0);
+    // 사진 탭에 보이는 앨범의 사진만 — 공개 범위 밖(참가 확정 학부모만, 미확정) 앨범의 사진은 없다
+    const visible = new Set(albums.body.items.map((album) => album.eventId));
+    expect(all.body.items.every((item) => visible.has(item.eventId) && item.album.eventId === item.eventId)).toBe(true);
+    expect(all.body.items.some((item) => item.eventId === sessions.album.lockedEventId)).toBe(false);
+    expect(JSON.stringify(all.body)).not.toMatch(/uploaderName|"faces"|descriptor/);
+
+    await page.goto('/parent/photos');
+    await page.getByRole('button', { name: '전체 사진 보기' }).click();
+    await expect(page).toHaveURL(/\/parent\/photos\/all$/);
+    await expect(page.getByRole('heading', { name: '전체 사진' })).toBeVisible();
+    const tiles = page.getByRole('button', { name: /(사진|영상) 열기/ });
+    await expect(tiles).toHaveCount(Math.min(all.body.items.length, 60));
+
+    // 얼굴 목록은 모든 앨범의 얼굴 — 누르면 그 사람의 사진 수만큼
+    const faces = page.getByRole('group', { name: '얼굴로 사진 찾기' });
+    const first = faces.getByRole('button', { name: /사진 \d+장$/ }).first();
+    const count = Number((await first.getAttribute('aria-label')).match(/사진 (\d+)장/)[1]);
+    await first.click();
+    await expect(tiles).toHaveCount(count);
+
+    await tiles.first().click();
+    await expect(page.getByRole('dialog', { name: '사진 보기' }).getByTestId('media-album')).not.toBeEmpty();
+  });
+
+  test('얼굴 목록 API 는 앨범 하나와 같은 화이트리스트 — 이름·학생 id·특징값·뺀 사진 수가 없다', async ({ request }) => {
+    const { status, body } = await api(request, sessions.parentMulti, 'GET', '/api/parent/albums/people');
+    expect(status).toBe(200);
+    for (const person of body.people) expect(Object.keys(person).sort()).toEqual(['cover', 'key', 'mine', 'photoCount']);
+    expect(JSON.stringify(body)).not.toMatch(/studentId|descriptor|faceIds|mediaIds|removed|name/);
+  });
+});
+
 test.describe('학부모 — 추천 상품 탭', () => {
   const teacher2 = { token: sessions.teacher2Token };
 
