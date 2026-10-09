@@ -68,8 +68,18 @@ describe('앨범 카드 미리보기와 대표 사진', () => {
   });
 });
 
-describe('EventMedia.coverableIds — 저장된 대표 사진 중 지금도 쓸 수 있는 것', () => {
+describe('EventMedia.coverRows · coverableIds — 저장된 대표 사진 중 지금도 쓸 수 있는 것', () => {
   beforeEach(() => pool.query.mockReset());
+
+  it('coverRows: 썸네일에 쓸 종류·Drive 파일 id 와 함께, 저장된 순서 그대로', async () => {
+    pool.query.mockResolvedValue({ rows: [{ id: 4, kind: 'image', driveFileId: 'd4' }, { id: 9, kind: 'video', driveFileId: 'v9' }] });
+
+    expect(await EventMedia.coverRows(3, [9, 4])).toEqual([
+      { id: 9, kind: 'video', driveFileId: 'v9' },
+      { id: 4, kind: 'image', driveFileId: 'd4' }
+    ]);
+    expect(pool.query.mock.calls[0][0]).toMatch(/SELECT id, kind, "driveFileId" FROM event_media/);
+  });
 
   it('이 앨범의 준비된·숨기지 않은 것만, 저장된 순서 그대로(중복은 한 번)', async () => {
     pool.query.mockResolvedValue({ rows: [{ id: 4 }, { id: 9 }] });

@@ -411,10 +411,14 @@ describe('PhotoAlbum — 대표 사진 고르기 (4장까지)', () => {
   const renderCover = async ({ covers = [], media = MEDIA, album = ALBUM, patch } = {}) => {
     let current = [...covers];
     fetchWithAuth.mockImplementation((url, options = {}) => {
-      if (url === '/api/events/31/album' && !options.method) return ok({ ...album, coverMediaIds: current, maxCovers: 4 });
+      if (url === '/api/events/31/album' && !options.method) {
+        const covers = current.map((id) => ({ id, kind: 'image', thumbnailUrl: `https://t/${id}` }));
+        return ok({ ...album, coverMediaIds: current, covers, maxCovers: 4 });
+      }
       if (url === '/api/events/31/album' && options.method === 'PATCH') {
         const body = JSON.parse(options.body);
         if (patch) return patch(body);
+        if (body.coverMediaIds) current = [...body.coverMediaIds];
         if (body.removeCoverMediaId) current = current.filter((id) => id !== body.removeCoverMediaId);
         if (body.addCoverMediaId) current = [...current, body.addCoverMediaId];
         return ok({ coverMediaIds: current });
@@ -495,6 +499,99 @@ describe('PhotoAlbum — 대표 사진 고르기 (4장까지)', () => {
 
     expect(screen.getByText('대표 사진은 4장까지 고를 수 있어요. 하나를 먼저 풀어 주세요.')).toBeInTheDocument();
     expect(within(viewer).getByRole('button', { name: '대표 사진으로' })).toBeEnabled();
+  });
+
+  describe('고르기에서 한 번에 [대표 사진 만들기]', () => {
+    const many = [1, 2, 4, 5, 6].map((id) => ({ id, kind: 'image', thumbnailUrl: `https://t/${id}`, uploaderRole: 'teacher', isHidden: false }));
+    const pick = async (...indexes) => {
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: '고르기' })); });
+      for (const index of indexes) fireEvent.click(tiles()[index]);
+    };
+    const makeButton = () => screen.getByRole('button', { name: '대표 사진 만들기' });
+
+    it('고른 순서대로 PATCH {coverMediaIds} — 지금 대표 사진을 바꾸고, 알리고, 고르기를 끝낸다', async () => {
+      await renderCover({ covers: [4], media: many });
+
+      await pick(3, 0);   // 5 → 1
+      expect(makeButton()).toBeEnabled();
+      await act(async () => { fireEvent.click(makeButton()); });
+
+      expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaIds: [5, 1] });
+      expect(screen.getByText(/대표 사진 2장을 정했어요/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '대표 사진 만들기' })).not.toBeInTheDocument();
+      expect(within(tiles()[3]).getByText('대표 1')).toBeInTheDocument();
+      expect(within(tiles()[0]).getByText('대표 2')).toBeInTheDocument();
+      expect(within(tiles()[2]).queryByText(/대표/)).not.toBeInTheDocument();   // 4 는 빠졌다
+    });
+
+    it('5장 이상 골랐으면 잠기고 4장까지라고 알려 준다', async () => {
+      await renderCover({ media: many });
+
+      await pick(0, 1, 2, 3, 4);
+
+      expect(makeButton()).toBeDisabled();
+      expect(makeButton()).toHaveAttribute('title', '대표 사진은 4장까지 골라 주세요');
+      expect(screen.getByText('대표 사진은 4장까지')).toBeInTheDocument();
+    });
+
+    it('숨긴 사진이 섞였으면 잠긴다 · 하나도 안 골랐으면 잠긴다', async () => {
+      await renderCover();
+
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: '고르기' })); });
+      expect(makeButton()).toBeDisabled();
+
+      fireEvent.click(tiles()[0]);
+      fireEvent.click(tiles()[2]);   // 3 은 숨김
+      expect(makeButton()).toBeDisabled();
+      expect(makeButton()).toHaveAttribute('title', '숨긴 사진은 대표 사진이 될 수 없어요');
+    });
+
+    it('서버가 거절하면 이유를 알리고 고르기는 그대로', async () => {
+      await renderCover({ media: many, patch: () => ok({ error: '이 앨범의 사진만 대표 사진으로 고를 수 있어요.' }, 400) });
+
+      await pick(0);
+      await act(async () => { fireEvent.click(makeButton()); });
+
+      expect(screen.getByText('이 앨범의 사진만 대표 사진으로 고를 수 있어요.')).toBeInTheDocument();
+      expect(screen.getByText('1장 골랐어요')).toBeInTheDocument();
+    });
+  });
+
+  describe('대표 사진 칸 — 순서 바꾸기', () => {
+    const panel = () => screen.getByRole('region', { name: '대표 사진' });
+    const panelOrder = () => within(panel()).getAllByRole('button', { name: /^대표 사진 \d/ }).map((b) => b.getAttribute('data-cover-id'));
+
+    it('지금 대표 사진을 순서대로 보여 주고, ←→ 로 옮기면 그 순서를 PATCH {coverMediaIds} 로 저장한다', async () => {
+      await renderCover({ covers: [1, 2] });
+
+      expect(panelOrder()).toEqual(['1', '2']);
+      await act(async () => {
+        fireEvent.keyDown(within(panel()).getAllByRole('button', { name: /^대표 사진 \d/ })[0], { key: 'ArrowRight' });
+      });
+
+      expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaIds: [2, 1] });
+      expect(panelOrder()).toEqual(['2', '1']);
+      expect(within(tiles()[1]).getByText('대표 1')).toBeInTheDocument();
+    });
+
+    it('저장이 안 되면 알리고 앨범을 다시 읽어 원래 순서로 돌린다', async () => {
+      await renderCover({ covers: [1, 2], patch: () => ok({ error: '바꾸지 못했어요.' }, 500) });
+      const albumReads = () => fetchWithAuth.mock.calls.filter(([url, options]) => url === '/api/events/31/album' && !options?.method).length;
+      const before = albumReads();
+
+      await act(async () => {
+        fireEvent.keyDown(within(panel()).getAllByRole('button', { name: /^대표 사진 \d/ })[0], { key: 'ArrowRight' });
+      });
+
+      expect(screen.getByText('바꾸지 못했어요.')).toBeInTheDocument();
+      expect(albumReads()).toBe(before + 1);
+      expect(panelOrder()).toEqual(['1', '2']);
+    });
+
+    it('대표 사진이 없으면 정하는 방법을 알려 준다', async () => {
+      await renderCover();
+      expect(within(panel()).getByText(/\[고르기\] 로 4장까지/)).toBeInTheDocument();
+    });
   });
 
   it('Google 연결이 끊겨도 고를 수 있다 — 앱 안의 값이다', async () => {

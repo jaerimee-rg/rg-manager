@@ -79,18 +79,23 @@ class EventMedia {
   }
 
   /**
-   * 저장된 대표 사진 id 중 지금도 쓸 수 있는 것만, 저장된 순서 그대로 — 숨겼거나 지웠거나 다른 앨범의 것은 빠진다.
-   * 선생님 앨범 화면의 [대표] 표시와 대표 사진 고치기(albumController)가 이 목록을 "지금 대표 사진" 으로 본다.
+   * 저장된 대표 사진 중 지금도 쓸 수 있는 것만, 저장된 순서 그대로 — 숨겼거나 지웠거나 다른 앨범의 것은 빠진다.
+   * → [{ id, kind, driveFileId }]. 선생님 앨범 화면의 대표 사진 칸(썸네일·순서)이 이것을 쓴다.
    */
-  static async coverableIds(eventId, ids) {
+  static async coverRows(eventId, ids) {
     const wanted = (Array.isArray(ids) ? ids : []).map(Number).filter((id) => Number.isInteger(id) && id > 0);
     if (!wanted.length) return [];
     const result = await pool.query(
-      `SELECT id FROM event_media WHERE "eventId" = $1 AND id = ANY($2::int[]) AND ${COVERABLE_SQL()}`,
+      `SELECT id, kind, "driveFileId" FROM event_media WHERE "eventId" = $1 AND id = ANY($2::int[]) AND ${COVERABLE_SQL()}`,
       [eventId, wanted]
     );
-    const found = new Set(result.rows.map((row) => Number(row.id)));
-    return wanted.filter((id, index) => found.has(id) && wanted.indexOf(id) === index);
+    const byId = new Map(result.rows.map((row) => [Number(row.id), { ...row, id: Number(row.id) }]));
+    return wanted.filter((id, index) => byId.has(id) && wanted.indexOf(id) === index).map((id) => byId.get(id));
+  }
+
+  /** coverRows 의 id 만 — 대표 사진 고치기(albumController)가 이 목록을 "지금 대표 사진" 으로 본다 */
+  static async coverableIds(eventId, ids) {
+    return (await EventMedia.coverRows(eventId, ids)).map((row) => row.id);
   }
 
   /** 업로드가 끝나 Drive 파일이 확인된 뒤 */
