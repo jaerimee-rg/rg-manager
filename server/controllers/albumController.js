@@ -7,7 +7,7 @@ import GoogleDriveAccount from '../models/GoogleDriveAccount.js';
 import albumService from '../services/albumService.js';
 import { DriveError, isDriveConfigured, getStorageQuota } from '../utils/googleDrive.js';
 import { getAccessToken } from '../services/driveAccess.js';
-import { sanitizeFolderName, folderNameFromEvent, MAX_FILES_PER_UPLOAD } from '../utils/mediaValidation.js';
+import { sanitizeFolderName, folderNameFromEvent, normalizeCaption, MAX_FILES_PER_UPLOAD } from '../utils/mediaValidation.js';
 import { canUpload, canManageAlbum, canDeleteMedia, reasonMessage, isValidAudience, isPhotoFolder } from '../utils/albumAccess.js';
 import { toTeacherMedia } from '../utils/mediaSerializer.js';
 import { sharePathFor } from '../services/albumShare.js';
@@ -525,6 +525,34 @@ export const rematch = async (req, res) => {
   }
 };
 
+/**
+ * PATCH /api/events/:id/media/:mediaId — 사진·영상 설명 { caption } (빈 글 · null 이면 지운다)
+ * 앱 안의 글이라 Google 연결이 끊겨도 고칠 수 있다(숨기기와 같다).
+ */
+export const updateMedia = async (req, res) => {
+  try {
+    const event = await loadEvent(req);
+    if (!event) return notFound(res);
+
+    const mediaId = parseInt(req.params.mediaId, 10);
+    if (isNaN(mediaId)) return res.status(404).json({ error: '사진을 찾을 수 없습니다.' });
+    if (!req.body || !Object.prototype.hasOwnProperty.call(req.body, 'caption')) {
+      return res.status(400).json({ error: '바꿀 내용이 없습니다.' });
+    }
+
+    const checked = normalizeCaption(req.body.caption);
+    if (!checked.ok) return res.status(400).json({ error: checked.message, reason: 'caption' });
+
+    const updated = await EventMedia.setCaption(mediaId, checked.caption, event.id);
+    if (!updated) return res.status(404).json({ error: '사진을 찾을 수 없습니다.' });
+
+    res.json({ id: updated.id, caption: updated.caption ?? null });
+  } catch (error) {
+    console.error('사진 설명 저장 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
 /** DELETE /api/events/:id/media/:mediaId */
 export const deleteMedia = async (req, res) => {
   try {
@@ -547,5 +575,5 @@ export const deleteMedia = async (req, res) => {
 export default {
   getAlbum, createAlbum, updateAlbum, refreshAlbum,
   listMedia, createUploads, completeUpload, bulkAction,
-  addTag, removeTag, listUnanalyzed, saveFaces, rematch, deleteMedia
+  addTag, removeTag, listUnanalyzed, saveFaces, rematch, updateMedia, deleteMedia
 };

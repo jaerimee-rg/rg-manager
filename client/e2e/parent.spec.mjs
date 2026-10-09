@@ -1147,3 +1147,127 @@ test.describe('학부모 — 공유받은 사진 폴더 링크', () => {
     await expect(page.getByRole('button', { name: '공유 링크 복사' })).toHaveCount(0);
   });
 });
+
+/**
+ * 사진·영상 설명 — 선생님이 앨범에서 사진을 눌러 쓰고, 학부모는 크게 볼 때 화면 아래쪽에서 읽는다.
+ * 픽스처: mediaIds = [선생님 사진 1, 선생님 사진 2, 학부모 사진 3, 영상 4]. 테스트마다 설명을 지우고 끝낸다.
+ */
+test.describe('사진 설명 — 선생님이 쓰고 학부모가 본다', () => {
+  const eventId = sessions.album.eventId;
+  const photoId = sessions.album.mediaIds[1];
+  const videoId = sessions.album.mediaIds[3];
+  const setCaption = (request, id, caption, session = sessions.teacher) =>
+    api(request, session, 'PATCH', `/api/events/${eventId}/media/${id}`, { caption });
+  const parentItem = async (request, id) => {
+    const res = await api(request, sessions.parent, 'GET', `/api/parent/events/${eventId}/media`);
+    expect(res.status).toBe(200);
+    return res.body.items.find((item) => item.id === id);
+  };
+
+  test.afterEach(async ({ request }) => {
+    for (const id of [photoId, videoId]) expect((await setCaption(request, id, null)).status).toBe(200);
+  });
+
+  test('선생님이 앨범에서 사진을 눌러 설명을 추가하고 고친다 — 학부모에게도 그대로 간다', async ({ page, request }) => {
+    await stubPortraitThumbnails(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginAs(page, sessions.teacher);
+    await page.goto(`/photos/${eventId}`);
+
+    // 선생님 목록의 순서 그대로 칸이 그려진다 — 그 사진의 칸을 누른다
+    const list = await api(request, sessions.teacher, 'GET', `/api/events/${eventId}/media?filter=all&limit=60`);
+    const index = list.body.items.findIndex((item) => item.id === photoId);
+    expect(index).toBeGreaterThanOrEqual(0);
+    await page.locator('.ui-media-tile').nth(index).click();
+
+    const viewer = page.getByRole('dialog', { name: '사진 보기' });
+    await expect(viewer.getByTestId('media-caption')).toHaveCount(0);
+    await viewer.getByRole('button', { name: '설명 추가' }).click();
+
+    const form = viewer.getByRole('form', { name: '사진 설명' });
+    const field = form.getByRole('textbox', { name: '사진 설명' });
+    await expect(field).toBeFocused();
+    // 입력 창이 화면 아래쪽에 붙고, [저장] 이 글 칸보다 위에 있다(키보드가 올라와도 가리지 않는다)
+    const formBox = await form.boundingBox();
+    expect(Math.round(formBox.y + formBox.height)).toBe(844);
+    const saveButton = form.getByRole('button', { name: '저장' });
+    expect((await saveButton.boundingBox()).y).toBeLessThan((await field.boundingBox()).y);
+
+    await field.fill('단체전 결승 무대\n리본 연기');
+    await saveButton.click();
+    await expect(form).toHaveCount(0);
+    const caption = viewer.getByTestId('media-caption');
+    await expect.poll(() => caption.locator('p').evaluate((el) => el.innerText)).toBe('단체전 결승 무대\n리본 연기');
+    expect((await parentItem(request, photoId)).caption).toBe('단체전 결승 무대\n리본 연기');
+
+    // 고치기 — 지금 설명이 채워져 열린다
+    await viewer.getByRole('button', { name: '설명 수정' }).click();
+    await expect(field).toHaveValue('단체전 결승 무대\n리본 연기');
+    await field.fill('단체전 결승 — 리본');
+    await form.getByRole('button', { name: '저장' }).click();
+    await expect(caption).toHaveText('단체전 결승 — 리본');
+
+    // 새로고침해도 남아 있다(서버에 저장됐다)
+    await page.reload();
+    await page.locator('.ui-media-tile').nth(index).click();
+    await expect(viewer.getByTestId('media-caption')).toHaveText('단체전 결승 — 리본');
+    expect((await parentItem(request, photoId)).caption).toBe('단체전 결승 — 리본');
+  });
+
+  test('학부모 휴대폰: 사진은 아래쪽 날짜 줄 위에 겹쳐, 영상은 플레이어 아래에 설명이 보인다 — 길면 세 줄로 접는다', async ({ page, request }) => {
+    expect((await setCaption(request, photoId, '단체전 결승 무대')).status).toBe(200);
+    const long = `개인전 곤봉 — ${'끝까지 집중해서 연기했어요. '.repeat(12)}`.trim();
+    expect((await setCaption(request, videoId, long)).status).toBe(200);
+    await page.route('https://drive.google.com/file/d/**', (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<body style="margin:0;background:#222"></body>' }));
+    await stubPortraitThumbnails(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginAs(page, sessions.parent);
+
+    // 사진
+    await page.goto(`/parent/photos/${eventId}?open=${photoId}`);
+    const viewer = page.getByRole('dialog', { name: '사진 보기' });
+    const caption = viewer.getByTestId('media-caption');
+    await expect(caption).toHaveText('단체전 결승 무대');
+    const info = viewer.getByTestId('media-info');
+    const infoBox = await info.boundingBox();
+    const captionBox = await caption.boundingBox();
+    const dateBox = await info.getByText(/\d+\/\d+\(.\) \d+:\d+/).boundingBox();
+    expect(infoBox.y + infoBox.height).toBe(844);
+    expect(captionBox.y).toBeGreaterThan(844 / 2);
+    expect(captionBox.y + captionBox.height).toBeLessThanOrEqual(dateBox.y + 1);
+    // 학부모는 고칠 수 없다
+    await expect(viewer.getByRole('button', { name: /설명 (추가|수정)/ })).toHaveCount(0);
+
+    // 영상 — 플레이어 아래 정보 줄, Drive 컨트롤 위에 겹치지 않는다
+    await page.goto(`/parent/photos/${eventId}?open=${videoId}`);
+    const player = viewer.locator('iframe');
+    await expect(player).toBeVisible();
+    const playerBox = await player.locator('xpath=..').boundingBox();
+    const videoCaption = viewer.getByTestId('media-caption');
+    await expect(videoCaption).toContainText('개인전 곤봉');
+    const folded = await videoCaption.locator('p').boundingBox();
+    expect(folded.y).toBeGreaterThanOrEqual(playerBox.y + playerBox.height - 1);
+    // 15px × 1.5 줄 간격 × 3줄 ≈ 68px — 긴 설명이 플레이어를 밀어내지 않는다
+    expect(folded.height).toBeLessThanOrEqual(70);
+    expect(playerBox.height).toBeGreaterThan(400);
+
+    await videoCaption.getByRole('button', { name: '더 보기' }).click();
+    const opened = await videoCaption.locator('p').boundingBox();
+    expect(opened.height).toBeGreaterThan(folded.height);
+    expect(opened.height).toBeLessThanOrEqual(844 * 0.4 + 1);
+    await expect(videoCaption.getByRole('button', { name: '접기' })).toBeVisible();
+  });
+
+  test('설명 API 는 그 앨범의 선생님만 쓴다 — 학부모 403 · 다른 선생님 404 · 500자 넘으면 400', async ({ request }) => {
+    expect((await setCaption(request, photoId, '무대', sessions.parent)).status).toBe(403);
+    expect((await setCaption(request, photoId, '무대', { token: sessions.teacher2Token })).status).toBe(404);
+    const tooLong = await setCaption(request, photoId, '가'.repeat(501));
+    expect(tooLong.status).toBe(400);
+    expect(tooLong.body.error).toContain('500자');
+    // 다른 이벤트의 사진 id 로는 못 쓴다
+    const other = await api(request, sessions.teacher, 'PATCH', `/api/events/${sessions.album.folderEventId}/media/${photoId}`, { caption: '무대' });
+    expect(other.status).toBe(404);
+    expect((await parentItem(request, photoId)).caption).toBeNull();
+  });
+});

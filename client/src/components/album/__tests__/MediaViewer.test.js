@@ -558,3 +558,248 @@ describe('MediaViewer — 옆으로 밀어 넘기기 (휴대폰)', () => {
     expect(screen.getByRole('img', { name: 'IMG_1.jpg' })).toBeInTheDocument();
   });
 });
+
+describe('MediaViewer — 선생님이 붙인 설명', () => {
+  const photo = (id, overrides = {}) => media({ id, fileName: `IMG_${id}.jpg`, ...overrides });
+  const counter = () => within(screen.getByTestId('viewer-top')).getByText(/\d+ \/ \d+/).textContent;
+  const editor = () => screen.getByRole('form', { name: /설명/ });
+  const field = () => within(editor()).getByRole('textbox');
+
+  describe('학부모 화면 — 보기만', () => {
+    it('사진: 설명이 아래 정보 줄 위에, 사진 위에 겹쳐 보인다 — 줄바꿈은 쓴 그대로', () => {
+      render(<MediaViewer items={[photo(1, { caption: '단체전 결승 무대\n리본 연기' })]} startId={1} onClose={jest.fn()} />);
+
+      const caption = screen.getByTestId('media-caption');
+      const info = screen.getByTestId('media-info');
+      expect(info).toContainElement(caption);
+      expect(info.firstChild).toBe(caption);
+      expect(info.style.position).toBe('absolute');
+      expect(info.style.bottom).toBe('0px');
+      expect(caption.textContent).toBe('단체전 결승 무대\n리본 연기');
+      expect(caption.querySelector('p').style.whiteSpace).toBe('pre-wrap');
+      // 학부모는 고칠 수 없다
+      expect(screen.queryByRole('button', { name: /설명 (추가|수정)/ })).not.toBeInTheDocument();
+    });
+
+    it('영상: 설명이 플레이어 아래 정보 줄에 보인다 — Drive 컨트롤을 가리지 않는다', () => {
+      render(<MediaViewer items={[video(1, { caption: '개인전 곤봉' })]} startId={1} onClose={jest.fn()} />);
+
+      const stage = screen.getByTestId('video-stage');
+      const caption = screen.getByTestId('media-caption');
+      expect(stage).toContainElement(caption);
+      expect(screen.getByTestId('media-info').style.position).toBe('');
+      // 플레이어 칸 다음에 정보 줄이 온다
+      expect(stage.lastChild).toBe(screen.getByTestId('media-info'));
+      expect(caption).toHaveTextContent('개인전 곤봉');
+    });
+
+    it('설명이 없으면 설명 칸을 그리지 않는다', () => {
+      render(<MediaViewer items={[photo(1)]} startId={1} onClose={jest.fn()} />);
+      expect(screen.queryByTestId('media-caption')).not.toBeInTheDocument();
+    });
+
+    it('넘기면 그 장의 설명으로 바뀐다', () => {
+      render(<MediaViewer items={[photo(1, { caption: '첫 장' }), photo(2)]} startId={1} onClose={jest.fn()} />);
+      expect(screen.getByTestId('media-caption')).toHaveTextContent('첫 장');
+
+      fireEvent.keyDown(document, { key: 'ArrowRight' });
+      expect(screen.queryByTestId('media-caption')).not.toBeInTheDocument();
+    });
+
+    describe('긴 설명', () => {
+      afterEach(() => {
+        delete HTMLElement.prototype.scrollHeight;
+        delete HTMLElement.prototype.clientHeight;
+      });
+
+      it('세 줄을 넘으면 접어 두고 [더 보기] 로 펼친다', () => {
+        Object.defineProperty(HTMLElement.prototype, 'scrollHeight', { configurable: true, get: () => 120 });
+        Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => 66 });
+        render(<MediaViewer items={[photo(1, { caption: '긴 설명 '.repeat(40) })]} startId={1} onClose={jest.fn()} />);
+
+        const text = screen.getByTestId('media-caption').querySelector('p');
+        expect(text.style.webkitLineClamp || text.style.WebkitLineClamp).toBe('3');
+        const more = screen.getByRole('button', { name: '더 보기' });
+        expect(more).toHaveAttribute('aria-expanded', 'false');
+        // 사진 위에 겹친 정보 줄은 터치를 지나보내지만 이 버튼은 눌려야 한다
+        expect(more.style.pointerEvents).toBe('auto');
+
+        fireEvent.click(more);
+        expect(screen.getByRole('button', { name: '접기' })).toHaveAttribute('aria-expanded', 'true');
+        expect(text.style.maxHeight).toBe('40vh');
+        expect(text.style.overflowY).toBe('auto');
+      });
+
+      it('세 줄 안이면 [더 보기] 가 없다', () => {
+        render(<MediaViewer items={[photo(1, { caption: '짧은 설명' })]} startId={1} onClose={jest.fn()} />);
+        expect(screen.queryByRole('button', { name: '더 보기' })).not.toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('선생님 화면 — 추가 · 수정', () => {
+    const open = (items, onCaptionSave = jest.fn().mockResolvedValue(undefined), extra = {}) => {
+      render(<MediaViewer items={items} startId={items[0].id} onClose={jest.fn()} onCaptionSave={onCaptionSave} {...extra} />);
+      return onCaptionSave;
+    };
+
+    it('설명이 없으면 [설명 추가], 있으면 [설명 수정] — 사진 위에 겹쳐도 눌린다', () => {
+      open([photo(1), photo(2, { caption: '무대' })]);
+
+      const add = screen.getByRole('button', { name: '설명 추가' });
+      expect(screen.getByTestId('media-info')).toContainElement(add);
+      expect(add.style.pointerEvents).toBe('auto');
+
+      fireEvent.keyDown(document, { key: 'ArrowRight' });
+      expect(screen.getByRole('button', { name: '설명 수정' })).toBeInTheDocument();
+    });
+
+    it('[설명 추가] → 입력 창이 열리고 바로 쓸 수 있다 · 쓴 글을 저장하면 다듬어 넘기고 창을 닫는다', async () => {
+      const item = photo(1);
+      const save = open([item]);
+
+      fireEvent.click(screen.getByRole('button', { name: '설명 추가' }));
+      expect(editor()).toHaveAccessibleName('사진 설명');
+      expect(field()).toHaveFocus();
+      expect(field()).toHaveAttribute('maxlength', '500');
+      // 아무것도 안 썼으면 저장할 게 없다
+      expect(within(editor()).getByRole('button', { name: '저장' })).toBeDisabled();
+
+      fireEvent.change(field(), { target: { value: '  단체전 결승 무대  ' } });
+      expect(within(editor()).getByText('13 / 500')).toBeInTheDocument();
+      await act(async () => { fireEvent.click(within(editor()).getByRole('button', { name: '저장' })); });
+
+      expect(save).toHaveBeenCalledWith(item, '단체전 결승 무대');
+      expect(screen.queryByRole('form', { name: /설명/ })).not.toBeInTheDocument();
+    });
+
+    it('[설명 수정] → 지금 설명이 채워져 있고, 비우고 저장하면 설명을 지운다(null)', async () => {
+      const item = video(1, { caption: '개인전 곤봉' });
+      const save = open([item]);
+
+      fireEvent.click(screen.getByRole('button', { name: '설명 수정' }));
+      expect(editor()).toHaveAccessibleName('영상 설명');
+      expect(field()).toHaveValue('개인전 곤봉');
+      // 고치지 않았으면 저장하지 않는다
+      expect(within(editor()).getByRole('button', { name: '저장' })).toBeDisabled();
+
+      fireEvent.change(field(), { target: { value: '   ' } });
+      await act(async () => { fireEvent.click(within(editor()).getByRole('button', { name: '저장' })); });
+
+      expect(save).toHaveBeenCalledWith(item, null);
+    });
+
+    it('저장에 실패하면 이유를 보여 주고 쓴 글과 창을 그대로 둔다', async () => {
+      const save = open([photo(1)], jest.fn().mockRejectedValue(new Error('설명은 500자까지 쓸 수 있어요.')));
+
+      fireEvent.click(screen.getByRole('button', { name: '설명 추가' }));
+      fireEvent.change(field(), { target: { value: '무대' } });
+      await act(async () => { fireEvent.click(within(editor()).getByRole('button', { name: '저장' })); });
+
+      expect(save).toHaveBeenCalled();
+      expect(within(editor()).getByRole('alert')).toHaveTextContent('설명은 500자까지 쓸 수 있어요.');
+      expect(field()).toHaveValue('무대');
+      expect(within(editor()).getByRole('button', { name: '저장' })).not.toBeDisabled();
+    });
+
+    it('[취소] 는 저장하지 않고 닫는다', () => {
+      const save = open([photo(1)]);
+
+      fireEvent.click(screen.getByRole('button', { name: '설명 추가' }));
+      fireEvent.change(field(), { target: { value: '무대' } });
+      fireEvent.click(within(editor()).getByRole('button', { name: '취소' }));
+
+      expect(save).not.toHaveBeenCalled();
+      expect(screen.queryByRole('form', { name: /설명/ })).not.toBeInTheDocument();
+    });
+
+    it('쓰는 동안: 화살표 키는 장을 넘기지 않고, Esc 는 뷰어가 아니라 입력 창만 닫는다', () => {
+      const onClose = jest.fn();
+      open([photo(1), photo(2)], undefined, { onClose });
+
+      fireEvent.click(screen.getByRole('button', { name: '설명 추가' }));
+      fireEvent.keyDown(document, { key: 'ArrowRight' });
+      expect(counter()).toBe('1 / 2');
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(screen.queryByRole('form', { name: /설명/ })).not.toBeInTheDocument();
+      expect(onClose).not.toHaveBeenCalled();
+
+      // 창을 닫은 뒤에는 예전처럼
+      fireEvent.keyDown(document, { key: 'ArrowRight' });
+      expect(counter()).toBe('2 / 2');
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    it('한글을 조합하는 중의 Esc 와 저장하는 중의 Esc 는 입력 창을 닫지 않는다', async () => {
+      let finish;
+      const save = jest.fn(() => new Promise((resolve) => { finish = resolve; }));
+      open([photo(1)], save);
+
+      fireEvent.click(screen.getByRole('button', { name: '설명 추가' }));
+      fireEvent.change(field(), { target: { value: '무대' } });
+      fireEvent.keyDown(document, { key: 'Escape', isComposing: true });
+      expect(editor()).toBeInTheDocument();
+
+      await act(async () => { fireEvent.click(within(editor()).getByRole('button', { name: '저장' })); });
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(editor()).toBeInTheDocument();
+
+      await act(async () => { finish(); });
+      expect(screen.queryByRole('form', { name: /설명/ })).not.toBeInTheDocument();
+    });
+
+    it('쓰는 동안에는 옆으로 밀어도 넘어가지 않는다 · 사진 위 넘기기 버튼도 가려진다', () => {
+      jest.useFakeTimers();
+      try {
+        open([photo(1), photo(2)]);
+        fireEvent.click(screen.getByRole('button', { name: '설명 추가' }));
+
+        const dialog = screen.getByRole('dialog');
+        fireEvent.touchStart(dialog, { touches: [{ clientX: 200, clientY: 400 }] });
+        fireEvent.touchMove(dialog, { touches: [{ clientX: 120, clientY: 400 }] });
+        fireEvent.touchMove(dialog, { touches: [{ clientX: 40, clientY: 400 }] });
+        fireEvent.touchEnd(dialog, { touches: [] });
+        act(() => { jest.advanceTimersByTime(300); });
+
+        expect(counter()).toBe('1 / 2');
+        expect(screen.getByTestId('viewer-track').style.transform).toBe('');
+        // 입력 창 층이 뷰어 전체를 덮는다 — 뒤쪽 버튼이 눌리지 않는다
+        const layer = screen.getByTestId('caption-editor');
+        expect(layer.style.position).toBe('absolute');
+        expect(layer.style.inset).toBe('0');
+        expect(Number(layer.style.zIndex)).toBeGreaterThan(2);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    describe('휴대폰 키보드', () => {
+      afterEach(() => { delete window.visualViewport; });
+
+      it('키보드가 화면 아래를 가리면 입력 창을 그만큼 올린다', () => {
+        const listeners = {};
+        window.visualViewport = {
+          height: 500, offsetTop: 0, scale: 1,
+          addEventListener: (type, fn) => { listeners[type] = fn; },
+          removeEventListener: jest.fn()
+        };
+        const innerHeight = window.innerHeight;
+        Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+        try {
+          open([photo(1)]);
+          fireEvent.click(screen.getByRole('button', { name: '설명 추가' }));
+          expect(screen.getByTestId('caption-editor').style.paddingBottom).toBe('300px');
+
+          // 키보드를 내리면 제자리
+          window.visualViewport.height = 800;
+          act(() => { listeners.resize(); });
+          expect(screen.getByTestId('caption-editor').style.paddingBottom).toBe('0px');
+        } finally {
+          Object.defineProperty(window, 'innerHeight', { configurable: true, value: innerHeight });
+        }
+      });
+    });
+  });
+});

@@ -50,7 +50,7 @@ describe('toParentMedia — 학부모에게 나가는 것만 나간다 (NFR-4)',
 
   it('내보내는 필드 목록을 고정한다 (새 컬럼이 저절로 새지 않게)', () => {
     expect(Object.keys(view).sort()).toEqual([
-      'canDelete', 'downloadUrl', 'durationMs', 'fileName', 'height', 'id', 'isCandidate', 'isMine',
+      'canDelete', 'caption', 'downloadUrl', 'durationMs', 'fileName', 'height', 'id', 'isCandidate', 'isMine',
       'kind', 'largeUrl', 'myTags', 'originalUrl', 'previewUrl', 'takenAt', 'thumbnailUrl', 'uploader', 'width'
     ].sort());
   });
@@ -97,6 +97,12 @@ describe('toParentMedia — 학부모에게 나가는 것만 나간다 (NFR-4)',
     expect(view.downloadUrl).toBe('https://drive.google.com/uc?export=download&id=file-abc');
   });
 
+  it('선생님이 붙인 설명을 준다 — 없으면 null', () => {
+    expect(toParentMedia({ ...media, caption: '단체전 결승 무대' }, { myUserId: 1 }).caption).toBe('단체전 결승 무대');
+    expect(view.caption).toBeNull();
+    expect(toParentMedia({ ...media, caption: '' }, { myUserId: 1 }).caption).toBeNull();
+  });
+
   it('영상은 재생 주소를 준다', () => {
     const video = toParentMedia({ ...media, kind: 'video', durationMs: 64000 }, { myStudentIds: [], myUserId: 1 });
     expect(video.previewUrl).toBe('https://drive.google.com/file/d/file-abc/preview');
@@ -110,6 +116,11 @@ describe('toTeacherMedia', () => {
   it('선생님은 얼굴 상자와 모든 태그를 본다', () => {
     expect(view.faces).toHaveLength(1);
     expect(view.tags.map((t) => t.name)).toEqual(['김하은', '박서연']);
+  });
+
+  it('설명을 준다 — 없으면 null', () => {
+    expect(toTeacherMedia({ ...media, caption: '리본 연기' }).caption).toBe('리본 연기');
+    expect(view.caption).toBeNull();
   });
 
   it('올린 사람 이름을 그대로 보여준다', () => {

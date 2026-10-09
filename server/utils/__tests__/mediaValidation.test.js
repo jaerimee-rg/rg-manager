@@ -8,7 +8,9 @@ import {
   lookupType,
   getExtension,
   MAX_IMAGE_BYTES,
-  MAX_VIDEO_BYTES
+  MAX_VIDEO_BYTES,
+  CAPTION_MAX,
+  normalizeCaption
 } from '../mediaValidation.js';
 
 describe('getExtension / lookupType', () => {
@@ -169,5 +171,35 @@ describe('folderNameFromEvent — 폴더 이름은 이벤트에서 (docs/photo-m
   it('제목·날짜가 비어도 빈 이름은 내지 않는다', () => {
     expect(folderNameFromEvent({})).toBe('앨범');
     expect(folderNameFromEvent({ date: '2026-10-12', title: '' })).toBe('2026-10-12');
+  });
+});
+
+describe('normalizeCaption — 사진·영상 설명', () => {
+  it('앞뒤 공백을 지우고 줄바꿈은 남긴다', () => {
+    expect(normalizeCaption('  단체전 결승 무대\r\n리본 연기  ')).toEqual({ ok: true, caption: '단체전 결승 무대\n리본 연기' });
+  });
+
+  it('빈 글 · 공백뿐인 글 · null 이면 설명을 지운다', () => {
+    expect(normalizeCaption('')).toEqual({ ok: true, caption: null });
+    expect(normalizeCaption('   \n\t ')).toEqual({ ok: true, caption: null });
+    expect(normalizeCaption(null)).toEqual({ ok: true, caption: null });
+    expect(normalizeCaption(undefined)).toEqual({ ok: true, caption: null });
+  });
+
+  it('보이지 않는 제어 문자는 지운다', () => {
+    expect(normalizeCaption('하은\u0000이\u0007 무대').caption).toBe('하은이 무대');
+  });
+
+  it(`${CAPTION_MAX}자까지 받고 넘으면 거절한다 — 이모지 하나는 한 글자로 센다`, () => {
+    expect(normalizeCaption('가'.repeat(CAPTION_MAX))).toEqual({ ok: true, caption: '가'.repeat(CAPTION_MAX) });
+    expect(normalizeCaption('🎀'.repeat(CAPTION_MAX)).ok).toBe(true);
+    const over = normalizeCaption('가'.repeat(CAPTION_MAX + 1));
+    expect(over.ok).toBe(false);
+    expect(over.message).toContain(`${CAPTION_MAX}자`);
+  });
+
+  it('글자가 아니면 거절한다', () => {
+    expect(normalizeCaption(42).ok).toBe(false);
+    expect(normalizeCaption({ text: '무대' }).ok).toBe(false);
   });
 });

@@ -773,6 +773,8 @@ const initDatabase = async () => {
     await client.query('CREATE INDEX IF NOT EXISTS idx_event_media_face ON event_media ("eventId", "faceStatus")');
     // 얼굴을 찾은 방식의 버전(utils/faceVector.js FACE_ANALYZER_VERSION). 낮거나 없으면 다시 찾을 대상이다.
     await client.query('ALTER TABLE event_media ADD COLUMN IF NOT EXISTS "faceAnalyzerVersion" INTEGER');
+    // 선생님이 붙이는 사진·영상 설명. 학부모 뷰어 아래쪽에 보인다. 없으면 NULL.
+    await client.query('ALTER TABLE event_media ADD COLUMN IF NOT EXISTS caption TEXT');
 
     // 사진에서 찾은 얼굴. 이미지는 저장하지 않고 특징값(128차원)과 위치만 남긴다.
     // descriptor 는 base64(Float32Array) — pgvector 는 운영 DB 계정 권한으로 설치할 수 없어

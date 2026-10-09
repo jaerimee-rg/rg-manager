@@ -271,6 +271,102 @@ describe('PhotoAlbum — 앨범 (docs/photo-menu FR-520~529)', () => {
   });
 });
 
+// ───────── 사진·영상 설명: 사진을 눌러 뷰어에서 추가 · 수정 ─────────
+describe('PhotoAlbum — 사진 설명', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  // 사진 설명 저장(PATCH .../media/:id) 응답을 정해 둔다 — 나머지 요청은 renderAlbum 의 가짜 응답 그대로
+  const answerCaption = (respond) => {
+    const base = fetchWithAuth.getMockImplementation();
+    fetchWithAuth.mockImplementation((url, options = {}) => {
+      if (/\/api\/events\/31\/media\/\d+$/.test(url) && options.method === 'PATCH') return respond(JSON.parse(options.body));
+      return base(url, options);
+    });
+  };
+  const openPhoto = async () => {
+    await act(async () => { fireEvent.click(document.querySelectorAll('.ui-media-tile')[0]); });
+    return screen.getByRole('dialog', { name: '사진 보기' });
+  };
+  const write = async (viewer, text) => {
+    await act(async () => { fireEvent.click(within(viewer).getByRole('button', { name: /설명 (추가|수정)/ })); });
+    const form = within(viewer).getByRole('form', { name: /설명/ });
+    fireEvent.change(within(form).getByRole('textbox'), { target: { value: text } });
+    await act(async () => { fireEvent.click(within(form).getByRole('button', { name: '저장' })); });
+  };
+
+  it('사진을 누르면 뷰어에서 [설명 추가] → 저장하면 그 사진에 저장하고 바로 보여 준다', async () => {
+    await renderAlbum();
+    answerCaption(({ caption }) => ok({ id: 1, caption }));
+
+    const viewer = await openPhoto();
+    await write(viewer, '  단체전 결승 무대 ');
+
+    expect(fetchWithAuth).toHaveBeenCalledWith('/api/events/31/media/1', {
+      method: 'PATCH', body: JSON.stringify({ caption: '단체전 결승 무대' })
+    });
+    expect(within(viewer).queryByRole('form', { name: /설명/ })).not.toBeInTheDocument();
+    expect(within(viewer).getByTestId('media-caption')).toHaveTextContent('단체전 결승 무대');
+    expect(within(viewer).getByRole('button', { name: '설명 수정' })).toBeInTheDocument();
+    // 토스트는 띄우지 않는다 — 아래쪽에 뜬 설명을 덮는다
+    expect(screen.queryByText(/설명을 저장했어요/)).not.toBeInTheDocument();
+
+    // 뷰어를 닫았다 다시 열어도 남아 있다(목록의 그 사진에 반영됐다)
+    await act(async () => { fireEvent.click(within(viewer).getByRole('button', { name: '닫기' })); });
+    const again = await openPhoto();
+    expect(within(again).getByTestId('media-caption')).toHaveTextContent('단체전 결승 무대');
+  });
+
+  it('있는 설명을 비우고 저장하면 지운다', async () => {
+    await renderAlbum(ALBUM, [{ ...MEDIA[0], caption: '옛 설명' }, MEDIA[1]]);
+    answerCaption(() => ok({ id: 1, caption: null }));
+
+    const viewer = await openPhoto();
+    expect(within(viewer).getByTestId('media-caption')).toHaveTextContent('옛 설명');
+    await write(viewer, '');
+
+    expect(fetchWithAuth).toHaveBeenCalledWith('/api/events/31/media/1', {
+      method: 'PATCH', body: JSON.stringify({ caption: null })
+    });
+    expect(within(viewer).queryByTestId('media-caption')).not.toBeInTheDocument();
+    expect(within(viewer).getByRole('button', { name: '설명 추가' })).toBeInTheDocument();
+  });
+
+  it('서버가 거절하면 그 이유를 입력 창에 보여 주고 창을 열어 둔다', async () => {
+    await renderAlbum();
+    answerCaption(() => ok({ error: '설명은 500자까지 쓸 수 있어요.' }, 400));
+
+    const viewer = await openPhoto();
+    await write(viewer, '무대');
+
+    const form = within(viewer).getByRole('form', { name: /설명/ });
+    expect(within(form).getByRole('alert')).toHaveTextContent('설명은 500자까지 쓸 수 있어요.');
+    expect(within(viewer).queryByTestId('media-caption')).not.toBeInTheDocument();
+  });
+
+  it('네트워크가 끊겨도 쓴 글을 잃지 않는다', async () => {
+    await renderAlbum();
+    answerCaption(() => Promise.reject(new TypeError('Failed to fetch')));
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const viewer = await openPhoto();
+    await write(viewer, '무대');
+
+    const form = within(viewer).getByRole('form', { name: /설명/ });
+    expect(within(form).getByRole('alert')).toHaveTextContent('설명을 저장하지 못했어요');
+    expect(within(form).getByRole('textbox')).toHaveValue('무대');
+    console.error.mockRestore();
+  });
+
+  it('Google 연결이 끊겨도 설명은 고칠 수 있다 — 앱 안의 글이다', async () => {
+    await renderAlbum({ ...ALBUM, published: true, drive: { ...DRIVE, status: 'error' } });
+
+    const viewer = await openPhoto();
+    expect(within(viewer).getByRole('button', { name: '설명 추가' })).toBeEnabled();
+    // 지우기(Drive 를 거친다)는 그대로 막혀 있다
+    expect(within(viewer).queryByRole('button', { name: '삭제' })).not.toBeInTheDocument();
+  });
+});
+
 // ───────── 사진 전용 폴더 관리: 이름·날짜 수정 · 폴더 삭제 (docs/photo-menu FR-519) ─────────
 describe('PhotoAlbum — 사진 폴더 관리 (FR-519)', () => {
   const FOLDER = {

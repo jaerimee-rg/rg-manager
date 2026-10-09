@@ -25,6 +25,7 @@ import {
   listUnanalyzed,
   saveFaces,
   rematch,
+  updateMedia,
   deleteMedia
 } from '../controllers/albumController.js';
 import { verifyToken } from '../middleware/auth.js';
@@ -63,6 +64,7 @@ router.post('/:id/media/:mediaId/complete', verifyToken, logAction('UPLOAD_ALBUM
 router.post('/:id/media/:mediaId/faces', verifyToken, saveFaces);
 router.post('/:id/media/:mediaId/tags', verifyToken, logAction('TAG_ALBUM_MEDIA'), addTag);
 router.delete('/:id/media/:mediaId/tags/:studentId', verifyToken, logAction('UNTAG_ALBUM_MEDIA'), removeTag);
+router.patch('/:id/media/:mediaId', verifyToken, logAction('CAPTION_ALBUM_MEDIA'), updateMedia);
 router.delete('/:id/media/:mediaId', verifyToken, logAction('DELETE_ALBUM_MEDIA'), deleteMedia);
 
 export default router;

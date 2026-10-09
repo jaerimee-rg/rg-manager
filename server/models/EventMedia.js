@@ -88,6 +88,18 @@ class EventMedia {
     return result.rowCount;
   }
 
+  /** 설명을 바꾼다(null 이면 지운다). 이 이벤트의 사진이 아니면 null */
+  static async setCaption(id, caption, eventId) {
+    const now = new Date().toISOString();
+    const result = await pool.query(
+      `UPDATE event_media SET caption = $2, "updatedAt" = $3
+        WHERE id = $1 AND "eventId" = $4
+        RETURNING id, caption`,
+      [id, caption, now, eventId]
+    );
+    return result.rows[0] || null;
+  }
+
   static async markMissing(ids) {
     if (!ids?.length) return 0;
     const now = new Date().toISOString();
