@@ -3,7 +3,7 @@ import EventMedia from '../models/EventMedia.js';
 import GoogleDriveAccount from '../models/GoogleDriveAccount.js';
 import { isDriveConfigured } from '../utils/googleDrive.js';
 import { folderNameFromEvent } from '../utils/mediaValidation.js';
-import { thumbnailUrl, coverImageUrl } from '../utils/mediaSerializer.js';
+import { thumbnailUrl, coverUrls } from '../utils/mediaSerializer.js';
 import { todayKst } from '../services/eventService.js';
 import { isPhotoFolder } from '../utils/albumAccess.js';
 import albumService from '../services/albumService.js';
@@ -34,9 +34,9 @@ const toAlbum = (event, summary = {}) => ({
     fromParents: summary.fromParents || 0
   },
   previews: (summary.previews || []).map((id) => thumbnailUrl(id, 400)),
-  // 선생님이 고른 대표 사진·영상 — 있으면 카드 표지에 이것 한 장만 크게 (숨겼거나 지웠으면 null 이 와서 최근 4장으로 돌아간다).
-  // 영상이면 Drive 가 만든 한 장면이 사진처럼 뜬다(재생 표시는 붙이지 않는다 — 사용자 결정 2026-10-09)
-  cover: summary.cover ? coverImageUrl(summary.cover) : null
+  // 선생님이 고른 대표 사진·영상(고른 순서, 최대 4장) — 있으면 카드 표지는 이것들만 (숨겼거나 지운 것은 빠지고, 다 빠지면 빈 목록이라
+  // 최근 4장으로 돌아간다). 영상이면 Drive 가 만든 한 장면이 사진처럼 뜬다(재생 표시는 붙이지 않는다 — 사용자 결정 2026-10-09)
+  covers: coverUrls(summary.covers || [])
 });
 
 const toTarget = (event, summary, today) => ({

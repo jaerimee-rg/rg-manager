@@ -804,7 +804,7 @@ describe('MediaViewer — 선생님이 붙인 설명', () => {
   });
 });
 
-describe('MediaViewer — 대표 사진 (사진 목록 카드의 표지)', () => {
+describe('MediaViewer — 대표 사진 (사진 목록 카드의 표지, 4장까지)', () => {
   const photo = (id, overrides = {}) => media({ id, fileName: `IMG_${id}.jpg`, ...overrides });
   const open = (items, extra = {}) => {
     const onCoverChange = extra.onCoverChange || jest.fn().mockResolvedValue(undefined);
@@ -819,7 +819,7 @@ describe('MediaViewer — 대표 사진 (사진 목록 카드의 표지)', () =>
 
   it('대표가 아닌 사진: [대표 사진으로] — 누르면 (그 사진, true), 사진 위에 겹쳐도 눌린다', async () => {
     const item = photo(1);
-    const onCoverChange = open([item]);
+    const onCoverChange = open([item], { coverIds: [7] });
 
     const button = screen.getByRole('button', { name: '대표 사진으로' });
     expect(button).toHaveAttribute('aria-pressed', 'false');
@@ -830,11 +830,11 @@ describe('MediaViewer — 대표 사진 (사진 목록 카드의 표지)', () =>
     expect(onCoverChange).toHaveBeenCalledWith(item, true);
   });
 
-  it('지금 대표인 사진: 눌린 [대표 사진] — 다시 누르면 (그 사진, false) 로 푼다', async () => {
+  it('대표인 사진: 몇 번째인지 보이는 눌린 [대표 사진 n] — 다시 누르면 (그 사진, false) 로 푼다', async () => {
     const item = photo(1);
-    const onCoverChange = open([item, photo(2)], { coverId: 1 });
+    const onCoverChange = open([item, photo(2)], { coverIds: [5, 1] });
 
-    const button = screen.getByRole('button', { name: '대표 사진' });
+    const button = screen.getByRole('button', { name: '대표 사진 2' });
     expect(button).toHaveAttribute('aria-pressed', 'true');
     await act(async () => { fireEvent.click(button); });
     expect(onCoverChange).toHaveBeenCalledWith(item, false);
@@ -842,6 +842,22 @@ describe('MediaViewer — 대표 사진 (사진 목록 카드의 표지)', () =>
     // 옆 장은 대표가 아니다
     fireEvent.keyDown(document, { key: 'ArrowRight' });
     expect(screen.getByRole('button', { name: '대표 사진으로' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('4장이 다 찼으면 다른 장의 버튼은 잠기고 이유를 말한다 — 대표인 장은 그대로 풀 수 있다', () => {
+    open([photo(9), photo(1)], { coverIds: [1, 2, 3, 4] });
+
+    const locked = screen.getByRole('button', { name: '대표 사진 4장 다 골랐어요' });
+    expect(locked).toBeDisabled();
+    expect(locked).toHaveAttribute('title', '다른 대표 사진을 먼저 풀어 주세요');
+
+    fireEvent.keyDown(document, { key: 'ArrowRight' });
+    expect(screen.getByRole('button', { name: '대표 사진 1' })).toBeEnabled();
+  });
+
+  it('최대 장수는 coverLimit 로 바꿀 수 있다', () => {
+    open([photo(9)], { coverIds: [1, 2], coverLimit: 2 });
+    expect(screen.getByRole('button', { name: '대표 사진 2장 다 골랐어요' })).toBeDisabled();
   });
 
   it('영상도 고를 수 있다 — 플레이어 아래 정보 줄에 버튼', async () => {

@@ -32,6 +32,14 @@ export const thumbnailUrl = (driveFileId, size = 400) =>
 export const coverImageUrl = (driveFileId) =>
   (driveFileId ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=w800-h500-c-rw` : null);
 
+/**
+ * 앨범 카드 표지의 대표 사진 주소들(고른 순서) — 선생님 사진 목록과 학부모 사진 탭이 같은 표지를 그린다.
+ * 한 장이면 표지 전체(16:10)를 채우니 그 비율로 잘라 받고, 여러 장이면 칸이 작아 정사각형 썸네일로 충분하다.
+ */
+export const coverUrls = (driveFileIds = []) => (driveFileIds.length === 1
+  ? [coverImageUrl(driveFileIds[0])]
+  : driveFileIds.map((id) => thumbnailUrl(id, 400)));
+
 /** 뷰어용 큰 사진 — 폭 기준, 원래 비율 그대로 */
 export const largeImageUrl = (driveFileId, width = 1600) =>
   (driveFileId ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=w${width}` : null);
@@ -116,7 +124,9 @@ export const toParentAlbum = (event, counts = {}) => ({
     videos: counts.videos || 0,
     mine: counts.mine || 0
   },
-  previews: (counts.previews || []).map((id) => thumbnailUrl(id, 400))
+  previews: (counts.previews || []).map((id) => thumbnailUrl(id, 400)),
+  // 선생님이 고른 대표 사진들 — 있으면 카드가 이것만 보여 준다(학부모에게 보이는 사진만 남는다: EventMedia previewRows)
+  covers: coverUrls(counts.covers || [])
 });
 
 /**
@@ -171,6 +181,7 @@ export const toTeacherMedia = (media, { studentNames = {} } = {}) => ({
 export default {
   thumbnailUrl,
   coverImageUrl,
+  coverUrls,
   largeImageUrl,
   originalUrl,
   previewUrl,

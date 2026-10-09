@@ -76,3 +76,34 @@ describe('ParentAlbumList — 앨범 카드', () => {
     expect(screen.getByText('앨범 화면')).toBeInTheDocument();
   });
 });
+
+describe('ParentAlbumList — 선생님이 고른 대표 사진', () => {
+  it('대표 사진이 있으면 그것만 보인다 — 최근 사진 줄 대신 선생님 목록과 같은 표지', async () => {
+    const covers = ['https://lh3/c2', 'https://lh3/c1'];
+    await renderList([album({ covers })]);
+
+    const card = screen.getByRole('button', { name: /선생님이랑 브런치/ });
+    const cover = within(card).getByTestId('album-covers');
+    expect(cover).toHaveClass('ui-album-card__cover');
+    expect(cover).toHaveAttribute('data-covers', '2');
+    expect([...cover.querySelectorAll('img')].map((img) => img.getAttribute('src'))).toEqual(covers);
+    expect(within(card).queryByTestId('album-previews')).not.toBeInTheDocument();
+    // 아래 글자는 그대로
+    expect(within(card).getByText('⭐ 스페셜')).toBeInTheDocument();
+  });
+
+  it('한 장이면 표지를 꽉 채운다', async () => {
+    await renderList([album({ covers: ['https://lh3/c1=w800-h500-c-rw'] })]);
+
+    const cover = screen.getByTestId('album-covers');
+    expect(cover).toHaveAttribute('data-covers', '1');
+    expect(cover.querySelectorAll('img')).toHaveLength(1);
+  });
+
+  it('대표 사진이 없으면(빈 목록 · 옛 응답) 최근 사진 줄', async () => {
+    await renderList([album({ covers: [] }), album({ eventId: 34, title: '옛 응답' })]);
+
+    expect(screen.queryByTestId('album-covers')).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('album-previews')).toHaveLength(2);
+  });
+});

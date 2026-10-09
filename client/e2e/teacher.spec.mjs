@@ -291,86 +291,111 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     expect(titleBox.y).toBeGreaterThanOrEqual(box.y + box.height);
   });
 
-  test('대표 사진 — 앨범에서 사진·영상을 열어 고르면 사진 목록 카드의 표지가 그 한 장이 된다 (숨기면 최근 사진으로)', async ({ page, request }) => {
+  test('대표 사진 — 앨범에서 사진·영상을 4장까지 골라 사진 목록과 학부모 사진 탭 카드의 표지로 (숨기면 빠진다)', async ({ page, request, browser, baseURL }) => {
     // 픽스처: mediaIds = [선생님 사진 1, 선생님 사진 2, 학부모 사진 3, 영상 4]
     const eventId = sessions.album.eventId;
-    const videoId = sessions.album.mediaIds[3];
-    const setCover = (coverMediaId) => api(request, sessions.teacher, 'PATCH', `/api/events/${eventId}/album`, { coverMediaId });
-    const albumCard = async () => {
+    const [photo1, photo2, parentPhoto, videoId] = sessions.album.mediaIds;
+    const patchAlbum = (id, body) => api(request, sessions.teacher, 'PATCH', `/api/events/${id}/album`, body);
+    const clearCovers = async (id) => {
+      const res = await api(request, sessions.teacher, 'GET', `/api/events/${id}/album`);
+      for (const coverId of res.body.coverMediaIds || []) await patchAlbum(id, { removeCoverMediaId: coverId });
+    };
+    const albumCard = async (id = eventId) => {
       const res = await api(request, sessions.teacher, 'GET', '/api/albums');
       expect(res.status).toBe(200);
-      return res.body.albums.find((album) => album.eventId === eventId);
+      return res.body.albums.find((album) => album.eventId === id);
     };
     const bulk = (action) => api(request, sessions.teacher, 'POST', `/api/events/${eventId}/media/bulk`, { action, mediaIds: [videoId] });
+    const folderId = sessions.album.peopleEventId;
 
     try {
-      expect((await setCover(null)).status).toBe(200);
+      await clearCovers(eventId);
       const { title } = await albumCard();
+      const list = await api(request, sessions.teacher, 'GET', `/api/events/${eventId}/media?filter=all&limit=60`);
+      const indexOf = (id) => list.body.items.findIndex((item) => item.id === id);
+      const fileOf = (id) => list.body.items[indexOf(id)].driveFileId;
       await stubPortraitThumbnails(page);
       await page.goto(`/photos/${eventId}`);
 
-      // 선생님 목록의 순서 그대로 칸이 그려진다 — 영상 칸을 눌러 뷰어에서 고른다
-      const list = await api(request, sessions.teacher, 'GET', `/api/events/${eventId}/media?filter=all&limit=60`);
-      const index = list.body.items.findIndex((item) => item.id === videoId);
-      const tile = page.locator('.ui-media-tile').nth(index);
-      await expect(tile.getByText('대표', { exact: true })).toHaveCount(0);
-      await tile.click();
+      // 영상 → 사진 2 순서로 고른다. 선생님 목록의 순서 그대로 칸이 그려진다
       const viewer = page.getByRole('dialog', { name: '사진 보기' });
-      await viewer.getByRole('button', { name: '대표 사진으로' }).click();
-      await expect(viewer.getByRole('button', { name: '대표 사진' })).toHaveAttribute('aria-pressed', 'true');
-      await viewer.getByRole('button', { name: '닫기' }).click();
-      await expect(tile.getByText('대표', { exact: true })).toBeVisible();
+      const pick = async (id, label) => {
+        await page.locator('.ui-media-tile').nth(indexOf(id)).click();
+        await viewer.getByRole('button', { name: '대표 사진으로' }).click();
+        await expect(viewer.getByRole('button', { name: label })).toHaveAttribute('aria-pressed', 'true');
+        await viewer.getByRole('button', { name: '닫기' }).click();
+      };
+      await pick(videoId, '대표 사진 1');
+      await pick(photo2, '대표 사진 2');
+      await expect(page.locator('.ui-media-tile').nth(indexOf(videoId)).getByText('대표 1', { exact: true })).toBeVisible();
+      await expect(page.locator('.ui-media-tile').nth(indexOf(photo2)).getByText('대표 2', { exact: true })).toBeVisible();
 
-      // 사진 목록 — 카드 표지가 그 영상의 한 장면 한 장(16:10). 영상 표시는 붙이지 않는다
+      // 사진 목록 — 고른 두 장만, 고른 순서로 나란히 (영상 표시는 붙이지 않는다)
       await page.goto('/photos');
       const cover = page.getByRole('button', { name: new RegExp(title) }).locator('.ui-album-card__cover');
-      await expect(cover).toHaveAttribute('data-single');
-      await expect(cover.locator('img')).toHaveCount(1);
-      await expect(cover.locator('img')).toHaveAttribute('src', /=w800-h500-c-rw$/);
-      const card = await albumCard();
-      expect(card.cover).toContain(list.body.items[index].driveFileId);
+      await expect(cover).toHaveAttribute('data-covers', '2');
+      await expect(cover.locator('img')).toHaveCount(2);
+      await expect(cover.locator('img').first()).toHaveAttribute('src', new RegExp(fileOf(videoId)));
+      await expect(cover.locator('img').nth(1)).toHaveAttribute('src', new RegExp(fileOf(photo2)));
 
-      // 학부모 앨범 목록도 같은 표지가 맨 앞 — 고른 id 같은 선생님용 값은 나가지 않는다.
-      // 확인은 "모든 학부모" 에게 공개된 사진 폴더(얼굴 목록 픽스처)로 한다 — 이 대회 앨범은 참가 확정 학부모만 본다
-      const folderId = sessions.album.peopleEventId;
-      const folderMedia = await api(request, sessions.teacher, 'GET', `/api/events/${folderId}/media?filter=all&limit=60`);
-      const oldest = folderMedia.body.items[folderMedia.body.items.length - 1];
-      const parentPreviews = async () => {
-        const res = await api(request, sessions.parent, 'GET', '/api/parent/albums');
-        const album = res.body.items.find((item) => item.eventId === folderId);
-        expect(album).not.toHaveProperty('cover');
-        expect(album).not.toHaveProperty('coverMediaId');
-        return album.previews;
-      };
-      expect((await parentPreviews())[0]).not.toContain(oldest.driveFileId);
-      try {
-        expect((await api(request, sessions.teacher, 'PATCH', `/api/events/${folderId}/album`, { coverMediaId: oldest.id })).status).toBe(200);
-        expect((await parentPreviews())[0]).toContain(oldest.driveFileId);
-      } finally {
-        await api(request, sessions.teacher, 'PATCH', `/api/events/${folderId}/album`, { coverMediaId: null });
-      }
+      // 나머지 두 장도 고르면 4장 — 앨범의 사진이 다 대표라 더 고를 것이 없다
+      expect((await patchAlbum(eventId, { addCoverMediaId: photo1 })).status).toBe(200);
+      const fourth = await patchAlbum(eventId, { addCoverMediaId: parentPhoto });
+      expect(fourth.body.coverMediaIds).toEqual([videoId, photo2, photo1, parentPhoto]);
+      expect((await albumCard()).covers).toHaveLength(4);
 
-      // 숨기면 표지로 쓰지 않는다(최근 사진으로) — 다시 보이게 하면 돌아온다
+      // 숨기면 표지에서 빠진다(3장) · 숨긴 것은 고를 수 없다 — 그 사이 대표를 바꾸지 않았으면 다시 보이게 할 때 제자리로 돌아온다
       expect((await bulk('hide')).status).toBe(200);
-      expect((await albumCard()).cover).toBeNull();
-      expect((await setCover(videoId)).body.reason).toBe('hidden_cover');
+      expect((await albumCard()).covers.map((url) => url.includes(fileOf(videoId)))).toEqual([false, false, false]);
+      expect((await patchAlbum(eventId, { addCoverMediaId: videoId })).body.reason).toBe('hidden_cover');
       expect((await bulk('show')).status).toBe(200);
-      expect((await albumCard()).cover).toContain(list.body.items[index].driveFileId);
+      const back = await api(request, sessions.teacher, 'GET', `/api/events/${eventId}/album`);
+      expect(back.body.coverMediaIds).toEqual([videoId, photo2, photo1, parentPhoto]);
 
       // 다른 앨범의 사진은 고를 수 없다
-      const other = await api(request, sessions.teacher, 'PATCH', `/api/events/${sessions.album.peopleEventId}/album`, { coverMediaId: videoId });
+      const other = await patchAlbum(folderId, { addCoverMediaId: videoId });
       expect(other.status).toBe(400);
       expect(other.body.reason).toBe('invalid_cover');
 
-      // 뷰어에서 다시 누르면 풀린다 — 카드는 최근 사진들로
+      // 뷰어에서 다시 누르면 풀린다 — 뒤의 것이 당겨진다
       await page.goto(`/photos/${eventId}`);
-      await page.locator('.ui-media-tile').nth(index).click();
-      await page.getByRole('dialog', { name: '사진 보기' }).getByRole('button', { name: '대표 사진' }).click();
-      await expect(page.getByRole('dialog', { name: '사진 보기' }).getByRole('button', { name: '대표 사진으로' })).toBeVisible();
-      await expect.poll(async () => (await albumCard()).cover).toBeNull();
+      await page.locator('.ui-media-tile').nth(indexOf(videoId)).click();
+      await viewer.getByRole('button', { name: '대표 사진 1' }).click();
+      await expect(viewer.getByRole('button', { name: '대표 사진으로' })).toBeVisible();
+      await expect.poll(async () => (await albumCard()).covers.length).toBe(3);
+
+      // 학부모 사진 탭 — 대표 사진을 고른 폴더는 그것만 보인다(선생님 목록과 같은 표지). 확인은 "모든 학부모" 에게 공개된
+      // 사진 폴더(얼굴 목록 픽스처)와, 처음부터 아이가 연결된 학부모(parentMulti)로 한다 — 이 대회 앨범은 참가 확정 학부모만 보고,
+      // 기본 학부모는 parent 프로젝트가 아이를 등록하기 전까지 온보딩 화면에 머문다
+      const folderMedia = await api(request, sessions.teacher, 'GET', `/api/events/${folderId}/media?filter=all&limit=60`);
+      const oldest = folderMedia.body.items[folderMedia.body.items.length - 1];
+      await clearCovers(folderId);
+      expect((await patchAlbum(folderId, { addCoverMediaId: oldest.id })).status).toBe(200);
+      const parentRes = await api(request, sessions.parentMulti, 'GET', '/api/parent/albums');
+      const parentAlbum = parentRes.body.items.find((item) => item.eventId === folderId);
+      expect(parentAlbum.covers).toEqual([expect.stringContaining(`${oldest.driveFileId}=w800-h500-c-rw`)]);
+      expect(parentAlbum).not.toHaveProperty('coverMediaIds');
+
+      const parentContext = await browser.newContext({ baseURL });
+      try {
+        const parentPage = await parentContext.newPage();
+        await stubPortraitThumbnails(parentPage);
+        await loginAs(parentPage, sessions.parentMulti);
+        await parentPage.goto('/parent/photos');
+        const folderTitle = (await albumCard(folderId)).title;
+        const parentCard = parentPage.getByRole('button', { name: new RegExp(folderTitle) });
+        await expect(parentCard.getByTestId('album-covers')).toHaveAttribute('data-covers', '1');
+        await expect(parentCard.getByTestId('album-previews')).toHaveCount(0);
+        // 표지가 16:10 을 지킨다(세로 그림이어도)
+        const box = await parentCard.getByTestId('album-covers').boundingBox();
+        expect(Math.abs(box.height - box.width * 10 / 16)).toBeLessThan(3);
+      } finally {
+        await parentContext.close();
+      }
     } finally {
       await bulk('show');
-      await setCover(null);
+      await clearCovers(eventId);
+      await clearCovers(folderId);
     }
   });
 

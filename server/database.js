@@ -733,9 +733,14 @@ const initDatabase = async () => {
     // 이 앨범의 자동 태그(face·candidate)를 어떤 매칭 규칙으로 계산했는지 (utils/faceVector.js matchRulesSignature).
     // 지금 규칙과 다르거나 비어 있으면 앨범을 열 때 다시 매칭한다(services/albumService.js ensureAlbumMatched).
     await client.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumMatchRules" TEXT');
-    // 선생님이 고른 대표 사진(event_media.id) — 앨범 카드의 표지. 외래 키는 두지 않는다: 읽을 때마다 "이 앨범의 준비된,
-    // 숨기지 않은 사진" 인지 다시 보고(EventMedia.summaries*), 아니면 최근 사진으로 돌아간다. 지워진 id 는 다시 쓰이지 않는다.
+    // 예전(PR #59) 한 장짜리 대표 사진 — 아래 albumCoverMediaIds 로 옮기고 비운다. 새 코드는 읽지 않는다.
     await client.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumCoverMediaId" INTEGER');
+    // 선생님이 고른 대표 사진들(event_media.id, 고른 순서, 최대 4장) — 앨범 카드의 표지. 외래 키는 두지 않는다: 읽을 때마다
+    // "이 앨범의 준비된, 숨기지 않은 사진" 인지 다시 보고(EventMedia previewRows · coverableIds), 아닌 것은 빠진다.
+    await client.query('ALTER TABLE events ADD COLUMN IF NOT EXISTS "albumCoverMediaIds" INTEGER[]');
+    // 한 장짜리 값을 옮기면서 비운다 — 비우지 않으면 선생님이 대표 사진을 모두 푼 뒤 부팅 때 다시 살아난다(멱등)
+    await client.query(`UPDATE events SET "albumCoverMediaIds" = ARRAY["albumCoverMediaId"], "albumCoverMediaId" = NULL
+                         WHERE "albumCoverMediaId" IS NOT NULL AND "albumCoverMediaIds" IS NULL`);
 
     // 사진·영상 1개. 바이트는 Drive 에 있고 여기에는 파일 id 와 메타만 둔다.
     await client.query(`

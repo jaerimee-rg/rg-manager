@@ -112,24 +112,33 @@ const renderAlbum = async (album = ALBUM, media = MEDIA) => {
 describe('PhotoAlbums — 대표 사진 표지', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  const withCover = (album) => ({ ...LIST, albums: [{ ...LIST.albums[0], previews: ['https://drive/t1', 'https://drive/t2'], ...album }] });
+  const withCovers = (covers) => ({ ...LIST, albums: [{ ...LIST.albums[0], previews: ['https://drive/t1', 'https://drive/t2'], covers }] });
   const coverOf = () => screen.getByRole('button', { name: /회장배 대회/ }).querySelector('.ui-album-card__cover');
 
-  it('대표 사진을 골랐으면 그 한 장이 표지를 채운다 — 최근 사진 4장 대신', async () => {
-    await renderList(withCover({ cover: 'https://lh3/c1=w800-h500-c-rw' }));
+  it('대표 사진을 한 장 골랐으면 그 한 장이 표지를 채운다 — 최근 사진 대신', async () => {
+    await renderList(withCovers(['https://lh3/c1=w800-h500-c-rw']));
 
     const cover = coverOf();
-    expect(cover).toHaveAttribute('data-single');
+    expect(cover).toHaveAttribute('data-covers', '1');
     const images = cover.querySelectorAll('img');
     expect(images).toHaveLength(1);
     expect(images[0]).toHaveAttribute('src', 'https://lh3/c1=w800-h500-c-rw');
   });
 
-  it('고르지 않았으면 예전처럼 최근 사진들', async () => {
-    await renderList(withCover({ cover: null }));
+  it('여러 장이면 고른 것만 고른 순서대로 — 장수가 표지 모양을 정한다', async () => {
+    await renderList(withCovers(['https://lh3/c3', 'https://lh3/c1', 'https://lh3/c2']));
 
     const cover = coverOf();
-    expect(cover).not.toHaveAttribute('data-single');
+    expect(cover).toHaveAttribute('data-covers', '3');
+    expect([...cover.querySelectorAll('img')].map((img) => img.getAttribute('src')))
+      .toEqual(['https://lh3/c3', 'https://lh3/c1', 'https://lh3/c2']);
+  });
+
+  it('고르지 않았으면 예전처럼 최근 사진들', async () => {
+    await renderList(withCovers([]));
+
+    const cover = coverOf();
+    expect(cover).not.toHaveAttribute('data-covers');
     expect(cover.querySelectorAll('img')).toHaveLength(2);
   });
 });
@@ -393,21 +402,22 @@ describe('PhotoAlbum — 사진 설명', () => {
   });
 });
 
-describe('PhotoAlbum — 대표 사진 고르기', () => {
+describe('PhotoAlbum — 대표 사진 고르기 (4장까지)', () => {
   beforeEach(() => jest.clearAllMocks());
 
   const VIDEO = { id: 4, kind: 'video', thumbnailUrl: 'https://t/4', previewUrl: 'https://drive/v4/preview', uploaderRole: 'teacher', isHidden: false };
 
-  // 앨범의 대표 사진을 서버처럼 기억한다 — PATCH {coverMediaId} 로 바뀌고, 다시 읽으면 바뀐 값이 온다
-  const renderCover = async ({ coverMediaId = null, media = MEDIA, album = ALBUM, patch } = {}) => {
-    let current = coverMediaId;
+  // 앨범의 대표 사진을 서버처럼 기억한다 — PATCH {add|removeCoverMediaId} 로 바뀌고, 다시 읽으면 바뀐 목록이 온다
+  const renderCover = async ({ covers = [], media = MEDIA, album = ALBUM, patch } = {}) => {
+    let current = [...covers];
     fetchWithAuth.mockImplementation((url, options = {}) => {
-      if (url === '/api/events/31/album' && !options.method) return ok({ ...album, coverMediaId: current });
+      if (url === '/api/events/31/album' && !options.method) return ok({ ...album, coverMediaIds: current, maxCovers: 4 });
       if (url === '/api/events/31/album' && options.method === 'PATCH') {
         const body = JSON.parse(options.body);
         if (patch) return patch(body);
-        current = body.coverMediaId;
-        return ok({ coverMediaId: current });
+        if (body.removeCoverMediaId) current = current.filter((id) => id !== body.removeCoverMediaId);
+        if (body.addCoverMediaId) current = [...current, body.addCoverMediaId];
+        return ok({ coverMediaIds: current });
       }
       if (url.startsWith('/api/events/31/media?')) return ok({ items: media, nextCursor: null });
       return ok({});
@@ -420,46 +430,51 @@ describe('PhotoAlbum — 대표 사진 고르기', () => {
       );
     });
   };
+  const tiles = () => document.querySelectorAll('.ui-media-tile');
   const openTile = async (index) => {
-    await act(async () => { fireEvent.click(document.querySelectorAll('.ui-media-tile')[index]); });
+    await act(async () => { fireEvent.click(tiles()[index]); });
     return screen.getByRole('dialog', { name: '사진 보기' });
   };
   const patches = () => fetchWithAuth.mock.calls.filter(([url, options]) => url === '/api/events/31/album' && options?.method === 'PATCH');
 
-  it('대표 사진 칸에 [대표] 표시 — 숨긴 사진이면 표지로 안 쓰이니 표시도 없다', async () => {
-    await renderCover({ coverMediaId: 1 });
+  it('대표 사진 칸마다 [대표 n] — 고른 순서 · 숨긴 사진이면 표지로 안 쓰이니 표시도 없다', async () => {
+    await renderCover({ covers: [2, 1, 3] });
 
-    const tiles = document.querySelectorAll('.ui-media-tile');
-    expect(within(tiles[0]).getByText('대표')).toBeInTheDocument();
-    expect(tiles[0]).toHaveAccessibleName(/대표 사진/);
-    expect(within(tiles[1]).queryByText('대표')).not.toBeInTheDocument();
-
-    cleanup();
-    await renderCover({ coverMediaId: 3 });
-    expect(within(document.querySelectorAll('.ui-media-tile')[2]).queryByText('대표')).not.toBeInTheDocument();
+    expect(within(tiles()[0]).getByText('대표 2')).toBeInTheDocument();
+    expect(tiles()[0]).toHaveAccessibleName(/대표 사진 2/);
+    expect(within(tiles()[1]).getByText('대표 1')).toBeInTheDocument();
+    expect(within(tiles()[2]).queryByText(/대표/)).not.toBeInTheDocument();   // 3 은 숨김
   });
 
-  it('사진을 열어 [대표 사진으로] → PATCH {coverMediaId}, 칸과 버튼이 바로 바뀐다 — 토스트로 버튼을 덮지 않는다', async () => {
-    await renderCover();
+  it('사진을 열어 [대표 사진으로] → PATCH {addCoverMediaId}, 칸과 버튼이 바로 바뀐다 — 토스트로 버튼을 덮지 않는다', async () => {
+    await renderCover({ covers: [1] });
 
     const viewer = await openTile(1);
     await act(async () => { fireEvent.click(within(viewer).getByRole('button', { name: '대표 사진으로' })); });
 
     expect(patches()).toHaveLength(1);
-    expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaId: 2 });
+    expect(JSON.parse(patches()[0][1].body)).toEqual({ addCoverMediaId: 2 });
     expect(document.querySelector('.ui-toast')).toBeNull();
-    expect(within(viewer).getByRole('button', { name: '대표 사진' })).toHaveAttribute('aria-pressed', 'true');
-    expect(within(document.querySelectorAll('.ui-media-tile')[1]).getByText('대표')).toBeInTheDocument();
+    expect(within(viewer).getByRole('button', { name: '대표 사진 2' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(tiles()[1]).getByText('대표 2')).toBeInTheDocument();
   });
 
-  it('[대표 사진] 을 다시 누르면 PATCH {coverMediaId: null} 로 푼다', async () => {
-    await renderCover({ coverMediaId: 1 });
+  it('[대표 사진 n] 을 다시 누르면 PATCH {removeCoverMediaId} 로 푼다 — 뒤의 것이 한 칸씩 당겨진다', async () => {
+    await renderCover({ covers: [1, 2] });
 
     const viewer = await openTile(0);
-    await act(async () => { fireEvent.click(within(viewer).getByRole('button', { name: '대표 사진' })); });
+    await act(async () => { fireEvent.click(within(viewer).getByRole('button', { name: '대표 사진 1' })); });
 
-    expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaId: null });
+    expect(JSON.parse(patches()[0][1].body)).toEqual({ removeCoverMediaId: 1 });
     expect(within(viewer).getByRole('button', { name: '대표 사진으로' })).toBeInTheDocument();
+    expect(within(tiles()[1]).getByText('대표 1')).toBeInTheDocument();
+  });
+
+  it('4장이 다 찼으면 다른 사진의 버튼이 잠긴다', async () => {
+    await renderCover({ covers: [1, 4, 8, 9], media: [MEDIA[0], MEDIA[1], VIDEO] });
+
+    const viewer = await openTile(1);
+    expect(within(viewer).getByRole('button', { name: '대표 사진 4장 다 골랐어요' })).toBeDisabled();
   });
 
   it('영상도 대표로 고를 수 있다', async () => {
@@ -468,17 +483,17 @@ describe('PhotoAlbum — 대표 사진 고르기', () => {
     const viewer = await openTile(1);
     await act(async () => { fireEvent.click(within(viewer).getByRole('button', { name: '대표 사진으로' })); });
 
-    expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaId: 4 });
-    expect(within(document.querySelectorAll('.ui-media-tile')[1]).getByText('대표')).toBeInTheDocument();
+    expect(JSON.parse(patches()[0][1].body)).toEqual({ addCoverMediaId: 4 });
+    expect(within(tiles()[1]).getByText('대표 1')).toBeInTheDocument();
   });
 
-  it('서버가 거절하면 그 이유를 알리고 버튼은 그대로', async () => {
-    await renderCover({ patch: () => ok({ error: '숨긴 사진은 대표 사진으로 고를 수 없어요.', reason: 'hidden_cover' }, 400) });
+  it('서버가 거절하면(그 사이 다른 창에서 4장을 채웠다 등) 그 이유를 알리고 버튼은 그대로', async () => {
+    await renderCover({ patch: () => ok({ error: '대표 사진은 4장까지 고를 수 있어요. 하나를 먼저 풀어 주세요.', reason: 'covers_full' }, 409) });
 
     const viewer = await openTile(0);
     await act(async () => { fireEvent.click(within(viewer).getByRole('button', { name: '대표 사진으로' })); });
 
-    expect(screen.getByText('숨긴 사진은 대표 사진으로 고를 수 없어요.')).toBeInTheDocument();
+    expect(screen.getByText('대표 사진은 4장까지 고를 수 있어요. 하나를 먼저 풀어 주세요.')).toBeInTheDocument();
     expect(within(viewer).getByRole('button', { name: '대표 사진으로' })).toBeEnabled();
   });
 

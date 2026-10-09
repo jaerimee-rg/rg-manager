@@ -26,7 +26,7 @@ const PAGE = 60;
  * 선생님 사진 메뉴 — 앨범 하나 (docs/photo-menu FR-520~529).
  *
  * 위: 학부모 공개 패널 + Drive 폴더 카드. 아래: 얼굴 목록(누르면 그 사람 사진만), 필터 칩과 사진 칸,
- * 고르기 모드(숨기기 · 다시 보이기 · 지우기). 사진을 열어 [대표 사진으로] 를 누르면 사진 목록 카드의 표지가 된다.
+ * 고르기 모드(숨기기 · 다시 보이기 · 지우기). 사진을 열어 [대표 사진으로] 를 누르면 사진 목록 카드의 표지가 된다(4장까지).
  * Google 연결이 끊기거나 폴더가 사라져도 읽기는 계속되고 쓰기 버튼만 막힌다.
  */
 function PhotoAlbum() {
@@ -210,9 +210,9 @@ function PhotoAlbum() {
     setItems((prev) => prev.map((media) => (media.id === item.id ? { ...media, caption: saved } : media)));
   };
 
-  // 대표 사진 — 사진 목록 카드의 표지. 앱 안의 값이라 Google 연결이 끊겨도 바꿀 수 있다(공개 · 숨기기와 같다).
-  // 됐다는 알림은 띄우지 않는다 — 뷰어의 버튼이 노란 [대표 사진] 으로 바뀌는 것이 알림이고, 토스트는 그 버튼을 덮는다
-  const setCover = (item, on) => patchAlbum({ coverMediaId: on ? item.id : null });
+  // 대표 사진(최대 4장) — 사진 목록 카드의 표지. 고른 순서가 표지의 순서다. 앱 안의 값이라 Google 연결이 끊겨도 바꿀 수 있다.
+  // 됐다는 알림은 띄우지 않는다 — 뷰어의 버튼이 노란 [대표 사진 n] 으로 바뀌는 것이 알림이고, 토스트는 그 버튼을 덮는다
+  const setCover = (item, on) => patchAlbum(on ? { addCoverMediaId: item.id } : { removeCoverMediaId: item.id });
 
   if (notFound) {
     return (
@@ -450,7 +450,7 @@ function PhotoAlbum() {
               showUploader
               selectable={selecting}
               selected={selected}
-              coverId={album.coverMediaId ?? null}
+              coverIds={album.coverMediaIds || []}
               onOpen={(item) => setViewerId(item.id)}
               onToggle={(item) => setSelected((prev) => (prev.includes(item.id) ? prev.filter((id) => id !== item.id) : [...prev, item.id]))}
             />
@@ -507,7 +507,8 @@ function PhotoAlbum() {
           onClose={() => setViewerId(null)}
           onDelete={locked ? undefined : (item) => { setViewerId(null); setConfirmDelete([item.id]); }}
           onCaptionSave={saveCaption}
-          coverId={album.coverMediaId ?? null}
+          coverIds={album.coverMediaIds || []}
+          coverLimit={album.maxCovers || 4}
           onCoverChange={setCover}
         />
       )}
