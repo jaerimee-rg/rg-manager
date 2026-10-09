@@ -784,6 +784,25 @@ const initDatabase = async () => {
     // 선생님이 붙이는 사진·영상 설명. 학부모 뷰어 아래쪽에 보인다. 없으면 NULL.
     await client.query('ALTER TABLE event_media ADD COLUMN IF NOT EXISTS caption TEXT');
 
+    // 학부모가 앨범·사진을 본 기록 — 선생님 앨범의 보기 통계, 관리자 사진 보기 로그(models/AlbumView.js).
+    // kind: 'album'(앨범 열기, mediaId 없음) | 'media'(사진·영상을 크게 봄). 사진을 지워도 기록은 남는다(mediaId → NULL).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS album_views (
+        id SERIAL PRIMARY KEY,
+        "eventId" INTEGER NOT NULL,
+        "mediaId" INTEGER,
+        "userId" INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        "createdAt" TEXT NOT NULL,
+        FOREIGN KEY ("eventId") REFERENCES events(id) ON DELETE CASCADE,
+        FOREIGN KEY ("mediaId") REFERENCES event_media(id) ON DELETE SET NULL,
+        FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+    await client.query('CREATE INDEX IF NOT EXISTS idx_album_views_event ON album_views ("eventId", kind)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_album_views_media ON album_views ("mediaId")');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_album_views_recent ON album_views ("createdAt" DESC, id DESC)');
+
     // 사진에서 찾은 얼굴. 이미지는 저장하지 않고 특징값(128차원)과 위치만 남긴다.
     // descriptor 는 base64(Float32Array) — pgvector 는 운영 DB 계정 권한으로 설치할 수 없어
     // 거리 계산은 순수 JS 로 한다 (docs/photo-sharing/03-implementation-plan.md C-1).

@@ -14,6 +14,7 @@ import {
   deleteFace
 } from '../controllers/parentAlbumController.js';
 import { listShops } from '../controllers/parentShopController.js';
+import { recordView } from '../controllers/albumViewController.js';
 import { verifyToken } from '../middleware/auth.js';
 import { requireRole } from '../middleware/roles.js';
 import { logAction } from '../middleware/logger.js';
@@ -45,6 +46,8 @@ router.post('/events/:id/media/:mediaId/complete', completeUpload);
 router.post('/events/:id/media/:mediaId/faces', saveOwnFaces);
 router.post('/events/:id/media/:mediaId/confirm', confirmTag);
 router.delete('/events/:id/media/:mediaId', deleteMedia);
+// 본 기록 — 앨범을 열었다 · 사진을 크게 봤다 (볼 수 있는 앨범의 숨기지 않은 사진만)
+router.post('/events/:id/views', recordView);
 
 // 추천 상품 탭 — 연결된 선생님의 공개 상점 (상품은 공유 링크 /shop/:publicId 화면이 보여 준다)
 router.get('/shops', listShops);

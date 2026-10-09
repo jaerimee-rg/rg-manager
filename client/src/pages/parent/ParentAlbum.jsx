@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ParentLayout from '../../components/parent/ParentLayout';
 import { Button, EmptyState, IconButton, Spinner } from '../../components/ui';
 import MediaGrid from '../../components/album/MediaGrid';
 import MediaViewer from '../../components/album/MediaViewer';
+import { createViewTracker } from '../../utils/albumViews';
 import UploadSheet from '../../components/album/UploadSheet';
 import RetryImage from '../../components/album/RetryImage';
 import FacePeopleStrip from '../../components/album/FacePeopleStrip';
@@ -114,6 +115,10 @@ function ParentAlbum() {
   // 앨범을 볼 수 있다고 확인된 뒤에만 읽는다(못 보는 앨범이면 어차피 403)
   const canView = Boolean(data);
   useEffect(() => { if (canView) loadPeople(); }, [canView, loadPeople]);
+
+  // 본 기록 — 앨범을 열면 한 번, 사진을 크게 볼 때마다(선생님 보기 통계 · 관리자 로그). 볼 수 있는 앨범일 때만
+  const views = useMemo(() => createViewTracker(eventId), [eventId]);
+  useEffect(() => { if (canView) views.album(); }, [canView, views]);
 
   // 사진을 지우거나 올리거나 우리 아이를 확인하면 얼굴 묶음도 바뀔 수 있다
   const reload = () => { load(); loadPeople(); };
@@ -444,6 +449,7 @@ function ParentAlbum() {
           startId={viewerId}
           onClose={() => setViewerId(null)}
           onDelete={removeMedia}
+          onShow={(item) => views.media(item.id)}
         />
       )}
 

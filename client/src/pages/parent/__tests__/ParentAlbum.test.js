@@ -443,3 +443,31 @@ describe('ParentAlbum — 맨 위 얼굴 목록 (앨범의 사람마다 얼굴 �
     expect(fetchWithAuth.mock.calls.some(([url]) => url.endsWith('/people'))).toBe(false);
   });
 });
+
+describe('ParentAlbum — 본 기록(선생님 보기 통계 · 관리자 로그)', () => {
+  const views = () => fetchWithAuth.mock.calls
+    .filter(([url, options]) => url === '/api/parent/events/3/views' && options?.method === 'POST')
+    .map(([, options]) => JSON.parse(options.body));
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('앨범을 열면 한 번, 사진을 크게 보면 그 사진 — 넘겨 본 사진도, 같은 것은 이 화면에서 한 번만', async () => {
+    fetchWithAuth.mockImplementation(() => jsonResponse(payload()));
+    await renderAlbum();
+
+    expect(views()).toEqual([{}]);
+
+    await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: /사진 열기|영상 열기/ })[0]); });
+    expect(views()).toEqual([{}, { mediaId: 1 }]);
+
+    await act(async () => { fireEvent.keyDown(document, { key: 'ArrowRight' }); });
+    await act(async () => { fireEvent.keyDown(document, { key: 'ArrowLeft' }); });
+    expect(views()).toEqual([{}, { mediaId: 1 }, { mediaId: 2 }]);
+  });
+
+  it('볼 수 없는 앨범이면 남기지 않는다', async () => {
+    fetchWithAuth.mockImplementation(() => jsonResponse({ error: '선생님이 아직 공개하지 않은 앨범이에요', reason: 'album_private' }, { ok: false, status: 403 }));
+    await renderAlbum();
+    expect(views()).toEqual([]);
+  });
+});

@@ -162,6 +162,8 @@ export const toTeacherMedia = (media, { studentNames = {} } = {}) => ({
   uploaderName: uploaderNameOf(media),
   status: media.status,
   isHidden: Boolean(media.isHidden),
+  // 학부모가 크게 본 횟수 (AlbumView.viewsByMedia)
+  viewCount: Number(media.viewCount) || 0,
   faceStatus: media.faceStatus,
   faceCount: media.faceCount || 0,
   faces: (media.faces || []).map((face) => ({

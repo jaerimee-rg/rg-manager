@@ -14,6 +14,7 @@ import { canUpload, canManageAlbum, canDeleteMedia, reasonMessage, isValidAudien
 import { toTeacherMedia, thumbnailUrl } from '../utils/mediaSerializer.js';
 import { sharePathFor } from '../services/albumShare.js';
 import { albumPeople, findPerson, removePerson, toPersonView } from '../services/albumPeople.js';
+import AlbumView from '../models/AlbumView.js';
 
 /**
  * 선생님의 앨범 관리. 이벤트 소유자만 들어온다.
@@ -109,7 +110,17 @@ export const getAlbum = async (req, res) => {
     };
 
     if (event.driveFolderId) {
-      const [stats, viewers] = await Promise.all([EventMedia.stats(event.id), albumService.countViewers(event)]);
+      const [stats, viewers, viewStats, topViewed] = await Promise.all([
+        EventMedia.stats(event.id),
+        albumService.countViewers(event),
+        AlbumView.albumStats(event.id),
+        AlbumView.topViewed(event.id, 4)
+      ]);
+      // 학부모가 본 통계 — 본 학부모 수 · 앨범 연 횟수 · 사진 본 횟수, 그리고 많이 본 사진
+      payload.viewStats = viewStats;
+      payload.topViewed = topViewed.map((row) => ({
+        id: row.id, kind: row.kind, views: row.views, thumbnailUrl: thumbnailUrl(row.driveFileId, 400)
+      }));
       payload.counts = {
         images: stats.images, videos: stats.videos, hidden: stats.hidden,
         fromParents: stats.fromParents || 0, fromTeacher: stats.fromTeacher || 0,
@@ -295,9 +306,10 @@ export const refreshAlbum = async (req, res) => {
 /** 목록 응답에 태그·얼굴을 붙인다 (N+1 을 피해 한 번에 읽는다). */
 const decorate = async (rows, userId, role) => {
   const ids = rows.map((row) => row.id);
-  const [tagsByMedia, facesByMedia] = await Promise.all([
+  const [tagsByMedia, facesByMedia, views] = await Promise.all([
     MediaTag.listByMediaIds(ids),
-    MediaFace.listByMediaIds(ids)
+    MediaFace.listByMediaIds(ids),
+    AlbumView.viewsByMedia(ids)
   ]);
 
   const studentIds = [...new Set(Object.values(tagsByMedia).flat().map((tag) => tag.studentId))];
@@ -305,7 +317,12 @@ const decorate = async (rows, userId, role) => {
   const studentNames = Object.fromEntries(students.map((student) => [student.id, student.name]));
 
   return rows.map((row) => toTeacherMedia(
-    { ...row, tags: tagsByMedia[row.id] || [], faces: facesByMedia[row.id] || [] },
+    {
+      ...row,
+      viewCount: views[row.id] || 0,
+      tags: tagsByMedia[row.id] || [],
+      faces: facesByMedia[row.id] || []
+    },
     { studentNames }
   ));
 };

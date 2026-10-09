@@ -29,6 +29,8 @@ import {
   PUBLIC_SHOP_READ_MAX,
   PUBLIC_SHOP_TRACK_MAX,
   PUBLIC_SHOP_TRACK_IP_MAX,
+  PHOTO_VIEW_IP_MAX,
+  isPhotoViewBeacon,
   PUBLIC_SHOP_RESERVE_IP_MAX,
   visitorKeyGenerator
 } from './utils/rateLimits.js';
@@ -101,8 +103,10 @@ const apiLimiter = rateLimit({
   message: { error: '너무 많은 요청입니다. 잠시 후 다시 시도해주세요.' },
   // 공개 채팅·공개 상점은 아래 전용 한도를 쓴다. 여기서 또 세면 더 낮은 쪽(200, IP 기준)이
   // 실제 상한이 되어 학부모 여러 명이 한 칸을 나눠 쓰게 된다.
+  // 학부모 사진 보기 기록도 아래 전용 한도를 쓴다(사진을 넘길 때마다 와서 일반 화면 몫을 다 먹는다).
   skip: (req) =>
-    req.originalUrl.startsWith('/api/chat/public') || req.originalUrl.startsWith('/api/shop/public'),
+    req.originalUrl.startsWith('/api/chat/public') || req.originalUrl.startsWith('/api/shop/public')
+    || isPhotoViewBeacon(req),
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -194,6 +198,15 @@ app.use('/api/shop/public', (req, res, next) => {
   // 방문·클릭 기록: 방문자 기준 + IP 기준 두 칸을 모두 통과해야 한다
   return publicShopTrackIpLimiter(req, res, () => publicShopTrackLimiter(req, res, next));
 });
+// 학부모 사진 보기 기록 — 일반 한도와 따로 센다(utils/rateLimits.js PHOTO_VIEW_IP_MAX)
+const photoViewLimiter = rateLimit({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: limitFromEnv(process.env.PHOTO_VIEW_RATE_LIMIT_MAX, PHOTO_VIEW_IP_MAX),
+  message: { error: '요청이 많습니다. 잠시 후 다시 시도해주세요.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+app.use('/api/parent/events', (req, res, next) => (isPhotoViewBeacon(req) ? photoViewLimiter(req, res, next) : next()));
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/signup', authLimiter);
 app.use('/api/auth/kakao', authLimiter);
