@@ -15,6 +15,7 @@ jest.unstable_mockModule('../../models/EventMedia.js', () => ({
     setCaption: jest.fn(),
     coverableIds: jest.fn().mockResolvedValue([]),
     coverRows: jest.fn().mockResolvedValue([]),
+    setCoverCrops: jest.fn().mockResolvedValue(0),
     listUnanalyzed: jest.fn().mockResolvedValue([]),
     refreshFaceCounts: jest.fn().mockResolvedValue(0)
   }
@@ -616,11 +617,11 @@ describe('updateAlbum — 대표 사진 (사진 목록 카드의 표지, 최대 
     expect(res.json.mock.calls[0][0].coverMediaIds).toEqual([41]);
   });
 
-  it('getAlbum 은 지금 쓸 수 있는 대표 사진 목록(고른 순서)·썸네일과 최대 장수를 준다', async () => {
+  it('getAlbum 은 지금 쓸 수 있는 대표 사진 목록(고른 순서)·썸네일·보일 부분과 최대 장수를 준다', async () => {
     Event.getById.mockResolvedValue(event({ albumCoverMediaIds: [41, 2, 7] }));
     EventMedia.coverRows.mockResolvedValue([
-      { id: 7, kind: 'video', driveFileId: 'v-7' },
-      { id: 41, kind: 'image', driveFileId: 'd-41' }
+      { id: 7, kind: 'video', driveFileId: 'v-7', coverCrop: { x: 20, y: 30, zoom: 2 } },
+      { id: 41, kind: 'image', driveFileId: 'd-41', coverCrop: null }
     ]);
 
     await getAlbum(req, res);
@@ -629,8 +630,8 @@ describe('updateAlbum — 대표 사진 (사진 목록 카드의 표지, 최대 
     expect(res.json.mock.calls[0][0]).toMatchObject({
       coverMediaIds: [7, 41],
       covers: [
-        { id: 7, kind: 'video', thumbnailUrl: 'https://lh3.googleusercontent.com/d/v-7=w400-h400-c-rw' },
-        { id: 41, kind: 'image', thumbnailUrl: 'https://lh3.googleusercontent.com/d/d-41=w400-h400-c-rw' }
+        { id: 7, kind: 'video', driveFileId: 'v-7', thumbnailUrl: 'https://lh3.googleusercontent.com/d/v-7=w400-h400-c-rw', crop: { x: 20, y: 30, zoom: 2 } },
+        { id: 41, kind: 'image', driveFileId: 'd-41', thumbnailUrl: 'https://lh3.googleusercontent.com/d/d-41=w400-h400-c-rw', crop: null }
       ],
       maxCovers: 4
     });
@@ -729,6 +730,68 @@ describe('updateAlbum — 대표 사진 통째로 바꾸기 (고르기에서 한
 
     expect(res.json.mock.calls[0][0].reason).toBe('invalid_cover');
     expect(Event.updateAlbum).not.toHaveBeenCalled();
+  });
+
+  describe('보일 부분 {coverCrops} — [저장하기] 가 목록과 함께 보낸다', () => {
+    beforeEach(() => { EventMedia.coverableIds.mockResolvedValue([3, 1]); });
+
+    it('목록에 든 사진의 보일 부분을 다듬어 한 번에 적는다 — 가운데는 null', async () => {
+      req.body = { coverMediaIds: [3, 1], coverCrops: { 3: { x: 20.04, y: 70, zoom: 1.5 }, 1: { x: 50, y: 50, zoom: 1 } } };
+
+      await updateAlbum(req, res);
+
+      expect(res.status).not.toHaveBeenCalled();
+      expect(Event.updateAlbum).toHaveBeenCalledWith(3, { albumCoverMediaIds: [3, 1] });
+      expect(EventMedia.setCoverCrops).toHaveBeenCalledWith(3, { 3: { x: 20, y: 70, zoom: 1.5 }, 1: null });
+    });
+
+    it('보일 부분이 안 오면 적지 않는다 — 예전 화면·API 호출', async () => {
+      req.body = { coverMediaIds: [3, 1] };
+
+      await updateAlbum(req, res);
+
+      expect(EventMedia.setCoverCrops).not.toHaveBeenCalled();
+    });
+
+    it('목록에 없는 사진의 보일 부분은 400 invalid_cover_crop — 아무것도 쓰지 않는다', async () => {
+      req.body = { coverMediaIds: [3, 1], coverCrops: { 9: { x: 10, y: 10, zoom: 1 } } };
+
+      await updateAlbum(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json.mock.calls[0][0].reason).toBe('invalid_cover_crop');
+      expect(Event.updateAlbum).not.toHaveBeenCalled();
+      expect(EventMedia.setCoverCrops).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['범위 밖', { 3: { x: 120, y: 10, zoom: 1 } }],
+      ['너무 큰 확대', { 3: { x: 10, y: 10, zoom: 5 } }],
+      ['객체가 아님', [1, 2]],
+      ['null', null]
+    ])('%s 이면 400 invalid_cover_crop', async (_label, coverCrops) => {
+      req.body = { coverMediaIds: [3, 1], coverCrops };
+
+      await updateAlbum(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json.mock.calls[0][0].reason).toBe('invalid_cover_crop');
+      expect(Event.updateAlbum).not.toHaveBeenCalled();
+    });
+
+    it('목록 없이 보일 부분만 오면 400 — 더하기·빼기와도 섞지 않는다', async () => {
+      for (const body of [{ coverCrops: { 3: null } }, { addCoverMediaId: 3, coverCrops: { 3: null } }]) {
+        res.status.mockClear();
+        Event.updateAlbum.mockClear();
+        req.body = body;
+
+        await updateAlbum(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(Event.updateAlbum).not.toHaveBeenCalled();
+      }
+      expect(EventMedia.setCoverCrops).not.toHaveBeenCalled();
+    });
   });
 });
 

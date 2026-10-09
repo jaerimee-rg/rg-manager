@@ -699,8 +699,21 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   `GET …/album` returns the current `coverMediaIds`, their thumbnails as `covers` (`EventMedia.coverRows`; they may not be on the
   loaded grid page) and `maxCovers`; grid tiles get a ★ 대표 n badge. **Both list cards show only the covers** — teacher 사진 list and parent
   사진 tab share `components/album/AlbumCovers.jsx` (`.ui-album-card__cover[data-covers]`: 1 fills the 16:10 box, 2 side by side,
-  3 = first one big on the left, 4 = 2×2). URLs come from `mediaSerializer.coverUrls` (one cover → lh3 `=w800-h500-c-rw`, several →
-  the square thumbnails) as `covers` on `GET /api/albums` and `toParentAlbum` (parent whitelist test pins the keys; no ids go out).
+  3 = first one big on the left, 4 = 2×2). URLs come from `mediaSerializer.coverUrls` — **uncropped** (one cover → lh3 `=w1000-rw`, several →
+  `=s800-rw`, both × the cover's zoom up to 1600; client twin `utils/coverCrop.js:coverImageUrl`) — as `covers` on `GET /api/albums` and
+  `toParentAlbum` (parent whitelist test pins the keys; no ids go out). Google's `-c` crop is gone on purpose: it made other parts impossible to show.
+- **Cover crop (보일 부분, 2026-10-09)** — `event_media."coverCrop"` JSONB `{x, y, zoom}` (x·y 0–100 %, zoom 1–3; NULL = centre, no zoom).
+  Rendered with pure CSS on every card: `object-fit: cover` + `object-position: x% y%` + `transform: scale(zoom)` around the same point
+  (`utils/coverCrop.js:cropStyle`), so one value works for every slot shape (16:10, half, quarter). Each cover sits in its own clipping
+  `.ui-album-card__cover-slot` or a zoomed photo would spill into the next slot. Lists get it as **`coverCrops`** (same order as `covers`,
+  `mediaSerializer.coverCropsOf`; `covers` stays a URL list so an old open tab doesn't break). The teacher clicks a photo in the 대표 사진
+  panel's preview ("사진 목록에서 이렇게 보여요", `AlbumCovers onSelect`) → `pages/Photos/CoverCropDialog.jsx` draws the card at full size,
+  the chosen slot draggable (pointer drag → `panCrop`, exact px→% math), slider/wheel/± zoom, ← → ↑ ↓, [가운데로]; [적용] only edits the draft
+  (`coverDraft.setCoverCrop`; `sameCovers` compares crops) and [저장하기] sends `PATCH …/album {coverMediaIds, coverCrops: {id: crop|null}}`
+  for every listed cover (`albumController.parseCoverCrops` → `EventMedia.setCoverCrops`, one `jsonb_each` UPDATE; only with `coverMediaIds`,
+  only for ids in it, values through `mediaValidation.normalizeCoverCrop`; else 400 `invalid_cover_crop`). A newly picked cover starts centred.
+  `GET …/album` covers carry `driveFileId` + `crop`. **Schema change** — apply `ALTER TABLE event_media ADD COLUMN IF NOT EXISTS "coverCrop" JSONB`
+  to production before merging (see *Deployment*).
   A video shows its Drive frame with **no play mark** (owner's call 2026-10-09). No covers → the old newest-four box / strip.
   The covers are **re-checked on every read** (`EventMedia` `previewRows`, `array_position … NULLS LAST`), and parent previews put them first.
 - **View stats & admin photo-view log** (`album_views`: `eventId` · `mediaId` (SET NULL when the photo is deleted) · `userId` · `kind`

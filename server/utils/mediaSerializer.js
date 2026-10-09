@@ -26,19 +26,33 @@ export const thumbnailUrl = (driveFileId, size = 400) =>
   (driveFileId ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=w${size}-h${size}-c-rw` : null);
 
 /**
- * 선생님 사진 목록 카드의 대표 사진 — 표지 칸(16:10)과 같은 비율로 가운데를 잘라 받는다(800×500 WebP, 2026-10-09 운영 사진으로 확인).
- * 정사각형 썸네일을 늘려 쓰면 위아래가 한 번 더 잘리고 흐려진다.
+ * 앨범 카드 표지의 대표 사진 — **자르지 않고** 원래 비율로 받는다(WebP). 어느 부분이 보일지는 화면이 정한다
+ * (object-fit: cover + 선생님이 고른 보일 부분 coverCrop — client utils/coverCrop.js cropStyle). Google 이 가운데를 잘라 주면
+ * 다른 부분을 보여 줄 수가 없다.
+ * 한 장이면 표지 전체(16:10)를 채우니 폭 기준 1000px, 여러 장이면 칸이 작아 긴 변 800px. 확대한 만큼 크게 받는다(1600px 까지).
+ * 같은 주소: client/src/utils/coverCrop.js coverImageUrl.
  */
-export const coverImageUrl = (driveFileId) =>
-  (driveFileId ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=w800-h500-c-rw` : null);
+export const coverImageUrl = (driveFileId, { single = true, zoom = 1 } = {}) => {
+  if (!driveFileId) return null;
+  const size = Math.min(1600, Math.ceil(((single ? 1000 : 800) * Math.max(1, Number(zoom) || 1)) / 100) * 100);
+  return `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=${single ? 'w' : 's'}${size}-rw`;
+};
+
+/** 표지 한 장 — 파일 id 만 오기도 하고(예전 모양) { driveFileId, crop } 으로 오기도 한다 */
+const coverParts = (cover) => (typeof cover === 'string' ? { driveFileId: cover, crop: null } : cover || {});
 
 /**
  * 앨범 카드 표지의 대표 사진 주소들(고른 순서) — 선생님 사진 목록과 학부모 사진 탭이 같은 표지를 그린다.
- * 한 장이면 표지 전체(16:10)를 채우니 그 비율로 잘라 받고, 여러 장이면 칸이 작아 정사각형 썸네일로 충분하다.
+ * covers = [{ driveFileId, crop }] (EventMedia previewRows). 보일 부분은 coverCropsOf 가 같은 순서로 따로 싣는다 —
+ * covers 는 예전처럼 주소 목록이라, 배포 직후 예전 화면이 받아도 깨지지 않는다(가운데가 보일 뿐이다).
  */
-export const coverUrls = (driveFileIds = []) => (driveFileIds.length === 1
-  ? [coverImageUrl(driveFileIds[0])]
-  : driveFileIds.map((id) => thumbnailUrl(id, 400)));
+export const coverUrls = (covers = []) => covers.map((cover) => {
+  const { driveFileId, crop } = coverParts(cover);
+  return coverImageUrl(driveFileId, { single: covers.length === 1, zoom: crop?.zoom });
+});
+
+/** 표지 대표 사진마다 보일 부분 { x, y, zoom } — 고르지 않았으면 null. coverUrls 와 같은 순서 */
+export const coverCropsOf = (covers = []) => covers.map((cover) => coverParts(cover).crop || null);
 
 /** 뷰어용 큰 사진 — 폭 기준, 원래 비율 그대로 */
 export const largeImageUrl = (driveFileId, width = 1600) =>
@@ -126,7 +140,9 @@ export const toParentAlbum = (event, counts = {}) => ({
   },
   previews: (counts.previews || []).map((id) => thumbnailUrl(id, 400)),
   // 선생님이 고른 대표 사진들 — 있으면 카드가 이것만 보여 준다(학부모에게 보이는 사진만 남는다: EventMedia previewRows)
-  covers: coverUrls(counts.covers || [])
+  covers: coverUrls(counts.covers || []),
+  // 같은 순서로 각 대표 사진의 보일 부분(선생님이 고른 것, 없으면 null) — 위치·확대 숫자뿐이다
+  coverCrops: coverCropsOf(counts.covers || [])
 });
 
 /**
@@ -184,6 +200,7 @@ export default {
   thumbnailUrl,
   coverImageUrl,
   coverUrls,
+  coverCropsOf,
   largeImageUrl,
   originalUrl,
   previewUrl,

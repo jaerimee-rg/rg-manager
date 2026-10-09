@@ -42,6 +42,25 @@ describe('CoverOrderPanel — 대표 사진 칸', () => {
       .toEqual(['https://lh3/c1', 'https://lh3/c2', 'https://lh3/c3']);
   });
 
+  it('미리 보기의 사진을 누르면 그 칸의 보일 부분 고르기를 연다 · 보일 부분대로 그린다', () => {
+    const onCrop = jest.fn();
+    render(<CoverOrderPanel covers={[cover(1), { ...cover(2), crop: { x: 5, y: 95, zoom: 1 } }]} onCrop={onCrop} />);
+
+    const preview = screen.getByTestId('cover-preview');
+    expect(preview.querySelectorAll('img')[1].style.objectPosition).toBe('5% 95%');
+    fireEvent.click(screen.getByRole('button', { name: '2번 사진 보일 부분 고르기' }));
+    expect(onCrop).toHaveBeenCalledWith(1);
+    expect(screen.getByText(/사진을 누르면 보일 부분을 골라요/)).toBeInTheDocument();
+  });
+
+  it('onCrop 이 없거나 저장 중이면 미리 보기는 눌리지 않는다', () => {
+    const { rerender } = render(<CoverOrderPanel covers={COVERS} />);
+    expect(screen.queryByRole('button', { name: /보일 부분 고르기/ })).not.toBeInTheDocument();
+
+    rerender(<CoverOrderPanel covers={COVERS} onCrop={jest.fn()} disabled />);
+    expect(screen.queryByRole('button', { name: /보일 부분 고르기/ })).not.toBeInTheDocument();
+  });
+
   it('대표 사진이 없으면 정하는 방법을 알려 준다 — [저장하기] 까지', () => {
     render(<CoverOrderPanel covers={[]} />);
 

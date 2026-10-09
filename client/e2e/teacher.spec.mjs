@@ -384,7 +384,8 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
       expect((await patchAlbum(folderId, { addCoverMediaId: oldest.id })).status).toBe(200);
       const parentRes = await api(request, sessions.parentMulti, 'GET', '/api/parent/albums');
       const parentAlbum = parentRes.body.items.find((item) => item.eventId === folderId);
-      expect(parentAlbum.covers).toEqual([expect.stringContaining(`${oldest.driveFileId}=w800-h500-c-rw`)]);
+      expect(parentAlbum.covers).toEqual([expect.stringContaining(`${oldest.driveFileId}=w1000-rw`)]);
+      expect(parentAlbum.coverCrops).toEqual([null]);
       expect(parentAlbum).not.toHaveProperty('coverMediaIds');
 
       const parentContext = await browser.newContext({ baseURL });
@@ -582,6 +583,106 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
       await expect(adminPage.getByText(/모두 \d+건/)).toBeVisible();
     } finally {
       await adminContext.close();
+    }
+  });
+
+  test('대표 사진 — "사진 목록에서 이렇게 보여요" 의 사진을 눌러 보일 부분을 고르고, [저장하기] 를 누르면 카드에 그대로 보인다', async ({ page, request }) => {
+    // 픽스처: mediaIds = [선생님 사진 1, 선생님 사진 2, 학부모 사진 3, 영상 4]
+    const eventId = sessions.album.eventId;
+    const [photo1, photo2] = sessions.album.mediaIds;
+    const patchAlbum = (id, body) => api(request, sessions.teacher, 'PATCH', `/api/events/${id}/album`, body);
+    const albumOf = async () => (await api(request, sessions.teacher, 'GET', `/api/events/${eventId}/album`)).body;
+    const panel = page.getByRole('region', { name: '대표 사진', exact: true });
+
+    try {
+      expect((await patchAlbum(eventId, { coverMediaIds: [photo1, photo2] })).status).toBe(200);
+      const list = await api(request, sessions.teacher, 'GET', `/api/events/${eventId}/media?filter=all&limit=60`);
+      const fileOf = (id) => list.body.items.find((item) => item.id === id).driveFileId;
+      await stubPortraitThumbnails(page);   // 세로 그림(위아래로 넘친다)
+      await page.goto(`/photos/${eventId}`);
+
+      // 미리 보기는 자르지 않은 사진(=s800) — Google 이 잘라 주면 다른 부분을 보여 줄 수 없다
+      const preview = panel.getByTestId('cover-preview');
+      await expect(preview.locator('img').first()).toHaveAttribute('src', new RegExp(`${fileOf(photo1)}=s800-rw$`));
+      await expect(panel.getByText(/사진을 누르면 보일 부분을 골라요/)).toBeVisible();
+
+      // 1번 사진을 누르면 보일 부분 고르기 — 카드와 같은 모양(2장 나란히)을 크게
+      await panel.getByRole('button', { name: '1번 사진 보일 부분 고르기' }).click();
+      const dialog = page.getByRole('dialog', { name: '대표 사진 1 — 보일 부분' });
+      await expect(dialog.getByTestId('cover-crop-stage')).toHaveAttribute('data-covers', '2');
+      const slot = dialog.getByRole('group', { name: /보일 부분/ });
+      await expect.poll(() => slot.locator('img').evaluate((img) => img.naturalHeight)).toBe(711);
+
+      // 마우스로 아래로 끌면 위쪽이 더 보인다(y 가 줄어든다) · 막대로 1.5배
+      const box = await slot.boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 40, { steps: 6 });
+      await page.mouse.up();
+      const dragged = await slot.locator('img').evaluate((img) => img.style.objectPosition);
+      const draggedY = Number(dragged.split(' ')[1].replace('%', ''));
+      expect(draggedY).toBeLessThan(50);
+      await dialog.getByRole('slider', { name: '확대' }).fill('1.5');
+      await expect(dialog.getByText('1.5배')).toBeVisible();
+      await dialog.getByRole('button', { name: '적용' }).click();
+      await expect(dialog).toHaveCount(0);
+
+      // 아직 저장하지 않았다 — 미리 보기만 바뀐다
+      await expect(preview.locator('img').first()).toHaveCSS('transform', /matrix\(1\.5, 0, 0, 1\.5/);
+      expect((await albumOf()).covers.map((cover) => cover.crop)).toEqual([null, null]);
+
+      const saveBar = page.getByRole('region', { name: '대표 사진 저장' });
+      await saveBar.getByRole('button', { name: '저장하기' }).click();
+      await expect(page.locator('.ui-toast')).toContainText('대표 사진 2장을 저장했어요');
+      const saved = (await albumOf()).covers;
+      expect(saved[0].crop).toMatchObject({ x: 50, zoom: 1.5 });
+      expect(saved[0].crop.y).toBeCloseTo(draggedY, 0);
+      expect(saved[1].crop).toBeNull();
+
+      // 선생님 사진 목록 카드 — 같은 보일 부분, 확대한 만큼 큰 사진
+      const cards = await api(request, sessions.teacher, 'GET', '/api/albums');
+      const card = cards.body.albums.find((album) => album.eventId === eventId);
+      expect(card.coverCrops[0]).toEqual(saved[0].crop);
+      expect(card.covers[0]).toMatch(new RegExp(`${fileOf(photo1)}=s1200-rw$`));
+      await page.goto('/photos');
+      const cover = page.getByRole('button', { name: new RegExp(card.title) }).locator('.ui-album-card__cover');
+      await expect(cover.locator('img').first()).toHaveCSS('object-position', `50% ${saved[0].crop.y}%`);
+      await expect(cover.locator('img').first()).toHaveCSS('transform', /matrix\(1\.5, 0, 0, 1\.5/);
+      // 확대한 사진이 옆 칸을 덮지 않는다 — 칸마다 잘린다
+      await expect(cover.locator('.ui-album-card__cover-slot').first()).toHaveCSS('overflow', 'hidden');
+
+      // API — 범위 밖 값, 목록에 없는 사진, 목록 없이 보일 부분만은 400
+      for (const body of [
+        { coverMediaIds: [photo1], coverCrops: { [photo1]: { x: 120, y: 0, zoom: 1 } } },
+        { coverMediaIds: [photo1], coverCrops: { [photo2]: { x: 10, y: 0, zoom: 1 } } },
+        { coverCrops: { [photo1]: { x: 10, y: 0, zoom: 1 } } }
+      ]) {
+        const bad = await patchAlbum(eventId, body);
+        expect(bad.status).toBe(400);
+        expect(bad.body.reason).toBe('invalid_cover_crop');
+      }
+    } finally {
+      await patchAlbum(eventId, { coverMediaIds: [photo1, photo2], coverCrops: { [photo1]: null, [photo2]: null } });
+      await patchAlbum(eventId, { coverMediaIds: [] });
+    }
+  });
+
+  test('대표 사진의 보일 부분은 학부모 사진 탭 카드에도 같이 간다 — 위치·확대 숫자뿐', async ({ request }) => {
+    // "모든 학부모" 에게 공개된 사진 폴더(얼굴 목록 픽스처)를 처음부터 아이가 연결된 학부모(parentMulti)로 본다
+    const folderId = sessions.album.peopleEventId;
+    const patchAlbum = (body) => api(request, sessions.teacher, 'PATCH', `/api/events/${folderId}/album`, body);
+    const media = await api(request, sessions.teacher, 'GET', `/api/events/${folderId}/media?filter=all&limit=60`);
+    const first = media.body.items[0];
+    try {
+      expect((await patchAlbum({ coverMediaIds: [first.id], coverCrops: { [first.id]: { x: 25, y: 75, zoom: 2 } } })).status).toBe(200);
+
+      const parentRes = await api(request, sessions.parentMulti, 'GET', '/api/parent/albums');
+      const card = parentRes.body.items.find((item) => item.eventId === folderId);
+      expect(card.covers).toEqual([expect.stringContaining(`${first.driveFileId}=w1600-rw`)]);
+      expect(card.coverCrops).toEqual([{ x: 25, y: 75, zoom: 2 }]);
+    } finally {
+      await patchAlbum({ coverMediaIds: [first.id], coverCrops: { [first.id]: null } });
+      await patchAlbum({ coverMediaIds: [] });
     }
   });
 

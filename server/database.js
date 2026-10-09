@@ -783,6 +783,8 @@ const initDatabase = async () => {
     await client.query('ALTER TABLE event_media ADD COLUMN IF NOT EXISTS "faceAnalyzerVersion" INTEGER');
     // 선생님이 붙이는 사진·영상 설명. 학부모 뷰어 아래쪽에 보인다. 없으면 NULL.
     await client.query('ALTER TABLE event_media ADD COLUMN IF NOT EXISTS caption TEXT');
+    // 대표 사진일 때 보일 부분 — { x, y, zoom } (x·y 0~100 %, zoom 1~3). 없으면 가운데·확대 없음. 선생님이 대표 사진 칸에서 고른다.
+    await client.query('ALTER TABLE event_media ADD COLUMN IF NOT EXISTS "coverCrop" JSONB');
 
     // 학부모가 앨범·사진을 본 기록 — 선생님 앨범의 보기 통계, 관리자 사진 보기 로그(models/AlbumView.js).
     // kind: 'album'(앨범 열기, mediaId 없음) | 'media'(사진·영상을 크게 봄). 사진을 지워도 기록은 남는다(mediaId → NULL).

@@ -23,8 +23,8 @@ const COVERABLE_SQL = (prefix = '') => `${prefix}status = 'ready' AND NOT ${pref
  * 대표가 아닌 사진은 array_position 이 NULL 이라 NULLS LAST 로 뒤에 선다.
  */
 const previewRows = async (eventIds) => (await pool.query(
-  `SELECT "eventId", "driveFileId", "isCover" FROM (
-     SELECT m."eventId", m."driveFileId", (m.id = ANY(e."albumCoverMediaIds")) IS TRUE AS "isCover",
+  `SELECT "eventId", "driveFileId", "coverCrop", "isCover" FROM (
+     SELECT m."eventId", m."driveFileId", m."coverCrop", (m.id = ANY(e."albumCoverMediaIds")) IS TRUE AS "isCover",
             ROW_NUMBER() OVER (
               PARTITION BY m."eventId"
               ORDER BY array_position(e."albumCoverMediaIds", m.id) ASC NULLS LAST, m."takenAt" DESC, m.id DESC
@@ -37,13 +37,13 @@ const previewRows = async (eventIds) => (await pool.query(
   [eventIds]
 )).rows;
 
-/** previewRows 를 요약(out[eventId])의 previews · covers(고른 순서) 에 싣는다 */
+/** previewRows 를 요약(out[eventId])의 previews(파일 id) · covers(고른 순서, { driveFileId, crop }) 에 싣는다 */
 const addPreviews = (out, rows) => {
   for (const row of rows) {
     const summary = out[row.eventId];
     if (!summary) continue;
     summary.previews.push(row.driveFileId);
-    if (row.isCover) summary.covers.push(row.driveFileId);
+    if (row.isCover) summary.covers.push({ driveFileId: row.driveFileId, crop: row.coverCrop || null });
   }
 };
 
@@ -86,11 +86,26 @@ class EventMedia {
     const wanted = (Array.isArray(ids) ? ids : []).map(Number).filter((id) => Number.isInteger(id) && id > 0);
     if (!wanted.length) return [];
     const result = await pool.query(
-      `SELECT id, kind, "driveFileId" FROM event_media WHERE "eventId" = $1 AND id = ANY($2::int[]) AND ${COVERABLE_SQL()}`,
+      `SELECT id, kind, "driveFileId", "coverCrop" FROM event_media WHERE "eventId" = $1 AND id = ANY($2::int[]) AND ${COVERABLE_SQL()}`,
       [eventId, wanted]
     );
     const byId = new Map(result.rows.map((row) => [Number(row.id), { ...row, id: Number(row.id) }]));
     return wanted.filter((id, index) => byId.has(id) && wanted.indexOf(id) === index).map((id) => byId.get(id));
+  }
+
+  /**
+   * 대표 사진들의 보일 부분을 한 번에 적는다 — crops = { [mediaId]: { x, y, zoom } | null } (검사는 albumController 가 끝냈다).
+   * 이 앨범의 사진만 바뀐다(eventId 조건). null 은 "고르지 않음"(가운데).
+   */
+  static async setCoverCrops(eventId, crops = {}) {
+    if (!Object.keys(crops).length) return 0;
+    const result = await pool.query(
+      `UPDATE event_media m SET "coverCrop" = NULLIF(c.value, 'null'::jsonb)
+         FROM jsonb_each($2::jsonb) c
+        WHERE m."eventId" = $1 AND m.id = c.key::int`,
+      [eventId, JSON.stringify(crops)]
+    );
+    return result.rowCount;
   }
 
   /** coverRows 의 id 만 — 대표 사진 고치기(albumController)가 이 목록을 "지금 대표 사진" 으로 본다 */

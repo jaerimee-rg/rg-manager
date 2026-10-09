@@ -138,7 +138,7 @@ function AlbumCard({ album, onOpen }) {
   return (
     <button type="button" className="ui-album-card" onClick={onOpen}>
       {album.covers?.length ? (
-        <AlbumCovers urls={album.covers} />
+        <AlbumCovers urls={album.covers} crops={album.coverCrops} />
       ) : previews.length ? (
         <div className="ui-album-card__cover">
           {previews.map((url) => <RetryImage key={url} src={url} loading="lazy" />)}
