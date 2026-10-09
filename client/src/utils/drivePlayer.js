@@ -77,6 +77,45 @@ export const isTouchDevice = (win = typeof window === 'undefined' ? null : windo
 /** 이 영상을 준비 상태로 띄울지 */
 export const shouldPrewarm = ({ src, touch, sawTap }) => Boolean(src && touch && sawTap);
 
+/*
+ * ── 영상 위에서도 옆으로 밀어 넘기기 ──────────────────────────────────────────────
+ * 플레이어는 다른 출처의 iframe 이라 그 안의 터치는 우리에게 오지 않는다. 그래서 손가락으로 쓰는 기기에서는
+ * 플레이어 위에 투명한 판을 덮어, 그 위에서 민 것을 뷰어가 받는다(hooks/useSwipeToPage).
+ * 판이 Drive 의 버튼을 가리면 재생을 못 하므로 세 군데는 비운다 (2026-10-09 운영 영상, Chrome Pixel 7 설정 실측):
+ *   - 가운데 SWIPE_HOLE px 정사각형 — Drive 의 재생 버튼(화면에서 약 47px), 준비 상태에서 누르면 바로 재생되는 자리,
+ *     우리 재생 표시
+ *   - 맨 아래 SWIPE_BOTTOM — 재생 중의 아래 막대. 진행 막대가 플레이어 바닥에서 약 102px(플레이어 자신의 px) 위에 있고
+ *     그 아래 재생/일시정지 · 소리 · 자막 · 속도 · 설정 · 전체 화면 줄이 있다. 진행 막대를 손끝으로 잡을 여유를 더했다
+ *   - 맨 위 SWIPE_TOP — 오른쪽 위 '새 창에서 열기' 버튼(약 51px)
+ * 위·아래 값은 플레이어 자신의 px 이다 — 좁은 화면에서 플레이어를 줄여 보여 주므로(drivePlayerFrame) 같은 비율로 줄인다.
+ * 판 위를 누르면 아무 일도 없다. 재생 중에 숨은 컨트롤을 다시 띄우려면 가운데나 아래쪽을 누른다.
+ * 마우스 기기는 덮지 않는다 — 밀어 넘길 일이 없고, Drive 화면 어디를 눌러도 되어야 한다.
+ */
+export const SWIPE_TOP = 64;
+export const SWIPE_BOTTOM = 132;
+export const SWIPE_HOLE = 120;
+
+/**
+ * 판 네 조각 — 가운데 구멍 둘레. 플레이어 칸 기준 CSS 위치(top·bottom·left·right).
+ * scale 은 플레이어를 줄여 보여 주는 비율(drivePlayerFrame().scale) — 위·아래 비울 높이에 곱한다.
+ */
+export const swipeBands = ({ scale = 1, top = SWIPE_TOP, bottom = SWIPE_BOTTOM, hole = SWIPE_HOLE } = {}) => {
+  const half = hole / 2;
+  const ratio = scale > 0 && scale < 1 ? scale : 1;
+  const topPx = Math.round(top * ratio);
+  const bottomPx = Math.round(bottom * ratio);
+  return [
+    { key: 'above', top: `${topPx}px`, bottom: `calc(50% + ${half}px)`, left: '0px', right: '0px' },
+    { key: 'below', top: `calc(50% + ${half}px)`, bottom: `${bottomPx}px`, left: '0px', right: '0px' },
+    { key: 'left', top: `calc(50% - ${half}px)`, bottom: `calc(50% - ${half}px)`, left: '0px', right: `calc(50% + ${half}px)` },
+    { key: 'right', top: `calc(50% - ${half}px)`, bottom: `calc(50% - ${half}px)`, left: `calc(50% + ${half}px)`, right: '0px' }
+  ];
+};
+
+/** 영상 위에 넘기기 판을 덮을지 — 손가락으로 쓰는 기기이고 넘길 다른 장이 있을 때만 */
+export const shouldCoverForSwipe = ({ touch, canPage }) => Boolean(touch && canPage);
+
 export default {
-  DRIVE_PLAYER_MIN_WIDTH, drivePlayerFrame, readyPreviewUrl, hasSeenFrameTap, rememberFrameTap, isTouchDevice, shouldPrewarm
+  DRIVE_PLAYER_MIN_WIDTH, drivePlayerFrame, readyPreviewUrl, hasSeenFrameTap, rememberFrameTap, isTouchDevice, shouldPrewarm,
+  swipeBands, shouldCoverForSwipe
 };

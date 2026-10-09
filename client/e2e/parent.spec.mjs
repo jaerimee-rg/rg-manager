@@ -816,6 +816,51 @@ test.describe('학부모 — 휴대폰에서 영상을 누르는 즉시 재생 (
     await expect(poster).toHaveCount(0, { timeout: 1000 });
     await expect(player).toHaveAttribute('src', /\/preview\?autoplay=1$/);
   });
+
+  test('영상 위에서 옆으로 밀어도 넘어간다 — Drive 의 재생 버튼(가운데)·아래 막대·오른쪽 위 버튼 자리는 그대로 눌린다', async ({ page }) => {
+    await loginAs(page, sessions.parent);
+    await stubPortraitThumbnails(page);
+    await page.route('https://drive.google.com/file/d/**', (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<body style="margin:0;background:#222"></body>' }));
+    await page.goto(`/parent/photos/${sessions.album.eventId}`);
+    await page.getByRole('button', { name: '영상 열기' }).first().click();
+
+    const viewer = page.getByRole('dialog', { name: '사진 보기' });
+    const player = viewer.locator('iframe');
+    const counter = viewer.getByTestId('viewer-top').getByText(/^\d+ \/ \d+$/);
+    await expect(viewer.getByTestId('video-swipe-cover')).toHaveCount(1);
+    const box = await player.boundingBox();
+    const at = (fx, fy) => ({ x: box.x + box.width * fx, y: box.y + box.height * fy });
+    const hit = ({ x, y }) => page.evaluate(([px, py]) => {
+      const el = document.elementFromPoint(px, py);
+      return el.dataset.band || el.tagName;
+    }, [x, y]);
+
+    // 누르면 Drive 로 가는 자리 — 가운데 재생 버튼 · 맨 아래 막대 · 오른쪽 위 버튼
+    expect(await hit(at(0.5, 0.5))).toBe('IFRAME');
+    expect(await hit({ x: box.x + box.width / 2, y: box.y + box.height - 20 })).toBe('IFRAME');
+    // 재생 중 진행 막대 — 플레이어 바닥에서 102px(플레이어 자신의 px, 520px 로 그려 줄인 만큼 줄어든다) 위
+    expect(await hit({ x: box.x + box.width * 0.7, y: box.y + box.height - Math.round((102 * box.width) / 520) })).toBe('IFRAME');
+    expect(await hit({ x: box.x + box.width - 20, y: box.y + 20 })).toBe('IFRAME');
+    // 그 밖은 넘기기 판
+    expect(await hit(at(0.85, 0.5))).toBe('right');
+    expect(await hit(at(0.15, 0.5))).toBe('left');
+    expect(await hit(at(0.5, 0.25))).toBe('above');
+    expect(await hit(at(0.5, 0.75))).toBe('below');
+
+    // 영상 한가운데 줄을 오른쪽에서 왼쪽으로 민다 → 다음 장, 플레이어가 사라진다
+    const [now, total] = (await counter.textContent()).split(' / ').map(Number);
+    await swipeTouch(page, at(0.85, 0.4), at(0.15, 0.4));
+    await expect(counter).toHaveText(`${(now % total) + 1} / ${total}`);
+    await expect(player).toHaveCount(0);
+
+    // 되돌아와서 아래쪽 판을 왼쪽에서 오른쪽으로 밀면 이전 장
+    await swipeTouch(page, { x: 70, y: 422 }, { x: 330, y: 422 });
+    await expect(counter).toHaveText(`${now} / ${total}`);
+    await expect(player).toHaveCount(1);
+    await swipeTouch(page, at(0.2, 0.7), at(0.9, 0.7));
+    await expect(counter).toHaveText(`${((now - 2 + total) % total) + 1} / ${total}`);
+  });
 });
 
 test.describe('학부모 — 선생님이 보낸 이벤트 공유 링크', () => {

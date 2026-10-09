@@ -4,7 +4,8 @@ import { formatDuration } from '../../utils/mediaUrls';
 import { PAGE_GAP } from '../../utils/viewerSwipe';
 import { useSwipeToPage } from '../../hooks/useSwipeToPage';
 import {
-  drivePlayerFrame, hasSeenFrameTap, isTouchDevice, readyPreviewUrl, rememberFrameTap, shouldPrewarm
+  drivePlayerFrame, hasSeenFrameTap, isTouchDevice, readyPreviewUrl, rememberFrameTap, shouldCoverForSwipe, shouldPrewarm,
+  swipeBands
 } from '../../utils/drivePlayer';
 import { formatTime, formatDayLabel, dayKeyOf, uploaderLabel } from '../../utils/albumFilter';
 
@@ -29,8 +30,9 @@ import { formatTime, formatDayLabel, dayKeyOf, uploaderLabel } from '../../utils
  * 저장·삭제는 위쪽 막대 오른쪽의 동그란 아이콘 버튼이다.
  *
  * 휴대폰에서는 옆으로 밀어 이전·다음 장(사진이든 영상이든)으로 넘긴다(hooks/useSwipeToPage). 양옆 장은 화면 밖에
- * 미리 그려 두어 밀 때 손가락을 따라 들어온다(영상은 미리보기 사진으로). 단 Drive 플레이어 안의 터치는 다른 출처의
- * iframe 이라 우리에게 오지 않는다 — 영상일 때는 위쪽 막대나 아래 정보 줄을 밀거나 위쪽 화살표를 누른다.
+ * 미리 그려 두어 밀 때 손가락을 따라 들어온다(영상은 미리보기 사진으로). Drive 플레이어 안의 터치는 다른 출처의
+ * iframe 이라 우리에게 오지 않으므로, 플레이어 위에 Drive 버튼 자리만 비운 투명한 판을 덮어 그 위에서 민 것을 받는다
+ * (어디를 비우는지는 utils/drivePlayer.js).
  */
 function MediaViewer({ items = [], startId, onClose, onDelete }) {
   const [index, setIndex] = useState(() => {
@@ -132,6 +134,7 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
                 src={item.previewUrl}
                 title={item.fileName || '영상'}
                 poster={item.largeUrl || item.thumbnailUrl}
+                canPage={hasNav}
               />
               <MediaInfo item={item} />
             </div>
@@ -246,14 +249,15 @@ function MediaInfo({ item, overlay = false }) {
  * 줄인 결과는 칸과 같은 크기라 화면에서는 꽉 찬 플레이어로 보인다.
  *
  * 휴대폰에서는 플레이어를 준비 상태로 띄우고 그 위에 미리보기 사진을 겹쳐, 누르는 즉시 재생되게 한다
- * (왜, 언제 켜는지는 utils/drivePlayer.js).
+ * (왜, 언제 켜는지는 utils/drivePlayer.js). canPage 면 손가락 기기에서 넘기기 판을 덮는다.
  */
-function DrivePlayer({ src, title, poster }) {
+function DrivePlayer({ src, title, poster, canPage = false }) {
   const boxRef = useRef(null);
   const frameRef = useRef(null);
   const [box, setBox] = useState({ width: 0, height: 0 });
   // 띄울 때 한 번 정한다 — 도중에 바뀌면 iframe 주소가 바뀌어 재생이 끊긴다
-  const [prewarm] = useState(() => shouldPrewarm({ src, touch: isTouchDevice(), sawTap: hasSeenFrameTap() }));
+  const [touch] = useState(isTouchDevice);
+  const [prewarm] = useState(() => shouldPrewarm({ src, touch, sawTap: hasSeenFrameTap() }));
   const [tapped, setTapped] = useState(false);
 
   useLayoutEffect(() => {
@@ -338,6 +342,15 @@ function DrivePlayer({ src, title, poster }) {
           }}>
             <Icon name="play" size={28} />
           </span>
+        </div>
+      )}
+
+      {/* 넘기기 판 — 그 위의 터치는 뷰어의 넘기기로 간다. Drive 버튼 자리(가운데 · 위 · 아래)는 비어 있어 그대로 눌린다 */}
+      {src && shouldCoverForSwipe({ touch, canPage }) && (
+        <div data-testid="video-swipe-cover" aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+          {swipeBands({ scale: frame.scale }).map(({ key, ...edges }) => (
+            <div key={key} data-band={key} style={{ position: 'absolute', ...edges, pointerEvents: 'auto' }} />
+          ))}
         </div>
       )}
     </div>
