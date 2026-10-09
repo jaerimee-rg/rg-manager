@@ -3495,42 +3495,6 @@ button.ui-album-card__cover-slot:hover::after {
  * 대표 사진 칸 — 앨범 화면(CoverOrderPanel). 번호 단 정사각형 칸이 한 줄, 끌어서 순서를 바꾼다.
  * 옆은 사진 목록 카드 표지 미리 보기(AlbumCovers 그대로).
  * ---------------------------------------------------------------- */
-/* ---------------------------------------------------------------- *
- * 보기 통계 — 앨범 화면(ViewStatsPanel). 숫자 셋 + 많이 본 사진 줄
- * ---------------------------------------------------------------- */
-.ui-view-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); margin: 0; }
-.ui-view-stats__item { display: flex; flex-direction: column; gap: 2px; }
-.ui-view-stats__item dt { font-size: var(--text-xs); color: var(--pencil); }
-.ui-view-stats__item dd { margin: 0; font-size: var(--text-sm); }
-.ui-view-stats__item dd b { font-family: var(--font-display); font-size: var(--display-sm); font-weight: var(--weight-regular); margin-right: 2px; }
-.ui-view-stats__top { display: grid; grid-template-columns: repeat(4, 64px); gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
-.ui-view-stats__photo {
-  position: relative;
-  display: block;
-  width: 64px; height: 64px;
-  padding: 0;
-  overflow: hidden;
-  border: var(--stroke-thin);
-  border-radius: var(--shape-box);
-  background: var(--rule-soft);
-  cursor: pointer;
-}
-.ui-view-stats__photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.ui-view-stats__photo:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.ui-view-stats__count {
-  position: absolute;
-  right: 3px; bottom: 3px;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 0 4px;
-  font-size: var(--text-2xs);
-  line-height: 16px;
-  font-weight: var(--weight-bold);
-  border-radius: var(--shape-tag);
-  background: var(--ink);
-  color: var(--paper);
-}
 /* 관리자 사진 보기 로그의 작은 썸네일 */
 .ui-photo-log__thumb { width: 32px; height: 32px; object-fit: cover; border-radius: var(--shape-tag); border: var(--stroke-thin); }
 
@@ -3645,6 +3609,7 @@ button.ui-album-card__cover-slot:hover::after {
 }
 
 .ui-album-card__body {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -3667,7 +3632,18 @@ button.ui-album-card__cover-slot:hover::after {
   line-height: var(--leading-sm);
   color: var(--pencil);
 }
-.ui-album-card__badges { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+.ui-album-card__badges { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-top: auto; padding-top: var(--space-2); }
+/* 학부모가 본 횟수 — 카드 오른쪽 아래. 배지가 넘쳐 줄이 바뀌어도 오른쪽에 붙고(margin-left: auto), 카드 높이가 달라도 맨 아래(body flex: 1) */
+.ui-album-card__views {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--pencil);
+  white-space: nowrap;
+}
 
 /* ---------------------------------------------------------------- *
  * 폴더 줄 — "RG Manager / 2026-10-12 회장배 대회"
@@ -3827,9 +3803,8 @@ button.ui-album-card__cover-slot:hover::after {
 .ui-media-tile:focus-visible { outline: none; box-shadow: inset 0 0 0 3px var(--ink); }
 
 .ui-media-tile__who,
-.ui-media-tile__video {
-  position: absolute;
-  bottom: 6px;
+.ui-media-tile__video,
+.ui-media-tile__views {
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -3839,7 +3814,17 @@ button.ui-album-card__cover-slot:hover::after {
   font-weight: var(--weight-bold);
   border-radius: var(--shape-tag);
 }
-.ui-media-tile__who { left: 6px; background: var(--sheet); border: var(--stroke-thin); color: var(--ink-900); }
+.ui-media-tile__who { position: absolute; bottom: 6px; left: 6px; background: var(--sheet); border: var(--stroke-thin); color: var(--ink-900); }
+/* 오른쪽 아래 — 영상 길이 위, 학부모가 본 횟수가 맨 아래(왼쪽 아래 올린 사람 이름과 가로로 겹치지 않게 세로로 쌓는다) */
+.ui-media-tile__corner {
+  position: absolute;
+  right: 6px; bottom: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+.ui-media-tile__views { background: var(--sheet); border: var(--stroke-thin); color: var(--ink-900); }
 /* 대표 사진 — 사진 목록 카드의 표지 (고르기 체크는 오른쪽 위라 왼쪽 위에 둔다) */
 .ui-media-tile__cover {
   position: absolute;
@@ -3856,7 +3841,7 @@ button.ui-album-card__cover-slot:hover::after {
   background: var(--star);
   color: var(--ink);
 }
-.ui-media-tile__video { right: 6px; background: var(--ink); color: var(--paper); }
+.ui-media-tile__video { background: var(--ink); color: var(--paper); }
 
 /* 숨긴 사진 — 학부모에게는 안 보인다 */
 .ui-media-tile[data-hidden] img { opacity: 0.35; filter: grayscale(1); }

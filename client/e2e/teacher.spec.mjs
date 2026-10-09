@@ -512,11 +512,11 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     }
   });
 
-  test('보기 통계 — 학부모가 앨범을 열고 사진을 크게 보면 선생님 앨범 · 사진 목록에 숫자가 오르고, 관리자 로그에 누가 무엇을 봤는지 남는다', async ({ page, request, browser, baseURL }) => {
+  test('본 횟수 — 학부모가 앨범을 열고 사진을 크게 보면 사진 목록 카드 · 사진 칸 오른쪽 아래 숫자가 오르고(보기 통계 카드는 없다), 관리자 로그에 누가 무엇을 봤는지 남는다', async ({ page, request, browser, baseURL }) => {
     // "모든 학부모" 에게 공개된 사진 폴더(얼굴 목록 픽스처)와 처음부터 아이가 연결된 학부모(parentMulti)로 본다
     const folderId = sessions.album.peopleEventId;
-    const albumOf = async () => (await api(request, sessions.teacher, 'GET', `/api/events/${folderId}/album`)).body;
-    const before = (await albumOf()).viewStats;
+    const cardOf = async () => (await api(request, sessions.teacher, 'GET', '/api/albums')).body.albums.find((album) => album.eventId === folderId);
+    const before = await cardOf();
     const media = (await api(request, sessions.teacher, 'GET', `/api/events/${folderId}/media?filter=all&limit=60`)).body.items;
 
     // 학부모 — 앨범을 열고 첫 사진을 크게 본 뒤 옆으로 하나 넘긴다
@@ -534,33 +534,60 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
       await parentPage.keyboard.press('ArrowRight');
       // 선생님에게는 본 횟수가 보이지만 학부모 화면에는 없다
       await expect(viewer.getByTestId('media-views')).toHaveCount(0);
+      await parentPage.keyboard.press('Escape');
+      await expect(parentPage.getByTestId('tile-views')).toHaveCount(0);
     } finally {
       await parentContext.close();
     }
 
-    // 선생님 — 앨범 통계(본 학부모 · 앨범 연 횟수 · 사진 본 횟수)와 많이 본 사진, 사진마다 본 횟수
-    await expect.poll(async () => (await albumOf()).viewStats.mediaViews).toBe(before.mediaViews + 2);
-    const after = await albumOf();
-    expect(after.viewStats.albumOpens).toBe(before.albumOpens + 1);
-    expect(after.viewStats.viewers).toBeGreaterThanOrEqual(1);
-    expect(after.topViewed.length).toBeGreaterThanOrEqual(2);
+    // 목록 API — 폴더 연 횟수 +1, 사진 본 횟수 +2. 앨범 화면 API 에는 보기 통계가 더는 없다
+    await expect.poll(async () => (await cardOf()).mediaViews).toBe(before.mediaViews + 2);
+    const after = await cardOf();
+    expect(after.albumOpens).toBe(before.albumOpens + 1);
+    const album = (await api(request, sessions.teacher, 'GET', `/api/events/${folderId}/album`)).body;
+    expect(album.viewStats).toBeUndefined();
+    expect(album.topViewed).toBeUndefined();
     const counted = (await api(request, sessions.teacher, 'GET', `/api/events/${folderId}/media?filter=all&limit=60`)).body.items;
-    expect(counted.filter((item) => item.viewCount > 0).length).toBeGreaterThanOrEqual(2);
+    const viewed = counted.filter((item) => item.viewCount > 0);
+    expect(viewed.length).toBeGreaterThanOrEqual(2);
     expect(media.length).toBe(counted.length);
 
+    // 앨범 화면 — 보기 통계 카드는 없고, 본 사진 칸마다 오른쪽 아래에 본 횟수
     await stubPortraitThumbnails(page);
     await page.goto(`/photos/${folderId}`);
-    const stats = page.getByRole('region', { name: '보기 통계' });
-    await expect(stats.getByText('사진 본 횟수')).toBeVisible();
-    await expect(stats.locator('dd').nth(2)).toHaveText(`${after.viewStats.mediaViews}번`);
-    // 많이 본 사진을 누르면 크게 보고, 선생님 뷰어에는 본 횟수가 있다
-    await stats.getByRole('button', { name: /많이 본 사진 1/ }).click();
+    await expect(page.getByRole('button', { name: /사진 올리기/ }).first()).toBeVisible();
+    await expect(page.getByRole('region', { name: '보기 통계' })).toHaveCount(0);
+    await expect(page.getByText('사진 본 횟수')).toHaveCount(0);
+    const tile = page.getByRole('button', { name: new RegExp(` · ${viewed[0].viewCount}번 봤어요`) }).first();
+    await expect(tile).toBeVisible();
+    const badge = tile.getByTestId('tile-views');
+    await expect(badge).toHaveText(String(viewed[0].viewCount));
+    const [tileBox, badgeBox] = [await tile.boundingBox(), await badge.boundingBox()];
+    // 오른쪽 아래 — 칸의 오른쪽·아래 가장자리에서 6px 안쪽
+    expect(Math.abs(tileBox.x + tileBox.width - (badgeBox.x + badgeBox.width) - 6)).toBeLessThanOrEqual(2);
+    expect(Math.abs(tileBox.y + tileBox.height - (badgeBox.y + badgeBox.height) - 6)).toBeLessThanOrEqual(2);
+    expect(await page.getByTestId('tile-views').count()).toBe(viewed.length);
+    // 칸을 누르면 크게 보고, 선생님 뷰어에도 본 횟수가 있다
+    await tile.click();
     await expect(page.getByRole('dialog', { name: '사진 보기' }).getByTestId('media-views')).toHaveText(/\d+번 봤어요/);
     await page.keyboard.press('Escape');
 
+    // 사진 목록 — 카드 오른쪽 아래에 폴더 · 사진 본 횟수
     await page.goto('/photos');
     const card = page.getByRole('button', { name: new RegExp(`e2e얼굴목록_`) }).first();
-    await expect(card.getByText(/명이 봤어요/)).toBeVisible();
+    const views = card.locator('.ui-album-card__views');
+    await expect(views).toHaveText(`학부모가 본 횟수 폴더 ${after.albumOpens} · 사진 ${after.mediaViews}`);
+    await expect(card.getByText(/명이 봤어요/)).toHaveCount(0);
+    const [cardBox, viewsBox] = [await card.boundingBox(), await views.boundingBox()];
+    const style = await card.locator('.ui-album-card__body').evaluate((el) => {
+      const css = getComputedStyle(el);
+      return { right: parseFloat(css.paddingRight), bottom: parseFloat(css.paddingBottom) };
+    });
+    expect(Math.abs(cardBox.x + cardBox.width - (viewsBox.x + viewsBox.width) - style.right)).toBeLessThanOrEqual(4);
+    // 아래 — 배지 줄(맨 아래 줄)에 있다: 배지보다 글자가 낮아 가운데 맞춤만큼 위로 뜰 수 있다
+    const gap = cardBox.y + cardBox.height - (viewsBox.y + viewsBox.height);
+    expect(gap).toBeGreaterThanOrEqual(style.bottom);
+    expect(gap).toBeLessThanOrEqual(style.bottom + 10);
 
     // 관리자 — 누가(학부모명) · 어느 앨범 · 어떤 사진을 봤는지. 선생님·학부모 토큰으로는 못 본다
     const log = await api(request, sessions.admin, 'GET', '/api/logs/photo-views?kind=media&limit=20');

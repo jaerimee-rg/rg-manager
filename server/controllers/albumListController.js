@@ -17,7 +17,7 @@ import AlbumView from '../models/AlbumView.js';
  * Google 은 부르지 않는다 — Drive 가 느리거나 끊겨도 목록은 바로 떠야 한다(용량은 앨범 화면에서).
  */
 
-const toAlbum = (event, summary = {}, viewers = 0) => ({
+const toAlbum = (event, summary = {}, views = {}) => ({
   eventId: event.id,
   title: event.title,
   date: event.date,
@@ -40,8 +40,9 @@ const toAlbum = (event, summary = {}, viewers = 0) => ({
   covers: coverUrls(summary.covers || []),
   // 같은 순서로 대표 사진마다 보일 부분(없으면 null) — 카드가 그 부분을 보여 준다
   coverCrops: coverCropsOf(summary.covers || []),
-  // 이 앨범을 연 학부모 수 (AlbumView.viewersByEvent)
-  viewers
+  // 학부모가 이 앨범(폴더)을 연 횟수 · 사진을 크게 본 횟수 — 카드 오른쪽 아래 (AlbumView.countsByEvent)
+  albumOpens: views.albumOpens || 0,
+  mediaViews: views.mediaViews || 0
 });
 
 const toTarget = (event, summary, today) => ({
@@ -65,9 +66,9 @@ export const listAlbums = async (req, res) => {
     ]);
 
     const withAlbum = events.filter((event) => event.driveFolderId);
-    const [summaries, viewers] = await Promise.all([
+    const [summaries, views] = await Promise.all([
       EventMedia.summariesForTeacher(withAlbum.map((event) => event.id)),
-      AlbumView.viewersByEvent(withAlbum.map((event) => event.id))
+      AlbumView.countsByEvent(withAlbum.map((event) => event.id))
     ]);
     const today = todayKst();
 
@@ -79,7 +80,7 @@ export const listAlbums = async (req, res) => {
         email: account?.googleEmail || null,
         rootFolderName: account?.rootFolderName || 'RG Manager'
       },
-      albums: withAlbum.map((event) => toAlbum(event, summaries[event.id], viewers[event.id] || 0)),
+      albums: withAlbum.map((event) => toAlbum(event, summaries[event.id], views[event.id])),
       targets: events.map((event) => toTarget(event, summaries[event.id], today))
     });
   } catch (error) {

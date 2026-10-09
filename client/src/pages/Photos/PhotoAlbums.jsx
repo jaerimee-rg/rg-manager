@@ -135,6 +135,9 @@ function PhotoAlbums() {
 function AlbumCard({ album, onOpen }) {
   const counts = album.counts || {};
   const previews = (album.previews || []).slice(0, 4);
+  // 학부모가 이 폴더를 연 횟수 · 사진을 크게 본 횟수 — 카드 오른쪽 아래, 아무도 안 봤으면 비운다
+  const albumOpens = album.albumOpens || 0;
+  const mediaViews = album.mediaViews || 0;
   return (
     <button type="button" className="ui-album-card" onClick={onOpen}>
       {album.covers?.length ? (
@@ -151,7 +154,6 @@ function AlbumCard({ album, onOpen }) {
         <div className="ui-album-card__meta">
           <span>{formatEventDate(album.date)} · {typeLabel(album.type)}</span>
           <span>사진 {counts.images || 0}{counts.videos ? ` · 영상 ${counts.videos}` : ''}</span>
-          {album.viewers > 0 && <span><Icon name="eye" size={13} /> {album.viewers}명이 봤어요</span>}
         </div>
         <div className="ui-album-card__badges">
           {album.published ? (
@@ -161,6 +163,13 @@ function AlbumCard({ album, onOpen }) {
             </>
           ) : <Badge tone="muted" dot>비공개</Badge>}
           {counts.fromParents > 0 && <Badge tone="neutral">학부모가 올린 {counts.fromParents}장</Badge>}
+          {(albumOpens > 0 || mediaViews > 0) && (
+            <span className="ui-album-card__views" title={`학부모가 폴더를 ${albumOpens}번 열고, 사진을 ${mediaViews}번 크게 봤어요`}>
+              <Icon name="eye" size={13} />
+              <span className="ui-visually-hidden">학부모가 본 횟수 </span>
+              폴더 {albumOpens} · 사진 {mediaViews}
+            </span>
+          )}
         </div>
       </div>
     </button>

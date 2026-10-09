@@ -50,11 +50,24 @@ describe('PhotoAlbums — 사진 목록 (docs/photo-menu FR-510~516)', () => {
     expect(within(screen.getByRole('button', { name: /가을 공개 수업/ })).getByText('비공개')).toBeInTheDocument();
   });
 
-  it('카드에 그 앨범을 본 학부모 수 — 아무도 안 봤으면 표시하지 않는다', async () => {
-    await renderList({ ...LIST, albums: [{ ...LIST.albums[0], viewers: 6 }, { ...LIST.albums[1], viewers: 0 }] });
+  it('카드 오른쪽 아래에 학부모가 폴더를 연 횟수 · 사진을 본 횟수 — 아무도 안 봤으면 비운다', async () => {
+    await renderList({ ...LIST, albums: [{ ...LIST.albums[0], albumOpens: 12, mediaViews: 34 }, { ...LIST.albums[1], albumOpens: 0, mediaViews: 0 }] });
 
-    expect(within(screen.getByRole('button', { name: /회장배 대회/ })).getByText(/6명이 봤어요/)).toBeInTheDocument();
-    expect(within(screen.getByRole('button', { name: /가을 공개 수업/ })).queryByText(/명이 봤어요/)).not.toBeInTheDocument();
+    const first = screen.getByRole('button', { name: /회장배 대회/ });
+    const views = first.querySelector('.ui-album-card__views');
+    expect(views).toHaveTextContent('폴더 12 · 사진 34');
+    expect(views).toHaveAttribute('title', '학부모가 폴더를 12번 열고, 사진을 34번 크게 봤어요');
+    // 배지 줄(카드 맨 아래)의 마지막 — CSS 가 오른쪽으로 민다
+    expect(first.querySelector('.ui-album-card__badges').lastElementChild).toBe(views);
+    expect(first).toHaveAccessibleName(/학부모가 본 횟수 폴더 12 · 사진 34/);
+    // 예전 "N명이 봤어요" 줄은 없다
+    expect(within(first).queryByText(/명이 봤어요/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /가을 공개 수업/ }).querySelector('.ui-album-card__views')).toBeNull();
+  });
+
+  it('폴더만 열고 사진은 아직 아무도 크게 안 봤어도 둘 다 보인다', async () => {
+    await renderList({ ...LIST, albums: [{ ...LIST.albums[0], albumOpens: 3, mediaViews: 0 }] });
+    expect(screen.getByRole('button', { name: /회장배 대회/ }).querySelector('.ui-album-card__views')).toHaveTextContent('폴더 3 · 사진 0');
   });
 
   it('카드를 누르면 그 앨범으로 간다', async () => {
@@ -252,6 +265,30 @@ describe('PhotoAlbum — 앨범 (docs/photo-menu FR-520~529)', () => {
     await renderAlbum({ ...ALBUM, published: true, publishedAt: '2026-10-13T01:00:00Z' });
     expect(screen.getByText('참가 확정 학부모 7명이 볼 수 있어요 · 10월 13일 공개')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '비공개로 전환' })).toBeInTheDocument();
+  });
+
+  it('사진 칸 오른쪽 아래에 학부모가 크게 본 횟수 — 아무도 안 본 사진은 비운다, 영상은 길이 아래에', async () => {
+    await renderAlbum(ALBUM, [
+      { ...MEDIA[0], viewCount: 7 },
+      { ...MEDIA[1], viewCount: 0 },
+      { id: 4, kind: 'video', thumbnailUrl: 'https://t/4', uploaderRole: 'teacher', isHidden: false, durationMs: 12000, viewCount: 2 }
+    ]);
+
+    const tiles = document.querySelectorAll('.ui-media-tile');
+    expect(tiles[0].querySelector('.ui-media-tile__corner .ui-media-tile__views')).toHaveTextContent('7');
+    expect(tiles[0]).toHaveAccessibleName('사진 · 7번 봤어요');
+    expect(tiles[1].querySelector('.ui-media-tile__views')).toBeNull();
+    expect(tiles[1]).toHaveAccessibleName('사진');
+    const corner = tiles[2].querySelector('.ui-media-tile__corner');
+    expect([...corner.children].map((el) => el.className)).toEqual(['ui-media-tile__video', 'ui-media-tile__views']);
+    expect(corner.lastElementChild).toHaveTextContent('2');
+  });
+
+  it('앨범 화면에 보기 통계 카드는 없다', async () => {
+    await renderAlbum({ ...ALBUM, viewStats: { viewers: 5, albumOpens: 9, mediaViews: 31 }, topViewed: [{ id: 1, kind: 'image', views: 3, thumbnailUrl: 'https://t/1' }] });
+    expect(screen.queryByRole('region', { name: '보기 통계' })).not.toBeInTheDocument();
+    expect(screen.queryByText('사진 본 횟수')).not.toBeInTheDocument();
+    expect(document.querySelector('.ui-view-stats')).toBeNull();
   });
 
   it('학부모가 올린 사진에는 올린 사람, 숨긴 사진에는 숨김 표시', async () => {

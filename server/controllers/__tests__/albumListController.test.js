@@ -25,9 +25,7 @@ jest.unstable_mockModule('../../services/eventService.js', () => ({
 jest.unstable_mockModule('../../models/AlbumView.js', () => ({
   default: {
     viewsByMedia: jest.fn().mockResolvedValue({}),
-    albumStats: jest.fn().mockResolvedValue({ viewers: 0, albumOpens: 0, mediaViews: 0 }),
-    topViewed: jest.fn().mockResolvedValue([]),
-    viewersByEvent: jest.fn().mockResolvedValue({})
+    countsByEvent: jest.fn().mockResolvedValue({})
   }
 }));
 
@@ -115,18 +113,20 @@ describe('GET /api/albums — 선생님 사진 목록 (docs/photo-menu 5.1)', ()
     expect(albums[2].previews).toHaveLength(2);
   });
 
-  it('카드마다 그 앨범을 연 학부모 수(viewers) — 기록이 없으면 0', async () => {
+  it('카드마다 학부모가 그 앨범(폴더)을 연 횟수 · 사진을 크게 본 횟수 — 기록이 없으면 0', async () => {
     Event.listForPhotos.mockResolvedValue([
       event({ driveFolderId: 'f-31', albumStatus: 'ready' }),
       event({ id: 32, driveFolderId: 'f-32', albumStatus: 'ready' })
     ]);
     EventMedia.summariesForTeacher.mockResolvedValue({});
-    AlbumView.viewersByEvent.mockResolvedValue({ 31: 6 });
+    AlbumView.countsByEvent.mockResolvedValue({ 31: { albumOpens: 6, mediaViews: 21 } });
 
     await listAlbums(req, res);
 
-    expect(AlbumView.viewersByEvent).toHaveBeenCalledWith([31, 32]);
-    expect(res.json.mock.calls[0][0].albums.map((album) => album.viewers)).toEqual([6, 0]);
+    expect(AlbumView.countsByEvent).toHaveBeenCalledWith([31, 32]);
+    const albums = res.json.mock.calls[0][0].albums;
+    expect(albums.map((album) => [album.albumOpens, album.mediaViews])).toEqual([[6, 21], [0, 0]]);
+    expect(albums[0]).not.toHaveProperty('viewers');
   });
 
   it('[사진 올리기] 목록은 앨범 유무와 상관없이 전부 — 앨범 없는 이벤트는 만들 폴더 이름을 미리 준다', async () => {

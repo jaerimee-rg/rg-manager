@@ -730,9 +730,12 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   repeat from the same person within **30 min (album) / 10 min (photo)** (`VIEW_DEDUPE_MS`, one `INSERT … WHERE NOT EXISTS`). These calls
   come once per swiped photo, so they are **skipped by `apiLimiter`** (200/IP — parents on one Wi-Fi would otherwise 429 each other's
   normal screens) and counted by their own `photoViewLimiter` (`utils/rateLimits.js` `PHOTO_VIEW_IP_MAX` 2000, `isPhotoViewBeacon`). Teachers see
-  it as `viewStats` {viewers, albumOpens, mediaViews} + `topViewed` on `GET …/album` (`pages/Photos/ViewStatsPanel.jsx`; tapping a
-  most-viewed photo opens it), `viewCount` per photo (viewer info line "N번 봤어요", `MediaViewer showViews`, teacher only) and `viewers`
-  on each 사진 list card ("N명이 봤어요"). **Who** viewed is only in Admin → 로그 → **사진 보기 로그** (`GET /api/logs/photo-views?kind&limit&offset`,
+  **counts only, in two corners** (owner's call 2026-10-10 — the album page's 보기 통계 card and the "N명이 봤어요" card line are gone, and
+  `GET …/album` no longer carries `viewStats`/`topViewed`): each 사진 list card has **"👁 폴더 N · 사진 M"** at its bottom right — the album
+  opens and photo views from `GET /api/albums` `albumOpens`/`mediaViews` (`AlbumView.countsByEvent`, one grouped query; the card body is
+  `flex: 1` and the badge row `margin-top: auto`, so it sits at the bottom whatever the card height) — and each photo tile has its
+  `viewCount` at the bottom right (`PhotoGrid showViews`, stacked under a video's duration in `.ui-media-tile__corner` so it never meets
+  the uploader name on the left), plus the viewer info line "N번 봤어요" (`MediaViewer showViews`). A zero is not drawn on either. **Who** viewed is only in Admin → 로그 → **사진 보기 로그** (`GET /api/logs/photo-views?kind&limit&offset`,
   admin only; parent name via `parentAwareDisplayNameSql`, placeholder ids shown as 학부모; `pages/admin/AdminPhotoViewLogs.jsx`). Parents
   never get counts. Likes/comments were built and then dropped on the owner's request (2026-10-09) — none of that is in the code.
 - **Deletes go to the Drive trash** (`files.update {trashed:true}`), never permanent — 30 days to
