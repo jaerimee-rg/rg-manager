@@ -71,6 +71,53 @@ describe('묶을 얼굴 · 태그 읽기', () => {
   });
 });
 
+describe('전체 사진 — 여러 앨범을 한 번에 (선생님 사진 메뉴)', () => {
+  it('EventMedia.listAcross — 내 앨범들의 사진을 같은 조건·순서로, 고른 사람의 사진만 거를 수 있다', async () => {
+    await EventMedia.listAcross([3, 5], { mediaIds: [4, 9], includeHidden: true, limit: 60 });
+
+    const [sql, params] = lastCall();
+    expect(squash(sql)).toContain(`WHERE m."eventId" = ANY($1::int[]) AND m.status = 'ready' AND m.id = ANY($2::int[])`);
+    expect(squash(sql)).toContain('ORDER BY m."takenAt" DESC, m.id DESC');
+    expect(sql).not.toContain('isHidden');
+    expect(params).toEqual([[3, 5], [4, 9], 60]);
+  });
+
+  it('EventMedia.listAcross — 커서는 앨범 하나와 같다(찍은 시각, id)', async () => {
+    await EventMedia.listAcross([3, 5], { cursor: { takenAt: '2026-10-01T00:00:00Z', id: 40 } });
+
+    const [sql, params] = lastCall();
+    expect(squash(sql)).toContain('(m."takenAt", m.id) < ($2, $3)');
+    expect(squash(sql)).toContain('m."isHidden" = FALSE');
+    expect(params).toEqual([[3, 5], '2026-10-01T00:00:00Z', 40, 60]);
+  });
+
+  it('EventMedia.list 는 그대로 앨범 하나', async () => {
+    await EventMedia.list(3, {});
+    expect(squash(lastCall()[0])).toContain(`WHERE m."eventId" = $1 AND m.status = 'ready'`);
+    expect(lastCall()[1][0]).toBe(3);
+  });
+
+  it('MediaFace · MediaTag.listForAlbums — 같은 조건을 앨범 여러 개로', async () => {
+    await MediaFace.listForAlbums([3, 5], { includeHidden: true });
+    let [sql, params] = lastCall();
+    expect(squash(sql)).toContain(`WHERE m."eventId" = ANY($1::int[]) AND m.status = 'ready' AND m.kind = 'image'`);
+    expect(sql).not.toContain('isHidden');
+    expect(params).toEqual([[3, 5]]);
+
+    await MediaTag.listForAlbums([3, 5]);
+    [sql, params] = lastCall();
+    expect(squash(sql)).toContain(`WHERE m."eventId" = ANY($1::int[]) AND m.status = 'ready' AND m."isHidden" = FALSE`);
+    expect(params).toEqual([[3, 5]]);
+  });
+
+  it('앨범이 없으면 쿼리 없이 빈 목록', async () => {
+    await expect(EventMedia.listAcross([])).resolves.toEqual([]);
+    await expect(MediaFace.listForAlbums([])).resolves.toEqual([]);
+    await expect(MediaTag.listForAlbums([])).resolves.toEqual([]);
+    expect(query).not.toHaveBeenCalled();
+  });
+});
+
 describe('얼굴 목록에서 사람 빼기', () => {
   const client = { query: jest.fn() };
 

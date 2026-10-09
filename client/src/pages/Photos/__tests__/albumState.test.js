@@ -1,6 +1,6 @@
 import {
   publishSummary, zeroAudienceWarning, driveNotice, canUploadWith, albumProblem, filterChips,
-  targetState, uploadPublishNote, formatPublishedDate, formatEventDate, formatShortDate, toViewerItem, publishLocked,
+  targetState, uploadPublishNote, formatPublishedDate, formatEventDate, formatShortDate, toViewerItem, toAllPhotosViewerItem, publishLocked,
   folderNameFrom, newFolderProblem, typeLabel, isPhotoFolder, publishPlaces, folderDeleteMessage, folderDeleteTitle,
   folderDeletedToast
 } from '../albumState';
@@ -123,6 +123,12 @@ describe('날짜 · 뷰어', () => {
   it('선생님 미디어는 뷰어에서 지울 수 있고 업로더 표기를 맞춘다', () => {
     expect(toViewerItem({ id: 1, uploaderRole: 'parent' })).toMatchObject({ uploader: 'parent', canDelete: true });
     expect(toViewerItem({ id: 2, uploaderRole: 'teacher' }).uploader).toBe('teacher');
+  });
+
+  it('전체 사진의 미디어는 폴더 이름을 싣고, 뷰어에서 지우지 않는다(폴더 화면에서)', () => {
+    expect(toAllPhotosViewerItem({ id: 1, uploaderRole: 'teacher', album: { eventId: 31, title: '회장배 대회' } }))
+      .toMatchObject({ uploader: 'teacher', canDelete: false, albumTitle: '회장배 대회' });
+    expect(toAllPhotosViewerItem({ id: 2, uploaderRole: 'parent', album: null }).albumTitle).toBeNull();
   });
 });
 

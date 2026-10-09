@@ -4,6 +4,20 @@ import { safeJsonParse } from '../utils/safeJsonParse.js';
 
 const hydrate = (row) => (row ? { ...row, box: safeJsonParse(row.box, {}) } : row);
 
+/** listForAlbum · listForAlbums 의 몸통 — 첫 조건(앨범 하나 / 여러 앨범)과 그 값($1)만 다르다 */
+const listFaces = async (scopeSql, scopeParam, includeHidden) => {
+  const result = await pool.query(
+    `SELECT f.id, f."mediaId", f.box, f.score, f.descriptor, m."driveFileId"
+       FROM media_faces f
+       JOIN event_media m ON m.id = f."mediaId"
+      WHERE ${scopeSql} AND m.status = 'ready' AND m.kind = 'image'
+        ${includeHidden ? '' : 'AND m."isHidden" = FALSE'}
+      ORDER BY f.id`,
+    [scopeParam]
+  );
+  return result.rows.map((row) => ({ ...hydrate(row), descriptor: decodeDescriptor(row.descriptor) }));
+};
+
 /**
  * 사진에서 찾은 얼굴. 이미지는 저장하지 않고 특징값과 위치만 남긴다 (FR-255).
  */
@@ -79,16 +93,13 @@ class MediaFace {
    * includeHidden=false 면 숨긴 사진의 얼굴은 뺀다(학부모 화면).
    */
   static async listForAlbum(eventId, { includeHidden = false } = {}) {
-    const result = await pool.query(
-      `SELECT f.id, f."mediaId", f.box, f.score, f.descriptor, m."driveFileId"
-         FROM media_faces f
-         JOIN event_media m ON m.id = f."mediaId"
-        WHERE m."eventId" = $1 AND m.status = 'ready' AND m.kind = 'image'
-          ${includeHidden ? '' : 'AND m."isHidden" = FALSE'}
-        ORDER BY f.id`,
-      [eventId]
-    );
-    return result.rows.map((row) => ({ ...hydrate(row), descriptor: decodeDescriptor(row.descriptor) }));
+    return listFaces(`m."eventId" = $1`, eventId, includeHidden);
+  }
+
+  /** listForAlbum 을 여러 앨범에서 한 번에 — 선생님 "전체 사진" 의 얼굴 목록(모든 폴더의 사람을 함께 묶는다) */
+  static async listForAlbums(eventIds, { includeHidden = false } = {}) {
+    if (!eventIds?.length) return [];
+    return listFaces(`m."eventId" = ANY($1::int[])`, eventIds, includeHidden);
   }
 
   /**

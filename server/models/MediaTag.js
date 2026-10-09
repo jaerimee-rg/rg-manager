@@ -1,5 +1,19 @@
 import pool from '../database.js';
 
+/** listForAlbum · listForAlbums 의 몸통 — 첫 조건(앨범 하나 / 여러 앨범)과 그 값($1)만 다르다 */
+const listTags = async (scopeSql, scopeParam, includeHidden) => {
+  const result = await pool.query(
+    `SELECT t."mediaId", t."studentId", t.source, t."faceId"
+       FROM media_tags t
+       JOIN event_media m ON m.id = t."mediaId"
+      WHERE ${scopeSql} AND m.status = 'ready'
+        ${includeHidden ? '' : 'AND m."isHidden" = FALSE'}
+      ORDER BY t.id`,
+    [scopeParam]
+  );
+  return result.rows;
+};
+
 /**
  * 미디어 ↔ 학생 태그. 미디어 × 학생 당 한 행이고, 출처에 우선순위가 있다.
  * 어떤 출처가 이기는지는 utils/faceMatch.js 가 정한다.
@@ -46,16 +60,13 @@ class MediaTag {
 
   /** 앨범의 태그 전부(평평한 목록) — 얼굴을 사람별로 묶을 때. includeHidden=false 면 숨긴 사진의 태그는 뺀다. */
   static async listForAlbum(eventId, { includeHidden = false } = {}) {
-    const result = await pool.query(
-      `SELECT t."mediaId", t."studentId", t.source, t."faceId"
-         FROM media_tags t
-         JOIN event_media m ON m.id = t."mediaId"
-        WHERE m."eventId" = $1 AND m.status = 'ready'
-          ${includeHidden ? '' : 'AND m."isHidden" = FALSE'}
-        ORDER BY t.id`,
-      [eventId]
-    );
-    return result.rows;
+    return listTags(`m."eventId" = $1`, eventId, includeHidden);
+  }
+
+  /** listForAlbum 을 여러 앨범에서 한 번에 — 선생님 "전체 사진" 의 얼굴 목록 */
+  static async listForAlbums(eventIds, { includeHidden = false } = {}) {
+    if (!eventIds?.length) return [];
+    return listTags(`m."eventId" = ANY($1::int[])`, eventIds, includeHidden);
   }
 
   /**

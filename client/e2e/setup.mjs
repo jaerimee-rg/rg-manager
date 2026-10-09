@@ -453,6 +453,43 @@ for (const [i, file] of sameFiles.entries()) {
   );
 }
 
+// 전체 사진(모든 폴더) — 따로 된 선생님에 대회 앨범 하나 + 사진 전용 폴더 하나. 같은 아이(가)가 두 폴더에 걸쳐 사진 3장(51·52·53),
+// 다른 사람(나)은 52 에만, 54 는 얼굴 없음. 공유 선생님의 다른 앨범 얼굴과 섞이지 않게 선생님을 따로 둔다
+// (전체 사진의 얼굴 목록은 그 선생님의 모든 폴더를 함께 묶는다).
+const allPhotosTeacher = (await pool.query(
+  `INSERT INTO users (username, password, role, "createdAt") VALUES ($1,$2,'user',$3) RETURNING id, username, role`,
+  [`e2e전체사진_${stamp}`, pw, now]
+)).rows[0];
+const allPhotosEventTitle = `e2e전체사진대회_${stamp}`;
+const allPhotosFolderTitle = `e2e전체사진폴더_${stamp}`;
+const mkAllPhotosAlbum = async (type, title, date) => (await pool.query(
+  `INSERT INTO events ("userId", type, title, date, options, "isPublished", "registrationOpen",
+                       "driveFolderId", "driveFolderName", "albumStatus", "albumUploadOpen", "albumCreatedAt",
+                       "albumPublished", "albumAudience", "createdAt", "updatedAt")
+   VALUES ($1,$2,$3,$4,'[]',TRUE,FALSE,$5,$6,'ready',TRUE,$7,FALSE,'all',$7,$7)
+   RETURNING id`,
+  [allPhotosTeacher.id, type, title, date, `e2e-all-${type}-${stamp}`, `${date} ${title}`, now]
+)).rows[0].id;
+const allPhotosEventId = await mkAllPhotosAlbum('competition', allPhotosEventTitle, '2026-09-14');
+const allPhotosFolderId = await mkAllPhotosAlbum('folder', allPhotosFolderTitle, '2026-09-15');
+const allPhotosMedia = {};
+for (const [i, eventId] of [[51, allPhotosEventId], [52, allPhotosEventId], [53, allPhotosFolderId], [54, allPhotosFolderId]]) {
+  allPhotosMedia[i] = await mkMedia({ i, kind: 'image', uploaderRole: 'teacher', uploaderUserId: allPhotosTeacher.id, eventId });
+}
+await pool.query('UPDATE event_media SET "faceAnalyzerVersion" = 3 WHERE id = ANY($1::int[])', [Object.values(allPhotosMedia)]);
+await pool.query(`UPDATE event_media SET "faceStatus" = 'none', "faceCount" = 0 WHERE id = $1`, [allPhotosMedia[54]]);
+for (const [mediaId, descriptor, box] of [
+  [allPhotosMedia[51], personA, { x: 0.2, y: 0.2, w: 0.2, h: 0.2 }],
+  [allPhotosMedia[52], personA, { x: 0.1, y: 0.3, w: 0.15, h: 0.15 }],
+  [allPhotosMedia[52], personB, { x: 0.6, y: 0.3, w: 0.15, h: 0.15 }],
+  [allPhotosMedia[53], personA, { x: 0.4, y: 0.4, w: 0.25, h: 0.25 }]
+]) {
+  await pool.query(
+    `INSERT INTO media_faces ("mediaId", box, score, descriptor, "createdAt") VALUES ($1,$2,0.9,$3,$4)`,
+    [mediaId, JSON.stringify(box), descriptor, now]
+  );
+}
+
 const sessions = {
   album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, doomedFolderEventId, doomedFolderTitle, doomedEventId, doomedEventTitle, sparseEventId, sparseEventTitle, sparseMediaId, faceScanEventId, faceThumbEventId, peopleEventId, removeFaceEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
   teacher: { token: sign(teacher), user: { id: teacher.id, username: teacher.username, role: 'user' } },
@@ -467,6 +504,11 @@ const sessions = {
   admin: { token: sign(adminUser), user: { id: adminUser.id, username: adminUser.username, role: 'admin' } },
   teacher2: { id: teacher2.id, username: teacher2.username, displayName: teacher2DisplayName, invite: invB.rows[0].token, eventId: eventB.rows[0].id },
   teacherInvite: { id: tinv.rows[0].id, token: tinv.rows[0].token },
+  allPhotos: {
+    teacher: { token: sign(allPhotosTeacher), user: { id: allPhotosTeacher.id, username: allPhotosTeacher.username, role: 'user' } },
+    eventTitle: allPhotosEventTitle,
+    folderTitle: allPhotosFolderTitle
+  },
   sameFile: {
     teacher: { token: sign(sameFileTeacher), user: { id: sameFileTeacher.id, username: sameFileTeacher.username, role: 'user' } },
     eventId: sameFileEventId,

@@ -18,6 +18,7 @@ import CoverOrderPanel from './CoverOrderPanel';
 import CoverCropDialog from './CoverCropDialog';
 import { coverCropsBody, coversFromPicks, dropCovers, sameCovers, setCoverCrops, toggleCover } from './coverDraft';
 import PhotoGrid from './PhotoGrid';
+import { saveMediaCaption } from './mediaCaptionSave';
 import {
   albumProblem, filterChips, folderDeleteMessage, folderDeletedToast, folderDeleteTitle, formatEventDate, isPhotoFolder,
   publishLocked, typeLabel, toViewerItem, PROBLEM_MESSAGES
@@ -215,16 +216,7 @@ function PhotoAlbum() {
   // 사진·영상 설명 — 앱 안의 글이라 Google 연결이 끊겨도 고칠 수 있다. 실패하면 뷰어의 입력 창이 그 글을 보여 준다.
   // 저장됐다는 알림은 띄우지 않는다 — 뷰어 아래쪽에 방금 쓴 설명이 뜨는 것이 알림이고, 토스트는 그 설명을 덮는다
   const saveCaption = async (item, caption) => {
-    let response;
-    try {
-      response = await fetchWithAuth(`${apiBase}/media/${item.id}`, { method: 'PATCH', body: JSON.stringify({ caption }) });
-    } catch (saveError) {
-      console.error('사진 설명 저장 실패:', saveError);
-      throw new Error('설명을 저장하지 못했어요. 잠시 뒤 다시 해 주세요.');
-    }
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.error || '설명을 저장하지 못했어요.');
-    const saved = payload.caption ?? null;
+    const saved = await saveMediaCaption(eventId, item.id, caption);
     setItems((prev) => prev.map((media) => (media.id === item.id ? { ...media, caption: saved } : media)));
   };
 

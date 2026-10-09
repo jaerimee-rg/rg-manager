@@ -210,6 +210,16 @@ export const toViewerItem = (item) => ({
   canDelete: true
 });
 
+/**
+ * 전체 사진(모든 폴더)의 미디어 → 뷰어. 어느 폴더의 사진인지(albumTitle)를 정보 줄에 보여 준다.
+ * 지우기는 폴더 화면에서만 한다 — Drive 연결·폴더 상태는 폴더마다 다르다.
+ */
+export const toAllPhotosViewerItem = (item) => ({
+  ...toViewerItem(item),
+  canDelete: false,
+  albumTitle: item.album?.title || null
+});
+
 export default {
   AUDIENCE_LABELS,
   formatPublishedDate,
@@ -234,5 +244,6 @@ export default {
   folderNameFrom,
   newFolderProblem,
   uploadPublishNote,
-  toViewerItem
+  toViewerItem,
+  toAllPhotosViewerItem
 };

@@ -1603,3 +1603,67 @@ test.describe('선생님 — 좁은 화면의 출석 학생 목록', () => {
     await expect(dialog).toHaveCount(0);
   });
 });
+
+test.describe('선생님 — 전체 사진 (모든 폴더)', () => {
+  // 따로 된 선생님: 대회 앨범(사진 51·52) + 사진 전용 폴더(53·54). 아이 가는 51·52·53, 나는 52 에만
+  const all = sessions.allPhotos;
+
+  test.beforeEach(async ({ page }) => {
+    await loginAs(page, all.teacher);
+    // 얼굴 목록은 브라우저가 lh3 사진에서 얼굴을 잘라 그린다 — 진짜 lh3 처럼 CORS 를 허락하는 그림으로 바꿔 끼운다
+    await page.route('https://lh3.googleusercontent.com/**', (route) => route.fulfill({
+      contentType: 'image/png', body: FACELESS_PNG.buffer, headers: { 'Access-Control-Allow-Origin': '*' }
+    }));
+  });
+
+  test('사진 목록의 [전체 사진 보기] — 모든 폴더의 사진이 한 곳에, 모든 아이의 얼굴로 거른다', async ({ page }) => {
+    await page.goto('/photos');
+    await page.locator('.ui-page-header').getByRole('button', { name: '전체 사진 보기' }).click();
+    await expect(page).toHaveURL(/\/photos\/all$/);
+    await expect(page.getByRole('heading', { name: '전체 사진' })).toBeVisible();
+
+    const tiles = page.locator('.ui-media-tile');
+    await expect(tiles).toHaveCount(4);   // 대회 앨범 2장 + 사진 폴더 2장
+
+    // 같은 아이는 폴더가 달라도 얼굴 하나 — 가(3장, 두 폴더) · 나(1장)
+    const faces = page.getByRole('group', { name: '얼굴로 사진 찾기' });
+    await expect(faces.getByRole('button', { name: /^얼굴 \d+ · / })).toHaveCount(2);
+    await expect(faces.locator('img')).toHaveCount(2);   // 잘라 낸 얼굴이 실제로 그려졌다
+
+    await faces.getByRole('button', { name: '얼굴 1 · 사진 3장' }).click();
+    await expect(tiles).toHaveCount(3);
+    const shown = await tiles.locator('img').evaluateAll((images) => images.map((image) => image.getAttribute('src')));
+    expect(shown.every((src) => /-5[123]=/.test(src))).toBe(true);
+
+    // 사진을 열면 어느 폴더의 사진인지 — 넘기면 다른 폴더의 사진
+    await tiles.first().click();
+    const viewer = page.getByRole('dialog', { name: '사진 보기' });
+    await expect(viewer.getByTestId('media-album')).toHaveText(all.folderTitle);
+    await page.keyboard.press('ArrowRight');
+    await expect(viewer.getByTestId('media-album')).toHaveText(all.eventTitle);
+    await page.keyboard.press('Escape');
+    await expect(viewer).toHaveCount(0);
+
+    await faces.getByRole('button', { name: '모든 사진' }).click();
+    await expect(tiles).toHaveCount(4);
+  });
+
+  test('API — 모든 폴더의 사진에 폴더 정보를 붙이고, 얼굴 목록은 이름·학생 id 없이', async ({ request }) => {
+    const media = await api(request, all.teacher, 'GET', '/api/albums/media');
+    expect(media.status).toBe(200);
+    expect(media.body.items.map((item) => item.album.title).sort()).toEqual(
+      [all.eventTitle, all.eventTitle, all.folderTitle, all.folderTitle].sort()
+    );
+
+    const people = await api(request, all.teacher, 'GET', '/api/albums/people');
+    expect(people.body.people.map((one) => one.photoCount)).toEqual([3, 1]);
+    people.body.people.forEach((one) => expect(Object.keys(one).sort()).toEqual(['cover', 'key', 'photoCount']));
+
+    const one = await api(request, all.teacher, 'GET', `/api/albums/media?person=${people.body.people[0].key}`);
+    expect(new Set(one.body.items.map((item) => item.eventId)).size).toBe(2);   // 두 폴더에 걸친 한 아이
+
+    // 학부모는 못 연다(선생님 사진 메뉴)
+    const parent = await api(request, sessions.parent, 'GET', '/api/albums/media');
+    expect(parent.status).toBe(403);
+  });
+});

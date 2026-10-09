@@ -10,12 +10,14 @@ jest.unstable_mockModule('../../database.js', () => ({ default: { connect: jest.
 jest.unstable_mockModule('../../models/MediaFace.js', () => ({
   default: {
     listForAlbum: jest.fn(),
+    listForAlbums: jest.fn(),
     deleteForAlbum: jest.fn(async () => { calls.push('deleteFaces'); return [1, 2, 2]; })
   }
 }));
 jest.unstable_mockModule('../../models/MediaTag.js', () => ({
   default: {
     listForAlbum: jest.fn(),
+    listForAlbums: jest.fn(),
     removeAutoTagsForFaces: jest.fn(async () => { calls.push('removeTags'); return 1; })
   }
 }));
@@ -26,7 +28,7 @@ jest.unstable_mockModule('../../models/EventMedia.js', () => ({
 const MediaFace = (await import('../../models/MediaFace.js')).default;
 const MediaTag = (await import('../../models/MediaTag.js')).default;
 const EventMedia = (await import('../../models/EventMedia.js')).default;
-const { removePerson } = await import('../albumPeople.js');
+const { removePerson, teacherPeople } = await import('../albumPeople.js');
 
 const axis = (i) => Float32Array.from({ length: 8 }, (_, k) => (k === i ? 1 : 0));
 const face = (id, mediaId, descriptor) => ({
@@ -80,5 +82,28 @@ describe('removePerson — 얼굴 목록에서 사람 빼기', () => {
     await expect(removePerson(3, 'p21', { seenPhotoCount: 3 })).resolves.toEqual({ blocked: 'person_changed' });
     await expect(removePerson(3, 'p21')).resolves.toEqual({ blocked: 'person_changed' });
     expect(calls).toEqual([]);
+  });
+});
+
+describe('teacherPeople — 전체 사진의 얼굴 목록(모든 폴더를 함께 묶는다)', () => {
+  it('폴더가 달라도 같은 아이는 한 사람 — 사진은 여러 폴더에 걸친다', async () => {
+    // 앨범 3 의 사진 1, 앨범 5 의 사진 8 에 같은 얼굴(axis 0) · 사진 8 에 다른 사람(axis 4)
+    MediaFace.listForAlbums.mockResolvedValue([face(21, 1, axis(0)), face(41, 8, axis(0)), face(42, 8, axis(4))]);
+    MediaTag.listForAlbums.mockResolvedValue([{ mediaId: 8, studentId: 9, source: 'face', faceId: 41 }]);
+
+    const people = await teacherPeople([3, 5], { includeHidden: true });
+
+    expect(MediaFace.listForAlbums).toHaveBeenCalledWith([3, 5], { includeHidden: true });
+    expect(MediaTag.listForAlbums).toHaveBeenCalledWith([3, 5], { includeHidden: true });
+    expect(people.map(({ key, mediaIds, studentId }) => ({ key, mediaIds, studentId }))).toEqual([
+      { key: 'p21', mediaIds: [1, 8], studentId: 9 },
+      { key: 'p42', mediaIds: [8], studentId: null }
+    ]);
+    expect(people[0].coverUrl).toMatch(/^https:\/\/lh3\.googleusercontent\.com\/d\/f(1|8)=s/);
+  });
+
+  it('앨범이 없으면 읽지 않고 빈 목록', async () => {
+    await expect(teacherPeople([])).resolves.toEqual([]);
+    expect(MediaFace.listForAlbums).not.toHaveBeenCalled();
   });
 });
