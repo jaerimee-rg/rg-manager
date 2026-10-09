@@ -154,16 +154,34 @@ export const newFolderProblem = ({ title, date } = {}) => {
  * 사진 전용 폴더를 지울 때 확인 문구 (FR-519) — 무엇이 사라지고 무엇이 남는지.
  * 앱의 폴더와 사진 기록은 사라지고(학부모 화면에서도), Google Drive 의 폴더와 원본은 남는다.
  */
+/** 이벤트(대회·스페셜)에 딸린 앨범인지 — 지워도 이벤트는 남는다. eventType 이 없으면 사진 폴더로 친다 */
+const isEventAlbum = (album) => Boolean(album?.eventType) && !isPhotoFolder(album.eventType);
+
+/** [폴더 삭제] 확인 창 제목 — 이벤트 앨범은 이벤트를 지우는 것으로 읽히지 않게 "사진 폴더" 라고 쓴다 */
+export const folderDeleteTitle = (album) => (
+  `‘${album?.eventTitle || ''}’ ${isEventAlbum(album) ? '사진 폴더' : '폴더'}를 지울까요?`
+);
+
 export const folderDeleteMessage = (album) => {
   const counts = album?.counts || {};
+  const event = isEventAlbum(album);
   // 숨긴 것도 함께 사라진다 (images · videos 는 보이는 것만 센 수다)
   const total = (counts.images || 0) + (counts.videos || 0) + (counts.hidden || 0);
-  const what = total ? `폴더와 사진·영상 ${total}개가` : '폴더가';
+  const folder = event ? '사진 폴더' : '폴더';
+  const what = total ? `${folder}와 사진·영상 ${total}개가` : `${folder}가`;
   const where = album?.published ? '앱과 학부모 화면에서' : '앱에서';
+  // 이벤트 앨범은 앨범만 지운다 — 신청·참가 학생이 걸린 이벤트는 이벤트 관리에서만 지운다
+  const kept = event ? ' 이벤트와 신청·참가 학생은 이벤트 관리에 그대로 남아요.' : '';
   const drive = album?.driveFolderId
     ? ' Google Drive 의 폴더와 원본 파일은 그대로 남아요.'
     : '';
-  return `${what} ${where} 사라지고, 되돌릴 수 없어요.${drive}`;
+  return `${what} ${where} 사라지고, 되돌릴 수 없어요.${kept}${drive}`;
+};
+
+/** 폴더를 지운 뒤 사진 목록에서 한 번 띄우는 알림 (DELETE /api/albums/:id 응답) */
+export const folderDeletedToast = (result) => {
+  if (result?.eventKept) return '사진 폴더를 지웠어요 · 이벤트와 Google Drive 의 폴더는 그대로 있어요';
+  return result?.driveFolderKept ? '폴더를 지웠어요 · Google Drive 의 폴더는 그대로 있어요' : '폴더를 지웠어요';
 };
 
 /** 공개하면 학부모에게 보이는 곳 — 사진 전용 폴더는 이벤트 상세가 없다 (FR-515, 517) */
@@ -210,7 +228,9 @@ export default {
   PHOTO_FOLDER_TYPE,
   isPhotoFolder,
   publishPlaces,
+  folderDeleteTitle,
   folderDeleteMessage,
+  folderDeletedToast,
   folderNameFrom,
   newFolderProblem,
   uploadPublishNote,

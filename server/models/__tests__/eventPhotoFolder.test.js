@@ -1,7 +1,7 @@
 import { jest } from '@jest/globals';
 
 // 사진 전용 폴더(photo-menu FR-517) — 무엇을 만들고, 어디서 빠지는지를 쿼리로 확인한다.
-jest.unstable_mockModule('../../database.js', () => ({ default: { query: jest.fn() } }));
+jest.unstable_mockModule('../../database.js', () => ({ default: { query: jest.fn(), connect: jest.fn() } }));
 
 const pool = (await import('../../database.js')).default;
 const Event = (await import('../Event.js')).default;
@@ -75,5 +75,69 @@ describe('사진 폴더는 이벤트 화면에 나오지 않는다', () => {
 
     await Event.listForPhotos(7);
     expect(lastSql()).not.toMatch(/folder/);
+  });
+});
+
+describe('Event.removeAlbum — 이벤트 앨범만 지운다, 이벤트는 남긴다 (FR-519)', () => {
+  let client;
+  const sqls = () => client.query.mock.calls.map(([sql]) => sql);
+
+  beforeEach(() => {
+    client = { query: jest.fn(), release: jest.fn() };
+    pool.connect.mockReset();
+    pool.connect.mockResolvedValue(client);
+    client.query.mockImplementation(async (sql) => {
+      if (/^UPDATE events/.test(sql.trim())) return { rows: [{ id: 31, type: 'special', options: '[]', driveFolderId: null }] };
+      if (/^DELETE FROM event_media/.test(sql.trim())) return { rowCount: 4, rows: [] };
+      return { rows: [] };
+    });
+  });
+
+  it('한 트랜잭션에서 앨범 컬럼을 앨범 만들기 전으로 돌리고, 그 이벤트의 사진 기록을 지운다', async () => {
+    const result = await Event.removeAlbum(31);
+
+    expect(sqls()[0]).toBe('BEGIN');
+    expect(sqls().at(-1)).toBe('COMMIT');
+    const update = sqls().find((sql) => /UPDATE events/.test(sql));
+    for (const column of ['driveFolderId', 'driveFolderName', 'driveAccountId', 'albumCreatedAt', 'albumCheckedAt',
+      'albumPublishedAt', 'albumCoverMediaIds', 'albumMatchRules']) {
+      expect(update).toMatch(new RegExp(`"${column}" = NULL`));
+    }
+    expect(update).toMatch(/"albumStatus" = 'none'/);
+    expect(update).toMatch(/"albumPublished" = FALSE/);
+    expect(update).toMatch(/"albumAudience" = 'participants'/);
+    expect(update).toMatch(/"albumUploadOpen" = TRUE/);
+    // 사진 전용 폴더는 행째 지운다(delete) — 여기서 빈 행으로 남기지 않는다
+    expect(update).toMatch(/WHERE id = \$1 AND type <> 'folder'/);
+    // 이벤트 행·신청은 지우지 않는다
+    expect(sqls().some((sql) => /DELETE FROM events|event_registrations|competition/.test(sql))).toBe(false);
+
+    const [deleteSql, deleteParams] = client.query.mock.calls.find(([sql]) => /DELETE FROM event_media/.test(sql));
+    expect(deleteSql).toMatch(/WHERE "eventId" = \$1/);
+    expect(deleteParams).toEqual([31]);
+    expect(result).toEqual({ event: expect.objectContaining({ id: 31, options: [] }), mediaCount: 4 });
+    expect(client.release).toHaveBeenCalled();
+  });
+
+  it('지울 이벤트 앨범이 없으면(사진 폴더 · 없는 id) 아무것도 지우지 않고 null', async () => {
+    client.query.mockImplementation(async () => ({ rows: [], rowCount: 0 }));
+
+    expect(await Event.removeAlbum(50)).toBeNull();
+    expect(sqls()).toContain('ROLLBACK');
+    expect(sqls().some((sql) => /DELETE FROM event_media/.test(sql))).toBe(false);
+    expect(client.release).toHaveBeenCalled();
+  });
+
+  it('도중에 실패하면 되돌리고 던진다', async () => {
+    client.query.mockImplementation(async (sql) => {
+      if (/^DELETE FROM event_media/.test(sql.trim())) throw new Error('boom');
+      if (/^UPDATE events/.test(sql.trim())) return { rows: [{ id: 31, options: '[]' }] };
+      return { rows: [] };
+    });
+
+    await expect(Event.removeAlbum(31)).rejects.toThrow('boom');
+    expect(sqls()).toContain('ROLLBACK');
+    expect(sqls()).not.toContain('COMMIT');
+    expect(client.release).toHaveBeenCalled();
   });
 });

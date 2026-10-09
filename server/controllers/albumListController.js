@@ -130,21 +130,21 @@ export const createPhotoFolder = async (req, res) => {
 };
 
 const NOT_A_FOLDER = {
-  error: '이벤트 앨범이에요. 이름·날짜와 삭제는 이벤트 관리에서 해 주세요.',
+  error: '이벤트 앨범이에요. 이름·날짜는 이벤트 관리에서 고쳐 주세요.',
   reason: 'not_photo_folder'
 };
 
 /**
  * 고치거나 지울 **사진 전용 폴더**를 읽는다. 앨범 화면과 같은 범위다(선생님 = 자기 것, 관리자 = 전부).
- * 이벤트 앨범은 여기서 다루지 않는다 — 이름·날짜는 이벤트 폼이, 삭제는 이벤트 삭제가 맡는다
- * (신청·참가 학생·대회 행이 걸려 있어서 사진 메뉴에서 지우면 안 된다).
+ * 이벤트 앨범의 이름·날짜는 여기서 고치지 않는다 — 이벤트 폼이 대회 행 동기화까지 맡는다.
+ * 지우기는 이벤트 앨범도 받는다(`eventAlbums`) — 이벤트는 두고 앨범만 비운다(deletePhotoFolder).
  * → { event } | { status, body }
  */
-const loadFolder = async (req) => {
+const loadFolder = async (req, { eventAlbums = false } = {}) => {
   const id = parseInt(req.params.id, 10);
   const event = Number.isNaN(id) ? null : await Event.getById(id, req.user.id, req.user.role);
   if (!event) return { status: 404, body: { error: '사진 폴더를 찾을 수 없습니다.' } };
-  if (!isPhotoFolder(event)) return { status: 400, body: NOT_A_FOLDER };
+  if (!isPhotoFolder(event) && !eventAlbums) return { status: 400, body: NOT_A_FOLDER };
   return { event };
 };
 
@@ -193,14 +193,33 @@ export const updatePhotoFolder = async (req, res) => {
 };
 
 /**
- * DELETE /api/albums/:id — 사진 전용 폴더를 지운다 (docs/photo-menu FR-519).
+ * DELETE /api/albums/:id — 사진 폴더를 지운다 (docs/photo-menu FR-519).
  * 앱의 폴더와 그 사진 기록(태그·얼굴 포함, CASCADE)이 사라져 학부모 화면에서도 바로 없어진다.
+ * - 사진 전용 폴더: 행째 지운다.
+ * - 이벤트 앨범(대회·스페셜): **이벤트는 남기고** 앨범만 비운다(Event.removeAlbum) — 신청·참가 학생·대회 행이 걸려 있어서
+ *   이벤트 자체는 이벤트 관리에서만 지운다. 사진 목록에서 빠지고, 다시 올리면 새 앨범으로 시작한다.
  * **Google Drive 의 폴더와 원본 파일은 건드리지 않는다** — 이벤트를 지울 때와 같은 규칙이다.
  */
 export const deletePhotoFolder = async (req, res) => {
   try {
-    const found = await loadFolder(req);
+    const found = await loadFolder(req, { eventAlbums: true });
     if (!found.event) return res.status(found.status).json(found.body);
+
+    if (!isPhotoFolder(found.event)) {
+      const target = found.event;
+      // 앨범이 없는 이벤트(휴관일 포함)는 지울 사진 폴더가 없다
+      if (!target.driveFolderId) {
+        return res.status(404).json({ error: '이 이벤트에는 사진 폴더가 없어요.', reason: 'no_album' });
+      }
+      const removed = await Event.removeAlbum(target.id);
+      if (!removed) return res.status(404).json({ error: '사진 폴더를 찾을 수 없습니다.' });
+      return res.json({
+        deleted: true,
+        eventKept: true,
+        driveFolderKept: true,
+        driveFolderName: target.driveFolderName || null
+      });
+    }
 
     const deleted = await Event.delete(found.event.id, req.user.id, req.user.role);
     if (!deleted) return res.status(404).json({ error: '사진 폴더를 찾을 수 없습니다.' });

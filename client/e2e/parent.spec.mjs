@@ -337,6 +337,41 @@ test.describe('학부모 — 사진', () => {
     await expect(page.getByText(/e2e미확정대회/)).toHaveCount(0);
   });
 
+  test('보일 사진이 없는 공개 앨범은 사진 탭에 나오지 않는다 — 이벤트 상세의 [앨범 열기] 로는 열리고, 사진이 다시 보이면 돌아온다', async ({ page, request }) => {
+    const id = sessions.album.sparseEventId;
+    const title = sessions.album.sparseEventTitle;
+    const bulk = (action) => api(request, sessions.teacher, 'POST', `/api/events/${id}/media/bulk`, { action, mediaIds: [sessions.album.sparseMediaId] });
+    const inTab = async () => (await api(request, sessions.parent, 'GET', '/api/parent/albums')).body.items.some((a) => a.eventId === id);
+
+    // 사진 한 장이 보이는 동안은 사진 탭에 있다
+    await page.goto('/parent/photos');
+    await expect(page.getByText(title)).toBeVisible();
+
+    try {
+      // 선생님이 그 한 장을 숨기면 학부모에게 보일 사진이 없다 → 사진 탭에서 빠진다
+      expect((await bulk('hide')).status).toBe(200);
+      expect(await inTab()).toBe(false);
+      await page.goto('/parent/photos');
+      await expect(page.getByText(/e2e확정대회/)).toBeVisible();
+      await expect(page.getByText(title)).toHaveCount(0);
+
+      // 앨범은 그대로다 — 이벤트 상세에서 열 수 있다(학부모가 사진을 올리는 입구)
+      await page.goto(`/parent/events/${id}`);
+      await expect(page.getByRole('heading', { name: '사진 · 영상' })).toBeVisible();
+      await page.getByRole('button', { name: /앨범 열기/ }).click();
+      await expect(page).toHaveURL(new RegExp(`/parent/photos/${id}$`));
+
+      // 선생님 사진 목록에는 그대로 있다(숨긴 사진을 다시 보이게 할 곳)
+      const teacherList = await api(request, sessions.teacher, 'GET', '/api/albums');
+      expect(teacherList.body.albums.some((a) => a.eventId === id)).toBe(true);
+    } finally {
+      expect((await bulk('show')).status).toBe(200);
+    }
+
+    // 다시 보이게 하면 사진 탭에 돌아온다
+    expect(await inTab()).toBe(true);
+  });
+
   test('휴대폰 사진 탭 — 세로 썸네일이 앨범 카드의 제목·날짜를 덮지 않는다', async ({ page }) => {
     await stubPortraitThumbnails(page);
     await page.setViewportSize({ width: 390, height: 844 });

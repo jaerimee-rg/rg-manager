@@ -476,12 +476,17 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   `parentAwareDisplayNameSql('u','pa')` (parent name → `users.displayName` → username) and
   `mediaSerializer.uploaderNameOf` drops placeholder ids (falls back to 학부모/선생님). Parents still never get
   uploader names (`toParentMedia` whitelist).
-- **Photo folders are renamed and deleted from the 사진 menu only** (docs/photo-menu FR-519): `PATCH` /
-  `DELETE /api/albums/:id` (`updatePhotoFolder` / `deletePhotoFolder`) work on `type='folder'` rows and answer
-  400 `not_photo_folder` for a real event — an event has registrations and a competition row, so it is edited and
-  deleted in 이벤트 관리. Rename also renames the Drive folder via `syncFolderName` (a Drive failure never fails the
-  save; `driveRenamed:false`). **Delete removes the row and its media/tags/faces (CASCADE) but never touches
-  Drive** — same rule as deleting an event; the confirm dialog says so. `Menu` positions itself in CSS
+- **Photo folders are renamed and deleted from the 사진 menu only** (docs/photo-menu FR-519): `PATCH
+  /api/albums/:id` (`updatePhotoFolder`) works on `type='folder'` rows only and answers 400 `not_photo_folder` for a
+  real event — an event's title/date belong to the event form (competition mirror). Rename also renames the Drive folder
+  via `syncFolderName` (a Drive failure never fails the save; `driveRenamed:false`). `DELETE /api/albums/:id`
+  (`deletePhotoFolder`) takes both: a photo folder **removes the row** and its media/tags/faces (CASCADE); an **event
+  album** (competition/special, 2026-10-09) **keeps the event** — `Event.removeAlbum` deletes its `event_media` rows and
+  resets the album columns to "no album yet" (private, `participants`, upload open, no covers/match rules) in one
+  transaction, so registrations, participants and the competition row stay (`{eventKept:true}`; an event with no album →
+  404 `no_album`). The event itself is still deleted only in 이벤트 관리. On an event album the [⋯ 폴더 관리] menu has only
+  [폴더 삭제]. **Neither touches Drive** — same rule as deleting an event; the confirm dialog says so (re-uploading later
+  makes a new Drive folder of the same name). `Menu` positions itself in CSS
   (`.ui-menu[data-align]`), never inline, or the mobile bottom-sheet rule loses.
 - **Album share link** (docs/photo-menu FR-518) = the parent album URL **plus the album owner's parent-invite
   token**: `/parent/photos/<eventId>?invite=<token>`, built server-side by `services/albumShare.sharePathFor` and
@@ -641,7 +646,9 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   tags and parent "아니에요" answers stay. Bumping `FACE_ANALYZER_VERSION` re-analyses the album and would find those
   faces again. While the X shows, tapping another face, [전체], outside or Esc only closes it (no selection); the
   long-press release click never selects.
-- **Parents**: 사진 tab (`/parent/photos`, published albums only), gallery (`/parent/photos/:eventId`) with the
+- **Parents**: 사진 tab (`/parent/photos`, published albums only — and only those with at least one visible ready photo/video:
+  an album whose photos were all deleted or hidden drops out of `GET /api/parent/albums` (owner's call 2026-10-09) but still opens
+  from the event detail's [앨범 열기] and share links, so parents can still upload; the teacher list keeps showing it), gallery (`/parent/photos/:eventId`) with the
   **우리 아이 사진만 보기** toggle and `?open=<mediaId>` to open one photo, a full-screen viewer whose 저장 button
   opens the Drive download URL and which **swipes sideways** to the previous/next photo or video
   (`hooks/useSwipeToPage.js`, rules in `utils/viewerSwipe.js`; both neighbours are pre-rendered off-screen so they

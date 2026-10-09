@@ -159,6 +159,7 @@ describe('listAlbums — 확정된 이벤트만 보인다', () => {
     Event.listWithAlbumsForParent.mockResolvedValue([event()]);
     EventRegistration.listForStudents.mockResolvedValue([]);
     Competition.getStudentIds.mockResolvedValue([5]);
+    EventMedia.summaries.mockResolvedValue({ 3: { images: 1, videos: 0, mine: 0, previews: [] } });
 
     await listAlbums(req, res);
 
@@ -183,11 +184,30 @@ describe('listAlbums — 확정된 이벤트만 보인다', () => {
 
   it('공개 범위가 모든 학부모인 앨범은 확정 없이도 보인다', async () => {
     Event.listWithAlbumsForParent.mockResolvedValue([event({ albumAudience: 'all', type: 'special', competitionId: null })]);
+    EventMedia.summaries.mockResolvedValue({ 3: { images: 0, videos: 2, mine: 0, previews: [] } });
 
     await listAlbums(req, res);
 
     expect(res.json.mock.calls[0][0].items).toHaveLength(1);
     expect(EventRegistration.listForStudents).not.toHaveBeenCalled();
+  });
+
+  it('보일 사진·영상이 없는 앨범(다 지웠거나 다 숨겼다)은 빈 카드로 두지 않는다', async () => {
+    Event.listWithAlbumsForParent.mockResolvedValue([
+      event({ id: 31, albumAudience: 'all', type: 'special', competitionId: null }),
+      event({ id: 32, albumAudience: 'all', type: 'folder', competitionId: null }),
+      event({ id: 33, albumAudience: 'all', type: 'special', competitionId: null })
+    ]);
+    // 31 = 사진이 하나도 없음(요약에 없음), 32 = 0장으로 셈, 33 = 영상 하나
+    EventMedia.summaries.mockResolvedValue({
+      32: { images: 0, videos: 0, mine: 0, previews: [] },
+      33: { images: 0, videos: 1, mine: 0, previews: [] }
+    });
+
+    await listAlbums(req, res);
+
+    expect(EventMedia.summaries).toHaveBeenCalledWith([31, 32, 33], expect.anything());
+    expect(res.json.mock.calls[0][0].items.map((item) => item.eventId)).toEqual([33]);
   });
 });
 

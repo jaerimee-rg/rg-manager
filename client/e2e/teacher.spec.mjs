@@ -874,13 +874,57 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     expect(list.body.targets.some((t) => t.eventId === id)).toBe(false);
   });
 
-  test('폴더 수정·삭제 API 는 사진 폴더에만 된다 — 이벤트 앨범은 400, 학부모는 403', async ({ request }) => {
+  test('이벤트 앨범의 사진 폴더를 지우면 앨범만 사라지고 이벤트와 신청은 남는다', async ({ page, request }) => {
+    const id = sessions.album.doomedEventId;
+    const title = sessions.album.doomedEventTitle;
+    const before = await api(request, sessions.teacher, 'GET', `/api/events/${id}/registrations`);
+    expect(before.status).toBe(200);
+    const registrationCount = before.body.registrations.length;
+    expect(registrationCount).toBeGreaterThan(0);
+
+    await page.goto(`/photos/${id}`);
+    await expect(page.locator('.ui-media-tile')).toHaveCount(1);
+
+    // 이벤트 앨범의 메뉴에는 폴더 삭제만 있다 — 이름·날짜는 이벤트 관리에서 고친다
+    await page.getByRole('button', { name: '폴더 관리' }).click();
+    await expect(page.getByRole('menuitem', { name: /이름 · 날짜 수정/ })).toHaveCount(0);
+    await page.getByRole('menuitem', { name: /폴더 삭제/ }).click();
+    const dialog = page.getByRole('dialog', { name: `‘${title}’ 사진 폴더를 지울까요?` });
+    await expect(dialog).toContainText('사진 폴더와 사진·영상 1개가 앱과 학부모 화면에서 사라지고, 되돌릴 수 없어요.');
+    await expect(dialog).toContainText('이벤트와 신청·참가 학생은 이벤트 관리에 그대로 남아요.');
+    await dialog.getByRole('button', { name: '폴더 삭제' }).click();
+
+    // 사진 목록으로 돌아오고, 그 앨범 카드는 없다
+    await expect(page).toHaveURL(/\/photos$/);
+    await expect(page.locator('.ui-toast')).toContainText('사진 폴더를 지웠어요 · 이벤트와 Google Drive 의 폴더는 그대로 있어요');
+    await expect(page.getByText(title)).toHaveCount(0);
+
+    // 이벤트와 신청은 그대로, 앨범은 앨범을 만들기 전으로
+    expect((await api(request, sessions.teacher, 'GET', `/api/events/${id}`)).status).toBe(200);
+    const after = await api(request, sessions.teacher, 'GET', `/api/events/${id}/registrations`);
+    expect(after.body.registrations.length).toBe(registrationCount);
+    const album = await api(request, sessions.teacher, 'GET', `/api/events/${id}/album`);
+    expect(album.status).toBe(200);
+    expect(album.body).toMatchObject({ driveFolderId: null, albumStatus: 'none', published: false });
+    const list = await api(request, sessions.teacher, 'GET', '/api/albums');
+    expect(list.body.albums.some((a) => a.eventId === id)).toBe(false);
+    // [사진 올리기] 대상에는 남는다 — 다시 올리면 새 앨범으로 시작한다
+    expect(list.body.targets.find((t) => t.eventId === id)).toMatchObject({ hasAlbum: false, count: 0 });
+    // 학부모 사진 탭에서도 사라진다
+    const parentAlbums = await api(request, sessions.parent, 'GET', '/api/parent/albums');
+    expect(parentAlbums.body.items.some((a) => a.eventId === id)).toBe(false);
+
+    // 한 번 더 지우려 하면 지울 사진 폴더가 없다
+    const again = await api(request, sessions.teacher, 'DELETE', `/api/albums/${id}`);
+    expect(again.status).toBe(404);
+    expect(again.body.reason).toBe('no_album');
+  });
+
+  test('폴더 수정 API 는 사진 폴더에만 된다 — 이벤트 앨범은 400, 학부모는 403', async ({ request }) => {
     const eventAlbum = sessions.album.eventId;
     const patchEvent = await api(request, sessions.teacher, 'PATCH', `/api/albums/${eventAlbum}`, { title: 'x', date: '2026-10-03' });
     expect(patchEvent.status).toBe(400);
     expect(patchEvent.body.reason).toBe('not_photo_folder');
-    const deleteEvent = await api(request, sessions.teacher, 'DELETE', `/api/albums/${eventAlbum}`);
-    expect(deleteEvent.status).toBe(400);
     // 이벤트는 그대로 있다
     expect((await api(request, sessions.teacher, 'GET', `/api/events/${eventAlbum}`)).status).toBe(200);
 

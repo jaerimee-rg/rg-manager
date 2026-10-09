@@ -3,7 +3,7 @@ import { jest } from '@jest/globals';
 jest.unstable_mockModule('../../models/Event.js', () => ({
   default: {
     listForPhotos: jest.fn(), createForPhotos: jest.fn(),
-    getById: jest.fn(), updateFolder: jest.fn(), delete: jest.fn()
+    getById: jest.fn(), updateFolder: jest.fn(), delete: jest.fn(), removeAlbum: jest.fn()
   }
 }));
 jest.unstable_mockModule('../../services/albumService.js', () => ({
@@ -398,7 +398,7 @@ describe('PATCH /api/albums/:id — 사진 폴더 이름·날짜 고치기 (FR-5
   });
 });
 
-describe('DELETE /api/albums/:id — 사진 폴더 지우기 (FR-519)', () => {
+describe('DELETE /api/albums/:id — 사진 폴더 지우기 (FR-519, 이벤트 앨범 포함)', () => {
   beforeEach(() => {
     req.params = { id: '50' };
     Event.getById.mockResolvedValue(folder());
@@ -423,26 +423,73 @@ describe('DELETE /api/albums/:id — 사진 폴더 지우기 (FR-519)', () => {
     expect(res.json).toHaveBeenCalledWith({ deleted: true, driveFolderKept: false, driveFolderName: null });
   });
 
-  it('이벤트 앨범은 여기서 지우지 않는다 — 신청·참가 학생이 함께 사라지면 안 된다', async () => {
-    Event.getById.mockResolvedValue(event({ id: 31, type: 'competition', driveFolderId: 'f-31' }));
+  it.each(['competition', 'special'])('이벤트 앨범(%s)은 앨범만 비운다 — 이벤트 행은 지우지 않는다', async (type) => {
+    Event.getById.mockResolvedValue(event({ id: 31, type, driveFolderId: 'f-31', driveFolderName: '2026-09-05 우면산 무 장애 길 러닝' }));
+    Event.removeAlbum.mockResolvedValue({ event: event({ id: 31, type }), mediaCount: 0 });
     req.params = { id: '31' };
 
     await deletePhotoFolder(req, res);
 
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json.mock.calls[0][0].reason).toBe('not_photo_folder');
+    expect(Event.getById).toHaveBeenCalledWith(31, 7, 'user');
+    expect(Event.removeAlbum).toHaveBeenCalledWith(31);
+    // 신청·참가 학생·대회 행이 걸린 이벤트 자체는 이벤트 관리에서만 지운다
     expect(Event.delete).not.toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({
+      deleted: true, eventKept: true, driveFolderKept: true, driveFolderName: '2026-09-05 우면산 무 장애 길 러닝'
+    });
   });
 
-  it('스페셜 · 휴관일도 마찬가지로 지우지 않는다', async () => {
-    for (const type of ['special', 'closure']) {
-      Event.delete.mockClear();
-      Event.getById.mockResolvedValue(event({ id: 31, type }));
+  it('관리자는 다른 선생님의 이벤트 앨범도 지운다 (앨범 화면과 같은 범위)', async () => {
+    req.user = { id: 1, role: 'admin' };
+    Event.getById.mockResolvedValue(event({ id: 31, userId: 7, driveFolderId: 'f-31' }));
+    Event.removeAlbum.mockResolvedValue({ event: event({ id: 31 }), mediaCount: 3 });
+    req.params = { id: '31' };
+
+    await deletePhotoFolder(req, res);
+
+    expect(Event.getById).toHaveBeenCalledWith(31, 1, 'admin');
+    expect(Event.removeAlbum).toHaveBeenCalledWith(31);
+  });
+
+  it('앨범이 없는 이벤트(휴관일 포함)는 지울 사진 폴더가 없다 — 404 no_album', async () => {
+    for (const type of ['competition', 'closure']) {
+      Event.removeAlbum.mockClear();
+      res.status.mockClear();
+      Event.getById.mockResolvedValue(event({ id: 31, type, driveFolderId: null }));
 
       await deletePhotoFolder(req, res);
 
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json.mock.calls.at(-1)[0].reason).toBe('no_album');
+      expect(Event.removeAlbum).not.toHaveBeenCalled();
       expect(Event.delete).not.toHaveBeenCalled();
     }
+  });
+
+  it('그 사이 이벤트가 지워졌으면 404', async () => {
+    Event.getById.mockResolvedValue(event({ id: 31, driveFolderId: 'f-31' }));
+    Event.removeAlbum.mockResolvedValue(null);
+
+    await deletePhotoFolder(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('사진 폴더는 행째 지운다 — 앨범만 비우는 길로 가지 않는다', async () => {
+    await deletePhotoFolder(req, res);
+
+    expect(Event.delete).toHaveBeenCalled();
+    expect(Event.removeAlbum).not.toHaveBeenCalled();
+  });
+
+  it('이벤트 앨범을 비우다 DB 오류가 나면 500', async () => {
+    Event.getById.mockResolvedValue(event({ id: 31, driveFolderId: 'f-31' }));
+    Event.removeAlbum.mockRejectedValue(new Error('x'));
+
+    await deletePhotoFolder(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
   });
 
   it('남의 폴더·없는 폴더는 404', async () => {
