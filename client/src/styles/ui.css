@@ -3447,20 +3447,39 @@ button.ui-album-card__cover-slot:hover::after {
   box-shadow: inset 0 0 0 2px var(--ink), inset 0 0 0 5px var(--star);
 }
 
-/* 대표 사진 보일 부분 고르기(CoverCropDialog) — 카드 표지와 같은 칸을 크게, 고르는 칸만 끌 수 있다 */
-.ui-cover-crop__stage { width: 100%; border: var(--stroke-thin); border-radius: var(--shape-box); }
-.ui-cover-crop__active { cursor: grab; touch-action: none; user-select: none; outline: none; }
-.ui-cover-crop__active:active { cursor: grabbing; }
-.ui-cover-crop__active img { pointer-events: none; -webkit-user-drag: none; }
-.ui-cover-crop__active::after {
+/* 대표 사진 보일 부분 고르기(CoverCropDialog) — 카드 표지와 같은 칸을 크게, 모든 칸을 끌어 고친다.
+   손가락은 표지 전체가 받는다(두 손가락이 옆 칸에 걸쳐도 된다) — 그래서 페이지 스크롤·확대를 표지 전체에서 막는다 */
+.ui-cover-crop__stage { width: 100%; border: var(--stroke-thin); border-radius: var(--shape-box); touch-action: none; user-select: none; }
+.ui-cover-crop__slot { cursor: grab; outline: none; }
+.ui-cover-crop__slot:active { cursor: grabbing; }
+.ui-cover-crop__slot img { pointer-events: none; -webkit-user-drag: none; }
+.ui-cover-crop__slot::after {
   content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
-  box-shadow: inset 0 0 0 3px var(--star);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .6);
 }
-.ui-cover-crop__active:focus-visible::after { box-shadow: inset 0 0 0 2px var(--ink), inset 0 0 0 5px var(--star); }
-.ui-cover-crop__other { opacity: .4; }
+.ui-cover-crop__slot[data-active]::after { box-shadow: inset 0 0 0 3px var(--star); }
+.ui-cover-crop__slot:focus-visible::after { box-shadow: inset 0 0 0 2px var(--ink), inset 0 0 0 5px var(--star); }
+.ui-cover-crop__num {
+  position: absolute;
+  top: 6px; left: 6px;
+  z-index: 1;
+  min-width: 20px;
+  padding: 0 5px;
+  font-size: var(--text-2xs);
+  line-height: 20px;
+  font-weight: var(--weight-bold);
+  text-align: center;
+  color: var(--ink);
+  background: var(--paper);
+  border: var(--stroke-thin);
+  border-radius: 999px;
+  pointer-events: none;
+}
+.ui-cover-crop__slot[data-active] .ui-cover-crop__num { background: var(--star); }
+.ui-cover-crop__which { font-size: var(--text-xs); color: var(--ink); white-space: nowrap; }
 .ui-cover-crop__controls { display: flex; align-items: center; gap: var(--space-2); color: var(--ink-500); }
 .ui-cover-crop__zoom { flex: 1; min-width: 0; margin: 0; background: transparent; accent-color: var(--ink-900); }
 .ui-cover-crop__zoom:focus { outline: none; }

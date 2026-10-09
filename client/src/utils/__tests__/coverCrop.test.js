@@ -1,5 +1,5 @@
 import {
-  MAX_COVER_ZOOM, toCrop, normalizeCrop, sameCrop, cropStyle, panCrop, zoomCrop, coverImageUrl
+  MAX_COVER_ZOOM, toCrop, normalizeCrop, sameCrop, cropStyle, panCrop, zoomCrop, pinchCrop, coverImageUrl
 } from '../coverCrop';
 
 describe('coverCrop — 대표 사진의 보일 부분', () => {
@@ -50,6 +50,43 @@ describe('coverCrop — 대표 사진의 보일 부분', () => {
 
     it('크기를 모르면(사진을 아직 못 읽었다) 그대로', () => {
       expect(panCrop({ x: 30, y: 30, zoom: 1 }, { dx: 10, dy: 10, boxWidth: 160, boxHeight: 100, imageWidth: 0, imageHeight: 0 }))
+        .toEqual({ x: 30, y: 30, zoom: 1 });
+    });
+  });
+
+  describe('pinchCrop — 두 손가락으로 벌리고 옮기기', () => {
+    // 칸 160×100 에 1000×1500 세로 사진 → cover 로 160×240
+    const size = { boxWidth: 160, boxHeight: 100, imageWidth: 1000, imageHeight: 1500 };
+
+    it('가운데에서 두 배로 벌리면 가운데를 중심으로 두 배', () => {
+      expect(pinchCrop(null, { ...size, start: { x: 80, y: 50, distance: 40 }, now: { x: 80, y: 50, distance: 80 } }))
+        .toEqual({ x: 50, y: 50, zoom: 2 });
+    });
+
+    it('손가락 가운데 아래의 사진 점이 그 자리에 남는다 — 위쪽에서 벌리면 위쪽이 커진다', () => {
+      const start = { x: 80, y: 10, distance: 40 };
+      const crop = pinchCrop(null, { ...size, start, now: { ...start, distance: 80 } });
+      expect(crop.zoom).toBe(2);
+      // 손가락 아래 점: 처음 (10 + 70) / 240 = 1/3. 두 배(480)에서 그 점이 y=10 에 오려면 왼쪽 위 끝은 10 − 160 = −150 → y = 150/380
+      expect(crop.y).toBeCloseTo((100 * 150) / 380, 1);
+      expect(crop.x).toBe(50);   // 좌우는 가운데에서 벌렸다
+    });
+
+    it('벌리지 않고 옮기기만 하면 panCrop 과 같다', () => {
+      const from = { x: 50, y: 50, zoom: 1.5 };
+      expect(pinchCrop(from, { ...size, start: { x: 80, y: 50, distance: 30 }, now: { x: 70, y: 64, distance: 30 } }))
+        .toEqual(panCrop(from, { ...size, dx: -10, dy: 14 }));
+    });
+
+    it('확대는 1~3배 안에서 멈춘다 · 오므리면 줄어든다', () => {
+      const start = { x: 80, y: 50, distance: 100 };
+      expect(pinchCrop({ x: 50, y: 50, zoom: 2 }, { ...size, start, now: { ...start, distance: 1000 } }).zoom).toBe(3);
+      expect(pinchCrop({ x: 50, y: 50, zoom: 2 }, { ...size, start, now: { ...start, distance: 10 } }).zoom).toBe(1);
+      expect(pinchCrop({ x: 50, y: 50, zoom: 2 }, { ...size, start, now: { ...start, distance: 75 } }).zoom).toBe(1.5);
+    });
+
+    it('크기를 모르면 그대로', () => {
+      expect(pinchCrop({ x: 30, y: 30, zoom: 1 }, { ...size, imageWidth: 0, start: { x: 0, y: 0, distance: 10 }, now: { x: 0, y: 0, distance: 20 } }))
         .toEqual({ x: 30, y: 30, zoom: 1 });
     });
   });

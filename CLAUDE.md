@@ -707,9 +707,15 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   (`utils/coverCrop.js:cropStyle`), so one value works for every slot shape (16:10, half, quarter). Each cover sits in its own clipping
   `.ui-album-card__cover-slot` or a zoomed photo would spill into the next slot. Lists get it as **`coverCrops`** (same order as `covers`,
   `mediaSerializer.coverCropsOf`; `covers` stays a URL list so an old open tab doesn't break). The teacher clicks a photo in the 대표 사진
-  panel's preview ("사진 목록에서 이렇게 보여요", `AlbumCovers onSelect`) → `pages/Photos/CoverCropDialog.jsx` draws the card at full size,
-  the chosen slot draggable (pointer drag → `panCrop`, exact px→% math), slider/wheel/± zoom, ← → ↑ ↓, [가운데로]; [적용] only edits the draft
-  (`coverDraft.setCoverCrop`; `sameCovers` compares crops) and [저장하기] sends `PATCH …/album {coverMediaIds, coverCrops: {id: crop|null}}`
+  panel's preview ("사진 목록에서 이렇게 보여요", `AlbumCovers onSelect`) → `pages/Photos/CoverCropDialog.jsx` draws the card at full size and
+  edits **every cover in one sitting** (2026-10-09): tapping/focusing a slot makes it the active one (star border, number badge, "n번 사진"),
+  the slider/[가운데로] act on it, and [적용] hands back all crops at once (`coverDraft.setCoverCrops`; `sameCovers` compares crops).
+  Gestures run on the whole stage (`touch-action: none` there), not per slot: one finger/mouse drags, **two fingers pinch and move like a
+  phone photo viewer** — `utils/coverCrop.js:pinchCrop` keeps the photo point under the fingers' midpoint under it (exact inverse of the
+  object-position + scale model; one finger = `panCrop`), the wheel zooms around the cursor with the same maths, ← → ↑ ↓ and ± on a
+  focused slot. The second finger may land on another slot — it still zooms the first one; a change in finger count restarts from the
+  current crop so nothing jumps; a touch that lands before the photo has loaded waits (`pending`) instead of being dropped. e2e drives a
+  real two-finger pinch through CDP (`e2e/helpers.mjs:pinchTouch`) and waits for the sheet to stop sliding first. [저장하기] sends `PATCH …/album {coverMediaIds, coverCrops: {id: crop|null}}`
   for every listed cover (`albumController.parseCoverCrops` → `EventMedia.setCoverCrops`, one `jsonb_each` UPDATE; only with `coverMediaIds`,
   only for ids in it, values through `mediaValidation.normalizeCoverCrop`; else 400 `invalid_cover_crop`). A newly picked cover starts centred.
   `GET …/album` covers carry `driveFileId` + `crop`. **Schema change** — apply `ALTER TABLE event_media ADD COLUMN IF NOT EXISTS "coverCrop" JSONB`

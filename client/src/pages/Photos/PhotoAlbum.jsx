@@ -16,7 +16,7 @@ import FolderEditDialog from './FolderEditDialog';
 import FaceScanPanel from './FaceScanPanel';
 import CoverOrderPanel from './CoverOrderPanel';
 import CoverCropDialog from './CoverCropDialog';
-import { coverCropsBody, coversFromPicks, dropCovers, sameCovers, setCoverCrop, toggleCover } from './coverDraft';
+import { coverCropsBody, coversFromPicks, dropCovers, sameCovers, setCoverCrops, toggleCover } from './coverDraft';
 import ViewStatsPanel from './ViewStatsPanel';
 import PhotoGrid from './PhotoGrid';
 import {
@@ -60,7 +60,7 @@ function PhotoAlbum() {
   const [viewerId, setViewerId] = useState(null);
   // 대표 사진 고치기 초안 — null 이면 고치는 중이 아니다. [저장하기] 를 누르기 전까지 서버에 보내지 않는다
   const [coverDraft, setCoverDraft] = useState(null);
-  const [cropIndex, setCropIndex] = useState(null);   // 보일 부분을 고르는 대표 사진(초안의 몇 번째)
+  const [cropIndex, setCropIndex] = useState(null);   // 보일 부분 고르기를 연 대표 사진(초안의 몇 번째) — 창에서 다른 사진으로 바꿀 수 있다
   const coverPanelRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState('');
@@ -256,13 +256,14 @@ function PhotoAlbum() {
     coverPanelRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
   };
 
-  // 미리 보기의 사진을 누르면 — 고치는 중이 아니었으면 지금 대표 사진에서 시작하고, 그 사진의 보일 부분 고르기를 연다
+  // 미리 보기의 사진을 누르면 — 고치는 중이 아니었으면 지금 대표 사진에서 시작하고, 보일 부분 고르기를 그 사진부터 연다.
+  // 창에서는 모든 대표 사진을 한 번에 고치고, [적용] 이 고친 것 모두를 초안에 넣는다
   const openCrop = (index) => {
     setCoverDraft((prev) => prev ?? savedCovers);
     setCropIndex(index);
   };
-  const applyCrop = (crop) => {
-    setCoverDraft((prev) => setCoverCrop(prev ?? savedCovers, cropIndex, crop));
+  const applyCrops = (crops) => {
+    setCoverDraft((prev) => setCoverCrops(prev ?? savedCovers, crops));
     setCropIndex(null);
   };
 
@@ -599,10 +600,9 @@ function PhotoAlbum() {
 
       {cropIndex !== null && shownCovers[cropIndex] && (
         <CoverCropDialog
-          key={shownCovers[cropIndex].id}
           covers={shownCovers}
           index={cropIndex}
-          onApply={applyCrop}
+          onApply={applyCrops}
           onClose={() => setCropIndex(null)}
         />
       )}

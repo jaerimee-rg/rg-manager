@@ -16,9 +16,9 @@ export const toCover = (item) => ({
 export const sameCovers = (a = [], b = []) => a.length === b.length
   && a.every((cover, index) => cover.id === b[index]?.id && sameCrop(cover.crop, b[index]?.crop));
 
-/** index 번째 대표 사진의 보일 부분을 바꾼 새 초안 */
-export const setCoverCrop = (draft = [], index, crop) => draft.map((cover, i) => (
-  i === index ? { ...cover, crop: normalizeCrop(crop) } : cover
+/** 보일 부분 고르기 창의 [적용] — 같은 순서의 보일 부분들로 바꾼 새 초안(여러 장을 한 번에). 없는 자리는 그대로 */
+export const setCoverCrops = (draft = [], crops = []) => draft.map((cover, i) => (
+  i < crops.length ? { ...cover, crop: normalizeCrop(crops[i]) } : cover
 ));
 
 /** [저장하기] 가 보낼 보일 부분 — { [id]: { x, y, zoom } | null } (목록에 든 사진 모두. null 은 가운데) */
@@ -40,4 +40,4 @@ export const toggleCover = (draft = [], item, max = 4) => {
 /** 숨기거나 지운 사진은 대표 사진이 될 수 없다 — 초안에서도 뺀다 */
 export const dropCovers = (draft = [], ids = []) => draft.filter((cover) => !ids.includes(cover.id));
 
-export default { toCover, sameCovers, setCoverCrop, coverCropsBody, coversFromPicks, toggleCover, dropCovers };
+export default { toCover, sameCovers, setCoverCrops, coverCropsBody, coversFromPicks, toggleCover, dropCovers };
