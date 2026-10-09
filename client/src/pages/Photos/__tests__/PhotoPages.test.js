@@ -715,7 +715,7 @@ describe('PhotoAlbum — 대표 사진 고르기 (4장까지)', () => {
     const previewImages = () => [...preview().querySelectorAll('img')];
     const openCrop = async (n) => {
       await act(async () => { fireEvent.click(within(panel()).getByRole('button', { name: `${n}번 사진 보일 부분 고르기` })); });
-      return screen.getByRole('dialog', { name: `대표 사진 ${n} — 보일 부분` });
+      return screen.getByRole('dialog', { name: '대표 사진 — 보일 부분' });
     };
 
     it('미리 보기는 사진 목록 카드와 같은 주소(자르지 않은 사진)와 저장된 보일 부분으로 그린다', async () => {
@@ -735,7 +735,7 @@ describe('PhotoAlbum — 대표 사진 고르기 (4장까지)', () => {
 
       const dialog = await openCrop(1);
       expect(within(panel()).getByText('수정 중')).toBeInTheDocument();   // 누르면 고치기가 시작된다
-      await act(async () => { fireEvent.change(within(dialog).getByRole('slider', { name: '확대' }), { target: { value: '2' } }); });
+      await act(async () => { fireEvent.change(within(dialog).getByRole('slider', { name: '1번 사진 확대' }), { target: { value: '2' } }); });
       await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: '적용' })); });
 
       expect(screen.queryByRole('dialog', { name: /보일 부분/ })).not.toBeInTheDocument();
@@ -748,6 +748,23 @@ describe('PhotoAlbum — 대표 사진 고르기 (4장까지)', () => {
       expect(saveBar()).toBeNull();
       // 다시 읽은 저장된 보일 부분
       expect(previewImages()[0].style.transform).toBe('scale(2)');
+    });
+
+    it('한 창에서 여러 장을 고쳐 [적용] 한 번 → [저장하기] 가 모두 보낸다', async () => {
+      await renderCover({ covers: [1, 2, 4] });
+
+      const dialog = await openCrop(2);
+      await act(async () => { fireEvent.change(within(dialog).getByRole('slider', { name: '2번 사진 확대' }), { target: { value: '1.5' } }); });
+      await act(async () => { within(dialog).getByRole('group', { name: /^3번 사진 보일 부분/ }).focus(); });
+      await act(async () => { fireEvent.change(within(dialog).getByRole('slider', { name: '3번 사진 확대' }), { target: { value: '2.5' } }); });
+      await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: '적용' })); });
+
+      expect(previewImages()[1].style.transform).toBe('scale(1.5)');
+      expect(previewImages()[2].style.transform).toBe('scale(2.5)');
+      await act(async () => { fireEvent.click(saveButton()); });
+      expect(JSON.parse(patches()[0][1].body).coverCrops).toEqual({
+        1: null, 2: { x: 50, y: 50, zoom: 1.5 }, 4: { x: 50, y: 50, zoom: 2.5 }
+      });
     });
 
     it('[취소] 하면 보일 부분은 그대로고, 바꾼 것이 없으니 [저장하기] 는 잠겨 있다', async () => {

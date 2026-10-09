@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'fs';
-import { loginAs, api, stubPortraitThumbnails, swipeTouch, FACELESS_PNG } from './helpers.mjs';
+import { loginAs, api, stubPortraitThumbnails, swipeTouch, pinchTouch, FACELESS_PNG } from './helpers.mjs';
 import { FAKE_PLACE, stubKakaoMaps } from './kakao-fakes.mjs';
 
 const sessions = JSON.parse(readFileSync(new URL('./.sessions.json', import.meta.url)));
@@ -608,9 +608,9 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
 
       // 1번 사진을 누르면 보일 부분 고르기 — 카드와 같은 모양(2장 나란히)을 크게
       await panel.getByRole('button', { name: '1번 사진 보일 부분 고르기' }).click();
-      const dialog = page.getByRole('dialog', { name: '대표 사진 1 — 보일 부분' });
+      const dialog = page.getByRole('dialog', { name: '대표 사진 — 보일 부분' });
       await expect(dialog.getByTestId('cover-crop-stage')).toHaveAttribute('data-covers', '2');
-      const slot = dialog.getByRole('group', { name: /보일 부분/ });
+      const slot = dialog.getByRole('group', { name: /^1번 사진 보일 부분/ });
       await expect.poll(() => slot.locator('img').evaluate((img) => img.naturalHeight)).toBe(711);
 
       // 마우스로 아래로 끌면 위쪽이 더 보인다(y 가 줄어든다) · 막대로 1.5배
@@ -622,7 +622,7 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
       const dragged = await slot.locator('img').evaluate((img) => img.style.objectPosition);
       const draggedY = Number(dragged.split(' ')[1].replace('%', ''));
       expect(draggedY).toBeLessThan(50);
-      await dialog.getByRole('slider', { name: '확대' }).fill('1.5');
+      await dialog.getByRole('slider', { name: '1번 사진 확대' }).fill('1.5');
       await expect(dialog.getByText('1.5배')).toBeVisible();
       await dialog.getByRole('button', { name: '적용' }).click();
       await expect(dialog).toHaveCount(0);
@@ -664,6 +664,70 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     } finally {
       await patchAlbum(eventId, { coverMediaIds: [photo1, photo2], coverCrops: { [photo1]: null, [photo2]: null } });
       await patchAlbum(eventId, { coverMediaIds: [] });
+    }
+  });
+
+  test('휴대폰 — 보일 부분 창에서 여러 장을 한 번에 고친다: 두 손가락으로 벌려 확대하고, 다른 칸을 눌러 이어서 고친 뒤 [적용] · [저장하기]', async ({ browser, baseURL, request }) => {
+    const eventId = sessions.album.eventId;
+    const [photo1, photo2] = sessions.album.mediaIds;
+    const patchAlbum = (body) => api(request, sessions.teacher, 'PATCH', `/api/events/${eventId}/album`, body);
+    const albumOf = async () => (await api(request, sessions.teacher, 'GET', `/api/events/${eventId}/album`)).body;
+    const phone = await browser.newContext({ baseURL, hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+    try {
+      expect((await patchAlbum({ coverMediaIds: [photo1, photo2], coverCrops: { [photo1]: null, [photo2]: null } })).status).toBe(200);
+      const page = await phone.newPage();
+      await stubPortraitThumbnails(page);
+      await loginAs(page, sessions.teacher);
+      await page.goto(`/photos/${eventId}`);
+      const panel = page.getByRole('region', { name: '대표 사진', exact: true });
+      await panel.getByRole('button', { name: '1번 사진 보일 부분 고르기' }).click();
+      const dialog = page.getByRole('dialog', { name: '대표 사진 — 보일 부분' });
+      const first = dialog.getByRole('group', { name: /^1번 사진 보일 부분/ });
+      const second = dialog.getByRole('group', { name: /^2번 사진 보일 부분/ });
+      for (const slot of [first, second]) await expect.poll(() => slot.locator('img').evaluate((img) => img.naturalHeight)).toBe(711);
+      // 휴대폰에서는 창이 아래에서 올라온다 — 다 올라와 멈춘 뒤의 자리에 손가락을 댄다
+      const settledBox = async (locator) => {
+        let previous = null;
+        await expect.poll(async () => {
+          const box = await locator.boundingBox();
+          const still = previous && Math.abs(box.y - previous.y) < 0.5;
+          previous = box;
+          return still;
+        }).toBe(true);
+        return previous;
+      };
+
+      // 1번: 두 손가락을 40px → 100px 로 벌린다 — 2.5배, 가운데에서 벌려 가운데 그대로
+      const box1 = await settledBox(first);
+      const scrollBefore = await page.evaluate(() => window.scrollY);
+      await pinchTouch(page, { x: box1.x + box1.width / 2, y: box1.y + box1.height / 2 }, 40, 100, { steps: 10 });
+      await expect(first.locator('img')).toHaveCSS('transform', /matrix\(2\.5, 0, 0, 2\.5/);
+      await expect(dialog.getByText('2.5배')).toBeVisible();
+      expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);   // 페이지가 대신 확대·스크롤되지 않는다
+
+      // 2번을 눌러 이어서 — 한 손가락으로 아래로 끌어 위쪽이 더 보이게
+      const box2 = await settledBox(second);
+      await swipeTouch(page, { x: box2.x + box2.width / 2, y: box2.y + box2.height / 2 }, { x: box2.x + box2.width / 2, y: box2.y + box2.height / 2 + 60 });
+      await expect(second).toHaveAttribute('data-active', 'true');
+      await expect(dialog.getByText('2번 사진')).toBeVisible();
+      const secondY = Number((await second.locator('img').evaluate((img) => img.style.objectPosition)).split(' ')[1].replace('%', ''));
+      expect(secondY).toBeLessThan(50);
+      await expect(first.locator('img')).toHaveCSS('transform', /matrix\(2\.5, 0, 0, 2\.5/);   // 1번은 그대로
+
+      await dialog.getByRole('button', { name: '적용' }).click();
+      await page.getByRole('region', { name: '대표 사진 저장' }).getByRole('button', { name: '저장하기' }).click();
+      await expect(page.locator('.ui-toast')).toContainText('대표 사진 2장을 저장했어요');
+      const saved = (await albumOf()).covers;
+      expect(saved[0].crop.zoom).toBe(2.5);
+      // 가운데에서 벌렸으니 가운데 그대로(손가락 좌표가 반 픽셀 어긋나도 1% 안)
+      expect(Math.abs(saved[0].crop.x - 50)).toBeLessThan(1);
+      expect(Math.abs(saved[0].crop.y - 50)).toBeLessThan(1);
+      expect(saved[1].crop).toMatchObject({ x: 50, zoom: 1 });
+      expect(saved[1].crop.y).toBeCloseTo(secondY, 0);
+    } finally {
+      await phone.close();
+      await patchAlbum({ coverMediaIds: [photo1, photo2], coverCrops: { [photo1]: null, [photo2]: null } });
+      await patchAlbum({ coverMediaIds: [] });
     }
   });
 

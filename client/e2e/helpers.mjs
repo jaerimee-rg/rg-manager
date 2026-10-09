@@ -74,6 +74,27 @@ export const swipeTouch = async (page, from, to, { steps = 8 } = {}) => {
   }
 };
 
+/**
+ * 두 손가락으로 벌리기(오므리기) — center 를 가운데로 두 손가락 사이를 fromGap → toGap(px) 으로 바꾼다. 진짜 터치 입력(CDP)이라
+ * 브라우저가 포인터 이벤트 두 개(pointerId 가 다르다)로 바꿔 보낸다. 컨텍스트가 hasTouch 여야 한다.
+ */
+export const pinchTouch = async (page, center, fromGap, toGap, { steps = 8 } = {}) => {
+  const cdp = await page.context().newCDPSession(page);
+  const at = (t) => {
+    const half = (fromGap + (toGap - fromGap) * t) / 2;
+    return [{ x: center.x - half, y: center.y, id: 1 }, { x: center.x + half, y: center.y, id: 2 }];
+  };
+  try {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(0) });
+    for (let i = 1; i <= steps; i += 1) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(i / steps) });
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } finally {
+    await cdp.detach();
+  }
+};
+
 /** 얼굴이 없는 64×64 PNG — 브라우저가 읽을 수는 있는 사진 (얼굴 등록 · 얼굴 찾기 테스트) */
 export const FACELESS_PNG = {
   name: 'no-face.png',

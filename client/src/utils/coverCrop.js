@@ -64,6 +64,32 @@ export const panCrop = (crop, { dx = 0, dy = 0, boxWidth, boxHeight, imageWidth,
 /** 확대만 바꾼다 — 같은 점을 중심으로 커진다 */
 export const zoomCrop = (crop, zoom) => toCrop({ ...toCrop(crop), zoom });
 
+/**
+ * 두 손가락으로 벌리고 옮기기(휴대폰의 사진 보기처럼) — 손가락 가운데 아래에 있던 사진의 점이 손가락을 따라간다.
+ * start / now = { x, y, distance } — 두 손가락의 가운데(칸 왼쪽 위 기준 px)와 두 손가락 사이 거리.
+ * 확대는 처음 확대 × (지금 거리 ÷ 처음 거리), 1~3배. 휠 확대는 distance 에 배율을 넣어 같은 식을 쓴다(가운데 = 마우스 자리).
+ * 사진 폭은 W·zoom 이고 왼쪽 끝은 (w − W·zoom)·x/100 이라, 손가락 아래 점 u(사진 폭의 비율)를 지키는 x 를 거꾸로 푼다.
+ */
+export const pinchCrop = (crop, { start, now, boxWidth, boxHeight, imageWidth, imageHeight }) => {
+  const from = toCrop(crop);
+  if (!(boxWidth > 0 && boxHeight > 0 && imageWidth > 0 && imageHeight > 0) || !(start?.distance > 0)) return from;
+  const zoom = clamp(from.zoom * ((now?.distance || start.distance) / start.distance), 1, MAX_COVER_ZOOM);
+  const base = Math.max(boxWidth / imageWidth, boxHeight / imageHeight);
+  const axis = (box, size, pos, startAt, nowAt) => {
+    const before = size * base * from.zoom;   // 처음 크기
+    const after = size * base * zoom;         // 지금 크기
+    if (after - box <= 0.5) return pos;       // 넘칠 것이 없으면 위치는 상관없다
+    const offset = ((box - before) * pos) / 100;
+    const point = (startAt - offset) / before;              // 손가락 아래 사진의 점(0~1)
+    return (100 * (nowAt - point * after)) / (box - after);  // 그 점을 지금 손가락 아래에 두는 위치
+  };
+  return toCrop({
+    x: axis(boxWidth, imageWidth, from.x, start.x, now.x),
+    y: axis(boxHeight, imageHeight, from.y, start.y, now.y),
+    zoom
+  });
+};
+
 const IMAGE_BASE = 'https://lh3.googleusercontent.com/d';
 
 /**
@@ -77,5 +103,5 @@ export const coverImageUrl = (driveFileId, { single = true, zoom = 1 } = {}) => 
 };
 
 export default {
-  MAX_COVER_ZOOM, DEFAULT_CROP, toCrop, normalizeCrop, sameCrop, cropStyle, panCrop, zoomCrop, coverImageUrl
+  MAX_COVER_ZOOM, DEFAULT_CROP, toCrop, normalizeCrop, sameCrop, cropStyle, panCrop, zoomCrop, pinchCrop, coverImageUrl
 };
