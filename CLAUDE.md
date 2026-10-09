@@ -700,7 +700,9 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   **each photo/video shown big** (open or swipe — `MediaViewer onShow`), through `utils/albumViews.createViewTracker` (fire-and-forget,
   `keepalive`, once per item per page visit) → `POST /api/parent/events/:id/views {mediaId?}` (`albumViewController.recordView`: same
   access as the gallery — `loadAlbumContext` — and only this album's ready, non-hidden media; anything else 404). The server also skips a
-  repeat from the same person within **30 min (album) / 10 min (photo)** (`VIEW_DEDUPE_MS`, one `INSERT … WHERE NOT EXISTS`). Teachers see
+  repeat from the same person within **30 min (album) / 10 min (photo)** (`VIEW_DEDUPE_MS`, one `INSERT … WHERE NOT EXISTS`). These calls
+  come once per swiped photo, so they are **skipped by `apiLimiter`** (200/IP — parents on one Wi-Fi would otherwise 429 each other's
+  normal screens) and counted by their own `photoViewLimiter` (`utils/rateLimits.js` `PHOTO_VIEW_IP_MAX` 2000, `isPhotoViewBeacon`). Teachers see
   it as `viewStats` {viewers, albumOpens, mediaViews} + `topViewed` on `GET …/album` (`pages/Photos/ViewStatsPanel.jsx`; tapping a
   most-viewed photo opens it), `viewCount` per photo (viewer info line "N번 봤어요", `MediaViewer showViews`, teacher only) and `viewers`
   on each 사진 list card ("N명이 봤어요"). **Who** viewed is only in Admin → 로그 → **사진 보기 로그** (`GET /api/logs/photo-views?kind&limit&offset`,

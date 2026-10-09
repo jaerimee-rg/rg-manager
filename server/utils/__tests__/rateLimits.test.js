@@ -9,6 +9,8 @@ import {
   PUBLIC_SHOP_READ_MAX,
   PUBLIC_SHOP_TRACK_MAX,
   PUBLIC_SHOP_TRACK_IP_MAX,
+  PHOTO_VIEW_IP_MAX,
+  isPhotoViewBeacon,
   PUBLIC_SHOP_RESERVE_IP_MAX,
   visitorKeyGenerator
 } from '../rateLimits.js';
@@ -189,5 +191,21 @@ describe('공개 추천 상품 한도', () => {
     expect(PUBLIC_SHOP_RESERVE_IP_MAX).toBeLessThan(PUBLIC_SHOP_TRACK_MAX / 4);
     // 같은 와이파이의 학부모 몇 명이 몇 개씩 예약해도 막히지 않는다
     expect(PUBLIC_SHOP_RESERVE_IP_MAX).toBeGreaterThanOrEqual(10);
+  });
+});
+
+describe('학부모 사진 보기 기록 — 일반 API 한도와 따로 센다', () => {
+  it('POST /api/parent/events/:id/views 만 해당한다', () => {
+    expect(isPhotoViewBeacon({ method: 'POST', originalUrl: '/api/parent/events/31/views' })).toBe(true);
+    expect(isPhotoViewBeacon({ method: 'POST', originalUrl: '/api/parent/events/31/views?x=1' })).toBe(true);
+    expect(isPhotoViewBeacon({ method: 'GET', originalUrl: '/api/parent/events/31/views' })).toBe(false);
+    expect(isPhotoViewBeacon({ method: 'POST', originalUrl: '/api/parent/events/31/media' })).toBe(false);
+    expect(isPhotoViewBeacon({ method: 'POST', originalUrl: '/api/parent/events/31/views/extra' })).toBe(false);
+    expect(isPhotoViewBeacon({ method: 'POST', originalUrl: '/api/events/31/views' })).toBe(false);
+    expect(isPhotoViewBeacon(undefined)).toBe(false);
+  });
+
+  it('같은 와이파이에서 여럿이 사진을 넘겨 봐도 넉넉하다 — 일반 한도(200)의 10배', () => {
+    expect(PHOTO_VIEW_IP_MAX).toBeGreaterThanOrEqual(1000);
   });
 });
