@@ -297,10 +297,11 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     await expect(page.getByRole('button', { name: '사진 올리기' }).first()).toBeDisabled();
   });
 
-  test('[얼굴 찾기] — 예전 방식으로 분석한 사진을 이 브라우저에서 다시 찾아 저장한다 (Google 연결 없이도)', async ({ page, request }) => {
-    test.setTimeout(120_000);
+  test('[얼굴 찾기] — 예전 방식으로 분석한 사진을 분석 서버로 다시 찾아 저장한다 (Google 연결 없이도)', async ({ page, request }) => {
+    const engine = await request.get('/api/face-engine/health');
+    test.skip(!engine.ok(), '얼굴 분석 서버가 없다 — e2e/fake-face-engine.mjs 를 띄우고 서버에 FACE_ENGINE_URL 을 주면 돈다');
     const id = sessions.album.faceScanEventId;
-    // Drive 사진(lh3, 긴 변 1920)을 얼굴 없는 그림으로 바꿔 끼운다. 진짜 lh3 처럼 CORS 를 허락해야 캔버스가 읽힌다.
+    // Drive 사진(lh3, 긴 변 1920)을 얼굴 없는 그림으로 바꿔 끼운다. 진짜 lh3 처럼 CORS 를 허락해야 브라우저가 읽는다.
     const asked = [];
     await page.route('https://lh3.googleusercontent.com/**', (route) => {
       // 갤러리 썸네일도 lh3 에서 온다 — 얼굴 찾기가 받는 긴 변 1920 만 센다
@@ -312,8 +313,7 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     await expect(page.getByText('얼굴을 찾아 볼 사진이 2장 있어요', { exact: false })).toBeVisible();
     await page.getByRole('button', { name: '얼굴 찾기' }).click();
 
-    // 모델을 받고 처음 계산할 때 셰이더를 만드느라 느리다
-    await expect(page.getByText(/사진 2장을 다시 봤어요\. 0장에서 얼굴을 찾았어요\./)).toBeVisible({ timeout: 90_000 });
+    await expect(page.getByText(/사진 2장을 다시 봤어요\. 0장에서 얼굴을 찾았어요\./)).toBeVisible({ timeout: 20_000 });
     expect(asked).toHaveLength(2);
     expect(asked.every((url) => /\/d\/e2e-file-.+=s1920$/.test(url))).toBe(true);
 

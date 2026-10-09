@@ -83,7 +83,7 @@ const {
 } = await import('../parentAlbumController.js');
 
 const parent = { id: 42, username: '하은엄마', role: 'parent' };
-const DESCRIPTOR = new Array(128).fill(0.1);
+const DESCRIPTOR = new Array(512).fill(0.1);
 
 // 기본은 "선생님이 공개한 앨범, 공개 범위 = 참가 확정 학부모" (docs/photo-menu)
 const event = (overrides = {}) => ({

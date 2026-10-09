@@ -3,11 +3,11 @@ import { FACE_ANALYZER_VERSION, detectFaces } from './faceClient';
 import { cropFaces } from './faceCrops';
 
 /**
- * 앨범에서 얼굴을 (다시) 찾아야 하는 사진을 선생님 브라우저에서 한 바퀴 돈다.
+ * 앨범에서 얼굴을 (다시) 찾아야 하는 사진을 선생님 브라우저에서 한 바퀴 돈다 (분석 자체는 face_engine/ 이 한다).
  *
  * 대상은 서버가 정한다(models/EventMedia.js needsFaceAnalysisSql) — 아직 못 찾았거나, 예전 방식
  * (FACE_ANALYZER_VERSION 보다 낮은 버전)으로 찾은 사진. 몇 장씩 받아
- *   Drive 사진(긴 변 1920, largeUrl) → 얼굴 찾기 → POST .../media/:id/faces (저장 + 바로 매칭)
+ *   Drive 사진(긴 변 1920, largeUrl) → 얼굴 분석 함수 → POST .../media/:id/faces (저장 + 바로 매칭)
  * 을 반복한다. 못 읽은 사진은 저장하지 않으므로 서버 목록에 그대로 남는데, 받은 마지막 id 를
  * afterId 로 넘기기 때문에 이번 바퀴에서 같은 사진을 다시 받지는 않는다.
  *

@@ -9,12 +9,20 @@
     {
       "src": "server/server.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "face_engine/index.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxDuration": 60,
+        "excludeFiles": "{client/**,server/**,docs/**,screenshots/**,face_engine/tests/**,face_engine/.models/**,*.md}"
+      }
     }
   ],
   "routes": [
+    { "src": "/api/face-engine(/.*)?", "dest": "face_engine/index.py" },
     { "src": "/api(/.*)?", "dest": "server/server.js" },
     { "src": "/assets/(.*)", "dest": "/client/assets/$1" },
-    { "src": "/models/(.*)", "dest": "/client/models/$1" },
     { "src": "/(logo-mark|og-image|icon-192|icon-512)\\.png", "dest": "/client/$1.png" },
     { "src": "/(.*)", "dest": "/client/index.html" }
   ]

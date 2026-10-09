@@ -518,37 +518,60 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   `utils/mediaSerializer.js:toParentMedia`, a **whitelist** — other children's tags, face boxes,
   descriptors, uploader names and Drive filenames never leave the server. A test pins the exact
   field list so a new column cannot leak by accident.
-- **Face indexing runs in the browser**, not on Vercel: `utils/faceClient.js` lazy-loads
-  `@vladmandic/face-api` plus three models from `client/public/models` (~6.4MB, its own bundle
-  chunk) and posts only `{box, score, descriptor}`. The server validates and stores the vector.
-  If the browser cannot decode the file (HEIC on Android) or the models fail to load, the upload
-  still succeeds with `faceStatus='skipped'` and the teacher can tag by hand. `detectFaces` returns
-  **`null` on failure and `[]` only for "no face"** — `[]` is stored as `none`, so a failure sent as `[]`
-  would look like a faceless photo.
-- **Detection = 1920px preview, TinyFaceDetector at 512 *and* 1024.** 512 alone found 0 faces in a real
-  group photo (faces ~7–9% wide); 1024 alone misses close-ups. 1024 first runs boxes-only and the full
-  landmark+descriptor pass runs only when it found a face 512 missed; results merge by IoU. Faces whose
-  short side is under 2% of the long side are dropped.
-- **`FACE_ANALYZER_VERSION`** (`client/src/utils/faceClient.js` **and** `server/utils/faceVector.js` — keep equal)
-  rides with every result into `event_media."faceAnalyzerVersion"`. Photos analysed by an older version (or
-  none recorded) count as needing analysis even if `none`/`done` (`EventMedia.needsFaceAnalysisSql`, used by the
-  re-analysis list, `counts.unanalyzed` and the `unanalyzed` filter). Bump both when detection changes.
+- **Face indexing runs on Vercel, in a Python function** (`face_engine/`, 2026-10) — InsightFace **buffalo_l**:
+  SCRFD `det_10g` at 640 + ArcFace `w600k_r50` (**512-dim**, unit length). It replaced the in-browser face-api
+  (TinyFaceDetector + 128-dim), which on the 102 production photos found faces in 51 and mixed different children
+  under one tag; buffalo_l found faces in 93 (85 → 256 faces) and separated the children. The browser still drives
+  everything (`utils/faceClient.js`): it JPEG-encodes the 1920px preview it already has and POSTs the bytes with its
+  login token to **`/api/face-engine/detect`**, then sends the returned `{box, score, descriptor}` to the Node API as
+  before. The photo is never stored. Failure (engine down/cold-start timeout, 401, unreadable image) → `detectFaces`
+  returns **`null`** and the upload still succeeds with `faceStatus='skipped'`; **`[]` only means "no face"** (stored as
+  `none`), so a failure sent as `[]` would look like a faceless photo.
+- **The engine is pure numpy + Pillow + onnxruntime** (`face_engine/requirements.txt`, ~135MB installed). The
+  `insightface` package itself pulls OpenCV/SciPy/scikit-image and would not fit the 500MB Python function limit, so
+  `engine.py`/`imaging.py` re-implement its preprocessing (cv2 INTER_LINEAR resize, warpAffine, skimage Umeyama
+  similarity). `tests/test_engine.py` + `tests/test_parity.py` check against the real insightface/cv2 when they are
+  installed (same faces, descriptor cosine > 0.98). The JWT is verified in Python with the same `JWT_SECRET`
+  (`auth_token.py`; HS256 only, `purpose` tokens such as the Drive state are refused).
+- **Models are not in the repo** — they are licensed **non-commercial research only** and this repository is public.
+  On a cold start `model_store.py` range-downloads just `det_10g.onnx` + `w600k_r50.onnx` (~176MB of the 289MB
+  `buffalo_l.zip`) from InsightFace's GitHub release, checks **size + SHA-256** (a changed file → 503, never a silently
+  different model), and keeps a copy in `/tmp` for the instance. A failed download is not retried for 30s. The owner
+  chose non-commercial use (2026-10-09); revisit the license before any commercial use.
+- **Local dev**: `python face_engine/model_store.py` (once, into gitignored `face_engine/.models`), then
+  `JWT_SECRET=<same as server> python face_engine/dev_server.py` (:5090) and start Express with
+  `FACE_ENGINE_URL=http://localhost:5090` — `server/utils/faceEngineProxy.js` forwards `/api/face-engine/*` there
+  (503 when unset). In production Vercel routes that path to the Python function **before** the Express catch-all, so
+  the proxy never runs there. Python tests: `pytest face_engine/tests` (needs pytest; the real-model tests skip unless
+  `face_engine/.models` exists and `FACE_TEST_IMAGE` points at a photo with several faces).
+- **Reference faces**: `detectSingleFace` accepts one face, or one face at least **3× the area** of the next
+  (`pickMainFace`) — the new detector also finds small background faces, so "exactly one" rejected most real photos.
+- **`FACE_ANALYZER_VERSION` = 3** (`client/src/utils/faceClient.js`, `server/utils/faceVector.js` **and**
+  `face_engine/service.py` — keep equal) rides with every result into `event_media."faceAnalyzerVersion"`. Photos
+  analysed by an older version (or none recorded) count as needing analysis even if `none`/`done`
+  (`EventMedia.needsFaceAnalysisSql`, used by the re-analysis list, `counts.unanalyzed` and the `unanalyzed` filter).
+  Bump all three when detection changes.
 - **[얼굴 찾기]** on the teacher album page (`pages/Photos/FaceScanPanel.jsx` → `utils/faceReanalysis.js`) walks
-  `GET .../media/unanalyzed?afterId=` and posts to `.../media/:id/faces`. The image is
-  `lh3.googleusercontent.com/d/<id>=s1920` — **not** `drive.google.com/thumbnail`, whose 302 carries no CORS
-  header so the canvas is tainted. Failed photos stay in the list; the `afterId` cursor stops one run from
-  looping on them. It never runs automatically (model download + per-photo work on the teacher's device).
-- **Vectors are `TEXT` (base64 of a 128-float array), not pgvector** — the production Supabase role
-  is not a superuser and cannot `CREATE EXTENSION`. Distances are computed in JS
-  (`utils/faceVector.js`); at this scale that is tens of milliseconds. Promote to pgvector later by
-  changing the column type only.
+  `GET .../media/unanalyzed?afterId=` and posts to `.../media/:id/faces`. The browser fetches
+  `lh3.googleusercontent.com/d/<id>=s1920` (CORS `*`; **not** `drive.google.com/thumbnail`, whose 302 has no CORS
+  header) and posts those bytes to the engine. Failed photos stay in the list; the `afterId` cursor stops one run from
+  looping on them. It never runs automatically.
+- **Vectors are `TEXT` (base64 of a 512-float array = 2732 chars), not pgvector** — the production Supabase role
+  is not a superuser and cannot `CREATE EXTENSION`. Distances are computed in JS (`utils/faceVector.js`); at this scale
+  that is tens of milliseconds. Promote to pgvector later by changing the column type only. Old 128-dim face-api
+  values decode to `null` (length check) and drop out of matching; boot deletes old **reference** faces
+  (`length(descriptor) = 684`) so they stop counting against the per-child limit — parents re-register in 내 정보.
+  Old album faces stay until [얼굴 찾기] replaces them.
 - **Tag precedence** `manual > parent_confirmed > face > candidate`, and `excluded` is never
   resurrected by re-matching (`utils/faceMatch.js:nextTagSource`, the whole table is unit-tested).
-  Distance ≤ `face_match_threshold` (**0.35**) auto-tags, ≤ `face_candidate_threshold` (**0.40**) becomes a
-  "혹시 우리 아이?" candidate; both are `app_settings` keys. They were 0.50 / 0.60 until 2026-10: this model packs
-  children's faces close together (six different faces and a profile all sat within 0.32–0.52), so 0.50 auto-tagged
-  almost anyone (wrong tags measured 0.378–0.492). Boot moves rows still holding an old default (0.50/0.55,
-  0.60/0.65) and leaves any other value alone. **One face → at most one child** (`faceVector.js:bestPerStudent`
+  The distance is **cosine distance (1 − cosine similarity)**. ≤ `face_match_threshold` (**0.35**, similarity ≥ 0.65)
+  auto-tags, ≤ `face_candidate_threshold` (**0.50**) becomes a "혹시 우리 아이?" candidate; both are `app_settings` keys.
+  Measured on production photos (2026-10): same child frontal 0.71–0.88 similarity, other children ≤ 0.40, two people
+  in one photo ≤ 0.51 — but an eyes-closed or hair-covered reference lets other children reach 0.53–0.61, hence the
+  candidate band. (The old face-api Euclidean values overlapped completely: same child 0.35–0.37, others 0.32–0.52.)
+  Boot moves rows still holding an old face-api default (match 0.50/0.55 → 0.35, candidate 0.40/0.60/0.65 → 0.50) and
+  leaves any other value alone — **this UPDATE sits at the end of `initDatabase` and has not run reliably in
+  production; apply it by hand after deploying**. **One face → at most one child** (`faceVector.js:bestPerStudent`
   assigns each face to its nearest student), so one face can no longer tag two children.
 - **Auto tags are a cache and re-match themselves.** `events."albumMatchRules"` records the rule signature the
   album's `face`/`candidate` tags were computed with (`faceVector.js:matchRulesSignature` = rules version + both
@@ -798,9 +821,11 @@ never the production DB. Three things must line up or almost everything fails in
 ```bash
 cd client && npm run build
 cd ../client && node e2e/fake-storage.mjs &                                   # fake Supabase Storage on :5056
+cd ../client && node e2e/fake-face-engine.mjs &                               # fake face engine on :5057
 cd ../server && DATABASE_URL=postgresql://<user>@localhost:5432/rg_manager PORT=5055 \
   JWT_SECRET=local-dev-secret API_RATE_LIMIT_MAX=100000 AUTH_RATE_LIMIT_MAX=100000 \
-  SUPABASE_URL=http://localhost:5056 SUPABASE_SECRET_KEY=e2e-fake node server.js &
+  SUPABASE_URL=http://localhost:5056 SUPABASE_SECRET_KEY=e2e-fake \
+  FACE_ENGINE_URL=http://localhost:5057 node server.js &
 cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e:setup   # writes e2e/.sessions.json
 cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 103 tests
 ```
@@ -808,6 +833,9 @@ cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 10
 - **`design` project** (`e2e/design.spec.mjs`) checks the redesign in a real browser — computed
   colors/strokes/fonts and the three role shells. Its font-download test needs the jsDelivr/Google Fonts
   CDNs and **skips** when they are unreachable.
+- **The fake face engine is optional too** (`client/e2e/fake-face-engine.mjs`): it answers `/api/face-engine/*` like
+  `face_engine/` (needs a Bearer token, always "no face") so the browser → Express → engine → save path runs without
+  the 190MB models. Without `FACE_ENGINE_URL` the two analysis tests (parent face photo, teacher [얼굴 찾기]) **skip**.
 - **The fake storage is optional** — it lets the shop photo tests upload for real (`client/e2e/fake-storage.mjs`
   mimics the three Storage REST calls `server/utils/storage.js` makes and keeps files in memory; `GET /__files`
   lists them). Without `SUPABASE_URL`/`SUPABASE_SECRET_KEY` the server reports `storageReady:false` and the
@@ -847,6 +875,9 @@ Production runs on Vercel at **https://rg-manager.vercel.app**, deployed automat
 on every push to `main` via the GitHub integration. Render is no longer used.
 
 **How it is wired** (`vercel.json`):
+- `/api/face-engine/*` → `face_engine/index.py` (`@vercel/python`, face analysis — see *Event Photo Albums*). Listed
+  **before** the `/api` route. Its `excludeFiles` keeps `client/`, `server/`, docs and the local `.models` out of the
+  Python bundle; dependencies come from `face_engine/requirements.txt`, Python from `face_engine/.python-version`.
 - `/api/*` → `server/server.js` as a serverless function (`@vercel/node`)
 - everything else → the static React build (`client/dist`)
 

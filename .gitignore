@@ -41,3 +41,8 @@ lerna-debug.log*
 Thumbs.db
 .vercel
 .env*
+
+# Face engine (Python)
+face_engine/.models/
+__pycache__/
+.pytest_cache/

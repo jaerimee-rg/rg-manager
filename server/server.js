@@ -36,6 +36,7 @@ import notificationRoutes from './routes/notifications.js';
 import settingsRoutes from './routes/settings.js';
 import faqFileRoutes from './routes/faqFiles.js';
 import { rejectParents } from './middleware/roles.js';
+import { createFaceEngineProxy } from './utils/faceEngineProxy.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -197,6 +198,10 @@ app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/signup', authLimiter);
 app.use('/api/auth/kakao', authLimiter);
 app.use('/api', apiLimiter);
+
+// 얼굴 분석(face_engine/, Python) — 운영에서는 vercel.json 이 Python 함수로 먼저 보내 여기까지 오지 않는다.
+// 로컬·e2e 에서만 FACE_ENGINE_URL 로 넘긴다(없으면 503 → 브라우저는 '분석 안 됨'으로 업로드를 이어 간다).
+app.use('/api/face-engine', express.raw({ type: () => true, limit: '5mb' }), createFaceEngineProxy());
 
 // 학부모 토큰(role='parent')은 선생님·관리자 기능에 접근할 수 없다.
 // verifyToken 은 역할을 보지 않으므로 라우터 등록 지점에서 한 번에 막는다.

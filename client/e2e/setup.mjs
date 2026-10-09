@@ -165,7 +165,7 @@ await mkMedia({ i: 11, kind: 'image', uploaderRole: 'teacher', uploaderUserId: t
 
 // 학부모가 첫째 아이에 등록해 둔 얼굴 사진 두 장(특징값만) → 내 정보에서 한 장을 지우는 흐름을 본다.
 // 픽스처 사진에는 media_faces 가 없어 지운 뒤의 다시 매칭이 아래 태그를 건드리지 않는다.
-const faceVector = Buffer.from(new Float32Array(128).fill(0.1).buffer).toString('base64');
+const faceVector = Buffer.from(new Float32Array(512).fill(0.1).buffer).toString('base64');   // ArcFace 512차원
 for (let i = 0; i < 2; i += 1) {
   await pool.query(
     `INSERT INTO child_face_profiles ("studentId","teacherUserId","parentUserId","createdBy",descriptor,"consentAt","createdAt")
@@ -174,11 +174,11 @@ for (let i = 0; i < 2; i += 1) {
   );
 }
 
-// 예전 규칙으로 붙은 자동 태그가 남은 앨범 — 얼굴은 기준 얼굴과 전혀 다른데(0.9 vs 0.1) 'face' 태그가 붙어 있다.
+// 예전 규칙으로 붙은 자동 태그가 남은 앨범 — 얼굴은 기준 얼굴과 전혀 다른데(코사인 거리 1, 직각) 'face' 태그가 붙어 있다.
 // 앨범을 열면 지금 규칙으로 다시 매칭돼 이 태그가 사라져야 한다(albumMatchRules 가 비어 있다).
 const staleEventId = await mkEvent(`e2e재매칭_${stamp}`, null, true, { type: 'special', published: false });
 const staleMediaId = await mkMedia({ i: 10, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: staleEventId });
-const farVector = Buffer.from(new Float32Array(128).fill(0.9).buffer).toString('base64');
+const farVector = Buffer.from(Float32Array.from({ length: 512 }, (_, i) => (i % 2 ? -0.9 : 0.9)).buffer).toString('base64');
 const staleFace = await pool.query(
   `INSERT INTO media_faces ("mediaId", box, score, descriptor, "createdAt") VALUES ($1,$2,0.9,$3,$4) RETURNING id`,
   [staleMediaId, JSON.stringify({ x: 0.1, y: 0.1, w: 0.2, h: 0.2 }), farVector, now]

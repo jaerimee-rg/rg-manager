@@ -28,7 +28,8 @@ function FoundFaces({ faces, className }) {
 
 /**
  * 앨범 화면의 [얼굴 찾기] — 얼굴을 아직 찾지 않았거나 예전 방식으로 찾은 사진(count 장)을
- * 이 브라우저에서 다시 본다. Google 연결이 끊겨도 된다(공유 링크로 읽고, 저장은 앱 DB). 자동으로 돌리지 않는다: 모델(약 6.5MB)을 받고 사진마다 계산하므로
+ * 다시 본다. 이 브라우저가 Drive 사진을 받아 얼굴 분석 함수(face_engine/)로 보내고 결과를 저장한다.
+ * Google 연결이 끊겨도 된다(공유 링크로 읽고, 저장은 앱 DB). 자동으로 돌리지 않는다: 사진마다 받고 보내고 계산하므로
  * 선생님이 누를 때만 한다.
  */
 function FaceScanPanel({ apiBase, count = 0, onDone, className }) {
