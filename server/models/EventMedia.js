@@ -5,7 +5,8 @@ import { FACE_ANALYZER_VERSION } from '../utils/faceVector.js';
 /**
  * 얼굴을 (다시) 찾아야 하는 사진 — 아직 못 찾았거나(pending·failed·skipped), 예전 방식으로 찾은 것.
  * "얼굴 없음(none)" 도 예전 방식이면 다시 본다: 작은 얼굴을 놓친 결과일 수 있다.
- * 재분석 목록 · 통계 · 필터가 모두 이 조건을 쓴다. prefix 는 테이블 별칭('m.').
+ * 재분석 목록 · 통계 · 필터가 모두 이 조건을 쓴다. prefix 는 테이블 별칭('m.'). 행 하나에 쓰는 같은 조건은
+ * utils/faceVector.js needsFaceAnalysis — 둘을 함께 고친다.
  */
 export const needsFaceAnalysisSql = (prefix = '') => (
   `${prefix}kind = 'image' AND (${prefix}"faceStatus" IN ('pending','failed','skipped')`

@@ -6,6 +6,7 @@ import {
   listPeople,
   createUploads,
   completeUpload,
+  saveOwnFaces,
   deleteMedia,
   confirmTag,
   listFaces,
@@ -40,6 +41,7 @@ router.get('/events/:id/media', listMedia);
 router.get('/events/:id/people', listPeople);
 router.post('/events/:id/media/uploads', createUploads);
 router.post('/events/:id/media/:mediaId/complete', completeUpload);
+router.post('/events/:id/media/:mediaId/faces', saveOwnFaces);
 router.post('/events/:id/media/:mediaId/confirm', confirmTag);
 router.delete('/events/:id/media/:mediaId', deleteMedia);
 

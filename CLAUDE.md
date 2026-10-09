@@ -558,7 +558,17 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   `GET .../media/unanalyzed?afterId=` and posts to `.../media/:id/faces`. The browser fetches
   `lh3.googleusercontent.com/d/<id>=s1920` (CORS `*`; **not** `drive.google.com/thumbnail`, whose 302 has no CORS
   header) and posts those bytes to the engine. Failed photos stay in the list; the `afterId` cursor stops one run from
-  looping on them. It never runs automatically.
+  looping on them. **It starts by itself** when the teacher opens an album that has photos to analyse
+  (`FaceScanPanel autoStart`, once per page visit — leftovers after that run wait for the button) and stops when the
+  page is left (`reanalyzeAlbum shouldStop`); unseen photos stay in the list for the next visit. The device only fetches
+  and forwards photos — the engine does the work — so running it unasked is cheap.
+- **Upload-time analysis retries itself** (`UploadSheet`): photos whose analysis failed during the upload (engine cold
+  start, or a HEIC the browser cannot decode) get one more try after all files are up — from the local preview, or from
+  Drive's JPEG rendition (`lh3 …=s1920`, `utils/mediaUrls.analysisImageUrl`) when the browser could not read the file —
+  and are saved with `POST …/media/:id/faces`. Parents use `POST /api/parent/events/:id/media/:mediaId/faces`
+  (`saveOwnFaces`): **own uploads only, and only while the photo still needs analysis** (`faceVector.needsFaceAnalysis`,
+  the JS twin of `needsFaceAnalysisSql`), so an analysed photo is never overwritten (409). What still fails is picked
+  up by the teacher's album auto-start.
 - **Vectors are `TEXT` (base64 of a 512-float array = 2732 chars), not pgvector** — the production Supabase role
   is not a superuser and cannot `CREATE EXTENSION`. Distances are computed in JS (`utils/faceVector.js`); at this scale
   that is tens of milliseconds. Promote to pgvector later by changing the column type only. Old 128-dim face-api

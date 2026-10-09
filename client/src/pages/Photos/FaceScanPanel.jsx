@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { reanalyzeAlbum } from '../../utils/faceReanalysis';
 import { Avatar, Button, Callout, Progress } from '../../components/ui';
 
@@ -29,15 +29,26 @@ function FoundFaces({ faces, className }) {
 /**
  * 앨범 화면의 [얼굴 찾기] — 얼굴을 아직 찾지 않았거나 예전 방식으로 찾은 사진(count 장)을
  * 다시 본다. 이 브라우저가 Drive 사진을 받아 얼굴 분석 함수(face_engine/)로 보내고 결과를 저장한다.
- * Google 연결이 끊겨도 된다(공유 링크로 읽고, 저장은 앱 DB). 자동으로 돌리지 않는다: 사진마다 받고 보내고 계산하므로
- * 선생님이 누를 때만 한다.
+ * Google 연결이 끊겨도 된다(공유 링크로 읽고, 저장은 앱 DB).
+ *
+ * autoStart — 찾을 사진이 있으면 **누르지 않아도 화면을 열 때 시작한다**(화면 하나에 한 번). 업로드 때 분석이 실패한
+ * 사진(분석 서버가 깨어나는 중, 학부모 휴대폰의 HEIC)과 분석 방식이 바뀐 뒤의 예전 사진이 여기서 저절로 채워진다.
+ * 분석은 서버(face_engine/)가 하므로 이 기기는 사진을 받아 보내기만 한다. 화면을 떠나면 멈추고, 못 본 사진은 목록에 남아
+ * 다음에 열 때 이어서 본다. 끝난 뒤 남은 사진(읽지 못한 것)은 [얼굴 찾기] 로 다시 시도할 수 있다.
  */
-function FaceScanPanel({ apiBase, count = 0, onDone, className }) {
+function FaceScanPanel({ apiBase, count = 0, onDone, className, autoStart = false }) {
   const [phase, setPhase] = useState('idle');   // idle | running | done
   const [progress, setProgress] = useState({ done: 0, total: count });
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [faces, setFaces] = useState(NO_FACES);   // { items: [{ mediaId, src }] (앞 FACE_PREVIEW_LIMIT 개), total }
+
+  const mounted = useRef(true);
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;   // StrictMode 는 정리 후 다시 붙인다
+    return () => { mounted.current = false; };
+  }, []);
 
   const addFaces = (found) => setFaces((prev) => ({
     items: prev.items.length < FACE_PREVIEW_LIMIT ? [...prev.items, ...found].slice(0, FACE_PREVIEW_LIMIT) : prev.items,
@@ -50,7 +61,12 @@ function FaceScanPanel({ apiBase, count = 0, onDone, className }) {
     setProgress({ done: 0, total: count });
     setFaces(NO_FACES);
     try {
-      const counts = await reanalyzeAlbum(apiBase, { onProgress: setProgress, onFaces: addFaces });
+      const counts = await reanalyzeAlbum(apiBase, {
+        onProgress: setProgress,
+        onFaces: addFaces,
+        shouldStop: () => !mounted.current   // 화면을 떠나면 멈춘다
+      });
+      if (!mounted.current) return;
       setResult(counts);
       setPhase('done');
       onDone?.(counts);
@@ -60,6 +76,13 @@ function FaceScanPanel({ apiBase, count = 0, onDone, className }) {
       setPhase('idle');
     }
   };
+
+  // 찾을 사진이 있으면 누르지 않아도 시작한다 — 화면에 한 번만(끝난 뒤 남은 것은 버튼으로)
+  useEffect(() => {
+    if (!autoStart || autoStarted.current || phase !== 'idle' || count <= 0) return;
+    autoStarted.current = true;
+    start();
+  }, [autoStart, count, phase]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   if (phase === 'done' && result) {
     return (
@@ -75,7 +98,7 @@ function FaceScanPanel({ apiBase, count = 0, onDone, className }) {
     return (
       <Callout className={className} tone="brand">
         <div className="ui-stack" data-gap="2">
-          <span>얼굴 찾는 중… {progress.done} / {progress.total}장 · 이 화면을 닫지 말아 주세요</span>
+          <span>얼굴 찾는 중… {progress.done} / {progress.total}장 · 화면을 떠나면 멈추고 다음에 이어서 찾아요</span>
           <Progress value={progress.total ? Math.round((progress.done / progress.total) * 100) : 0} label="얼굴 찾기 진행률" />
           <FoundFaces faces={faces} />
         </div>

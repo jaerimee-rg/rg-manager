@@ -11,17 +11,19 @@ import { cropFaces } from './faceCrops';
  * 을 반복한다. 못 읽은 사진은 저장하지 않으므로 서버 목록에 그대로 남는데, 받은 마지막 id 를
  * afterId 로 넘기기 때문에 이번 바퀴에서 같은 사진을 다시 받지는 않는다.
  *
+ * shouldStop() — 사진 한 장을 시작하기 전마다 묻는다. true 면 거기서 멈춘다(앨범 화면을 떠났다) — 못 본 사진은 목록에 남아 다음에 이어서 본다.
  * onProgress({ done, total }) — 한 장 끝날 때마다
  * onFaces([{ mediaId, src }]) — 얼굴을 찾아 저장한 사진마다, 그 얼굴들을 잘라 낸 작은 그림(utils/faceCrops.js).
  *   화면에 보여 주기만 한다 — 서버로는 보내지 않는다.
  * → { done, found, failed }  found = 얼굴을 찾은 사진, failed = 읽지 못했거나 저장하지 못한 사진
  */
-export const reanalyzeAlbum = async (apiBase, { onProgress, onFaces, batch = 5 } = {}) => {
+export const reanalyzeAlbum = async (apiBase, { onProgress, onFaces, shouldStop, batch = 5 } = {}) => {
   let afterId = 0;
   let total = null;
   const counts = { done: 0, found: 0, failed: 0 };
 
   for (;;) {
+    if (shouldStop?.()) return counts;
     const response = await fetchWithAuth(`${apiBase}/media/unanalyzed?batch=${batch}&afterId=${afterId}`);
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || '얼굴을 찾을 사진을 불러오지 못했어요.');
@@ -31,6 +33,7 @@ export const reanalyzeAlbum = async (apiBase, { onProgress, onFaces, batch = 5 }
     if (!items.length) break;
 
     for (const item of items) {
+      if (shouldStop?.()) return counts;
       afterId = item.id;
       const faces = await detectFaces(item.largeUrl);
 
