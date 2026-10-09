@@ -47,7 +47,8 @@ import { formatTime, formatDayLabel, dayKeyOf, uploaderLabel } from '../../utils
  * 숨긴 사진은 표지로 쓰이지 않아 버튼이 없다.
  */
 function MediaViewer({
-  items = [], startId, onClose, onDelete, onCaptionSave, coverIds = [], coverLimit = 4, coverPending = false, onCoverChange
+  items = [], startId, onClose, onDelete, onCaptionSave, coverIds = [], coverLimit = 4, coverPending = false, onCoverChange,
+  onShow, showViews = false
 }) {
   const [index, setIndex] = useState(() => {
     const found = items.findIndex((item) => item.id === startId);
@@ -80,6 +81,13 @@ function MediaViewer({
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [items.length, onClose, editing]);
+
+  // 지금 장이 바뀔 때마다(열기 · 넘기기) 알린다 — 학부모 화면이 본 기록을 남긴다
+  const shownId = items[index]?.id;
+  useEffect(() => {
+    if (shownId != null) onShow?.(items[index]);
+    // 장이 바뀔 때만 — 같은 장에서 목록만 새로 받으면 다시 알리지 않는다
+  }, [shownId]);
 
   // 목록이 바뀌어(삭제 등) 인덱스가 넘치면 되돌린다.
   useEffect(() => {
@@ -173,7 +181,7 @@ function MediaViewer({
                 poster={item.largeUrl || item.thumbnailUrl}
                 canPage={hasNav}
               />
-              <MediaInfo item={item} onEditCaption={onEditCaption} cover={cover} />
+              <MediaInfo item={item} onEditCaption={onEditCaption} cover={cover} showViews={showViews} />
             </div>
           ) : (
             <>
@@ -182,7 +190,7 @@ function MediaViewer({
                 alt={item.fileName || '사진'}
                 style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
               />
-              <MediaInfo item={item} overlay onEditCaption={onEditCaption} cover={cover} />
+              <MediaInfo item={item} overlay onEditCaption={onEditCaption} cover={cover} showViews={showViews} />
             </>
           )}
 
@@ -257,7 +265,7 @@ function PeekPage({ item, side }) {
  * cover 가 있으면(선생님 화면) 그 뒤에 [대표 사진으로] — 지금 대표 사진이면 노란 [대표 사진 n] 으로 눌려 있고,
  * 대표가 꽉 찼으면 [대표 사진 4장 다 골랐어요] 로 잠긴다.
  */
-function MediaInfo({ item, overlay = false, onEditCaption, cover }) {
+function MediaInfo({ item, overlay = false, onEditCaption, cover, showViews = false }) {
   const duration = formatDuration(item.durationMs);
   const entry = { display: 'inline-flex', alignItems: 'center', gap: '5px' };
   const pill = {
@@ -296,6 +304,13 @@ function MediaInfo({ item, overlay = false, onEditCaption, cover }) {
         <span style={entry}>
           <Icon name="clock" size={14} />
           {duration}
+        </span>
+      )}
+      {/* 선생님 화면 — 학부모가 이 사진을 크게 본 횟수 */}
+      {showViews && (
+        <span style={entry} data-testid="media-views">
+          <Icon name="eye" size={14} />
+          {item.viewCount || 0}번 봤어요
         </span>
       )}
       {/* 얼굴 매칭으로 붙은 아이 이름은 보이지 않는다 — 매칭이 틀릴 수 있다(2026-10) */}

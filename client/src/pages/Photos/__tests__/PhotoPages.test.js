@@ -50,6 +50,13 @@ describe('PhotoAlbums — 사진 목록 (docs/photo-menu FR-510~516)', () => {
     expect(within(screen.getByRole('button', { name: /가을 공개 수업/ })).getByText('비공개')).toBeInTheDocument();
   });
 
+  it('카드에 그 앨범을 본 학부모 수 — 아무도 안 봤으면 표시하지 않는다', async () => {
+    await renderList({ ...LIST, albums: [{ ...LIST.albums[0], viewers: 6 }, { ...LIST.albums[1], viewers: 0 }] });
+
+    expect(within(screen.getByRole('button', { name: /회장배 대회/ })).getByText(/6명이 봤어요/)).toBeInTheDocument();
+    expect(within(screen.getByRole('button', { name: /가을 공개 수업/ })).queryByText(/명이 봤어요/)).not.toBeInTheDocument();
+  });
+
   it('카드를 누르면 그 앨범으로 간다', async () => {
     await renderList();
     fireEvent.click(screen.getByRole('button', { name: /회장배 대회/ }));

@@ -16,6 +16,7 @@ import FolderEditDialog from './FolderEditDialog';
 import FaceScanPanel from './FaceScanPanel';
 import CoverOrderPanel from './CoverOrderPanel';
 import { coversFromPicks, dropCovers, sameCovers, toggleCover } from './coverDraft';
+import ViewStatsPanel from './ViewStatsPanel';
 import PhotoGrid from './PhotoGrid';
 import {
   albumProblem, filterChips, folderDeleteMessage, folderDeletedToast, folderDeleteTitle, formatEventDate, isPhotoFolder,
@@ -469,6 +470,8 @@ function PhotoAlbum() {
             />
           </div>
 
+          <ViewStatsPanel className="ui-mt-4" stats={album.viewStats} top={album.topViewed || []} onOpen={setViewerId} />
+
           <FacePeopleStrip className="ui-mt-5" people={people} selected={person} onSelect={setPerson} onRemove={removePerson} />
 
           <div className={`ui-row ${people.length ? 'ui-mt-3' : 'ui-mt-5'} ui-mb-3`} data-gap="2" data-justify="between">
@@ -587,6 +590,7 @@ function PhotoAlbum() {
           onClose={() => setViewerId(null)}
           onDelete={locked ? undefined : (item) => { setViewerId(null); setConfirmDelete([item.id]); }}
           onCaptionSave={saveCaption}
+          showViews
           coverIds={shownCoverIds}
           coverLimit={maxCovers}
           coverPending={coverDirty}

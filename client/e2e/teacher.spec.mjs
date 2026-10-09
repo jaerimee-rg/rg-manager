@@ -511,6 +511,80 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     }
   });
 
+  test('보기 통계 — 학부모가 앨범을 열고 사진을 크게 보면 선생님 앨범 · 사진 목록에 숫자가 오르고, 관리자 로그에 누가 무엇을 봤는지 남는다', async ({ page, request, browser, baseURL }) => {
+    // "모든 학부모" 에게 공개된 사진 폴더(얼굴 목록 픽스처)와 처음부터 아이가 연결된 학부모(parentMulti)로 본다
+    const folderId = sessions.album.peopleEventId;
+    const albumOf = async () => (await api(request, sessions.teacher, 'GET', `/api/events/${folderId}/album`)).body;
+    const before = (await albumOf()).viewStats;
+    const media = (await api(request, sessions.teacher, 'GET', `/api/events/${folderId}/media?filter=all&limit=60`)).body.items;
+
+    // 학부모 — 앨범을 열고 첫 사진을 크게 본 뒤 옆으로 하나 넘긴다
+    const parentContext = await browser.newContext({ baseURL });
+    try {
+      const parentPage = await parentContext.newPage();
+      await stubPortraitThumbnails(parentPage);
+      await loginAs(parentPage, sessions.parentMulti);
+      await parentPage.goto(`/parent/photos/${folderId}`);
+      const tiles = parentPage.getByRole('button', { name: /사진 열기|영상 열기/ });
+      await expect(tiles.first()).toBeVisible();
+      await tiles.first().click();
+      const viewer = parentPage.getByRole('dialog', { name: '사진 보기' });
+      await expect(viewer).toBeVisible();
+      await parentPage.keyboard.press('ArrowRight');
+      // 선생님에게는 본 횟수가 보이지만 학부모 화면에는 없다
+      await expect(viewer.getByTestId('media-views')).toHaveCount(0);
+    } finally {
+      await parentContext.close();
+    }
+
+    // 선생님 — 앨범 통계(본 학부모 · 앨범 연 횟수 · 사진 본 횟수)와 많이 본 사진, 사진마다 본 횟수
+    await expect.poll(async () => (await albumOf()).viewStats.mediaViews).toBe(before.mediaViews + 2);
+    const after = await albumOf();
+    expect(after.viewStats.albumOpens).toBe(before.albumOpens + 1);
+    expect(after.viewStats.viewers).toBeGreaterThanOrEqual(1);
+    expect(after.topViewed.length).toBeGreaterThanOrEqual(2);
+    const counted = (await api(request, sessions.teacher, 'GET', `/api/events/${folderId}/media?filter=all&limit=60`)).body.items;
+    expect(counted.filter((item) => item.viewCount > 0).length).toBeGreaterThanOrEqual(2);
+    expect(media.length).toBe(counted.length);
+
+    await stubPortraitThumbnails(page);
+    await page.goto(`/photos/${folderId}`);
+    const stats = page.getByRole('region', { name: '보기 통계' });
+    await expect(stats.getByText('사진 본 횟수')).toBeVisible();
+    await expect(stats.locator('dd').nth(2)).toHaveText(`${after.viewStats.mediaViews}번`);
+    // 많이 본 사진을 누르면 크게 보고, 선생님 뷰어에는 본 횟수가 있다
+    await stats.getByRole('button', { name: /많이 본 사진 1/ }).click();
+    await expect(page.getByRole('dialog', { name: '사진 보기' }).getByTestId('media-views')).toHaveText(/\d+번 봤어요/);
+    await page.keyboard.press('Escape');
+
+    await page.goto('/photos');
+    const card = page.getByRole('button', { name: new RegExp(`e2e얼굴목록_`) }).first();
+    await expect(card.getByText(/명이 봤어요/)).toBeVisible();
+
+    // 관리자 — 누가(학부모명) · 어느 앨범 · 어떤 사진을 봤는지. 선생님·학부모 토큰으로는 못 본다
+    const log = await api(request, sessions.admin, 'GET', '/api/logs/photo-views?kind=media&limit=20');
+    expect(log.status).toBe(200);
+    const mine = log.body.items.filter((item) => item.eventId === folderId);
+    expect(mine.length).toBeGreaterThanOrEqual(2);
+    expect(mine[0]).toMatchObject({ kind: 'media', mediaDeleted: false });
+    expect(mine[0].viewerName).not.toMatch(/^카카오_/);
+    expect((await api(request, sessions.teacher, 'GET', '/api/logs/photo-views')).status).toBe(403);
+    expect([401, 403]).toContain((await api(request, sessions.parentMulti, 'GET', '/api/logs/photo-views')).status);
+
+    const adminContext = await browser.newContext({ baseURL });
+    try {
+      const adminPage = await adminContext.newPage();
+      await stubPortraitThumbnails(adminPage);
+      await loginAs(adminPage, sessions.admin);
+      await adminPage.goto('/admin/logs');
+      await adminPage.getByRole('button', { name: '사진 보기 로그' }).click();
+      await expect(adminPage.getByText(mine[0].viewerName).first()).toBeVisible();
+      await expect(adminPage.getByText(/모두 \d+건/)).toBeVisible();
+    } finally {
+      await adminContext.close();
+    }
+  });
+
   test('Google 이 준비되지 않으면 [사진 올리기] 가 잠기고 안내가 나온다', async ({ page }) => {
     await page.goto('/photos');
     await expect(page.getByText(/관리자에게 문의|Google 계정을 먼저 연결/).first()).toBeVisible();

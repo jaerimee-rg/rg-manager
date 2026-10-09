@@ -22,8 +22,18 @@ jest.unstable_mockModule('../../services/eventService.js', () => ({
   todayKst: jest.fn(() => '2026-10-08')
 }));
 
+jest.unstable_mockModule('../../models/AlbumView.js', () => ({
+  default: {
+    viewsByMedia: jest.fn().mockResolvedValue({}),
+    albumStats: jest.fn().mockResolvedValue({ viewers: 0, albumOpens: 0, mediaViews: 0 }),
+    topViewed: jest.fn().mockResolvedValue([]),
+    viewersByEvent: jest.fn().mockResolvedValue({})
+  }
+}));
+
 const Event = (await import('../../models/Event.js')).default;
 const EventMedia = (await import('../../models/EventMedia.js')).default;
+const AlbumView = (await import('../../models/AlbumView.js')).default;
 const GoogleDriveAccount = (await import('../../models/GoogleDriveAccount.js')).default;
 const { isDriveConfigured } = await import('../../utils/googleDrive.js');
 const albumService = (await import('../../services/albumService.js')).default;
@@ -100,6 +110,20 @@ describe('GET /api/albums — 선생님 사진 목록 (docs/photo-menu 5.1)', ()
     ]);
     expect(albums[2].covers).toEqual([]);
     expect(albums[2].previews).toHaveLength(2);
+  });
+
+  it('카드마다 그 앨범을 연 학부모 수(viewers) — 기록이 없으면 0', async () => {
+    Event.listForPhotos.mockResolvedValue([
+      event({ driveFolderId: 'f-31', albumStatus: 'ready' }),
+      event({ id: 32, driveFolderId: 'f-32', albumStatus: 'ready' })
+    ]);
+    EventMedia.summariesForTeacher.mockResolvedValue({});
+    AlbumView.viewersByEvent.mockResolvedValue({ 31: 6 });
+
+    await listAlbums(req, res);
+
+    expect(AlbumView.viewersByEvent).toHaveBeenCalledWith([31, 32]);
+    expect(res.json.mock.calls[0][0].albums.map((album) => album.viewers)).toEqual([6, 0]);
   });
 
   it('[사진 올리기] 목록은 앨범 유무와 상관없이 전부 — 앨범 없는 이벤트는 만들 폴더 이름을 미리 준다', async () => {

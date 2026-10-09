@@ -22,6 +22,15 @@ export const PUBLIC_SHOP_TRACK_IP_MAX = 600;
 // 같은 와이파이의 학부모 몇 명이 몇 개씩 예약해도 넉넉한 값.
 export const PUBLIC_SHOP_RESERVE_IP_MAX = 20;
 
+// 학부모 사진 보기 기록(POST /api/parent/events/:id/views) — 사진을 넘길 때마다 하나씩 와서 일반 API 한도(200, IP 기준)를
+// 함께 쓰면 사진을 많이 넘겨 본 학부모, 그리고 같은 와이파이의 다른 학부모까지 일반 화면이 429 로 막힌다.
+// 그래서 일반 한도에서 빼고 이 칸만 따로 센다 — 같은 와이파이에서 여럿이 앨범을 넘겨 봐도 넉넉한 값.
+export const PHOTO_VIEW_IP_MAX = 2000;
+
+/** 학부모 사진 보기 기록 요청인지 — 일반 API 한도에서 빼고 PHOTO_VIEW_IP_MAX 로 센다 */
+export const isPhotoViewBeacon = (req) =>
+  req?.method === 'POST' && /^\/api\/parent\/events\/\d+\/views\/?$/.test(String(req.originalUrl || '').split('?')[0]);
+
 // 클라이언트 폴링 주기와 맞물린 값이라 함께 관리한다 (client/src/pages/PublicChat.jsx).
 export const PUBLIC_CHAT_POLL_INTERVAL_MS = 12000;
 

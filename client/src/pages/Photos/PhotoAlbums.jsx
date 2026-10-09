@@ -151,6 +151,7 @@ function AlbumCard({ album, onOpen }) {
         <div className="ui-album-card__meta">
           <span>{formatEventDate(album.date)} · {typeLabel(album.type)}</span>
           <span>사진 {counts.images || 0}{counts.videos ? ` · 영상 ${counts.videos}` : ''}</span>
+          {album.viewers > 0 && <span><Icon name="eye" size={13} /> {album.viewers}명이 봤어요</span>}
         </div>
         <div className="ui-album-card__badges">
           {album.published ? (

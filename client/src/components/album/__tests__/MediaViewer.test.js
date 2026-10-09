@@ -887,3 +887,30 @@ describe('MediaViewer — 대표 사진 (사진 목록 카드의 표지, 4장까
     expect(button).toBeEnabled();
   });
 });
+
+describe('MediaViewer — 본 기록 · 본 횟수', () => {
+  const photo = (id, overrides = {}) => media({ id, fileName: `IMG_${id}.jpg`, ...overrides });
+
+  it('열 때와 넘길 때마다 지금 장을 onShow 로 알린다 — 같은 장에서 목록만 바뀌면 다시 알리지 않는다', () => {
+    const onShow = jest.fn();
+    const items = [photo(1), photo(2)];
+    const { rerender } = render(<MediaViewer items={items} startId={1} onClose={jest.fn()} onShow={onShow} />);
+    expect(onShow).toHaveBeenLastCalledWith(items[0]);
+
+    fireEvent.keyDown(document, { key: 'ArrowRight' });
+    expect(onShow).toHaveBeenLastCalledWith(items[1]);
+    expect(onShow).toHaveBeenCalledTimes(2);
+
+    rerender(<MediaViewer items={[photo(1), photo(2, { caption: '새 설명' })]} startId={1} onClose={jest.fn()} onShow={onShow} />);
+    expect(onShow).toHaveBeenCalledTimes(2);
+  });
+
+  it('선생님 화면(showViews)은 학부모가 크게 본 횟수를 정보 줄에 — 학부모 화면에는 없다', () => {
+    const { unmount } = render(<MediaViewer items={[photo(1, { viewCount: 7 })]} startId={1} onClose={jest.fn()} showViews />);
+    expect(screen.getByTestId('media-views')).toHaveTextContent('7번 봤어요');
+    unmount();
+
+    render(<MediaViewer items={[photo(1, { viewCount: 7 })]} startId={1} onClose={jest.fn()} />);
+    expect(screen.queryByTestId('media-views')).not.toBeInTheDocument();
+  });
+});

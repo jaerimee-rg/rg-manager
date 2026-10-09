@@ -58,7 +58,7 @@ const confirmationFor = async (event, studentIds) => {
 };
 
 /** 앨범 화면에 필요한 것을 한 번에 모은다. */
-const loadAlbumContext = async (req) => {
+export const loadAlbumContext = async (req) => {
   const teacherIds = await teachersOf(req.user.id);
   if (!teacherIds.length) return { error: notFound };
 
