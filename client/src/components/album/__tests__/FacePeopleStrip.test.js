@@ -116,4 +116,17 @@ describe('FacePeopleStrip — 앨범 위 얼굴 목록', () => {
     expect(cropFaces).toHaveBeenCalledTimes(1);
     expect(faceButtons().map(shownSrc)).toEqual(['data:late']);
   });
+
+  it('못 자른 얼굴은 목록을 다시 받을 때 한 번 더 해 본다 (잠깐의 429 등)', async () => {
+    cropFaces.mockResolvedValueOnce([null]).mockResolvedValueOnce(['data:retry']);
+    const { rerender } = render(<FacePeopleStrip people={[PEOPLE[2]]} onSelect={jest.fn()} />);
+    await act(async () => {});
+    expect(faceButtons().map(shownSrc)).toEqual([null]);
+
+    await act(async () => { rerender(<FacePeopleStrip people={[{ ...PEOPLE[2] }]} onSelect={jest.fn()} />); });
+
+    expect(cropFaces).toHaveBeenCalledTimes(2);
+    expect(faceButtons().map(shownSrc)).toEqual(['data:retry']);
+  });
 });
+

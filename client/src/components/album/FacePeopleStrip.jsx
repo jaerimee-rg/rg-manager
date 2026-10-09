@@ -6,7 +6,7 @@ const coverId = (cover) => `${cover?.url}|${cover?.box?.x},${cover?.box?.y},${co
 
 /**
  * 표지 얼굴을 잘라 둔다 — 표지(사진 주소 + 상자)마다 JPEG data URL. 같은 사진에서 나온 얼굴은 그 사진을 한 번만 받아 함께 자르고,
- * 한 번 자른 얼굴은 목록을 다시 받아도(사진을 숨기거나 얼굴을 다시 찾은 뒤) 다시 자르지 않는다.
+ * 한 번 자른 얼굴은 목록을 다시 받아도(사진을 숨기거나 얼굴을 다시 찾은 뒤) 다시 자르지 않는다 — 못 자른 얼굴만 다시.
  */
 const useFaceCovers = (people) => {
   const cache = useRef(new Map());   // coverId → src | null(못 자름) | undefined(자르는 중)
@@ -22,7 +22,8 @@ const useFaceCovers = (people) => {
     const byUrl = new Map();
     people.forEach((person) => {
       const id = coverId(person.cover);
-      if (!person.cover?.url || cache.current.has(id)) return;
+      // 자른 것·자르는 중인 것은 건너뛴다. 못 자른 것(null — 잠깐의 429 등)은 목록을 다시 받을 때 한 번 더 해 본다
+      if (!person.cover?.url || (cache.current.has(id) && cache.current.get(id) !== null)) return;
       cache.current.set(id, undefined);   // 자르는 중
       if (!byUrl.has(person.cover.url)) byUrl.set(person.cover.url, []);
       byUrl.get(person.cover.url).push(person.cover);
