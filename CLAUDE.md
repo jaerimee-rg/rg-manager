@@ -695,6 +695,17 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   the square thumbnails) as `covers` on `GET /api/albums` and `toParentAlbum` (parent whitelist test pins the keys; no ids go out).
   A video shows its Drive frame with **no play mark** (owner's call 2026-10-09). No covers → the old newest-four box / strip.
   The covers are **re-checked on every read** (`EventMedia` `previewRows`, `array_position … NULLS LAST`), and parent previews put them first.
+- **View stats & admin photo-view log** (`album_views`: `eventId` · `mediaId` (SET NULL when the photo is deleted) · `userId` · `kind`
+  `album`|`media` · `createdAt`; `models/AlbumView.js`). The parent album page records **one album open** when it can view the album and
+  **each photo/video shown big** (open or swipe — `MediaViewer onShow`), through `utils/albumViews.createViewTracker` (fire-and-forget,
+  `keepalive`, once per item per page visit) → `POST /api/parent/events/:id/views {mediaId?}` (`albumViewController.recordView`: same
+  access as the gallery — `loadAlbumContext` — and only this album's ready, non-hidden media; anything else 404). The server also skips a
+  repeat from the same person within **30 min (album) / 10 min (photo)** (`VIEW_DEDUPE_MS`, one `INSERT … WHERE NOT EXISTS`). Teachers see
+  it as `viewStats` {viewers, albumOpens, mediaViews} + `topViewed` on `GET …/album` (`pages/Photos/ViewStatsPanel.jsx`; tapping a
+  most-viewed photo opens it), `viewCount` per photo (viewer info line "N번 봤어요", `MediaViewer showViews`, teacher only) and `viewers`
+  on each 사진 list card ("N명이 봤어요"). **Who** viewed is only in Admin → 로그 → **사진 보기 로그** (`GET /api/logs/photo-views?kind&limit&offset`,
+  admin only; parent name via `parentAwareDisplayNameSql`, placeholder ids shown as 학부모; `pages/admin/AdminPhotoViewLogs.jsx`). Parents
+  never get counts. Likes/comments were built and then dropped on the owner's request (2026-10-09) — none of that is in the code.
 - **Deletes go to the Drive trash** (`files.update {trashed:true}`), never permanent — 30 days to
   recover. The DB row is removed, cascading faces and tags.
 

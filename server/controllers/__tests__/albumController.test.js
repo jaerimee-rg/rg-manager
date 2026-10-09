@@ -72,6 +72,15 @@ jest.unstable_mockModule('../../services/driveAccess.js', () => ({
   getAccessToken: jest.fn().mockResolvedValue({ ok: true, accessToken: 'at' })
 }));
 
+jest.unstable_mockModule('../../models/AlbumView.js', () => ({
+  default: {
+    viewsByMedia: jest.fn().mockResolvedValue({}),
+    albumStats: jest.fn().mockResolvedValue({ viewers: 0, albumOpens: 0, mediaViews: 0 }),
+    topViewed: jest.fn().mockResolvedValue([]),
+    viewersByEvent: jest.fn().mockResolvedValue({})
+  }
+}));
+
 const Event = (await import('../../models/Event.js')).default;
 const EventMedia = (await import('../../models/EventMedia.js')).default;
 const MediaTag = (await import('../../models/MediaTag.js')).default;
@@ -80,6 +89,7 @@ const Student = (await import('../../models/Student.js')).default;
 const GoogleDriveAccount = (await import('../../models/GoogleDriveAccount.js')).default;
 const ParentInvite = (await import('../../models/ParentInvite.js')).default;
 const albumService = (await import('../../services/albumService.js')).default;
+const AlbumView = (await import('../../models/AlbumView.js')).default;
 const { DriveError } = await import('../../utils/googleDrive.js');
 const {
   getAlbum, createAlbum, updateAlbum, listMedia, listPeople, deletePerson, createUploads, completeUpload,
@@ -221,6 +231,39 @@ describe('getAlbum — 공개 단계 (docs/photo-menu)', () => {
     await getAlbum(req, res);
 
     expect(res.json.mock.calls[0][0].counts).toMatchObject({ fromParents: 5, fromTeacher: 41 });
+  });
+});
+
+describe('getAlbum · listMedia — 학부모 보기 통계', () => {
+  it('앨범에 본 학부모 수 · 앨범 연 횟수 · 사진 본 횟수와 많이 본 사진을 싣는다', async () => {
+    Event.getById.mockResolvedValue(event());
+    AlbumView.albumStats.mockResolvedValue({ viewers: 5, albumOpens: 9, mediaViews: 31 });
+    AlbumView.topViewed.mockResolvedValue([{ id: 41, kind: 'image', driveFileId: 'd41', views: 12 }]);
+
+    await getAlbum(req, res);
+
+    const payload = res.json.mock.calls[0][0];
+    expect(AlbumView.albumStats).toHaveBeenCalledWith(3);
+    expect(payload.viewStats).toEqual({ viewers: 5, albumOpens: 9, mediaViews: 31 });
+    expect(payload.topViewed).toEqual([{ id: 41, kind: 'image', views: 12, thumbnailUrl: 'https://lh3.googleusercontent.com/d/d41=w400-h400-c-rw' }]);
+  });
+
+  it('앨범이 아직 없으면 통계를 읽지 않는다', async () => {
+    Event.getById.mockResolvedValue(event({ driveFolderId: null }));
+    await getAlbum(req, res);
+    expect(AlbumView.albumStats).not.toHaveBeenCalled();
+    expect(res.json.mock.calls[0][0].viewStats).toBeUndefined();
+  });
+
+  it('사진마다 학부모가 크게 본 횟수(viewCount)', async () => {
+    Event.getById.mockResolvedValue(event());
+    EventMedia.list.mockResolvedValue([{ id: 41, kind: 'image', driveFileId: 'd41', takenAt: 't', uploaderRole: 'teacher' }]);
+    AlbumView.viewsByMedia.mockResolvedValue({ 41: 7 });
+
+    await listMedia(req, res);
+
+    expect(AlbumView.viewsByMedia).toHaveBeenCalledWith([41]);
+    expect(res.json.mock.calls[0][0].items[0].viewCount).toBe(7);
   });
 });
 

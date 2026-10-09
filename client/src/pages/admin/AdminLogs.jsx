@@ -3,6 +3,7 @@ import { fetchWithAuth } from '../../utils/api';
 import DateRangePicker from '../../components/common/DateRangePicker';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import AdminLlmLogs from './AdminLlmLogs';
+import AdminPhotoViewLogs from './AdminPhotoViewLogs';
 
 function AdminLogs() {
   const formatDateOnly = (date) => {
@@ -123,9 +124,16 @@ function AdminLogs() {
         <button className={tab === 'llm' ? 'on' : ''} onClick={() => setTab('llm')}>
           AI 호출 로그
         </button>
+        <button className={tab === 'photos' ? 'on' : ''} onClick={() => setTab('photos')}>
+          사진 보기 로그
+        </button>
       </div>
 
-      {tab === 'llm' ? (
+      {tab === 'photos' ? (
+        <div className="card">
+          <AdminPhotoViewLogs />
+        </div>
+      ) : tab === 'llm' ? (
         <div className="card">
           <AdminLlmLogs users={users} />
         </div>

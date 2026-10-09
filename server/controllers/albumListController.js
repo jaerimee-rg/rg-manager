@@ -7,6 +7,7 @@ import { thumbnailUrl, coverUrls } from '../utils/mediaSerializer.js';
 import { todayKst } from '../services/eventService.js';
 import { isPhotoFolder } from '../utils/albumAccess.js';
 import albumService from '../services/albumService.js';
+import AlbumView from '../models/AlbumView.js';
 
 /**
  * 선생님 사진 메뉴 목록 (docs/photo-menu 5.1).
@@ -16,7 +17,7 @@ import albumService from '../services/albumService.js';
  * Google 은 부르지 않는다 — Drive 가 느리거나 끊겨도 목록은 바로 떠야 한다(용량은 앨범 화면에서).
  */
 
-const toAlbum = (event, summary = {}) => ({
+const toAlbum = (event, summary = {}, viewers = 0) => ({
   eventId: event.id,
   title: event.title,
   date: event.date,
@@ -36,7 +37,9 @@ const toAlbum = (event, summary = {}) => ({
   previews: (summary.previews || []).map((id) => thumbnailUrl(id, 400)),
   // 선생님이 고른 대표 사진·영상(고른 순서, 최대 4장) — 있으면 카드 표지는 이것들만 (숨겼거나 지운 것은 빠지고, 다 빠지면 빈 목록이라
   // 최근 4장으로 돌아간다). 영상이면 Drive 가 만든 한 장면이 사진처럼 뜬다(재생 표시는 붙이지 않는다 — 사용자 결정 2026-10-09)
-  covers: coverUrls(summary.covers || [])
+  covers: coverUrls(summary.covers || []),
+  // 이 앨범을 연 학부모 수 (AlbumView.viewersByEvent)
+  viewers
 });
 
 const toTarget = (event, summary, today) => ({
@@ -60,7 +63,10 @@ export const listAlbums = async (req, res) => {
     ]);
 
     const withAlbum = events.filter((event) => event.driveFolderId);
-    const summaries = await EventMedia.summariesForTeacher(withAlbum.map((event) => event.id));
+    const [summaries, viewers] = await Promise.all([
+      EventMedia.summariesForTeacher(withAlbum.map((event) => event.id)),
+      AlbumView.viewersByEvent(withAlbum.map((event) => event.id))
+    ]);
     const today = todayKst();
 
     res.json({
@@ -71,7 +77,7 @@ export const listAlbums = async (req, res) => {
         email: account?.googleEmail || null,
         rootFolderName: account?.rootFolderName || 'RG Manager'
       },
-      albums: withAlbum.map((event) => toAlbum(event, summaries[event.id])),
+      albums: withAlbum.map((event) => toAlbum(event, summaries[event.id], viewers[event.id] || 0)),
       targets: events.map((event) => toTarget(event, summaries[event.id], today))
     });
   } catch (error) {
