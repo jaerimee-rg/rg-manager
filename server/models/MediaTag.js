@@ -27,6 +27,23 @@ class MediaTag {
     return byMedia;
   }
 
+  /** 앨범(이벤트) 안의 태그 전부를 미디어 id 별로 — 얼굴 벡터가 없는 사진의 태그까지 다시 매칭하려고 */
+  static async listByEvent(eventId) {
+    const result = await pool.query(
+      `SELECT t.* FROM media_tags t
+         JOIN event_media m ON m.id = t."mediaId"
+        WHERE m."eventId" = $1
+        ORDER BY t.id`,
+      [eventId]
+    );
+    const byMedia = {};
+    for (const row of result.rows) {
+      if (!byMedia[row.mediaId]) byMedia[row.mediaId] = [];
+      byMedia[row.mediaId].push(row);
+    }
+    return byMedia;
+  }
+
   /** 태그 하나를 넣거나 갱신한다. */
   static async upsert({ mediaId, studentId, source, distance = null, faceId = null, createdByUserId = null }, client = pool) {
     const now = new Date().toISOString();

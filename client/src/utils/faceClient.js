@@ -83,9 +83,11 @@ export const detectFaces = async (source) => {
 
     const payload = await response.json();
     if (!Array.isArray(payload?.faces)) return null;
+    // 얼굴은 찾았다는데 쓸 수 있는 값이 하나도 없으면 '얼굴 없음'([])이 아니라 실패다
+    const usable = payload.faces.filter(isUsableFace);
+    if (payload.faces.length && !usable.length) return null;
 
-    return payload.faces
-      .filter(isUsableFace)
+    return usable
       .slice(0, MAX_FACES)
       .map((face) => ({
         box: { x: clamp01(face.box?.x), y: clamp01(face.box?.y), w: clamp01(face.box?.w), h: clamp01(face.box?.h) },

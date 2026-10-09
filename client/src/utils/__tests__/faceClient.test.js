@@ -110,6 +110,11 @@ describe('detectFaces', () => {
     expect(faces[0].box.x).toBe(0);
   });
 
+  it('얼굴은 찾았다는데 쓸 수 있는 값이 하나도 없으면 "얼굴 없음" 이 아니라 null', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ faces: [{ ...face(0, 0, 0.1, 0.1), descriptor: [1, 2, 3] }] }));
+    await expect(detectFaces(canvas())).resolves.toBeNull();
+  });
+
   it('토큰이 없으면 Authorization 없이 보낸다(서버가 401 → null)', async () => {
     getToken.mockReturnValue(null);
     fetch.mockResolvedValueOnce(jsonResponse({ error: 'login' }, 401));

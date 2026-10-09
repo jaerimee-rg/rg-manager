@@ -111,14 +111,27 @@ class FaceEngine:
         return dets[keep], kpss[keep]
 
     def embed(self, image, landmarks):
-        """얼굴마다 정렬한 112×112 → 길이 1 로 맞춘 512차원 특징값 (N, 512)"""
-        if len(landmarks) == 0:
-            return np.empty((0, 512), dtype=np.float32)
-        crops = [warp_affine(image, similarity_transform(points, ARCFACE_DST), ALIGNED_SIZE) for points in landmarks]
+        """얼굴마다 정렬한 112×112 → 길이 1 로 맞춘 512차원 특징값 (N, 512).
+
+        눈·코·입 점이 한 점에 겹치는 등 정렬할 수 없는 얼굴은 그 행만 None 으로 둔다 — 한 얼굴 때문에 사진 전체가
+        실패(500 → '분석 안 됨')하지 않게.
+        """
+        rows = [None] * len(landmarks)
+        crops, kept = [], []
+        for index, points in enumerate(landmarks):
+            try:
+                crops.append(warp_affine(image, similarity_transform(points, ARCFACE_DST), ALIGNED_SIZE))
+                kept.append(index)
+            except (ValueError, np.linalg.LinAlgError):
+                continue
+        if not crops:
+            return rows
         blob = ((np.stack(crops).astype(np.float32) - 127.5) / 127.5).transpose(0, 3, 1, 2)
         features = self.recognizer.run(None, {self.rec_input: np.ascontiguousarray(blob)})[0]
-        norms = np.linalg.norm(features, axis=1, keepdims=True)
-        return features / np.maximum(norms, 1e-12)
+        features = features / np.maximum(np.linalg.norm(features, axis=1, keepdims=True), 1e-12)
+        for row, index in enumerate(kept):
+            rows[index] = features[row]
+        return rows
 
     def analyze(self, image):
         """→ [{ box: {x, y, w, h} 0~1, score, descriptor: [512] }] — 점수 높은 순, 작은 얼굴 제외"""
@@ -133,6 +146,8 @@ class FaceEngine:
         clamp = lambda value: float(min(1.0, max(0.0, value)))  # noqa: E731
         faces = []
         for row, index in enumerate(chosen):
+            if features[row] is None:
+                continue
             x1, y1, x2, y2, score = (float(v) for v in dets[index])
             faces.append({
                 "box": {"x": clamp(x1 / width), "y": clamp(y1 / height),

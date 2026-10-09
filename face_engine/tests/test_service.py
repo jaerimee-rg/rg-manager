@@ -95,3 +95,17 @@ def test_a_failed_download_is_not_retried_for_a_while(monkeypatch):
         with pytest.raises(ModelUnavailable):
             service.get_engine()
     assert len(calls) == 1
+
+
+def test_an_engine_that_cannot_start_is_reported_as_unavailable_and_backs_off(monkeypatch):
+    calls = []
+
+    def broken_models():
+        calls.append(1)
+        return {}   # 모델 키가 없다 → 세션을 못 만든다
+
+    monkeypatch.setattr(service, "load_models", broken_models)
+    for _ in range(2):
+        with pytest.raises(ModelUnavailable):
+            service.get_engine()
+    assert len(calls) == 1

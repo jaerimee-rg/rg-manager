@@ -36,6 +36,7 @@ jest.unstable_mockModule('../../models/MediaTag.js', () => ({
   default: {
     listByMedia: jest.fn().mockResolvedValue([]),
     listByMediaIds: jest.fn().mockResolvedValue({}),
+    listByEvent: jest.fn().mockResolvedValue({}),
     listByTeacherAndStudent: jest.fn().mockResolvedValue([]),
     upsert: jest.fn(),
     removeStudents: jest.fn().mockResolvedValue(0)
@@ -101,6 +102,7 @@ beforeEach(() => {
   MediaTag.listByMedia.mockResolvedValue([]);
   MediaTag.listByTeacherAndStudent.mockResolvedValue([]);
   MediaTag.listByMediaIds.mockResolvedValue({});
+  MediaTag.listByEvent.mockResolvedValue({});
   MediaFace.listVectorsByTeacher.mockResolvedValue(new Map());
   MediaFace.listVectorsByMedia.mockResolvedValue([]);
   ChildFaceProfile.listVectorsByTeacher.mockResolvedValue([]);
@@ -346,18 +348,38 @@ describe('rematchAlbum — 앨범 전체 다시 매칭', () => {
       [12, [{ id: 2, descriptor: D(1) }]]      // 예전 임계값에서 붙었던 사진
     ]));
     ChildFaceProfile.listVectorsByTeacher.mockResolvedValue([{ studentId: 5, descriptor: D(0) }]);
-    MediaTag.listByMediaIds.mockResolvedValue({
+    MediaTag.listByEvent.mockResolvedValue({
       12: [{ mediaId: 12, studentId: 5, source: 'face', distance: 0.45, faceId: 2 }, { mediaId: 12, studentId: 9, source: 'excluded' }]
     });
     MediaTag.removeStudents.mockResolvedValue(1);
 
     const result = await albumService.rematchAlbum(event());
 
-    expect(MediaTag.listByMediaIds).toHaveBeenCalledWith([11, 12]);
+    expect(MediaTag.listByEvent).toHaveBeenCalledWith(event().id);
     expect(MediaTag.listByMedia).not.toHaveBeenCalled();
     expect(MediaTag.upsert).toHaveBeenCalledWith(expect.objectContaining({ mediaId: 11, studentId: 5, source: 'face' }));
     expect(MediaTag.removeStudents).toHaveBeenCalledWith(12, [5]);   // excluded(9) 는 남는다
     expect(result).toEqual({ added: 1, candidates: 0, removed: 1 });
+  });
+
+  it('얼굴 벡터를 읽을 수 없는 사진(예전 128차원만 남음)의 자동 태그도 지운다 — 사람이 정한 태그는 둔다', async () => {
+    // 사진 30 의 얼굴은 예전 face-api 값이라 listVectorsByTeacher 에 나오지 않는다
+    MediaFace.listVectorsByTeacher.mockResolvedValue(new Map());
+    ChildFaceProfile.listVectorsByTeacher.mockResolvedValue([{ studentId: 5, descriptor: D(0) }]);
+    MediaTag.listByEvent.mockResolvedValue({
+      30: [
+        { mediaId: 30, studentId: 5, source: 'face', distance: 0.31, faceId: 7 },
+        { mediaId: 30, studentId: 6, source: 'candidate', distance: 0.38, faceId: 8 },
+        { mediaId: 30, studentId: 9, source: 'manual' }
+      ]
+    });
+    MediaTag.removeStudents.mockResolvedValue(2);
+
+    const result = await albumService.rematchAlbum(event());
+
+    expect(MediaTag.removeStudents).toHaveBeenCalledWith(30, [5, 6]);
+    expect(MediaTag.upsert).not.toHaveBeenCalled();
+    expect(result.removed).toBe(2);
   });
 });
 
@@ -469,6 +491,21 @@ describe('matchStudentAcrossAlbums — 자녀 얼굴 등록 직후', () => {
     expect(MediaTag.removeStudents).toHaveBeenCalledTimes(1);
     expect(MediaTag.removeStudents).toHaveBeenCalledWith(12, [5]);
     expect(MediaTag.upsert).not.toHaveBeenCalled();   // 11 은 값이 그대로라 다시 쓰지 않는다
+  });
+
+  it('얼굴 벡터를 읽을 수 없는 사진(예전 128차원)에 남은 이 아이의 자동 태그는 지운다', async () => {
+    MediaFace.listVectorsByTeacher.mockResolvedValue(new Map([[11, [{ id: 1, descriptor: D(0) }]]]));
+    ChildFaceProfile.listVectorsByTeacher.mockResolvedValue([{ studentId: 5, descriptor: D(0) }]);
+    MediaTag.listByTeacherAndStudent.mockResolvedValue([
+      { mediaId: 11, studentId: 5, source: 'face', distance: 0, faceId: 1 },
+      { mediaId: 40, studentId: 5, source: 'candidate', distance: 0.38, faceId: 9 },   // 사진 40 은 예전 값뿐
+      { mediaId: 41, studentId: 5, source: 'manual' }                                  // 선생님이 붙임 → 그대로
+    ]);
+
+    await albumService.matchStudentAcrossAlbums(7, 5);
+
+    expect(MediaTag.removeStudents).toHaveBeenCalledTimes(1);
+    expect(MediaTag.removeStudents).toHaveBeenCalledWith(40, [5]);
   });
 
   it('기준 얼굴이 없으면 아무 것도 하지 않는다', async () => {

@@ -46,6 +46,9 @@ def get_engine():
         except ModelUnavailable:
             _last_failure = time.time()
             raise
+        except Exception as error:  # 세션을 못 만들면(런타임 오류 등) 받은 모델과 같게 취급 — 503 + 잠시 쉼
+            _last_failure = time.time()
+            raise ModelUnavailable(f"engine init failed: {error}") from error
         return _engine
 
 
