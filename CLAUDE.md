@@ -672,7 +672,15 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   serializers (the parent whitelist test lists it); `MediaViewer` shows it above the date line — over the photo, or
   under the Drive player for videos — clamped to 3 lines with [더 보기]. While the editor is open, swipe and arrow
   keys are off and Esc closes only the editor. No toast on save: it would cover the caption that just appeared.
-- **Album covers (대표 사진, up to 4)** (`events."albumCoverMediaIds"`, nullable `INTEGER[]` in pick order, no FK; the single
+- **Album covers (대표 사진, up to 4)** — **nothing is saved until [저장하기]** (owner's call 2026-10-09). The three ways to change covers
+  below (viewer button, 고르기 [대표 사진 만들기], the panel's reorder/✕) only edit a client-side draft (`PhotoAlbum` `coverDraft`, pure
+  helpers in `pages/Photos/coverDraft.js`); grid badges, the viewer button and the panel all show the draft. While a draft exists a
+  sticky **대표 사진 저장** bar (`.ui-cover-save-bar`, sticky on every width — the panel sits above the grid) offers [취소] / [저장하기]
+  (locked until something changed); [저장하기] sends the whole list once as `PATCH …/album {coverMediaIds}` (a rejection keeps the
+  draft), and an unsaved draft arms a `beforeunload` prompt. Hiding/deleting a photo drops it from the draft. The panel is read-only
+  with a [수정] button until a draft starts. The server API below is unchanged; `addCoverMediaId`/`removeCoverMediaId` stay for API
+  callers but the screen no longer sends them.
+  Storage: `events."albumCoverMediaIds"`, nullable `INTEGER[]` in pick order, no FK; the single
   `albumCoverMediaId` from PR #59 is moved into it at boot and cleared — boot UPDATEs are unreliable in production, so run that
   move by hand after deploying). The teacher opens a photo **or video** in the 사진 menu album → the viewer's info line has
   **[대표 사진으로]** (pressed, yellow **[대표 사진 n]** when it is a cover; pressing again removes it; with 4 already it is locked as
@@ -687,7 +695,7 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   **대표 사진 panel** (`pages/Photos/CoverOrderPanel.jsx`) shows the covers numbered in order plus an `AlbumCovers` preview of the card,
   and **reorders by drag and drop** — pointer events, so mouse and finger (`touch-action: none` on the tiles), landing slot from the
   other tiles' horizontal midpoints (`utils/reorder.js:dropIndex/dropMarker`, same as the shop list), clamped to the filled tiles,
-  6 px slop so a tap is not a drag — or ←→ on a focused tile. It shows the new order at once and re-reads the album if the save fails.
+  6 px slop so a tap is not a drag — or ←→ on a focused tile, plus a ✕ per tile; all of it only edits the draft (see above).
   `GET …/album` returns the current `coverMediaIds`, their thumbnails as `covers` (`EventMedia.coverRows`; they may not be on the
   loaded grid page) and `maxCovers`; grid tiles get a ★ 대표 n badge. **Both list cards show only the covers** — teacher 사진 list and parent
   사진 tab share `components/album/AlbumCovers.jsx` (`.ui-album-card__cover[data-covers]`: 1 fills the 16:10 box, 2 side by side,
