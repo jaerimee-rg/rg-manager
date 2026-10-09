@@ -3483,6 +3483,12 @@ a.ui-btn { text-decoration: none; }
 }
 
 /* ---------------------------------------------------------------- *
+ * 찾은 얼굴 줄 — 앨범 [얼굴 찾기] (FaceScanPanel). 얼굴 하나 = Avatar lg
+ * ---------------------------------------------------------------- */
+.ui-face-strip { display: flex; flex-wrap: wrap; gap: var(--space-1); list-style: none; }
+.ui-face-strip__more { background: var(--rule-soft); color: var(--ink-800); }
+
+/* ---------------------------------------------------------------- *
  * 공개 패널 — 앨범 화면 위쪽
  * ---------------------------------------------------------------- */
 .ui-publish { display: flex; flex-direction: column; gap: var(--space-4); }

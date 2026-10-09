@@ -561,6 +561,10 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
 - **Matched names are never shown on photos.** `toParentMedia` sends `myTags` as `{studentId, source}` only (no
   name), and `MediaGrid` / `MediaViewer` draw no name badge — matching can be wrong. The "우리 아이 사진만 보기"
   filter and the 맞아요/아니에요 candidate box still use the tags.
+- **[얼굴 찾기] shows the faces it found** (teacher only) as small round crops under the progress bar and the
+  result line — first 30, then "+N" (`FaceScanPanel` `FoundFaces`). `utils/faceCrops.js` cuts them in the browser
+  from the same lh3 photo using only the saved `box` (0–1), so it does not care how the faces were detected. Crops
+  are JPEG data URLs that live in React state only — never sent to the server, never stored; reloading clears them.
 - **Parents**: 사진 tab (`/parent/photos`, published albums only), gallery (`/parent/photos/:eventId`) with the
   **우리 아이 사진만 보기** toggle and `?open=<mediaId>` to open one photo, a full-screen viewer whose 저장 button
   opens the Drive download URL and which **swipes sideways** to the previous/next photo or video

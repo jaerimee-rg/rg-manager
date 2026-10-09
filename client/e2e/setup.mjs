@@ -159,6 +159,9 @@ await mkMedia({ i: 7, kind: 'image', uploaderRole: 'teacher', uploaderUserId: te
 const faceScanEventId = await mkEvent(`e2e얼굴찾기_${stamp}`, null, true, { type: 'special', published: false });
 await mkMedia({ i: 8, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: faceScanEventId, faceStatus: 'none' });
 await mkMedia({ i: 9, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: faceScanEventId, faceStatus: 'none' });
+// 얼굴이 나오는 사진 한 장 — [얼굴 찾기] 가 찾은 얼굴을 작게 잘라 보여 주는지 본다(위 앨범과 따로 둬 서로 안 섞이게)
+const faceThumbEventId = await mkEvent(`e2e얼굴그림_${stamp}`, null, true, { type: 'special', published: false });
+await mkMedia({ i: 11, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: faceThumbEventId, faceStatus: 'none' });
 
 // 학부모가 첫째 아이에 등록해 둔 얼굴 사진 두 장(특징값만) → 내 정보에서 한 장을 지우는 흐름을 본다.
 // 픽스처 사진에는 media_faces 가 없어 지운 뒤의 다시 매칭이 아래 태그를 건드리지 않는다.
@@ -336,7 +339,7 @@ const tinv = await pool.query(
 );
 
 const sessions = {
-  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, doomedFolderEventId, doomedFolderTitle, faceScanEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
+  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, doomedFolderEventId, doomedFolderTitle, faceScanEventId, faceThumbEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
   teacher: { token: sign(teacher), user: { id: teacher.id, username: teacher.username, role: 'user' } },
   teacher2Token: sign(teacher2),
   parent: { token: sign(parent), user: { id: parent.id, username: parent.username, role: 'parent' } },
