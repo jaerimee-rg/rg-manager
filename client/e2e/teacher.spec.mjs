@@ -303,7 +303,8 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     // Drive 사진(lh3, 긴 변 1920)을 얼굴 없는 그림으로 바꿔 끼운다. 진짜 lh3 처럼 CORS 를 허락해야 캔버스가 읽힌다.
     const asked = [];
     await page.route('https://lh3.googleusercontent.com/**', (route) => {
-      asked.push(route.request().url());
+      // 갤러리 썸네일도 lh3 에서 온다 — 얼굴 찾기가 받는 긴 변 1920 만 센다
+      if (/=s1920$/.test(route.request().url())) asked.push(route.request().url());
       return route.fulfill({ contentType: 'image/png', body: FACELESS_PNG.buffer, headers: { 'Access-Control-Allow-Origin': '*' } });
     });
 

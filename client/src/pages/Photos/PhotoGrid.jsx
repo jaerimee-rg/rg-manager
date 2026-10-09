@@ -1,6 +1,7 @@
 import React from 'react';
 import { Icon } from '../../components/ui';
 import { formatDuration } from '../../utils/mediaUrls';
+import RetryImage from '../../components/album/RetryImage';
 
 /**
  * 정사각형 사진 칸 (docs/photo-menu FR-524~525). 칸 수는 CSS(.ui-media-grid)가 정한다 — 휴대폰 3 · 태블릿 4 · 데스크탑 6.
@@ -25,9 +26,7 @@ function PhotoGrid({ items = [], showUploader = false, selectable = false, selec
             aria-pressed={selectable ? isSelected : undefined}
             onClick={() => (selectable ? onToggle?.(item) : onOpen?.(item))}
           >
-            {item.thumbnailUrl
-              ? <img src={item.thumbnailUrl} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }} />
-              : null}
+            <RetryImage src={item.thumbnailUrl} loading="lazy" />
             {showUploader && item.uploaderRole === 'parent' && (
               <span className="ui-media-tile__who">{item.uploaderName || '학부모'}</span>
             )}

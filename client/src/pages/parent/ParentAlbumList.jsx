@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ParentLayout from '../../components/parent/ParentLayout';
+import RetryImage from '../../components/album/RetryImage';
 import { Spinner } from '../../components/ui';
 import { fetchWithAuth } from '../../utils/api';
 import { albumSummaryText } from '../../utils/albumFilter';
@@ -75,13 +76,11 @@ function ParentAlbumList() {
             }}
           >
             {(album.previews || []).slice(0, 4).map((url, i) => (
-              <img
+              <RetryImage
                 key={i}
                 src={url}
-                alt=""
                 loading="lazy"
                 style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', background: 'var(--color-gray-200)' }}
-                onError={(event) => { event.currentTarget.style.visibility = 'hidden'; }}
               />
             ))}
           </div>

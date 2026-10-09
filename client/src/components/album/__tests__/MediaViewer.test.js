@@ -336,3 +336,146 @@ describe('MediaViewer — 올린 사람', () => {
     expect(infoOf({ uploader: 'me' })).toContain('내가 올림');
   });
 });
+
+describe('MediaViewer — 옆으로 밀어 넘기기 (휴대폰)', () => {
+  const photo = (id) => media({
+    id,
+    fileName: `IMG_${id}.jpg`,
+    thumbnailUrl: `https://lh3.googleusercontent.com/d/f${id}=w400-h400-c-rw`,
+    largeUrl: `https://lh3.googleusercontent.com/d/f${id}=w1600`
+  });
+  const clip = (id) => video(id, { largeUrl: `https://lh3.googleusercontent.com/d/v${id}=w1600` });
+  const counter = () => within(screen.getByTestId('viewer-top')).getByText(/\d+ \/ \d+/).textContent;
+
+  // 한 손가락(또는 fingers 개)으로 (200, 400) 에서 dx·dy 만큼 나눠 움직이고 뗀다. touchmove 마다 기본 동작을 막았는지 돌려준다
+  const drag = (target, { dx, dy = 0, steps = 4, fingers = 1, release = true }) => {
+    const at = (x, y) => Array.from({ length: fingers }, () => ({ clientX: x, clientY: y }));
+    fireEvent.touchStart(target, { touches: at(200, 400) });
+    const prevented = [];
+    for (let i = 1; i <= steps; i += 1) {
+      prevented.push(!fireEvent.touchMove(target, { touches: at(200 + (dx * i) / steps, 400 + (dy * i) / steps) }));
+    }
+    if (release) fireEvent.touchEnd(target, { touches: [] });
+    return prevented;
+  };
+  const settle = () => act(() => { jest.advanceTimersByTime(200); });
+
+  beforeEach(() => { jest.useFakeTimers(); });
+  afterEach(() => {
+    jest.useRealTimers();
+    delete window.visualViewport;
+  });
+
+  it('사진을 왼쪽으로 밀면 다음 장 — 다음이 영상이면 영상 플레이어가 뜬다', () => {
+    render(<MediaViewer items={[photo(1), clip(2), photo(3)]} startId={1} onClose={jest.fn()} />);
+    expect(counter()).toBe('1 / 3');
+
+    drag(screen.getByRole('dialog'), { dx: -150 });
+    settle();
+
+    expect(counter()).toBe('2 / 3');
+    expect(screen.getByTitle('VID_2.mov')).toHaveAttribute('src', 'https://drive.google.com/file/d/v2/preview');
+    // 다 넘긴 뒤 줄은 제자리 — 새 장이 가운데
+    expect(screen.getByTestId('viewer-track').style.transform).toBe('');
+  });
+
+  it('오른쪽으로 밀면 이전 장 — 첫 장에서는 버튼처럼 마지막 장으로 돈다', () => {
+    render(<MediaViewer items={[photo(1), clip(2), photo(3)]} startId={1} onClose={jest.fn()} />);
+
+    drag(screen.getByRole('dialog'), { dx: 150 });
+    settle();
+    expect(counter()).toBe('3 / 3');
+    expect(screen.getByRole('img', { name: 'IMG_3.jpg' })).toBeInTheDocument();
+  });
+
+  it('미는 동안 지금 장이 손가락을 따라 움직이고, 옆으로 미는 것은 브라우저가 가져가지 않게 막는다', () => {
+    render(<MediaViewer items={[photo(1), photo(2)]} startId={1} onClose={jest.fn()} />);
+
+    const prevented = drag(screen.getByRole('dialog'), { dx: -60, release: false });
+    expect(screen.getByTestId('viewer-track').style.transform).toBe('translateX(-60px)');
+    expect(prevented.every(Boolean)).toBe(true);
+  });
+
+  it('조금만 밀고 놓으면 제자리로 돌아간다', () => {
+    render(<MediaViewer items={[photo(1), photo(2)]} startId={1} onClose={jest.fn()} />);
+
+    drag(screen.getByRole('dialog'), { dx: -40 });
+    settle();
+    expect(counter()).toBe('1 / 2');
+    expect(screen.getByTestId('viewer-track').style.transform).toBe('');
+  });
+
+  it('위아래로 움직인 것은 넘기지 않고 막지도 않는다', () => {
+    render(<MediaViewer items={[photo(1), photo(2)]} startId={1} onClose={jest.fn()} />);
+
+    const prevented = drag(screen.getByRole('dialog'), { dx: -30, dy: 200 });
+    settle();
+    expect(counter()).toBe('1 / 2');
+    expect(prevented.some(Boolean)).toBe(false);
+    expect(screen.getByTestId('viewer-track').style.transform).toBe('');
+  });
+
+  it('영상일 때는 플레이어 바깥(위쪽 막대)을 밀어 넘긴다 — 플레이어 안의 터치는 우리에게 오지 않는다', () => {
+    render(<MediaViewer items={[clip(1), photo(2)]} startId={1} onClose={jest.fn()} />);
+
+    drag(screen.getByTestId('viewer-top'), { dx: -150 });
+    settle();
+    expect(screen.queryByTestId('video-stage')).toBeNull();
+    expect(screen.getByRole('img', { name: 'IMG_2.jpg' })).toBeInTheDocument();
+
+    // 아래 정보 줄에서 밀어도 된다
+    drag(screen.getByTestId('media-info'), { dx: 150 });
+    settle();
+    expect(screen.getByTitle('VID_1.mov')).toBeInTheDocument();
+  });
+
+  it('두 손가락(확대)이나 확대해 둔 화면에서는 넘기지 않는다', () => {
+    render(<MediaViewer items={[photo(1), photo(2)]} startId={1} onClose={jest.fn()} />);
+
+    drag(screen.getByRole('dialog'), { dx: -150, fingers: 2 });
+    settle();
+    expect(counter()).toBe('1 / 2');
+
+    window.visualViewport = { scale: 2 };
+    drag(screen.getByRole('dialog'), { dx: -150 });
+    settle();
+    expect(counter()).toBe('1 / 2');
+  });
+
+  it('움직임을 줄이는 설정이면 미끄러지지 않고 바로 바뀐다', () => {
+    window.matchMedia = jest.fn((query) => ({ matches: query === '(prefers-reduced-motion: reduce)' }));
+    try {
+      render(<MediaViewer items={[photo(1), photo(2)]} startId={1} onClose={jest.fn()} />);
+      drag(screen.getByRole('dialog'), { dx: -150 });
+      expect(counter()).toBe('2 / 2');
+    } finally {
+      delete window.matchMedia;
+    }
+  });
+
+  it('양옆 장을 화면 밖에 미리 그려 둔다 — 화면 읽기에는 지금 장만 보인다', () => {
+    render(<MediaViewer items={[photo(1), photo(2), clip(3)]} startId={2} onClose={jest.fn()} />);
+
+    const [prev, next] = screen.getAllByTestId('viewer-peek');
+    expect(prev).toHaveAttribute('aria-hidden', 'true');
+    expect(prev.querySelector('img')).toHaveAttribute('src', 'https://lh3.googleusercontent.com/d/f1=w1600');
+    expect(prev.style.transform).toBe('translateX(calc(-100% + -16px))');
+    // 다음 장이 영상이면 미리보기 사진 + 재생 표시
+    expect(next.querySelector('img')).toHaveAttribute('src', 'https://lh3.googleusercontent.com/d/v3=w1600');
+    expect(next.querySelector('svg')).not.toBeNull();
+    expect(next.style.transform).toBe('translateX(calc(100% + 16px))');
+
+    expect(screen.getAllByRole('img')).toHaveLength(1);
+    expect(screen.getByRole('img', { name: 'IMG_2.jpg' })).toBeInTheDocument();
+  });
+
+  it('하나뿐이면 옆 장도 없고 밀어도 그대로', () => {
+    render(<MediaViewer items={[photo(1)]} startId={1} onClose={jest.fn()} />);
+    expect(screen.queryAllByTestId('viewer-peek')).toHaveLength(0);
+
+    drag(screen.getByRole('dialog'), { dx: -150 });
+    settle();
+    expect(screen.getByTestId('viewer-track').style.transform).toBe('');
+    expect(screen.getByRole('img', { name: 'IMG_1.jpg' })).toBeInTheDocument();
+  });
+});

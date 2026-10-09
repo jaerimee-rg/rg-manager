@@ -442,8 +442,15 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   **signed 10-minute `state`** carrying the user id.
 - **Album folder**: the app creates the folder under `RG Manager` and turns on **link sharing
   (anyone with the link, reader)** — the gallery uses Drive thumbnail URLs directly, so without
-  sharing nothing renders. `events.albumStatus` is `none|ready|missing|unshared`. Deleting an
-  event never deletes the Drive folder.
+  sharing nothing renders.
+  Thumbnails and the viewer's large photo come straight from `lh3.googleusercontent.com/d/<id>=…`
+  (`mediaSerializer.thumbnailUrl` = `=w400-h400-c-rw`, a square WebP crop — every thumbnail box is square or
+  wider with `object-fit: cover`; `largeImageUrl` = `=w1600`). `drive.google.com/thumbnail` only 302s there:
+  80 real thumbnails took 2.4–3.5 s through it vs 0.9–1.1 s direct (2026-10-09, phone Chrome). lh3 answers
+  **429 to a `localhost` referer** — strip the referer (Playwright `route.continue`) to see real photos locally.
+  Every thumbnail `<img>` is `components/album/RetryImage` — on error it retries after 1 s · 3 s · 8 s with
+  `?retry=n` (lh3 ignores the query), then shows an image icon instead of a blank box (`utils/imageRetry.js`).
+  `events.albumStatus` is `none|ready|missing|unshared`. Deleting an event never deletes the Drive folder.
 - **Teacher UI = the 사진 menu** (`/photos`, `/photos/:eventId`, `client/src/pages/Photos/`), right below
   이벤트 관리. **Photos are uploaded only there** — the event list/form have no photo entry (owner's call,
   2026-09-01 and again 2026-10-08). `GET /api/albums` (`albumListController`, guarded by `rejectParents`)
@@ -556,7 +563,10 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   filter and the 맞아요/아니에요 candidate box still use the tags.
 - **Parents**: 사진 tab (`/parent/photos`, published albums only), gallery (`/parent/photos/:eventId`) with the
   **우리 아이 사진만 보기** toggle and `?open=<mediaId>` to open one photo, a full-screen viewer whose 저장 button
-  opens the Drive download URL, child face registration in 내 정보 (`ChildFaceCard`: registered photos are listed
+  opens the Drive download URL and which **swipes sideways** to the previous/next photo or video
+  (`hooks/useSwipeToPage.js`, rules in `utils/viewerSwipe.js`; both neighbours are pre-rendered off-screen so they
+  follow the finger — touches inside the Drive player iframe never reach us, so on a video you swipe the top bar or
+  the info line), child face registration in 내 정보 (`ChildFaceCard`: registered photos are listed
   by date — only the vector is stored, so there is no thumbnail — and a parent can **delete the ones they
   registered**; deleting re-matches that child and `matchStudentAcrossAlbums` now also **removes auto tags that no
   longer match**, while 맞아요/아니에요 answers stay), and a **6-photo grid on the event detail**

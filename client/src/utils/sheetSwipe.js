@@ -26,14 +26,17 @@ export const shouldDismiss = ({ offset, velocity = 0, height = 0 }) => {
   return offset >= distance || (velocity >= DISMISS_VELOCITY && offset >= FLICK_MIN);
 };
 
-/** 최근 손가락 위치 [{ y, t }] → 놓는 순간 아래로 내리던 속도 (px/ms, 위로 올리던 중이면 음수) */
-export const releaseVelocity = (samples = []) => {
+/**
+ * 최근 손가락 위치 [{ y, t }] → 놓는 순간 아래로 내리던 속도 (px/ms, 위로 올리던 중이면 음수).
+ * axis 를 'x' 로 주면 [{ x, t }] 로 가로 속도(오른쪽이 양수)를 잰다 — 뷰어 넘기기(utils/viewerSwipe).
+ */
+export const releaseVelocity = (samples = [], axis = 'y') => {
   if (samples.length < 2) return 0;
   const last = samples[samples.length - 1];
   const recent = samples.filter((s) => last.t - s.t <= VELOCITY_WINDOW);
   const first = recent.length > 1 ? recent[0] : samples[samples.length - 2];
   const dt = last.t - first.t;
-  return dt > 0 ? (last.y - first.y) / dt : 0;
+  return dt > 0 ? (last[axis] - first[axis]) / dt : 0;
 };
 
 /** 손가락이 닿은 곳부터 시트까지 이미 아래로 스크롤된 칸이 있는가 — 있으면 끌어내리기 대신 그 칸을 스크롤한다 */

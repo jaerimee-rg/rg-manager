@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import UploadSheet from '../../components/album/UploadSheet';
+import RetryImage from '../../components/album/RetryImage';
 import {
   Badge, Button, Callout, Card, EmptyState, Icon, PageHeader, SkeletonList, Toast
 } from '../../components/ui';
@@ -136,7 +137,7 @@ function AlbumCard({ album, onOpen }) {
     <button type="button" className="ui-album-card" onClick={onOpen}>
       {previews.length ? (
         <div className="ui-album-card__cover">
-          {previews.map((url) => <img key={url} src={url} alt="" loading="lazy" />)}
+          {previews.map((url) => <RetryImage key={url} src={url} loading="lazy" />)}
         </div>
       ) : (
         <div className="ui-album-card__cover" data-empty><Icon name="image" size={22} />아직 사진이 없어요</div>

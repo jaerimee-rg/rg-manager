@@ -1,4 +1,4 @@
-import { toParentMedia, toTeacherMedia, toParentAlbum, thumbnailUrl, downloadUrl } from '../mediaSerializer.js';
+import { toParentMedia, toTeacherMedia, toParentAlbum, thumbnailUrl, largeImageUrl, downloadUrl } from '../mediaSerializer.js';
 
 const media = {
   id: 11,
@@ -142,7 +142,7 @@ describe('toParentAlbum', () => {
     );
 
     expect(album).toMatchObject({ eventId: 3, counts: { images: 27, videos: 3, mine: 11 }, uploadOpen: true });
-    expect(album.previews[0]).toContain('id=a');
+    expect(album.previews[0]).toContain('/d/a=');
   });
 
   it('개수가 없으면 0 으로 채운다', () => {
@@ -157,6 +157,26 @@ describe('URL 만들기', () => {
   });
 
   it('파일 id 를 URL 로 안전하게 감싼다', () => {
-    expect(thumbnailUrl('a b')).toContain('id=a%20b');
+    expect(thumbnailUrl('a b')).toContain('/d/a%20b=');
+    expect(largeImageUrl('a/b')).toContain('/d/a%2Fb=');
+  });
+
+  it('썸네일은 lh3 를 바로 부른다 — drive.google.com/thumbnail 의 302 를 한 번 덜 오간다. 정사각형으로 잘라 WebP 로', () => {
+    expect(thumbnailUrl('f1')).toBe('https://lh3.googleusercontent.com/d/f1=w400-h400-c-rw');
+    expect(thumbnailUrl('f1', 200)).toBe('https://lh3.googleusercontent.com/d/f1=w200-h200-c-rw');
+  });
+
+  it('뷰어용 큰 사진은 자르지 않고 폭 1600 — 원래 비율 그대로', () => {
+    expect(largeImageUrl('f1')).toBe('https://lh3.googleusercontent.com/d/f1=w1600');
+    expect(largeImageUrl(null)).toBeNull();
+  });
+
+  it('학부모·선생님 응답과 앨범 카드 미리보기가 같은 주소를 쓴다', () => {
+    const media = { id: 1, kind: 'image', driveFileId: 'f1', uploaderRole: 'teacher', tags: [] };
+    for (const item of [toParentMedia(media), toTeacherMedia(media)]) {
+      expect(item.thumbnailUrl).toBe(thumbnailUrl('f1'));
+      expect(item.largeUrl).toBe(largeImageUrl('f1'));
+    }
+    expect(toParentAlbum({ id: 9 }, { previews: ['f1'] }).previews).toEqual([thumbnailUrl('f1')]);
   });
 });

@@ -12,11 +12,22 @@
 
 import { isPlaceholderName } from './usernames.js';
 
-const THUMBNAIL_BASE = 'https://drive.google.com/thumbnail';
+// Drive 사진 변환 주소. drive.google.com/thumbnail 은 매번 이 주소로 302 를 보내는 문이라, 바로 부르면 한 번 덜 오간다
+// (2026-10-09 운영 사진 80장을 휴대폰 설정 Chrome 에서 한꺼번에: 다 뜨기까지 2.4~3.5초 → 0.9~1.1초).
+// 앨범 폴더가 링크 공유 중이어야 열리는 것은 같다. 뒤의 옵션: wN 폭 · hN 높이 · c 가운데 자르기 · rw WebP.
+const IMAGE_BASE = 'https://lh3.googleusercontent.com/d';
 const FILE_BASE = 'https://drive.google.com/file/d';
 
+/**
+ * 갤러리 칸용 정사각형 썸네일(WebP). 썸네일을 그리는 칸은 모두 정사각형이거나 그보다 납작하고 object-fit: cover 라
+ * 가운데를 잘라 받아도 보이는 부분이 같다 — 세로 사진을 통째로 받을 때보다 바이트가 절반쯤이다.
+ */
 export const thumbnailUrl = (driveFileId, size = 400) =>
-  (driveFileId ? `${THUMBNAIL_BASE}?id=${encodeURIComponent(driveFileId)}&sz=w${size}` : null);
+  (driveFileId ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=w${size}-h${size}-c-rw` : null);
+
+/** 뷰어용 큰 사진 — 폭 기준, 원래 비율 그대로 */
+export const largeImageUrl = (driveFileId, width = 1600) =>
+  (driveFileId ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=w${width}` : null);
 
 export const originalUrl = (driveFileId) =>
   (driveFileId ? `${FILE_BASE}/${encodeURIComponent(driveFileId)}/view` : null);
@@ -53,7 +64,7 @@ export const toParentMedia = (media, { myStudentIds = [], myUserId = null } = {}
     id: media.id,
     kind: media.kind,
     thumbnailUrl: thumbnailUrl(media.driveFileId, 400),
-    largeUrl: thumbnailUrl(media.driveFileId, 1600),
+    largeUrl: largeImageUrl(media.driveFileId),
     originalUrl: originalUrl(media.driveFileId),
     previewUrl: media.kind === 'video' ? previewUrl(media.driveFileId) : null,
     downloadUrl: downloadUrl(media.driveFileId),
@@ -103,7 +114,7 @@ export const toTeacherMedia = (media, { studentNames = {} } = {}) => ({
   kind: media.kind,
   driveFileId: media.driveFileId,
   thumbnailUrl: thumbnailUrl(media.driveFileId, 400),
-  largeUrl: thumbnailUrl(media.driveFileId, 1600),
+  largeUrl: largeImageUrl(media.driveFileId),
   originalUrl: originalUrl(media.driveFileId),
   previewUrl: media.kind === 'video' ? previewUrl(media.driveFileId) : null,
   downloadUrl: downloadUrl(media.driveFileId),
@@ -137,6 +148,7 @@ export const toTeacherMedia = (media, { studentNames = {} } = {}) => ({
 
 export default {
   thumbnailUrl,
+  largeImageUrl,
   originalUrl,
   previewUrl,
   downloadUrl,

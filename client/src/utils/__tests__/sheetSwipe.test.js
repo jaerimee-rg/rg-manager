@@ -59,6 +59,11 @@ describe('releaseVelocity — 놓는 순간의 속도', () => {
     expect(releaseVelocity([{ y: 0, t: 5 }, { y: 10, t: 5 }])).toBe(0);
     expect(releaseVelocity()).toBe(0);
   });
+
+  it("axis 'x' 면 가로 속도를 잰다 — 오른쪽이 양수 (뷰어 넘기기)", () => {
+    expect(releaseVelocity([{ x: 200, t: 0 }, { x: 140, t: 50 }, { x: 100, t: 100 }], 'x')).toBeCloseTo(-1);
+    expect(releaseVelocity([{ x: 0, t: 0 }, { x: 30, t: 60 }], 'x')).toBeCloseTo(0.5);
+  });
 });
 
 describe('insideScrolled · ignoresSwipe', () => {
