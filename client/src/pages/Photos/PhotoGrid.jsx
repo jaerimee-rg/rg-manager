@@ -8,13 +8,15 @@ import RetryImage from '../../components/album/RetryImage';
  *
  * showUploader — 학부모가 올린 사진에 올린 사람 이름을 붙인다(선생님 화면에서만)
  * selectable   — 고르기 모드. 누르면 onToggle, 아니면 onOpen
+ * coverId      — 대표 사진(사진 목록 카드의 표지) id. 그 칸에 [대표] 표시 — 숨긴 사진은 표지로 쓰이지 않아 표시도 없다
  */
-function PhotoGrid({ items = [], showUploader = false, selectable = false, selected = [], onOpen, onToggle }) {
+function PhotoGrid({ items = [], showUploader = false, selectable = false, selected = [], coverId = null, onOpen, onToggle }) {
   return (
     <div className="ui-media-grid">
       {items.map((item) => {
         const isSelected = selected.includes(item.id);
-        const label = `${item.kind === 'video' ? '영상' : '사진'}${item.isHidden ? ' (숨김)' : ''}${isSelected ? ' · 고름' : ''}`;
+        const isCover = coverId !== null && item.id === coverId && !item.isHidden;
+        const label = `${item.kind === 'video' ? '영상' : '사진'}${item.isHidden ? ' (숨김)' : ''}${isCover ? ' · 대표 사진' : ''}${isSelected ? ' · 고름' : ''}`;
         return (
           <button
             key={item.id}
@@ -27,6 +29,9 @@ function PhotoGrid({ items = [], showUploader = false, selectable = false, selec
             onClick={() => (selectable ? onToggle?.(item) : onOpen?.(item))}
           >
             <RetryImage src={item.thumbnailUrl} loading="lazy" />
+            {isCover && (
+              <span className="ui-media-tile__cover"><Icon name="star" size={10} fill="currentColor" />대표</span>
+            )}
             {showUploader && item.uploaderRole === 'parent' && (
               <span className="ui-media-tile__who">{item.uploaderName || '학부모'}</span>
             )}

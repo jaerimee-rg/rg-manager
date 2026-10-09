@@ -407,6 +407,128 @@ describe('updateAlbum', () => {
   });
 });
 
+describe('updateAlbum — 대표 사진 (사진 목록 카드의 표지)', () => {
+  const media = (overrides = {}) => ({ id: 41, eventId: 3, status: 'ready', isHidden: false, driveFileId: 'd-41', ...overrides });
+
+  it('이 앨범의 사진을 대표 사진으로 정하고 응답에 싣는다', async () => {
+    Event.getById.mockResolvedValue(event());
+    EventMedia.getById.mockResolvedValue(media());
+    Event.updateAlbum.mockImplementation(async (id, fields) => event(fields));
+    req.body = { coverMediaId: 41 };
+
+    await updateAlbum(req, res);
+
+    expect(EventMedia.getById).toHaveBeenCalledWith(41);
+    expect(Event.updateAlbum).toHaveBeenCalledWith(3, { albumCoverMediaId: 41 });
+    expect(res.json.mock.calls[0][0].coverMediaId).toBe(41);
+  });
+
+  it('영상도 대표로 고를 수 있다 — 카드에는 Drive 가 만든 한 장면이 뜬다', async () => {
+    Event.getById.mockResolvedValue(event());
+    EventMedia.getById.mockResolvedValue(media({ id: 42, kind: 'video', driveFileId: 'v-42' }));
+    Event.updateAlbum.mockImplementation(async (id, fields) => event(fields));
+    req.body = { coverMediaId: 42 };
+
+    await updateAlbum(req, res);
+
+    expect(res.status).not.toHaveBeenCalled();
+    expect(Event.updateAlbum).toHaveBeenCalledWith(3, { albumCoverMediaId: 42 });
+    expect(res.json.mock.calls[0][0].coverMediaId).toBe(42);
+  });
+
+  it('null 이면 대표 사진을 푼다 — 사진을 읽지 않는다', async () => {
+    Event.getById.mockResolvedValue(event({ albumCoverMediaId: 41 }));
+    Event.updateAlbum.mockImplementation(async (id, fields) => event(fields));
+    req.body = { coverMediaId: null };
+
+    await updateAlbum(req, res);
+
+    expect(EventMedia.getById).not.toHaveBeenCalled();
+    expect(Event.updateAlbum).toHaveBeenCalledWith(3, { albumCoverMediaId: null });
+    expect(res.json.mock.calls[0][0].coverMediaId).toBeNull();
+  });
+
+  it.each([
+    ['다른 앨범의 사진', media({ eventId: 99 })],
+    ['아직 올리는 중인 사진', media({ status: 'uploading' })],
+    ['Drive 파일이 없는 행', media({ driveFileId: null })],
+    ['없는 사진', null]
+  ])('%s 은 고를 수 없다 (400 invalid_cover)', async (_label, row) => {
+    Event.getById.mockResolvedValue(event());
+    EventMedia.getById.mockResolvedValue(row);
+    req.body = { coverMediaId: 41 };
+
+    await updateAlbum(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0].reason).toBe('invalid_cover');
+    expect(Event.updateAlbum).not.toHaveBeenCalled();
+  });
+
+  it.each([['문자열', '41'], ['0', 0], ['소수', 4.5], ['참/거짓', true]])('id 가 %s 이면 사진을 찾지도 않고 거절한다', async (_label, value) => {
+    Event.getById.mockResolvedValue(event());
+    req.body = { coverMediaId: value };
+
+    await updateAlbum(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(EventMedia.getById).not.toHaveBeenCalled();
+    expect(Event.updateAlbum).not.toHaveBeenCalled();
+  });
+
+  it('숨긴 사진은 고를 수 없다 — 표지는 학부모 카드에도 쓰인다', async () => {
+    Event.getById.mockResolvedValue(event());
+    EventMedia.getById.mockResolvedValue(media({ isHidden: true }));
+    req.body = { coverMediaId: 41 };
+
+    await updateAlbum(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0].reason).toBe('hidden_cover');
+    expect(Event.updateAlbum).not.toHaveBeenCalled();
+  });
+
+  it('잘못 고르면 같은 요청의 폴더 이름 바꾸기(Drive)도 하지 않는다', async () => {
+    Event.getById.mockResolvedValue(event());
+    EventMedia.getById.mockResolvedValue(media({ eventId: 99 }));
+    req.body = { coverMediaId: 41, folderName: '새 이름' };
+
+    await updateAlbum(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(albumService.renameAlbumFolder).not.toHaveBeenCalled();
+  });
+
+  it('Google 연결이 끊겨도 바꿀 수 있다 — Drive 를 부르지 않는다', async () => {
+    GoogleDriveAccount.getByUserId.mockResolvedValue({ id: 11, status: 'error' });
+    Event.getById.mockResolvedValue(event());
+    EventMedia.getById.mockResolvedValue(media());
+    Event.updateAlbum.mockImplementation(async (id, fields) => event(fields));
+    req.body = { coverMediaId: 41 };
+
+    await updateAlbum(req, res);
+
+    expect(res.status).not.toHaveBeenCalled();
+    expect(Event.updateAlbum).toHaveBeenCalledWith(3, { albumCoverMediaId: 41 });
+  });
+
+  it('앨범 화면이 지금 대표 사진을 알 수 있게 getAlbum 에도 싣는다', async () => {
+    Event.getById.mockResolvedValue(event({ albumCoverMediaId: 41 }));
+
+    await getAlbum(req, res);
+
+    expect(res.json.mock.calls[0][0].coverMediaId).toBe(41);
+  });
+
+  it('고른 적이 없으면 null', async () => {
+    Event.getById.mockResolvedValue(event());
+
+    await getAlbum(req, res);
+
+    expect(res.json.mock.calls[0][0].coverMediaId).toBeNull();
+  });
+});
+
 describe('createUploads', () => {
   it('세션을 발급한다', async () => {
     Event.getById.mockResolvedValue(event());

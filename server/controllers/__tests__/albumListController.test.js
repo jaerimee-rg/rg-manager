@@ -78,6 +78,24 @@ describe('GET /api/albums — 선생님 사진 목록 (docs/photo-menu 5.1)', ()
     expect(albums[0].previews[0]).toContain('d1');
   });
 
+  it('대표 사진이 있으면 카드 표지(16:10) 주소를 따로 준다 — 없으면 null 이라 화면이 최근 4장을 쓴다', async () => {
+    Event.listForPhotos.mockResolvedValue([
+      event({ driveFolderId: 'f-31', albumStatus: 'ready' }),
+      event({ id: 32, driveFolderId: 'f-32', albumStatus: 'ready' })
+    ]);
+    EventMedia.summariesForTeacher.mockResolvedValue({
+      31: { images: 3, previews: ['c1', 'd1', 'd2'], cover: 'c1' },
+      32: { images: 2, previews: ['d3', 'd4'], cover: null }
+    });
+
+    await listAlbums(req, res);
+
+    const { albums } = res.json.mock.calls[0][0];
+    expect(albums[0].cover).toBe('https://lh3.googleusercontent.com/d/c1=w800-h500-c-rw');
+    expect(albums[0].previews[0]).toContain('/d/c1=');
+    expect(albums[1].cover).toBeNull();
+  });
+
   it('[사진 올리기] 목록은 앨범 유무와 상관없이 전부 — 앨범 없는 이벤트는 만들 폴더 이름을 미리 준다', async () => {
     Event.listForPhotos.mockResolvedValue([
       event({ id: 35, title: '스페셜: 리본', date: '2026-11-02', type: 'special' }),

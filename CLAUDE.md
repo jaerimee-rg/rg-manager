@@ -665,6 +665,15 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   serializers (the parent whitelist test lists it); `MediaViewer` shows it above the date line — over the photo, or
   under the Drive player for videos — clamped to 3 lines with [더 보기]. While the editor is open, swipe and arrow
   keys are off and Esc closes only the editor. No toast on save: it would cover the caption that just appeared.
+- **Album cover (대표 사진)** (`events."albumCoverMediaId"`, nullable INTEGER, no FK): the teacher opens a photo **or video**
+  in the 사진 menu album → the viewer's info line has **[대표 사진으로]** (pressed, yellow **[대표 사진]** when it is the cover;
+  pressing again clears it) → `PATCH /api/events/:id/album {coverMediaId: id|null}` (`albumController.checkCover`: this album's
+  `ready`, non-hidden media only → 400 `invalid_cover` / `hidden_cover`; works while Google is disconnected; no success toast —
+  it would cover the button). The 사진 list card then shows that one image filling the 16:10 cover
+  (`cover` = `mediaSerializer.coverImageUrl`, lh3 `=w800-h500-c-rw`; a video shows its Drive frame with **no play mark** — owner's
+  call 2026-10-09) instead of the newest four, and the grid tile gets a ★ 대표 badge. The cover is **re-checked on every read**
+  (`EventMedia` `previewRows`, shared by the teacher and parent summaries): hidden/deleted/other-album ids simply drop out and
+  the newest four come back. The parent album list gets the cover as its **first preview** only — no `cover`/`coverMediaId` field.
 - **Deletes go to the Drive trash** (`files.update {trashed:true}`), never permanent — 30 days to
   recover. The DB row is removed, cascading faces and tags.
 
