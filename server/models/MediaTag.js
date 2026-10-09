@@ -44,6 +44,20 @@ class MediaTag {
     return byMedia;
   }
 
+  /** 앨범의 태그 전부(평평한 목록) — 얼굴을 사람별로 묶을 때. includeHidden=false 면 숨긴 사진의 태그는 뺀다. */
+  static async listForAlbum(eventId, { includeHidden = false } = {}) {
+    const result = await pool.query(
+      `SELECT t."mediaId", t."studentId", t.source, t."faceId"
+         FROM media_tags t
+         JOIN event_media m ON m.id = t."mediaId"
+        WHERE m."eventId" = $1 AND m.status = 'ready'
+          ${includeHidden ? '' : 'AND m."isHidden" = FALSE'}
+        ORDER BY t.id`,
+      [eventId]
+    );
+    return result.rows;
+  }
+
   /** 태그 하나를 넣거나 갱신한다. */
   static async upsert({ mediaId, studentId, source, distance = null, faceId = null, createdByUserId = null }, client = pool) {
     const now = new Date().toISOString();

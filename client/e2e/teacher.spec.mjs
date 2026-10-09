@@ -364,6 +364,33 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     expect(saved[0].faces.every((face) => Object.keys(face).sort().join() === 'box,descriptor,score')).toBe(true);
   });
 
+  test('얼굴 목록 — 앨범에 나온 사람마다 얼굴 하나, 누르면 그 사람이 나온 사진만', async ({ page }) => {
+    // 표지 얼굴은 브라우저가 lh3 사진에서 잘라 그린다 — 진짜 lh3 처럼 CORS 를 허락하는 그림으로 바꿔 끼운다
+    const covers = [];
+    await page.route('https://lh3.googleusercontent.com/**', (route) => {
+      if (/=s\d+$/.test(route.request().url())) covers.push(route.request().url());
+      return route.fulfill({ contentType: 'image/png', body: FACELESS_PNG.buffer, headers: { 'Access-Control-Allow-Origin': '*' } });
+    });
+
+    await page.goto(`/photos/${sessions.album.peopleEventId}`);
+    const tiles = page.locator('.ui-media-tile');
+    await expect(tiles).toHaveCount(3);
+
+    // 사진 세 장에 두 사람(가: 21·22, 나: 22·23) — 같은 사람은 얼굴 하나로
+    const faces = page.getByRole('group', { name: '얼굴로 사진 찾기' });
+    await expect(faces.getByRole('button', { name: /^얼굴 \d+ · 사진 2장$/ })).toHaveCount(2);
+    await expect(faces.locator('img')).toHaveCount(2);   // 잘라 낸 얼굴이 실제로 그려졌다
+    expect(covers.every((url) => /\/d\/e2e-file-.+-(21|23)=s\d+$/.test(url))).toBe(true);   // 표지 = 각자 가장 큰 얼굴
+
+    await faces.getByRole('button', { name: '얼굴 1 · 사진 2장' }).click();
+    await expect(tiles).toHaveCount(2);
+    const shown = await tiles.locator('img').evaluateAll((images) => images.map((image) => image.getAttribute('src')));
+    expect(shown.every((src) => /-2[12]=/.test(src))).toBe(true);
+
+    await faces.getByRole('button', { name: '모든 사진' }).click();
+    await expect(tiles).toHaveCount(3);
+  });
+
   test('예전 규칙으로 붙은 자동 태그는 앨범을 열 때 다시 매칭돼 사라진다 (임계값·규칙이 바뀐 뒤)', async ({ request }) => {
     const id = sessions.album.staleEventId;
 

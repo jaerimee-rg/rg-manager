@@ -5,6 +5,7 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 jest.mock('../../../utils/api', () => ({ fetchWithAuth: jest.fn() }));
 jest.mock('../../../utils/copyToClipboard', () => ({ copyToClipboard: jest.fn().mockResolvedValue(true) }));
 jest.mock('../../../utils/faceClient', () => ({ detectFaces: jest.fn().mockResolvedValue([]) }));
+jest.mock('../../../utils/faceCrops', () => ({ cropFaces: jest.fn((url, covers) => Promise.resolve(covers.map(() => 'data:image/jpeg;base64,x'))) }));
 
 const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({
@@ -368,6 +369,71 @@ describe('PhotoAlbum — 사진 설명', () => {
 });
 
 // ───────── 사진 전용 폴더 관리: 이름·날짜 수정 · 폴더 삭제 (docs/photo-menu FR-519) ─────────
+describe('PhotoAlbum — 얼굴 목록으로 거르기', () => {
+  const cover = { url: 'https://lh3.googleusercontent.com/d/f1=s600', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } };
+  const PEOPLE = [{ key: 'p11', photoCount: 3, cover }, { key: 'p21', photoCount: 1, cover }];
+
+  const renderWithPeople = async ({ people = PEOPLE, missing = null } = {}) => {
+    const calls = { people: 0 };
+    fetchWithAuth.mockImplementation((url, options = {}) => {
+      if (url === '/api/events/31/album' && !options.method) return ok(ALBUM);
+      if (url === '/api/events/31/album/people') { calls.people += 1; return ok({ people }); }
+      if (missing && url.includes(`person=${missing}`)) return ok({ items: [], nextCursor: null, personMissing: true });
+      if (url.includes('person=p11')) return ok({ items: [MEDIA[0]], nextCursor: null });
+      if (url.startsWith('/api/events/31/media?')) return ok({ items: MEDIA, nextCursor: null });
+      return ok({});
+    });
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={['/photos/31']}>
+          <Routes><Route path="/photos/:eventId" element={<PhotoAlbum />} /></Routes>
+        </MemoryRouter>
+      );
+    });
+    return calls;
+  };
+  const mediaUrls = () => fetchWithAuth.mock.calls.map(([url]) => url).filter((url) => url.startsWith('/api/events/31/media?'));
+  const photoCount = () => document.querySelectorAll('.ui-media-tile').length;
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('사진 칸 위에 얼굴 목록 — 누르면 그 사람 사진만, 칩과 함께 걸리고, 다시 누르면 전체', async () => {
+    await renderWithPeople();
+    expect(photoCount()).toBe(3);
+
+    const group = screen.getByRole('group', { name: '얼굴로 사진 찾기' });
+    const chips = screen.getByRole('button', { name: /^선생님/ });
+    expect(group.compareDocumentPosition(chips) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();   // 칩보다 위
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '얼굴 1 · 사진 3장' })); });
+    expect(mediaUrls().at(-1)).toContain('person=p11');
+    expect(photoCount()).toBe(1);
+
+    await act(async () => { fireEvent.click(chips); });
+    expect(mediaUrls().at(-1)).toMatch(/filter=teacher.*person=p11|person=p11.*filter=teacher/);
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '얼굴 1 · 사진 3장' })); });
+    expect(mediaUrls().at(-1)).not.toContain('person=');
+  });
+
+  it('고른 사람이 사라졌으면 고른 것을 풀고 얼굴 목록을 다시 읽는다', async () => {
+    const calls = await renderWithPeople({ missing: 'p21' });
+    const before = calls.people;
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '얼굴 2 · 사진 1장' })); });
+
+    expect(calls.people).toBeGreaterThan(before);
+    expect(mediaUrls().at(-1)).not.toContain('person=');
+    expect(screen.getByRole('button', { name: '모든 사진' })).toHaveAttribute('aria-pressed', 'true');
+    expect(photoCount()).toBe(3);
+  });
+
+  it('얼굴이 없으면 목록을 그리지 않는다', async () => {
+    await renderWithPeople({ people: [] });
+    expect(screen.queryByRole('group', { name: '얼굴로 사진 찾기' })).not.toBeInTheDocument();
+  });
+});
+
 describe('PhotoAlbum — 사진 폴더 관리 (FR-519)', () => {
   const FOLDER = {
     ...ALBUM, eventType: 'folder', eventTitle: '가을 소풍', eventDate: '2026-09-27', audience: 'all',

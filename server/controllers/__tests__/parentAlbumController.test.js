@@ -27,8 +27,12 @@ jest.unstable_mockModule('../../models/Competition.js', () => ({
 jest.unstable_mockModule('../../models/EventMedia.js', () => ({
   default: { list: jest.fn().mockResolvedValue([]), summaries: jest.fn().mockResolvedValue({}), getById: jest.fn() }
 }));
+jest.unstable_mockModule('../../models/MediaFace.js', () => ({
+  default: { listForAlbum: jest.fn().mockResolvedValue([]) }
+}));
 jest.unstable_mockModule('../../models/MediaTag.js', () => ({
   default: {
+    listForAlbum: jest.fn().mockResolvedValue([]),
     listByMediaIds: jest.fn().mockResolvedValue({}),
     upsert: jest.fn().mockResolvedValue({ studentId: 5, source: 'parent_confirmed' }),
     removeAutoTagsForStudent: jest.fn().mockResolvedValue(0)
@@ -74,12 +78,13 @@ const EventRegistration = (await import('../../models/EventRegistration.js')).de
 const Competition = (await import('../../models/Competition.js')).default;
 const EventMedia = (await import('../../models/EventMedia.js')).default;
 const MediaTag = (await import('../../models/MediaTag.js')).default;
+const MediaFace = (await import('../../models/MediaFace.js')).default;
 const ChildFaceProfile = (await import('../../models/ChildFaceProfile.js')).default;
 const GoogleDriveAccount = (await import('../../models/GoogleDriveAccount.js')).default;
 const ParentInvite = (await import('../../models/ParentInvite.js')).default;
 const albumService = (await import('../../services/albumService.js')).default;
 const {
-  listAlbums, listMedia, createUploads, deleteMedia, confirmTag, addFace, deleteFace, uploadLabelChild
+  listAlbums, listMedia, listPeople, createUploads, deleteMedia, confirmTag, addFace, deleteFace, uploadLabelChild
 } = await import('../parentAlbumController.js');
 
 const parent = { id: 42, username: '하은엄마', role: 'parent' };
@@ -116,6 +121,8 @@ beforeEach(() => {
   Competition.getStudentIds.mockResolvedValue([]);
   EventMedia.list.mockResolvedValue([]);
   MediaTag.listByMediaIds.mockResolvedValue({});
+  MediaTag.listForAlbum.mockResolvedValue([]);
+  MediaFace.listForAlbum.mockResolvedValue([]);
   ChildFaceProfile.countByParentAndStudent.mockResolvedValue(0);
   ChildFaceProfile.countByStudent.mockResolvedValue(0);
   ParentTeacher.teacherIds.mockResolvedValue([7]);
@@ -210,6 +217,94 @@ describe('listMedia — 공개 단계 (photo-menu FR-541)', () => {
 
     expect(res.status).not.toHaveBeenCalledWith(403);
     expect(res.json.mock.calls[0][0].items).toEqual([]);
+  });
+});
+
+/**
+ * 앨범 위 얼굴 목록 — 2026-10-09 학부모에게도 앨범의 모든 얼굴을 보여 주기로 했다(우리 아이만이 아니라).
+ * 대신 나가는 값은 얼굴을 잘라 그릴 사진 주소·상자와 사진 수뿐이다: 다른 아이의 이름·학생 id·특징값은 없다.
+ */
+describe('얼굴 목록 (앨범의 사람마다 얼굴 하나)', () => {
+  // 8차원 단위 벡터 — 같은 축이면 같은 사람
+  const axis = (i) => Float32Array.from({ length: 8 }, (_, k) => (k === i ? 1 : 0));
+  const face = (id, mediaId, descriptor, w = 0.1) => ({
+    id, mediaId, box: { x: 0.2, y: 0.3, w, h: w }, score: 0.9, descriptor, driveFileId: `file-${mediaId}`
+  });
+  // 남의 아이(학생 9): 사진 1·2·3 / 우리 아이(학생 5, 얼굴 태그): 사진 2·4
+  const albumFaces = () => [
+    face(11, 1, axis(0), 0.2), face(12, 2, axis(0)), face(13, 3, axis(0)),
+    face(21, 2, axis(3)), face(22, 4, axis(3), 0.04)
+  ];
+  const albumTags = () => [
+    { mediaId: 2, studentId: 5, source: 'face', faceId: 21 },
+    { mediaId: 1, studentId: 9, source: 'face', faceId: 11 }
+  ];
+
+  beforeEach(() => {
+    Event.getPublishedForParent.mockResolvedValue(event({ albumAudience: 'all' }));
+    MediaFace.listForAlbum.mockResolvedValue(albumFaces());
+    MediaTag.listForAlbum.mockResolvedValue(albumTags());
+  });
+
+  it('우리 아이를 먼저, 그다음 사진 많은 사람 — 숨긴 사진은 빼고 묶는다', async () => {
+    await listPeople(req, res);
+
+    expect(MediaFace.listForAlbum).toHaveBeenCalledWith(3, { includeHidden: false });
+    expect(MediaTag.listForAlbum).toHaveBeenCalledWith(3, { includeHidden: false });
+    const { people } = res.json.mock.calls[0][0];
+    expect(people.map(({ key, mine, photoCount }) => ({ key, mine, photoCount }))).toEqual([
+      { key: 'p21', mine: true, photoCount: 2 },
+      { key: 'p11', mine: false, photoCount: 3 }
+    ]);
+    // 표지 = 가장 큰 얼굴, 얼굴이 작을수록 큰 사진(긴 변 N)을 받는다
+    expect(people[1].cover).toEqual({ url: 'https://lh3.googleusercontent.com/d/file-1=s300', box: { x: 0.2, y: 0.3, w: 0.2, h: 0.2 } });
+    expect(people[0].cover.url).toBe('https://lh3.googleusercontent.com/d/file-2=s600');
+  });
+
+  it('나가는 값은 화이트리스트 — 다른 아이의 이름·학생 id·특징값·사진 id 목록이 없다', async () => {
+    await listPeople(req, res);
+
+    for (const person of res.json.mock.calls[0][0].people) {
+      expect(Object.keys(person).sort()).toEqual(['cover', 'key', 'mine', 'photoCount']);
+      expect(Object.keys(person.cover).sort()).toEqual(['box', 'url']);
+      expect(Object.keys(person.cover.box).sort()).toEqual(['h', 'w', 'x', 'y']);
+    }
+    expect(JSON.stringify(res.json.mock.calls[0][0])).not.toMatch(/studentId|descriptor|faceIds|mediaIds/);
+  });
+
+  it('볼 수 없는 앨범이면 얼굴 목록도 403 — 묶지도 않는다', async () => {
+    Event.getPublishedForParent.mockResolvedValue(event({ albumPublished: false }));
+
+    await listPeople(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(MediaFace.listForAlbum).not.toHaveBeenCalled();
+  });
+
+  it('?person= 이면 그 사람이 나온 사진만 — "우리 아이만" 은 함께 켜지 않는다', async () => {
+    req.query = { person: 'p11', mine: '1' };
+
+    await listMedia(req, res);
+
+    expect(EventMedia.list).toHaveBeenCalledWith(3, expect.objectContaining({ mediaIds: [1, 2, 3], studentIds: null }));
+    expect(res.json.mock.calls[0][0].personMissing).toBeUndefined();
+    expect(res.json.mock.calls[0][0].candidates).toEqual([]);
+  });
+
+  it('그 사이 없어진 사람이면 빈 목록 + personMissing (모든 사진을 보여 주지 않는다)', async () => {
+    req.query = { person: 'p999' };
+
+    await listMedia(req, res);
+
+    expect(EventMedia.list).toHaveBeenCalledWith(3, expect.objectContaining({ mediaIds: [] }));
+    expect(res.json.mock.calls[0][0]).toMatchObject({ personMissing: true, items: [] });
+  });
+
+  it('person 이 없으면 묶지 않는다 — 평소 목록은 그대로', async () => {
+    await listMedia(req, res);
+
+    expect(MediaFace.listForAlbum).not.toHaveBeenCalled();
+    expect(EventMedia.list).toHaveBeenCalledWith(3, expect.objectContaining({ mediaIds: null }));
   });
 });
 

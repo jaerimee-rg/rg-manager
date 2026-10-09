@@ -3,6 +3,7 @@ import { getMe, addChildren, deleteChild, updateName, getEvents, getEvent, regis
 import {
   listAlbums,
   listMedia,
+  listPeople,
   createUploads,
   completeUpload,
   deleteMedia,
@@ -36,6 +37,7 @@ router.delete('/events/:id/registrations/:childId', cancelChild);
 // 사진 (앨범). 확정된 이벤트만 열리고, 응답은 화이트리스트를 거친다.
 router.get('/albums', listAlbums);
 router.get('/events/:id/media', listMedia);
+router.get('/events/:id/people', listPeople);
 router.post('/events/:id/media/uploads', createUploads);
 router.post('/events/:id/media/:mediaId/complete', completeUpload);
 router.post('/events/:id/media/:mediaId/confirm', confirmTag);

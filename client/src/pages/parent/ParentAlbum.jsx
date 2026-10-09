@@ -6,6 +6,7 @@ import MediaGrid from '../../components/album/MediaGrid';
 import MediaViewer from '../../components/album/MediaViewer';
 import UploadSheet from '../../components/album/UploadSheet';
 import RetryImage from '../../components/album/RetryImage';
+import FacePeopleStrip from '../../components/album/FacePeopleStrip';
 import { fetchWithAuth } from '../../utils/api';
 import { copyToClipboard } from '../../utils/copyToClipboard';
 import { albumShareUrl } from '../../utils/albumShare';
@@ -21,7 +22,8 @@ const TYPE_FILTERS = [
 /**
  * 앨범 갤러리.
  *
- * "우리 아이 사진만 보기" 는 서버가 태그로 걸러 주고(mine=1), 사진/영상/내가 올린 것은
+ * 맨 위 얼굴 목록(앨범에 나온 사람마다 얼굴 하나, 우리 아이 먼저)에서 얼굴을 누르면 그 사람이 나온 사진만(person=).
+ * "우리 아이 사진만 보기" 는 서버가 태그로 걸러 주고(mine=1) — 둘은 함께 켜지 않는다. 사진/영상/내가 올린 것은
  * 화면에서 한 번 더 거른다. 사진을 누르면 뷰어가 열리고 거기서 원본을 저장할 수 있다.
  */
 function ParentAlbum() {
@@ -43,15 +45,31 @@ function ParentAlbum() {
   const [linkOffer, setLinkOffer] = useState(null);   // { invite, teacherName } — 연결할지 묻는 중
   const [linking, setLinking] = useState(false);
   const [mineOnly, setMineOnly] = useState(false);
+  const [people, setPeople] = useState([]);       // 얼굴 목록
+  const [person, setPerson] = useState(null);     // 고른 사람의 key
   const [childId, setChildId] = useState(null);
   const [typeFilter, setTypeFilter] = useState('all');
   const [viewerId, setViewerId] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
 
+  const loadPeople = useCallback(async () => {
+    try {
+      const response = await fetchWithAuth(`/api/parent/events/${eventId}/people`);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) return;
+      const next = payload.people || [];
+      setPeople(next);
+      setPerson((prev) => (prev && !next.some((one) => one.key === prev) ? null : prev));
+    } catch (error) {
+      console.error('얼굴 목록 조회 실패:', error);
+    }
+  }, [eventId]);
+
   const load = useCallback(async () => {
     try {
       const params = new URLSearchParams();
+      if (person) params.set('person', person);
       if (mineOnly) params.set('mine', '1');
       if (mineOnly && childId) params.set('studentId', String(childId));
 
@@ -80,6 +98,8 @@ function ParentAlbum() {
       }
       if (!response.ok) { setDenied('사진을 불러오지 못했어요.'); return; }
 
+      // 고른 사람이 그 사이 묶음에서 사라졌다 — 고른 것을 풀면 다시 불러온다
+      if (payload.personMissing) { setPerson(null); loadPeople(); return; }
       setDenied(null);
       setData(payload);
       setChildId((prev) => prev ?? payload.children?.[0]?.studentId ?? null);
@@ -87,9 +107,21 @@ function ParentAlbum() {
       console.error('앨범 조회 실패:', error);
       setDenied('사진을 불러오지 못했어요.');
     }
-  }, [eventId, mineOnly, childId]);
+  }, [eventId, mineOnly, childId, person, loadPeople]);
 
   useEffect(() => { load(); }, [load]);
+
+  // 앨범을 볼 수 있다고 확인된 뒤에만 읽는다(못 보는 앨범이면 어차피 403)
+  const canView = Boolean(data);
+  useEffect(() => { if (canView) loadPeople(); }, [canView, loadPeople]);
+
+  // 사진을 지우거나 올리거나 우리 아이를 확인하면 얼굴 묶음도 바뀔 수 있다
+  const reload = () => { load(); loadPeople(); };
+
+  const choosePerson = (key) => {
+    setPerson(key);
+    if (key) setMineOnly(false);
+  };
 
   // 학부모가 [연결하고 사진 보기] 를 눌렀을 때만 그 선생님과 연결한다
   const acceptLink = async () => {
@@ -147,7 +179,7 @@ function ParentAlbum() {
         return;
       }
       toast(confirmed ? '우리 아이 사진으로 저장했어요' : '다음부터 보여드리지 않을게요');
-      load();
+      reload();
     } catch (error) {
       console.error('사진 확인 실패:', error);
       toast('확인하지 못했어요.');
@@ -162,7 +194,7 @@ function ParentAlbum() {
       if (!response.ok) { toast(payload.error || '지우지 못했어요.'); return; }
       setViewerId(null);
       toast('Drive 휴지통으로 옮겼어요');
-      load();
+      reload();
     } catch (error) {
       console.error('사진 삭제 실패:', error);
       toast('지우지 못했어요.');
@@ -244,9 +276,11 @@ function ParentAlbum() {
       subtitle={`${data.event?.date || ''} · 사진 ${counts.photo} · 영상 ${counts.video}`}
       action={<IconButton icon="link" label="공유 링크 복사" onClick={share} />}
     >
+      <FacePeopleStrip people={people} selected={person} onSelect={choosePerson} className="ui-mb-2" />
+
       <button
         type="button"
-        onClick={() => setMineOnly((prev) => !prev)}
+        onClick={() => { if (!mineOnly) setPerson(null); setMineOnly(!mineOnly); }}
         aria-pressed={mineOnly}
         style={{
           display: 'flex', alignItems: 'center', gap: '10px', width: '100%', textAlign: 'left',
@@ -372,11 +406,15 @@ function ParentAlbum() {
         <div style={{ textAlign: 'center', padding: '44px 20px' }}>
           <div style={{ fontSize: '2.5rem' }}>{typeFilter === 'video' ? '🎬' : '📷'}</div>
           <div style={{ fontSize: '1rem', fontWeight: 700, marginTop: '8px' }}>
-            {typeFilter === 'video' ? '영상이 없어요' : typeFilter === 'uploaded' ? '아직 올린 사진이 없어요' : '아직 사진이 없어요'}
+            {person
+              ? '이 조건의 사진이 없어요'
+              : typeFilter === 'video' ? '영상이 없어요' : typeFilter === 'uploaded' ? '아직 올린 사진이 없어요' : '아직 사진이 없어요'}
           </div>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--color-gray-500)', lineHeight: 1.6, marginTop: '6px' }}>
-            우하단 [+ 올리기] 로 사진·영상을 올려 보세요.
-          </div>
+          {!person && (
+            <div style={{ fontSize: '0.8125rem', color: 'var(--color-gray-500)', lineHeight: 1.6, marginTop: '6px' }}>
+              우하단 [+ 올리기] 로 사진·영상을 올려 보세요.
+            </div>
+          )}
         </div>
       ))}
 
@@ -413,8 +451,8 @@ function ParentAlbum() {
         <UploadSheet
           apiBase={`/api/parent/events/${eventId}`}
           eventTitle={data.event?.title}
-          onClose={() => { setUploading(false); load(); }}
-          onDone={load}
+          onClose={() => { setUploading(false); reload(); }}
+          onDone={reload}
         />
       )}
 

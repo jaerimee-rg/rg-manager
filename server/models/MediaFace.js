@@ -74,6 +74,23 @@ class MediaFace {
     return byMedia;
   }
 
+  /**
+   * 앨범의 얼굴 전부 — 사람별로 묶으려고(utils/facePeople.js). 특징값은 풀어서, 표지 사진 주소용 Drive id 를 붙여 준다.
+   * includeHidden=false 면 숨긴 사진의 얼굴은 뺀다(학부모 화면).
+   */
+  static async listForAlbum(eventId, { includeHidden = false } = {}) {
+    const result = await pool.query(
+      `SELECT f.id, f."mediaId", f.box, f.score, f.descriptor, m."driveFileId"
+         FROM media_faces f
+         JOIN event_media m ON m.id = f."mediaId"
+        WHERE m."eventId" = $1 AND m.status = 'ready' AND m.kind = 'image'
+          ${includeHidden ? '' : 'AND m."isHidden" = FALSE'}
+        ORDER BY f.id`,
+      [eventId]
+    );
+    return result.rows.map((row) => ({ ...hydrate(row), descriptor: decodeDescriptor(row.descriptor) }));
+  }
+
   /** 사진마다 몇 개의 얼굴이 있는지 (선생님 화면 배지) */
   static async countsByMedia(mediaIds) {
     if (!mediaIds?.length) return {};

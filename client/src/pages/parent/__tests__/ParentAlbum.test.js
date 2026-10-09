@@ -5,6 +5,7 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 jest.mock('../../../utils/api', () => ({ fetchWithAuth: jest.fn() }));
 jest.mock('../../../utils/copyToClipboard', () => ({ copyToClipboard: jest.fn().mockResolvedValue(true) }));
 jest.mock('../../../utils/faceClient', () => ({ detectFaces: jest.fn(), detectSingleFace: jest.fn() }));
+jest.mock('../../../utils/faceCrops', () => ({ cropFaces: jest.fn((url, covers) => Promise.resolve(covers.map(() => 'data:image/jpeg;base64,x'))) }));
 
 import { fetchWithAuth } from '../../../utils/api';
 import { copyToClipboard } from '../../../utils/copyToClipboard';
@@ -359,5 +360,86 @@ describe('ParentAlbum — 학부모도 공유 링크를 복사한다 (docs/photo
     await renderAlbum();
 
     expect(screen.queryByRole('button', { name: '공유 링크 복사' })).not.toBeInTheDocument();
+  });
+});
+
+describe('ParentAlbum — 맨 위 얼굴 목록 (앨범의 사람마다 얼굴 하나)', () => {
+  const cover = { url: 'https://lh3.googleusercontent.com/d/f1=s600', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } };
+  const PEOPLE = [
+    { key: 'p21', photoCount: 2, mine: true, cover },
+    { key: 'p11', photoCount: 3, mine: false, cover }
+  ];
+  let peopleCalls;
+  let missing;
+
+  const serve = () => {
+    peopleCalls = 0;
+    missing = null;
+    fetchWithAuth.mockImplementation((url) => {
+      if (url.endsWith('/people')) { peopleCalls += 1; return jsonResponse({ people: PEOPLE }); }
+      if (missing && url.includes(`person=${missing}`)) return jsonResponse(payload({ items: [], personMissing: true }));
+      return jsonResponse(payload());
+    });
+  };
+  const mediaUrls = () => fetchWithAuth.mock.calls.map(([url]) => url).filter((url) => url.includes('/media?'));
+  const toggle = () => screen.getByRole('button', { name: /우리 아이 사진만 보기/ });
+
+  it('앨범을 열면 맨 위에 얼굴이 우리 아이 먼저 보이고, 누르면 그 사람이 나온 사진만 불러온다', async () => {
+    serve();
+    await renderAlbum();
+
+    const group = screen.getByRole('group', { name: '얼굴로 사진 찾기' });
+    expect(group.compareDocumentPosition(toggle()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();   // 토글보다 위
+    expect(screen.getByRole('button', { name: '우리 아이 · 사진 2장' })).toBeInTheDocument();
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '얼굴 2 · 사진 3장' })); });
+
+    expect(mediaUrls().at(-1)).toContain('person=p11');
+    expect(screen.getByRole('button', { name: '얼굴 2 · 사진 3장' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('얼굴을 고르면 "우리 아이만" 은 꺼지고, "우리 아이만" 을 켜면 고른 얼굴은 풀린다', async () => {
+    serve();
+    await renderAlbum();
+
+    await act(async () => { fireEvent.click(toggle()); });
+    expect(mediaUrls().at(-1)).toContain('mine=1');
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '얼굴 2 · 사진 3장' })); });
+    expect(toggle()).toHaveAttribute('aria-pressed', 'false');
+    expect(mediaUrls().at(-1)).toContain('person=p11');
+    expect(mediaUrls().at(-1)).not.toContain('mine=1');
+
+    await act(async () => { fireEvent.click(toggle()); });
+    expect(mediaUrls().at(-1)).toContain('mine=1');
+    expect(mediaUrls().at(-1)).not.toContain('person=');
+    expect(screen.getByRole('button', { name: '모든 사진' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('고른 사람이 그 사이 묶음에서 사라졌으면 고른 것을 풀고 얼굴 목록을 다시 읽는다', async () => {
+    serve();
+    await renderAlbum();
+    missing = 'p11';
+    const before = peopleCalls;
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '얼굴 2 · 사진 3장' })); });
+
+    expect(peopleCalls).toBeGreaterThan(before);
+    expect(mediaUrls().at(-1)).not.toContain('person=');
+    expect(screen.getAllByRole('button', { name: /사진 열기|영상 열기/ })).toHaveLength(2);
+  });
+
+  it('얼굴이 없는 앨범이면 목록을 그리지 않는다', async () => {
+    fetchWithAuth.mockImplementation((url) => jsonResponse(url.endsWith('/people') ? { people: [] } : payload()));
+    await renderAlbum();
+
+    expect(screen.queryByRole('group', { name: '얼굴로 사진 찾기' })).not.toBeInTheDocument();
+  });
+
+  it('볼 수 없는 앨범이면 얼굴 목록을 묻지도 않는다', async () => {
+    fetchWithAuth.mockImplementation(() => jsonResponse({ error: '아직 공개하지 않은 앨범이에요', reason: 'album_private' }, { ok: false, status: 403 }));
+    await renderAlbum();
+
+    expect(fetchWithAuth.mock.calls.some(([url]) => url.endsWith('/people'))).toBe(false);
   });
 });

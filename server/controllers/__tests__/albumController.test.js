@@ -14,10 +14,14 @@ jest.unstable_mockModule('../../models/EventMedia.js', () => ({
   }
 }));
 jest.unstable_mockModule('../../models/MediaFace.js', () => ({
-  default: { listByMediaIds: jest.fn().mockResolvedValue({}) }
+  default: { listByMediaIds: jest.fn().mockResolvedValue({}), listForAlbum: jest.fn().mockResolvedValue([]) }
 }));
 jest.unstable_mockModule('../../models/MediaTag.js', () => ({
-  default: { listByMediaIds: jest.fn().mockResolvedValue({}), upsert: jest.fn().mockResolvedValue({ studentId: 5, source: 'manual' }) }
+  default: {
+    listByMediaIds: jest.fn().mockResolvedValue({}),
+    listForAlbum: jest.fn().mockResolvedValue([]),
+    upsert: jest.fn().mockResolvedValue({ studentId: 5, source: 'manual' })
+  }
 }));
 jest.unstable_mockModule('../../models/Student.js', () => ({
   default: { getByIds: jest.fn().mockResolvedValue([]) }
@@ -60,13 +64,14 @@ jest.unstable_mockModule('../../services/driveAccess.js', () => ({
 const Event = (await import('../../models/Event.js')).default;
 const EventMedia = (await import('../../models/EventMedia.js')).default;
 const MediaTag = (await import('../../models/MediaTag.js')).default;
+const MediaFace = (await import('../../models/MediaFace.js')).default;
 const Student = (await import('../../models/Student.js')).default;
 const GoogleDriveAccount = (await import('../../models/GoogleDriveAccount.js')).default;
 const ParentInvite = (await import('../../models/ParentInvite.js')).default;
 const albumService = (await import('../../services/albumService.js')).default;
 const { DriveError } = await import('../../utils/googleDrive.js');
 const {
-  getAlbum, createAlbum, updateAlbum, listMedia, createUploads, completeUpload,
+  getAlbum, createAlbum, updateAlbum, listMedia, listPeople, createUploads, completeUpload,
   bulkAction, addTag, updateMedia, deleteMedia, listUnanalyzed, saveFaces, analysisImageUrl
 } = await import('../albumController.js');
 
@@ -722,6 +727,56 @@ describe('listMedia', () => {
     await listMedia(req, res);
 
     expect(res.json.mock.calls[0][0].nextCursor).toBeNull();
+  });
+});
+
+describe('얼굴 목록 (앨범의 사람마다 얼굴 하나)', () => {
+  const axis = (i) => Float32Array.from({ length: 8 }, (_, k) => (k === i ? 1 : 0));
+  const face = (id, mediaId, descriptor) => ({
+    id, mediaId, box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 }, score: 0.9, descriptor, driveFileId: `file-${mediaId}`
+  });
+
+  beforeEach(() => {
+    Event.getById.mockResolvedValue(event());
+    MediaFace.listForAlbum.mockResolvedValue([face(11, 1, axis(0)), face(12, 2, axis(0)), face(21, 2, axis(3))]);
+    MediaTag.listForAlbum.mockResolvedValue([{ mediaId: 1, studentId: 9, source: 'face', faceId: 11 }]);
+  });
+
+  it('선생님은 숨긴 사진까지 묶고, 학부모와 같은 모양(이름·학생 id 없이)으로 받는다', async () => {
+    await listPeople(req, res);
+
+    expect(albumService.ensureAlbumsMatched).toHaveBeenCalled();
+    expect(MediaFace.listForAlbum).toHaveBeenCalledWith(3, { includeHidden: true });
+    expect(res.json.mock.calls[0][0].people).toEqual([
+      { key: 'p11', photoCount: 2, cover: { url: 'https://lh3.googleusercontent.com/d/file-1=s600', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } } },
+      { key: 'p21', photoCount: 1, cover: { url: 'https://lh3.googleusercontent.com/d/file-2=s600', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } } }
+    ]);
+  });
+
+  it('남의 이벤트면 404 — 묶지 않는다', async () => {
+    Event.getById.mockResolvedValue(null);
+
+    await listPeople(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(MediaFace.listForAlbum).not.toHaveBeenCalled();
+  });
+
+  it('?person= 이면 그 사람의 사진만, 다른 거르기(칩)와 함께', async () => {
+    req.query = { person: 'p11', filter: 'teacher' };
+
+    await listMedia(req, res);
+
+    expect(EventMedia.list).toHaveBeenCalledWith(3, expect.objectContaining({ filter: 'teacher', mediaIds: [1, 2], includeHidden: true }));
+  });
+
+  it('없어진 사람이면 빈 목록 + personMissing', async () => {
+    req.query = { person: 'p404' };
+
+    await listMedia(req, res);
+
+    expect(EventMedia.list).toHaveBeenCalledWith(3, expect.objectContaining({ mediaIds: [] }));
+    expect(res.json.mock.calls[0][0].personMissing).toBe(true);
   });
 });
 
