@@ -3498,9 +3498,11 @@ button.ui-album-card__cover-slot:hover::after {
 /* 관리자 사진 보기 로그의 작은 썸네일 */
 .ui-photo-log__thumb { width: 32px; height: 32px; object-fit: cover; border-radius: var(--shape-tag); border: var(--stroke-thin); }
 
-/* 사진 고르기 아래 버튼 줄 — 버튼이 넷이라 휴대폰에서는 두 줄(2×2). 한 줄이면 [대표 사진 만들기] 가 화면 밖으로 밀린다 */
+/* 사진 고르기 아래 버튼 줄 — 버튼이 넷이라 휴대폰에서는 두 줄(2×2). 한 줄이면 [대표 사진 만들기] 가 화면 밖으로 밀린다.
+   얼굴을 골랐을 때 붙는 [이 얼굴에서 빼기]·[다시 넣기] 는 맨 위 한 줄을 다 쓴다(__wide) */
 @media (max-width: 767px) {
   .ui-photo-select-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ui-photo-select-actions__wide { grid-column: 1 / -1; }
 }
 .ui-cover-order { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-4); }
 .ui-cover-order__slots {

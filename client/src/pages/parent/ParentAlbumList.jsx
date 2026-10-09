@@ -10,6 +10,7 @@ import { albumSummaryText } from '../../utils/albumFilter';
 /**
  * 사진 탭 — 선생님이 공개한 앨범 중 내가 볼 수 있는 것(공개 범위 안의 이벤트 앨범 + 사진 전용 폴더)만 보인다.
  * 일정에서 대회를 눌러 들어올 수도 있고, 여기서 모아 볼 수도 있다. 카드 표지는 선생님이 고른 대표 사진(없으면 최근 사진).
+ * 제목 줄 오른쪽 [전체 사진 보기] 는 모든 앨범의 사진을 한 화면에(얼굴로 거르기, ParentAllPhotos) — 앨범이 있을 때만.
  */
 function ParentAlbumList() {
   const navigate = useNavigate();
@@ -53,8 +54,13 @@ function ParentAlbumList() {
     );
   }
 
+  // 링크처럼 생긴 글자 버튼 — 일정 탭의 [지난 일정 보기] 와 같은 자리·모양
+  const allPhotos = (
+    <button type="button" className="ui-link" onClick={() => navigate('/parent/photos/all')}>전체 사진 보기</button>
+  );
+
   return (
-    <ParentLayout title="사진" subtitle="선생님이 공개한 앨범">
+    <ParentLayout title="사진" subtitle="선생님이 공개한 앨범" action={allPhotos}>
       {albums.map((album) => (
         <button
           key={album.eventId}

@@ -8,7 +8,8 @@
  *      PERSON_JOIN_DISTANCE 이하면 그 무리로, 아니면 새 무리로.
  *   3) 평균이 서로 가까워진 무리끼리 합친다(먼저 온 얼굴 탓에 한 사람이 둘로 갈린 것을 잇는다).
  * 늘 지키는 것: **한 사진의 두 얼굴은 같은 무리가 될 수 없다**(한 사람이 한 사진에 두 번 나오지 않는다),
- * 학부모가 [아니에요] 로 뺀 사진(excluded)은 그 학생 무리에 들어가지 않는다, 서로 다른 학생 무리는 합치지 않는다.
+ * 학부모가 [아니에요] 로 뺀 사진(excluded)은 그 학생 무리에 들어가지 않는다, 서로 다른 학생 무리는 합치지 않는다,
+ * 선생님이 얼굴 목록에서 "이 얼굴 아님" 으로 뺀 얼굴 쌍(cannotLink — face_exclusions)은 한 무리가 되지 않는다.
  *
  * 임계값은 운영 사진(2026-10-09, 512차원 얼굴 38개)으로 정했다: 다른 사진의 얼굴 쌍 유사도는 0.4 아래(대부분)와
  * 0.5 위(같은 사람)로 갈렸고 0.4~0.5 에는 한 쌍도 없었다. 같은 사진 속 얼굴(확실히 다른 사람)은 0.4 를 넘지 않았다.
@@ -48,15 +49,33 @@ const similarityTo = (sum, unit) => {
 
 const byQuality = (a, b) => quality(b) - quality(a) || a.id - b.id;
 
+/** 쌍 목록 → 얼굴 id 마다 같은 무리가 될 수 없는 얼굴 id 들 (방향 없이) */
+const apartMap = (pairs) => {
+  const apart = new Map();
+  const link = (a, b) => {
+    if (!apart.has(a)) apart.set(a, new Set());
+    apart.get(a).add(b);
+  };
+  for (const pair of pairs) {
+    const a = Number(pair.faceId);
+    const b = Number(pair.otherFaceId);
+    if (!Number.isInteger(a) || !Number.isInteger(b) || a === b) continue;
+    link(a, b);
+    link(b, a);
+  }
+  return apart;
+};
+
 /**
  * faces: [{ id, mediaId, box: {x,y,w,h}, score, descriptor: Float32Array | null }]
  * tags:  [{ mediaId, studentId, source, faceId }]
+ * cannotLink: [{ faceId, otherFaceId }] — 같은 사람으로 묶지 말아야 할 얼굴 쌍(선생님이 얼굴 목록에서 뺀 것)
  * → [{ key, studentId, faceIds, mediaIds, photoCount, cover: { faceId, mediaId, box } }]
  *    사진 많은 사람부터. key = 'p' + 무리에서 가장 작은 얼굴 id — 같은 데이터면 늘 같은 값이라
  *    목록을 받은 뒤 그 key 로 거를 때 다시 묶어도 같은 사람을 가리킨다.
  *    mediaIds 에는 얼굴 없이 학생 태그만 붙은 사진(선생님이 손으로 붙인 것)도 들어간다.
  */
-export const groupFaces = (faces = [], tags = [], { joinDistance = PERSON_JOIN_DISTANCE } = {}) => {
+export const groupFaces = (faces = [], tags = [], { joinDistance = PERSON_JOIN_DISTANCE, cannotLink = [] } = {}) => {
   const usable = faces
     .map((face) => ({ ...face, unit: face.descriptor ? toUnit(face.descriptor) : null }))
     .filter((face) => face.unit);
@@ -82,20 +101,29 @@ export const groupFaces = (faces = [], tags = [], { joinDistance = PERSON_JOIN_D
     if (!previous || rank(tag.source) < rank(previous.source)) studentOfFace.set(tag.faceId, tag);
   }
 
+  const apart = apartMap(cannotLink);
   const groups = [];
   const newGroup = (studentId = null) => {
-    const group = { studentId, faces: [], mediaIds: new Set(), sum: new Float64Array(dimension) };
+    const group = { studentId, faces: [], faceIds: new Set(), mediaIds: new Set(), sum: new Float64Array(dimension) };
     groups.push(group);
     return group;
   };
   const add = (group, face) => {
     group.faces.push(face);
+    group.faceIds.add(face.id);
     group.mediaIds.add(face.mediaId);
     for (let i = 0; i < dimension; i += 1) group.sum[i] += face.unit[i];
   };
   const blocked = (group, mediaIds) => [...mediaIds].some((mediaId) => (
     group.mediaIds.has(mediaId) || (group.studentId != null && excluded.has(`${mediaId}:${group.studentId}`))
   ));
+  // 이 얼굴들 중 하나라도 무리의 얼굴과 "같은 사람 아님" 쌍이면 함께 둘 수 없다
+  const apartFrom = (group, faceList) => apart.size > 0 && faceList.some((face) => {
+    const others = apart.get(face.id);
+    if (!others) return false;
+    for (const id of others) if (group.faceIds.has(id)) return true;
+    return false;
+  });
 
   // 1) 학생 태그가 붙은 얼굴
   const ordered = [...sameDimension].sort(byQuality);
@@ -106,8 +134,8 @@ export const groupFaces = (faces = [], tags = [], { joinDistance = PERSON_JOIN_D
     if (!tag) { rest.push(face); continue; }
     const group = studentGroups.get(tag.studentId) || newGroup(tag.studentId);
     studentGroups.set(tag.studentId, group);
-    // 한 사진에서 같은 학생으로 두 얼굴이 태그됐으면(손 태그 실수) 두 번째는 닮은 무리를 따로 찾는다
-    if (group.mediaIds.has(face.mediaId)) rest.push(face);
+    // 한 사진에서 같은 학생으로 두 얼굴이 태그됐으면(손 태그 실수) 두 번째는 닮은 무리를 따로 찾는다 — 뺀 쌍에 걸려도 그렇다
+    if (group.mediaIds.has(face.mediaId) || apartFrom(group, [face])) rest.push(face);
     else add(group, face);
   }
 
@@ -115,7 +143,7 @@ export const groupFaces = (faces = [], tags = [], { joinDistance = PERSON_JOIN_D
   for (const face of rest) {
     let best = null;
     for (const group of groups) {
-      if (blocked(group, [face.mediaId])) continue;
+      if (blocked(group, [face.mediaId]) || apartFrom(group, [face])) continue;
       const similarity = similarityTo(group.sum, face.unit);
       if (1 - similarity <= joinDistance && (!best || similarity > best.similarity)) best = { group, similarity };
     }
@@ -153,6 +181,7 @@ export const groupFaces = (faces = [], tags = [], { joinDistance = PERSON_JOIN_D
         const similarity = norms > 0 ? dots[i][j] / Math.sqrt(norms) : -1;
         if (1 - similarity > joinDistance || (best && similarity <= best.similarity)) continue;
         if (blocked(a, b.mediaIds) || blocked(b, a.mediaIds)) continue;
+        if (apartFrom(a, b.faces)) continue;   // 쌍은 양쪽에 다 적혀 있어 한쪽으로만 보면 된다
         best = { i, j, similarity };
       }
     }

@@ -6,6 +6,7 @@ import ParentEventDetail from '../../pages/parent/ParentEventDetail';
 import ParentSettings from '../../pages/parent/ParentSettings';
 import ParentAlbumList from '../../pages/parent/ParentAlbumList';
 import ParentAlbum from '../../pages/parent/ParentAlbum';
+import ParentAllPhotos from '../../pages/parent/ParentAllPhotos';
 import ParentShop from '../../pages/parent/ParentShop';
 import ParentOnboarding from '../../pages/parent/ParentOnboarding';
 import InviteLanding from '../../pages/parent/InviteLanding';
@@ -64,6 +65,8 @@ function ParentApp() {
           {/* 이벤트 상세 — 일정 카드를 누르거나 선생님이 공유한 링크를 열면 이 전체 화면이 뜬다 */}
           <Route path="/parent/events/:eventId" element={<ParentEventDetail />} />
           <Route path="/parent/photos" element={<ParentAlbumList />} />
+          {/* 전체 사진(모든 앨범) — 정적 경로라 아래 :eventId 보다 먼저 맞는다 */}
+          <Route path="/parent/photos/all" element={<ParentAllPhotos />} />
           <Route path="/parent/photos/:eventId" element={<ParentAlbum />} />
           {/* 추천 상품 — 공유 링크 /shop/:publicId 의 전체 화면으로 보낸다 (상점이 여럿이면 여기서 고른다) */}
           <Route path="/parent/shop" element={<ParentShop />} />

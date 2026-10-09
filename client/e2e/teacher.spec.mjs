@@ -1657,7 +1657,8 @@ test.describe('선생님 — 전체 사진 (모든 폴더)', () => {
 
     const people = await api(request, all.teacher, 'GET', '/api/albums/people');
     expect(people.body.people.map((one) => one.photoCount)).toEqual([3, 1]);
-    people.body.people.forEach((one) => expect(Object.keys(one).sort()).toEqual(['cover', 'key', 'photoCount']));
+    // 선생님 칸(removable · removedCount)까지 — 이름·학생 id·특징값은 없다
+    people.body.people.forEach((one) => expect(Object.keys(one).sort()).toEqual(['cover', 'key', 'photoCount', 'removable', 'removedCount']));
 
     const one = await api(request, all.teacher, 'GET', `/api/albums/media?person=${people.body.people[0].key}`);
     expect(new Set(one.body.items.map((item) => item.eventId)).size).toBe(2);   // 두 폴더에 걸친 한 아이
@@ -1665,5 +1666,38 @@ test.describe('선생님 — 전체 사진 (모든 폴더)', () => {
     // 학부모는 못 연다(선생님 사진 메뉴)
     const parent = await api(request, sessions.parent, 'GET', '/api/albums/media');
     expect(parent.status).toBe(403);
+  });
+
+  test('얼굴을 고르고 잘못 묶인 사진을 [이 얼굴에서 빼기] — [뺀 사진] 에서 다시 넣는다 (사진은 그대로)', async ({ page, request }) => {
+    await page.goto('/photos/all');
+    const tiles = page.locator('.ui-media-tile');
+    const faces = page.getByRole('group', { name: '얼굴로 사진 찾기' });
+    await expect(tiles).toHaveCount(4);
+    await faces.getByRole('button', { name: '얼굴 1 · 사진 3장' }).click();
+    await expect(tiles).toHaveCount(3);
+
+    // 두 사람이 나온 사진 52 를 가에게서 뺀다
+    await page.getByRole('button', { name: '고르기' }).click();
+    await tiles.filter({ has: page.locator('img[src*="-52="]') }).click();
+    await page.getByRole('button', { name: '이 얼굴에서 빼기' }).click();
+    await expect(page.getByText('1장을 이 얼굴에서 뺐어요', { exact: false })).toBeVisible();
+    await expect(tiles).toHaveCount(2);
+    const left = await tiles.locator('img').evaluateAll((images) => images.map((image) => image.getAttribute('src')));
+    expect(left.every((src) => /-5[13]=/.test(src))).toBe(true);
+    // 52 의 그 얼굴은 따로 선다(가 2장 · 나 1장 · 그 얼굴 1장) — 사진은 그대로 4장
+    await expect(faces.getByRole('button', { name: /^얼굴 \d+ · / })).toHaveCount(3);
+    const media = await api(request, all.teacher, 'GET', '/api/albums/media');
+    expect(media.body.items).toHaveLength(4);
+
+    // [뺀 사진] 에서 다시 넣는다 — 다 넣으면 그 얼굴의 사진으로 돌아간다
+    const bar = page.getByRole('toolbar', { name: '고른 얼굴의 사진' });
+    await bar.getByRole('button', { name: /뺀 사진/ }).click();
+    await expect(tiles).toHaveCount(1);
+    await page.getByRole('button', { name: '고르기' }).click();
+    await tiles.first().click();
+    await page.getByRole('button', { name: '이 얼굴에 다시 넣기' }).click();
+    await expect(page.getByText('1장을 이 얼굴에 다시 넣었어요')).toBeVisible();
+    await expect(tiles).toHaveCount(3);
+    await expect(faces.getByRole('button', { name: /^얼굴 \d+ · / })).toHaveCount(2);
   });
 });

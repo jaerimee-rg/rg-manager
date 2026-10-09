@@ -128,3 +128,53 @@ describe('groupFaces — 앨범 얼굴을 사람별로', () => {
     expect(people.map((person) => person.faceIds)).toEqual([[1, 4]]);
   });
 });
+
+describe('groupFaces — "이 얼굴 아님" 쌍(cannotLink, 선생님이 얼굴 목록에서 뺀 사진)', () => {
+  it('쌍으로 적힌 얼굴은 아무리 닮아도 그 무리에 들지 않는다', () => {
+    const faces = [face(1, 1, axis(0)), face(2, 2, angle(10)), face(3, 3, angle(5))];
+    expect(groupFaces(faces)).toHaveLength(1);
+
+    const people = groupFaces(faces, [], { cannotLink: [{ faceId: 3, otherFaceId: 1 }] });
+
+    expect(people.map(({ key, faceIds }) => ({ key, faceIds }))).toEqual([
+      { key: 'p1', faceIds: [1, 2] },
+      { key: 'p3', faceIds: [3] }
+    ]);
+  });
+
+  it('방향은 없다 — 반대로 적혀도 같다', () => {
+    const faces = [face(1, 1, axis(0)), face(2, 2, angle(10)), face(3, 3, angle(5))];
+    expect(keys(groupFaces(faces, [], { cannotLink: [{ faceId: 1, otherFaceId: 3 }] }))).toEqual(['p1', 'p3']);
+  });
+
+  it('나중에 가까워진 무리끼리 합칠 때도 지킨다', () => {
+    // 1 · 2 는 처음에 따로 서지만(같은 사진) 3 이 오면 1 쪽, 4 는 2 쪽 — 쌍이 없으면 두 무리가 합쳐질 만큼 가깝다
+    const faces = [face(1, 1, axis(0)), face(3, 3, angle(40)), face(4, 4, angle(45)), face(2, 2, angle(85))];
+    const together = groupFaces(faces);
+    const apart = groupFaces(faces, [], { cannotLink: [{ faceId: 4, otherFaceId: 1 }] });
+
+    // 쌍이 없으면 2 가 마지막에 합쳐져 한 사람. 쌍이 있으면 4 는 2 쪽으로 가고, 두 무리는 가까워도 합치지 않는다
+    expect(together.map((person) => person.faceIds)).toEqual([[1, 2, 3, 4]]);
+    expect(apart.map((person) => person.faceIds)).toEqual([[1, 3], [2, 4]]);
+  });
+
+  it('학생 태그가 붙은 얼굴도 쌍이 걸리면 그 아이 무리에 들지 않는다', () => {
+    const faces = [face(1, 1, axis(0)), face(2, 2, angle(10))];
+    const tags = [
+      { mediaId: 1, studentId: 9, source: 'manual', faceId: 1 },
+      { mediaId: 2, studentId: 9, source: 'face', faceId: 2 }
+    ];
+
+    const people = groupFaces(faces, tags, { cannotLink: [{ faceId: 2, otherFaceId: 1 }] });
+
+    const child = people.find((person) => person.studentId === 9);
+    expect(child.faceIds).toEqual([1]);
+    expect(people.find((person) => person.faceIds.includes(2)).studentId).toBeNull();
+  });
+
+  it('없는 얼굴·같은 얼굴·이상한 값은 무시한다', () => {
+    const faces = [face(1, 1, axis(0)), face(2, 2, angle(10))];
+    const people = groupFaces(faces, [], { cannotLink: [{ faceId: 1, otherFaceId: 1 }, { faceId: 99, otherFaceId: 1 }, { faceId: 'x' }] });
+    expect(people).toHaveLength(1);
+  });
+});

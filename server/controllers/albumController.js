@@ -13,7 +13,9 @@ import {
 import { canUpload, canManageAlbum, canDeleteMedia, reasonMessage, isValidAudience, isPhotoFolder } from '../utils/albumAccess.js';
 import { toTeacherMedia, thumbnailUrl } from '../utils/mediaSerializer.js';
 import { sharePathFor } from '../services/albumShare.js';
-import { albumPeople, teacherPeople, findPerson, removePerson, toPersonView } from '../services/albumPeople.js';
+import {
+  albumPeople, peopleAcross, findPerson, removePerson, excludePhotos, restorePhotos, toPersonView
+} from '../services/albumPeople.js';
 import AlbumView from '../models/AlbumView.js';
 
 /**
@@ -353,6 +355,12 @@ const decorate = async (rows, userId, role) => {
   ));
 };
 
+/** 고른 사람의 사진 — ?removed=1 이면 그 사람에게서 뺀 사진. 없는 사람이면 빈 목록(전부 보여 주지 않는다) */
+const personMediaIds = (person, query) => {
+  if (!person) return [];
+  return String(query.removed || '') === '1' ? person.removedMediaIds || [] : person.mediaIds;
+};
+
 /** GET /api/events/:id/media */
 export const listMedia = async (req, res) => {
   try {
@@ -366,11 +374,11 @@ export const listMedia = async (req, res) => {
       ? { takenAt: req.query.cursorTakenAt, id: parseInt(req.query.cursorId, 10) }
       : null;
 
-    // 얼굴 목록에서 한 사람을 골랐으면 그 사람이 나온 사진만. 그 사이 묶음이 바뀌어 없는 사람이면
-    // 빈 목록 + personMissing (화면이 고른 것을 풀고 목록을 다시 읽는다)
+    // 얼굴 목록에서 한 사람을 골랐으면 그 사람이 나온 사진만(removed=1 이면 그 사람에게서 "이 얼굴 아님" 으로 뺀 사진만).
+    // 그 사이 묶음이 바뀌어 없는 사람이면 빈 목록 + personMissing (화면이 고른 것을 풀고 목록을 다시 읽는다)
     const personKey = req.query.person ? String(req.query.person) : null;
     const person = personKey ? findPerson(await albumPeople(event.id, { includeHidden: true }), personKey) : null;
-    const mediaIds = personKey ? (person?.mediaIds || []) : null;
+    const mediaIds = personKey ? personMediaIds(person, req.query) : null;
 
     const rows = await EventMedia.list(event.id, {
       filter, limit, cursor, includeHidden: true, uploaderUserId: req.user.id, mediaIds
@@ -432,8 +440,8 @@ export const listAllMedia = async (req, res) => {
     const eventIds = albums.map((event) => event.id);
     const { limit, cursor } = pageOf(req.query);
     const personKey = req.query.person ? String(req.query.person) : null;
-    const person = personKey ? findPerson(await teacherPeople(eventIds, { includeHidden: true }), personKey) : null;
-    const mediaIds = personKey ? (person?.mediaIds || []) : null;
+    const person = personKey ? findPerson(await peopleAcross(eventIds, { includeHidden: true }), personKey) : null;
+    const mediaIds = personKey ? personMediaIds(person, req.query) : null;
 
     const rows = await EventMedia.listAcross(eventIds, {
       filter: String(req.query.filter || 'all'), limit, cursor, includeHidden: true, uploaderUserId: req.user.id, mediaIds
@@ -458,8 +466,8 @@ export const listAllMedia = async (req, res) => {
 
 /**
  * GET /api/albums/people — 모든 폴더에 나온 사람마다 얼굴 하나(같은 아이는 폴더가 달라도 하나로 묶인다).
- * 앨범 화면의 얼굴 목록과 같은 모양이다. 여기서는 사람을 빼지 않으므로 removable 은 싣지 않는다
- * (빼기는 앨범 화면에서 — 그 앨범의 얼굴만 지운다).
+ * 앨범 화면의 얼굴 목록과 같은 모양이다(선생님 칸 removable · removedCount 포함). 사람 통째로 빼기는 앨범 화면에서만 한다
+ * — 그 앨범의 얼굴만 지운다. 여기서는 사진을 "이 얼굴 아님" 으로 빼고 되돌린다(아래 exclude/restore).
  */
 export const listAllPeople = async (req, res) => {
   try {
@@ -467,8 +475,8 @@ export const listAllPeople = async (req, res) => {
     if (!albums.length) return res.json({ people: [] });
     await albumService.ensureAlbumsMatched(albums);
 
-    const people = await teacherPeople(albums.map((event) => event.id), { includeHidden: true });
-    res.json({ people: people.map((person) => toPersonView(person)) });
+    const people = await peopleAcross(albums.map((event) => event.id), { includeHidden: true });
+    res.json({ people: people.map((person) => toPersonView(person, { teacher: true })) });
   } catch (error) {
     console.error('전체 사진 얼굴 목록 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
@@ -502,6 +510,49 @@ export const deletePerson = async (req, res) => {
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
   }
 };
+
+/** 사진 빼기·되돌리기 결과 → 응답. 화면은 바뀐 key 로 그 사람을 계속 고르고 목록을 다시 읽는다 */
+const personPhotosResponse = (res, result) => {
+  if (!result) return res.status(404).json({ error: '얼굴 목록이 바뀌었어요. 새로고침해 주세요.', personMissing: true });
+  if (result.blocked === 'all_photos') {
+    return res.status(409).json({ error: '이 얼굴의 사진을 모두 뺄 수는 없어요. 관계없는 사람이면 얼굴 목록에서 빼 주세요.', reason: 'all_photos' });
+  }
+  if (result.blocked) {
+    return res.status(409).json({ error: '얼굴 목록이 바뀌었어요. 다시 확인해 주세요.', reason: 'person_changed' });
+  }
+  return res.json(result);
+};
+
+const editPersonPhotos = (action) => async (req, res, scopeOf) => {
+  try {
+    const scope = await scopeOf(req);
+    if (scope == null) return notFound(res);
+    // 앨범이 하나도 없으면 그 사람도 없다
+    if (Array.isArray(scope) && !scope.length) return personPhotosResponse(res, null);
+    const run = action === 'exclude' ? excludePhotos : restorePhotos;
+    const result = await run(scope, req.params.key, req.body?.mediaIds, { userId: req.user.id });
+    personPhotosResponse(res, result);
+  } catch (error) {
+    console.error(`얼굴 사진 ${action === 'exclude' ? '빼기' : '되돌리기'} 오류:`, error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/** 앨범 하나(이 선생님의 이벤트)에서 — 남의 이벤트는 null(404) */
+const albumScope = async (req) => (await loadEvent(req))?.id ?? null;
+/** 내 앨범 전부(전체 사진)에서 — 앨범이 없으면 빈 목록이라 그 사람도 없다(404) */
+const allAlbumsScope = async (req) => (await myAlbums(req)).map((event) => event.id);
+
+/**
+ * POST /api/events/:id/album/people/:key/exclude {mediaIds} — 고른 사람의 사진에서 잘못 묶인 것을 뺀다("이 얼굴 아님").
+ * 사진은 그대로다(services/albumPeople.js excludePhotos). 그 사람의 사진을 다 빼려 하면 409 all_photos.
+ */
+export const excludeAlbumPersonPhotos = (req, res) => editPersonPhotos('exclude')(req, res, albumScope);
+/** POST /api/events/:id/album/people/:key/restore {mediaIds} — 뺀 사진을 다시 넣는다 */
+export const restoreAlbumPersonPhotos = (req, res) => editPersonPhotos('restore')(req, res, albumScope);
+/** POST /api/albums/people/:key/exclude · /restore — 전체 사진(모든 폴더)에서 같은 일 */
+export const excludeAllPersonPhotos = (req, res) => editPersonPhotos('exclude')(req, res, allAlbumsScope);
+export const restoreAllPersonPhotos = (req, res) => editPersonPhotos('restore')(req, res, allAlbumsScope);
 
 /**
  * POST /api/events/:id/media/uploads — 업로드 세션 발급
@@ -810,7 +861,9 @@ export const deleteMedia = async (req, res) => {
 };
 
 export default {
-  getAlbum, listPeople, deletePerson, listAllMedia, listAllPeople, createAlbum, updateAlbum, refreshAlbum,
+  getAlbum, listPeople, deletePerson, listAllMedia, listAllPeople,
+  excludeAlbumPersonPhotos, restoreAlbumPersonPhotos, excludeAllPersonPhotos, restoreAllPersonPhotos,
+  createAlbum, updateAlbum, refreshAlbum,
   listMedia, createUploads, completeUpload, bulkAction,
   addTag, removeTag, listUnanalyzed, saveFaces, rematch, updateMedia, deleteMedia
 };

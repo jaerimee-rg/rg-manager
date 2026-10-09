@@ -116,3 +116,29 @@ describe('ParentAlbumList — 선생님이 고른 대표 사진', () => {
     expect(screen.getAllByTestId('album-previews')).toHaveLength(2);
   });
 });
+
+describe('ParentAlbumList — 전체 사진 보기', () => {
+  it('제목 줄 오른쪽 [전체 사진 보기] 는 모든 앨범의 사진 화면으로', async () => {
+    fetchWithAuth.mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({ items: [album()] }) });
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={['/parent/photos']}>
+          <Routes>
+            <Route path="/parent/photos" element={<ParentAlbumList />} />
+            <Route path="/parent/photos/all" element={<div>전체 사진 화면</div>} />
+            <Route path="/parent/photos/:eventId" element={<div>앨범 화면</div>} />
+          </Routes>
+        </MemoryRouter>
+      );
+    });
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '전체 사진 보기' })); });
+
+    expect(screen.getByText('전체 사진 화면')).toBeInTheDocument();
+  });
+
+  it('볼 앨범이 없으면 [전체 사진 보기] 도 없다', async () => {
+    await renderList([]);
+    expect(screen.queryByRole('button', { name: '전체 사진 보기' })).not.toBeInTheDocument();
+  });
+});
