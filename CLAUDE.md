@@ -646,7 +646,9 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   tags and parent "아니에요" answers stay. Bumping `FACE_ANALYZER_VERSION` re-analyses the album and would find those
   faces again. While the X shows, tapping another face, [전체], outside or Esc only closes it (no selection); the
   long-press release click never selects.
-- **Parents**: 사진 tab (`/parent/photos`, published albums only), gallery (`/parent/photos/:eventId`) with the
+- **Parents**: 사진 tab (`/parent/photos`, published albums only — and only those with at least one visible ready photo/video:
+  an album whose photos were all deleted or hidden drops out of `GET /api/parent/albums` (owner's call 2026-10-09) but still opens
+  from the event detail's [앨범 열기] and share links, so parents can still upload; the teacher list keeps showing it), gallery (`/parent/photos/:eventId`) with the
   **우리 아이 사진만 보기** toggle and `?open=<mediaId>` to open one photo, a full-screen viewer whose 저장 button
   opens the Drive download URL and which **swipes sideways** to the previous/next photo or video
   (`hooks/useSwipeToPage.js`, rules in `utils/viewerSwipe.js`; both neighbours are pre-rendered off-screen so they

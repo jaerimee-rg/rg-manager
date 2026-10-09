@@ -101,7 +101,14 @@ export const uploadLabelChild = (children, confirmedIds, teacherId) =>
   || children.find((child) => Number(child.teacherId) === Number(teacherId))
   || null;
 
-/** GET /api/parent/albums — 사진 탭 */
+/** 학부모에게 보일 사진·영상이 있는지 — summaries 는 이미 숨기지 않은 ready 만 센다 */
+const hasVisibleMedia = (summary) => ((summary?.images || 0) + (summary?.videos || 0)) > 0;
+
+/**
+ * GET /api/parent/albums — 사진 탭.
+ * 보일 사진·영상이 하나도 없는 앨범(다 지웠거나 다 숨겼다)은 빈 카드로 두지 않고 뺀다 (사용자 결정 2026-10-09).
+ * 앨범 자체는 그대로라 이벤트 상세의 [앨범 열기]·공유 링크로는 열리고(학부모 업로드 입구), 사진이 생기면 다시 나온다.
+ */
 export const listAlbums = async (req, res) => {
   try {
     const teacherIds = await teachersOf(req.user.id);
@@ -126,7 +133,8 @@ export const listAlbums = async (req, res) => {
     await albumService.ensureAlbumsMatched(visible);
 
     const summaries = await EventMedia.summaries(visible.map((event) => event.id), { studentIds });
-    res.json({ items: visible.map((event) => toParentAlbum(event, summaries[event.id])) });
+    const withMedia = visible.filter((event) => hasVisibleMedia(summaries[event.id]));
+    res.json({ items: withMedia.map((event) => toParentAlbum(event, summaries[event.id])) });
   } catch (error) {
     console.error('학부모 앨범 목록 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });

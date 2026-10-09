@@ -128,6 +128,12 @@ const doomedEventId = await mkEvent(doomedEventTitle, null, true, { type: 'speci
 // e2e확정대회 카드를 화면 밖(lazy 이미지가 안 뜬다)으로 밀어낸다
 await pool.query(`UPDATE events SET date = '2026-09-05' WHERE id = $1`, [doomedEventId]);
 
+// 모든 학부모에게 공개된 스페셜 앨범, 사진 한 장 — 학부모 테스트가 그 한 장을 숨겨 "보일 사진이 없는 앨범은 사진 탭에서 빠진다" 를 본다.
+// 날짜를 앞당기는 이유는 위와 같다(사진 목록에서 e2e확정대회 아래에 두려고)
+const sparseEventTitle = `e2e한장앨범_${stamp}`;
+const sparseEventId = await mkEvent(sparseEventTitle, null, true, { type: 'special', audience: 'all' });
+await pool.query(`UPDATE events SET date = '2026-09-04' WHERE id = $1`, [sparseEventId]);
+
 // 첫째 아이를 이 대회의 참가 학생으로 넣어 "확정" 상태를 만든다.
 await pool.query(
   `INSERT INTO competition_students ("competitionId","studentId","createdAt") VALUES ($1,$2,$3)`,
@@ -162,6 +168,7 @@ await mkMedia({ i: 6, kind: 'image', uploaderRole: 'teacher', uploaderUserId: te
 // 지울 폴더에도 한 장 — 폴더를 지우면 이 기록도 함께 사라져야 한다
 await mkMedia({ i: 40, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: doomedFolderEventId });
 await mkMedia({ i: 41, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: doomedEventId });
+const sparseMediaId = await mkMedia({ i: 42, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: sparseEventId });
 await pool.query(
   `INSERT INTO event_registrations ("eventId", "studentId", "parentUserId", status, "confirmedAt", "createdBy", "createdAt", "updatedAt")
    VALUES ($1,$2,NULL,'confirmed',$3,'teacher',$3,$3)`,
@@ -447,7 +454,7 @@ for (const [i, file] of sameFiles.entries()) {
 }
 
 const sessions = {
-  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, doomedFolderEventId, doomedFolderTitle, doomedEventId, doomedEventTitle, faceScanEventId, faceThumbEventId, peopleEventId, removeFaceEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
+  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, doomedFolderEventId, doomedFolderTitle, doomedEventId, doomedEventTitle, sparseEventId, sparseEventTitle, sparseMediaId, faceScanEventId, faceThumbEventId, peopleEventId, removeFaceEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
   teacher: { token: sign(teacher), user: { id: teacher.id, username: teacher.username, role: 'user' } },
   teacher2Token: sign(teacher2),
   parent: { token: sign(parent), user: { id: parent.id, username: parent.username, role: 'parent' } },
