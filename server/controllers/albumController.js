@@ -117,17 +117,10 @@ export const getAlbum = async (req, res) => {
     };
 
     if (event.driveFolderId) {
-      const [stats, viewers, viewStats, topViewed] = await Promise.all([
+      const [stats, viewers] = await Promise.all([
         EventMedia.stats(event.id),
-        albumService.countViewers(event),
-        AlbumView.albumStats(event.id),
-        AlbumView.topViewed(event.id, 4)
+        albumService.countViewers(event)
       ]);
-      // 학부모가 본 통계 — 본 학부모 수 · 앨범 연 횟수 · 사진 본 횟수, 그리고 많이 본 사진
-      payload.viewStats = viewStats;
-      payload.topViewed = topViewed.map((row) => ({
-        id: row.id, kind: row.kind, views: row.views, thumbnailUrl: thumbnailUrl(row.driveFileId, 400)
-      }));
       payload.counts = {
         images: stats.images, videos: stats.videos, hidden: stats.hidden,
         fromParents: stats.fromParents || 0, fromTeacher: stats.fromTeacher || 0,

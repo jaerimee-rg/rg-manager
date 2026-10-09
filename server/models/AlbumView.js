@@ -2,7 +2,7 @@ import pool from '../database.js';
 import { displayNameSql, parentAwareDisplayNameSql } from '../utils/usernames.js';
 
 /**
- * 학부모가 앨범·사진을 본 기록 (album_views) — 선생님 앨범의 보기 통계와 관리자 사진 보기 로그.
+ * 학부모가 앨범·사진을 본 기록 (album_views) — 선생님 화면의 본 횟수(사진 목록 카드 · 사진 칸 · 뷰어)와 관리자 사진 보기 로그.
  *
  * 같은 사람이 같은 것을 잠깐 사이에 여러 번 열어도 한 번으로 친다 — 앨범 열기는 30분, 사진은 10분.
  * 옆으로 넘겨 보다 되돌아온 것까지 세면 "몇 번 봤는지" 가 부풀고 관리자 로그가 읽히지 않는다.
@@ -27,45 +27,26 @@ class AlbumView {
     return result.rows.length > 0;
   }
 
-  /** 선생님 앨범의 보기 통계 — 본 학부모 수 · 앨범을 연 횟수 · 사진을 크게 본 횟수 */
-  static async albumStats(eventId) {
-    const result = await pool.query(
-      `SELECT COUNT(DISTINCT "userId")::int AS viewers,
-              COUNT(*) FILTER (WHERE kind = 'album')::int AS "albumOpens",
-              COUNT(*) FILTER (WHERE kind = 'media')::int AS "mediaViews"
-         FROM album_views WHERE "eventId" = $1`,
-      [eventId]
-    );
-    const row = result.rows[0] || {};
-    return { viewers: row.viewers || 0, albumOpens: row.albumOpens || 0, mediaViews: row.mediaViews || 0 };
-  }
-
-  /** 많이 본 사진 — 지금 있는 사진만, 본 횟수 순 */
-  static async topViewed(eventId, limit = 4) {
-    const result = await pool.query(
-      `SELECT m.id, m.kind, m."driveFileId", COUNT(v.id)::int AS views
-         FROM album_views v JOIN event_media m ON m.id = v."mediaId"
-        WHERE v."eventId" = $1 AND v.kind = 'media' AND m.status = 'ready' AND m."driveFileId" IS NOT NULL
-        GROUP BY m.id
-        ORDER BY views DESC, m.id DESC
-        LIMIT $2`,
-      [eventId, limit]
-    );
-    return result.rows;
-  }
-
-  /** 사진 목록 카드의 "N명이 봤어요" — 앨범마다 본 학부모 수 → { [eventId]: n } */
-  static async viewersByEvent(eventIds) {
+  /**
+   * 사진 목록 카드 오른쪽 아래의 본 횟수 — 앨범(폴더)마다 학부모가 연 횟수 · 사진을 크게 본 횟수
+   * → { [eventId]: { albumOpens, mediaViews } } (기록 없는 앨범은 빠진다)
+   */
+  static async countsByEvent(eventIds) {
     if (!eventIds?.length) return {};
     const result = await pool.query(
-      `SELECT "eventId", COUNT(DISTINCT "userId")::int AS viewers
+      `SELECT "eventId",
+              COUNT(*) FILTER (WHERE kind = 'album')::int AS "albumOpens",
+              COUNT(*) FILTER (WHERE kind = 'media')::int AS "mediaViews"
          FROM album_views WHERE "eventId" = ANY($1::int[]) GROUP BY "eventId"`,
       [eventIds]
     );
-    return Object.fromEntries(result.rows.map((row) => [row.eventId, row.viewers]));
+    return Object.fromEntries(result.rows.map((row) => [
+      row.eventId,
+      { albumOpens: row.albumOpens || 0, mediaViews: row.mediaViews || 0 }
+    ]));
   }
 
-  /** 사진마다 크게 본 횟수 → { [mediaId]: n } (선생님 사진 칸 · 뷰어) */
+  /** 사진마다 크게 본 횟수 → { [mediaId]: n } (선생님 사진 칸 오른쪽 아래 · 뷰어) */
   static async viewsByMedia(mediaIds) {
     const ids = (mediaIds || []).map(Number).filter(Boolean);
     if (!ids.length) return {};
