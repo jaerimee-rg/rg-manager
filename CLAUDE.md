@@ -653,8 +653,10 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   `services/albumPeople.js:peopleAcross`): **all of the teacher's albums grouped together**, so a child is one face whatever the
   folder, and `?person=<key>` regroups the same way. Scope is `Event.listForPhotos(req.user.id)` with a Drive folder (admins see
   their own, like `GET /api/albums`); both routes sit under the `rejectParents` mount. The viewer shows the folder name
-  (`item.albumTitle`) and saves captions to that photo's own album (`mediaCaptionSave.js`); hide, delete, covers and removing a whole
-  person stay on the album page (no X on this strip).
+  (`item.albumTitle`) and saves captions to that photo's own album (`mediaCaptionSave.js`); hide, delete and covers stay on the album
+  page. **Long-pressing a face shows the same X as the album strip** (2026-10-10): `DELETE /api/albums/people/:key?photoCount=N`
+  (`albumController.deleteAllPerson` → `removePerson(eventIds, …)`, same rules/409s as the album page) removes that person's faces from
+  **every** folder (`MediaFace.deleteForAlbums`), photos stay.
 - **전체 사진 (parent, `/parent/photos/all`, `pages/parent/ParentAllPhotos.jsx`)** — [전체 사진 보기] text link at the top right of the
   사진 tab (only when there are albums). `GET /api/parent/albums/media` + `/people` (`parentAlbumController.listAllMedia/listAllPeople`)
   use the **same visibility as the 사진 tab** (`visibleAlbums`: linked teachers' published albums inside their audience), hidden photos

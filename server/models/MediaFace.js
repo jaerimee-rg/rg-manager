@@ -118,6 +118,19 @@ class MediaFace {
     return result.rows.map((row) => row.mediaId);
   }
 
+  /** deleteForAlbum 을 여러 앨범에서 — 전체 사진(모든 폴더)에서 한 사람을 뺄 때. 이 앨범들의 얼굴만 지운다 */
+  static async deleteForAlbums(faceIds, eventIds, client = pool) {
+    if (!faceIds?.length || !eventIds?.length) return [];
+    const result = await client.query(
+      `DELETE FROM media_faces f
+        USING event_media m
+        WHERE f.id = ANY($1::int[]) AND m.id = f."mediaId" AND m."eventId" = ANY($2::int[])
+        RETURNING f."mediaId"`,
+      [faceIds, eventIds]
+    );
+    return result.rows.map((row) => row.mediaId);
+  }
+
   /** 사진마다 몇 개의 얼굴이 있는지 (선생님 화면 배지) */
   static async countsByMedia(mediaIds) {
     if (!mediaIds?.length) return {};

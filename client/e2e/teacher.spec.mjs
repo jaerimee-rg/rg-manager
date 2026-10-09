@@ -1700,4 +1700,32 @@ test.describe('선생님 — 전체 사진 (모든 폴더)', () => {
     await expect(tiles).toHaveCount(3);
     await expect(faces.getByRole('button', { name: /^얼굴 \d+ · / })).toHaveCount(2);
   });
+
+  // 이 묶음의 마지막 테스트 — 나(사진 52)를 얼굴 목록에서 지운다(앞 테스트들이 가·나 둘을 전제한다)
+  test('얼굴을 길게 누르면 X — 누르면 모든 폴더에서 그 사람을 얼굴 목록에서 뺀다 (사진은 그대로)', async ({ page, request }) => {
+    await page.goto('/photos/all');
+    const tiles = page.locator('.ui-media-tile');
+    const faces = page.getByRole('group', { name: '얼굴로 사진 찾기' });
+    await expect(tiles).toHaveCount(4);
+    await expect(faces.getByRole('button', { name: /^얼굴 \d+ · / })).toHaveCount(2);
+
+    // 길게 누르기: 누른 채 0.7초 → 그 얼굴에만 X. 손을 뗄 때 오는 click 은 그 얼굴을 고르지 않는다
+    const second = faces.getByRole('button', { name: '얼굴 2 · 사진 1장' });
+    await second.scrollIntoViewIfNeeded();
+    const box = await second.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + 20);
+    await page.mouse.down();
+    await page.waitForTimeout(700);
+    await page.mouse.up();
+    await expect(second).toHaveAttribute('aria-pressed', 'false');
+    await expect(faces.getByRole('button', { name: /목록에서 빼기/ })).toHaveCount(1);
+    await faces.getByRole('button', { name: '얼굴 2 목록에서 빼기' }).click();
+
+    await expect(page.getByText('얼굴을 목록에서 뺐어요', { exact: false })).toBeVisible();
+    await expect(faces.getByRole('button', { name: /^얼굴 \d+ · / })).toHaveCount(1);
+    await expect(tiles).toHaveCount(4);   // 사진은 그대로
+
+    const people = await api(request, all.teacher, 'GET', '/api/albums/people');
+    expect(people.body.people.map((one) => one.photoCount)).toEqual([3]);
+  });
 });
