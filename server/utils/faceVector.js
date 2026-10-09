@@ -24,6 +24,15 @@ export const DESCRIPTOR_LENGTH = 512;
  */
 export const FACE_ANALYZER_VERSION = 3;
 
+/**
+ * 얼굴을 (다시) 찾아야 하는 사진인가 — models/EventMedia.js needsFaceAnalysisSql 과 **같은 조건**을 행 하나에.
+ * 이미 지금 방식으로 분석된 사진을 덮어쓰지 않으려고 쓴다(학부모가 다시 찾아 보낸 얼굴 저장).
+ */
+export const needsFaceAnalysis = (media) => Boolean(media) && media.kind === 'image' && (
+  ['pending', 'failed', 'skipped'].includes(media.faceStatus)
+  || (Number(media.faceAnalyzerVersion) || 1) < FACE_ANALYZER_VERSION
+);
+
 /** 브라우저가 보낸 버전 → 양의 정수, 아니면 null (기록 없음 = 예전 방식으로 취급된다) */
 export const parseAnalyzerVersion = (value) => {
   const version = Number(value);
@@ -168,6 +177,7 @@ export default {
   FACE_MATCH_RULES_VERSION,
   matchRulesSignature,
   FACE_ANALYZER_VERSION,
+  needsFaceAnalysis,
   parseAnalyzerVersion,
   DESCRIPTOR_LENGTH,
   DEFAULT_MATCH_THRESHOLD,

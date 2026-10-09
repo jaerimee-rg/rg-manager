@@ -128,6 +128,26 @@ describe('reanalyzeAlbum', () => {
     expect(cropFaces).not.toHaveBeenCalled();
   });
 
+  it('shouldStop 이 true 가 되면 다음 사진부터 멈춘다 — 못 본 사진은 서버 목록에 그대로 남는다', async () => {
+    serve([3, 7, 9]);
+    detectFaces.mockResolvedValue([FACE]);
+    let stop = false;
+    detectFaces.mockImplementation(async () => { stop = true; return [FACE]; });   // 첫 장을 보는 사이 화면을 떠났다
+
+    const result = await reanalyzeAlbum('/api/events/31', { shouldStop: () => stop });
+
+    expect(result).toEqual({ done: 1, found: 1, failed: 0 });
+    expect(detectFaces).toHaveBeenCalledTimes(1);
+    expect(fetchWithAuth.mock.calls.filter(([url]) => url.includes('/faces'))).toHaveLength(1);
+  });
+
+  it('처음부터 멈춰 있으면 목록도 받지 않는다', async () => {
+    serve([3]);
+
+    await expect(reanalyzeAlbum('/api/events/31', { shouldStop: () => true })).resolves.toEqual({ done: 0, found: 0, failed: 0 });
+    expect(fetchWithAuth).not.toHaveBeenCalled();
+  });
+
   it('목록을 못 받으면 서버의 안내로 던진다', async () => {
     fetchWithAuth.mockResolvedValue({ ok: false, status: 400, json: () => Promise.resolve({ error: 'Drive 연결이 끊겼어요' }) });
 

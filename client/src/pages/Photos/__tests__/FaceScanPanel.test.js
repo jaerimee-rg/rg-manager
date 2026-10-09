@@ -141,4 +141,56 @@ describe('FaceScanPanel — 앨범의 [얼굴 찾기]', () => {
     await act(async () => { report(crops(4, 1)); });
     expect(shownSrcs(screen.getByRole('list', { name: '찾은 얼굴 1개' }))).toEqual(['data:image/jpeg;base64,4-0']);
   });
+
+  describe('autoStart — 앨범을 열면 누르지 않아도 찾는다', () => {
+    it('찾을 사진이 있으면 바로 시작하고, 화면에 한 번만 — 끝난 뒤 남은 것은 버튼으로', async () => {
+      reanalyzeAlbum.mockResolvedValue({ done: 2, found: 1, failed: 1 });
+      const onDone = jest.fn();
+      let rerender;
+      await act(async () => {
+        ({ rerender } = render(<FaceScanPanel apiBase="/api/events/31" count={2} onDone={onDone} autoStart />));
+      });
+
+      expect(reanalyzeAlbum).toHaveBeenCalledTimes(1);
+      expect(onDone).toHaveBeenCalledWith({ done: 2, found: 1, failed: 1 });
+      expect(screen.getByText(/1장은 읽지 못했어요/)).toBeInTheDocument();
+
+      // 앨범을 다시 읽어 읽지 못한 1장이 남아도, 결과를 닫아도 다시 돌지 않는다
+      await act(async () => { rerender(<FaceScanPanel apiBase="/api/events/31" count={1} onDone={onDone} autoStart />); });
+      fireEvent.click(screen.getByRole('button', { name: '닫기' }));
+      expect(reanalyzeAlbum).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('button', { name: '얼굴 찾기' })).toBeEnabled();
+    });
+
+    it('찾을 사진이 없으면 시작하지 않는다 — 나중에 생기면(업로드 뒤 앨범을 다시 읽으면) 그때 시작한다', async () => {
+      reanalyzeAlbum.mockResolvedValue({ done: 1, found: 0, failed: 0 });
+      let rerender;
+      await act(async () => {
+        ({ rerender } = render(<FaceScanPanel apiBase="/api/events/31" count={0} autoStart />));
+      });
+      expect(reanalyzeAlbum).not.toHaveBeenCalled();
+
+      await act(async () => { rerender(<FaceScanPanel apiBase="/api/events/31" count={1} autoStart />); });
+      expect(reanalyzeAlbum).toHaveBeenCalledTimes(1);
+    });
+
+    it('autoStart 가 없으면 누를 때만', async () => {
+      await act(async () => { render(<FaceScanPanel apiBase="/api/events/31" count={2} />); });
+      expect(reanalyzeAlbum).not.toHaveBeenCalled();
+    });
+
+    it('화면을 떠나면 멈추라고 알린다 (shouldStop)', async () => {
+      let options;
+      reanalyzeAlbum.mockImplementation((apiBase, opts) => { options = opts; return new Promise(() => {}); });
+      let unmount;
+      await act(async () => {
+        ({ unmount } = render(<FaceScanPanel apiBase="/api/events/31" count={3} autoStart />));
+      });
+
+      expect(options.shouldStop()).toBe(false);
+      unmount();
+      expect(options.shouldStop()).toBe(true);
+    });
+  });
 });
+

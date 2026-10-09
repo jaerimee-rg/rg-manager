@@ -6,6 +6,7 @@ const query = jest.fn().mockResolvedValue({ rows: [] });
 jest.unstable_mockModule('../../database.js', () => ({ default: { query } }));
 
 const { default: EventMedia, needsFaceAnalysisSql } = await import('../EventMedia.js');
+const { needsFaceAnalysis } = await import('../../utils/faceVector.js');
 
 const squash = (sql) => sql.replace(/\s+/g, ' ').trim();
 const lastCall = () => query.mock.calls.at(-1);
@@ -24,6 +25,25 @@ describe('needsFaceAnalysisSql', () => {
 
   it('별칭 없이도 쓴다', () => {
     expect(needsFaceAnalysisSql()).toContain(`kind = 'image' AND ("faceStatus" IN`);
+  });
+});
+
+describe('needsFaceAnalysis (utils/faceVector.js) — needsFaceAnalysisSql 과 같은 조건을 행 하나에', () => {
+  const media = (overrides) => ({ kind: 'image', faceStatus: 'done', faceAnalyzerVersion: 3, ...overrides });
+
+  it.each([
+    ['못 찾음(pending)', media({ faceStatus: 'pending' }), true],
+    ['실패(failed)', media({ faceStatus: 'failed' }), true],
+    ['건너뜀(skipped)', media({ faceStatus: 'skipped' }), true],
+    ['예전 방식으로 찾음(버전 2)', media({ faceAnalyzerVersion: 2 }), true],
+    ['버전 기록 없음', media({ faceAnalyzerVersion: null }), true],
+    ['예전 방식 "얼굴 없음"', media({ faceStatus: 'none', faceAnalyzerVersion: 2 }), true],
+    ['지금 방식으로 찾음', media({}), false],
+    ['지금 방식 "얼굴 없음"', media({ faceStatus: 'none' }), false],
+    ['영상은 찾지 않는다', media({ kind: 'video', faceStatus: 'skipped', faceAnalyzerVersion: null }), false],
+    ['없는 행', null, false]
+  ])('%s', (_, row, expected) => {
+    expect(needsFaceAnalysis(row)).toBe(expected);
   });
 });
 

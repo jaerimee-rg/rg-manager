@@ -297,7 +297,7 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     await expect(page.getByRole('button', { name: '사진 올리기' }).first()).toBeDisabled();
   });
 
-  test('[얼굴 찾기] — 예전 방식으로 분석한 사진을 분석 서버로 다시 찾아 저장한다 (Google 연결 없이도)', async ({ page, request }) => {
+  test('[얼굴 찾기] — 앨범을 열면 누르지 않아도 예전 방식·실패한 사진을 분석 서버로 다시 찾아 저장한다 (Google 연결 없이도)', async ({ page, request }) => {
     const engine = await request.get('/api/face-engine/health');
     test.skip(!engine.ok(), '얼굴 분석 서버가 없다 — e2e/fake-face-engine.mjs 를 띄우고 서버에 FACE_ENGINE_URL 을 주면 돈다');
     const id = sessions.album.faceScanEventId;
@@ -309,10 +309,8 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
       return route.fulfill({ contentType: 'image/png', body: FACELESS_PNG.buffer, headers: { 'Access-Control-Allow-Origin': '*' } });
     });
 
+    // 버튼을 누르지 않는다 — 열자마자 저절로 돈다
     await page.goto(`/photos/${id}`);
-    await expect(page.getByText('얼굴을 찾아 볼 사진이 2장 있어요', { exact: false })).toBeVisible();
-    await page.getByRole('button', { name: '얼굴 찾기' }).click();
-
     await expect(page.getByText(/사진 2장을 다시 봤어요\. 0장에서 얼굴을 찾았어요\./)).toBeVisible({ timeout: 20_000 });
     expect(asked).toHaveLength(2);
     expect(asked.every((url) => /\/d\/e2e-file-.+=s1920$/.test(url))).toBe(true);
@@ -343,8 +341,7 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
       if (request.method() === 'POST' && /\/media\/\d+\/faces$/.test(request.url())) saved.push(request.postDataJSON());
     });
 
-    await page.goto(`/photos/${sessions.album.faceThumbEventId}`);
-    await page.getByRole('button', { name: '얼굴 찾기' }).click();
+    await page.goto(`/photos/${sessions.album.faceThumbEventId}`);   // 열면 저절로 찾는다
     await expect(page.getByText(/사진 1장을 다시 봤어요\. 1장에서 얼굴을 찾았어요\./)).toBeVisible({ timeout: 20_000 });
 
     // 저장한 얼굴 수만큼 결과 안내 아래에 작은 얼굴 그림이 남는다

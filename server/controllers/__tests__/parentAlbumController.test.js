@@ -60,7 +60,8 @@ jest.unstable_mockModule('../../services/albumService.js', () => ({
     deleteMedia: jest.fn(),
     matchStudentAcrossAlbums: jest.fn().mockResolvedValue({ albums: 2, photos: 11, candidates: 3 }),
     ensureAlbumsMatched: jest.fn().mockResolvedValue(0),
-    markAlbumsStale: jest.fn().mockResolvedValue(undefined)
+    markAlbumsStale: jest.fn().mockResolvedValue(undefined),
+    indexFaces: jest.fn().mockResolvedValue({ faceStatus: 'done', faceCount: 2 })
   }
 }));
 jest.unstable_mockModule('../../utils/googleDrive.js', () => {
@@ -84,7 +85,8 @@ const GoogleDriveAccount = (await import('../../models/GoogleDriveAccount.js')).
 const ParentInvite = (await import('../../models/ParentInvite.js')).default;
 const albumService = (await import('../../services/albumService.js')).default;
 const {
-  listAlbums, listMedia, listPeople, createUploads, deleteMedia, confirmTag, addFace, deleteFace, uploadLabelChild
+  listAlbums, listMedia, listPeople, createUploads, deleteMedia, confirmTag, addFace, deleteFace, uploadLabelChild,
+  saveOwnFaces
 } = await import('../parentAlbumController.js');
 
 const parent = { id: 42, username: '하은엄마', role: 'parent' };
@@ -687,3 +689,77 @@ describe('deleteFace', () => {
     expect(res.status).toHaveBeenCalledWith(403);
   });
 });
+
+/**
+ * 업로드 때 분석이 실패한 사진을 업로드 시트가 다 올린 뒤 다시 분석해 보내는 곳 — 내가 올린, 아직 분석이 필요한 사진만.
+ */
+describe('saveOwnFaces — 내가 올린 사진의 얼굴 다시 저장', () => {
+  const FACES = [{ box: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 }, score: 0.9, descriptor: DESCRIPTOR }];
+  const photo = (overrides = {}) => ({
+    id: 70, eventId: 3, kind: 'image', status: 'ready', uploaderUserId: 42, faceStatus: 'skipped', faceAnalyzerVersion: null,
+    ...overrides
+  });
+
+  beforeEach(() => {
+    Event.getPublishedForParent.mockResolvedValue(event({ albumAudience: 'all' }));
+    req.params = { id: '3', mediaId: '70' };
+    req.body = { faces: FACES, analyzerVersion: 3 };
+    EventMedia.getById.mockResolvedValue(photo());
+  });
+
+  it('업로드 때 분석하지 못한(skipped) 내 사진이면 저장하고 매칭까지 한다', async () => {
+    await saveOwnFaces(req, res);
+
+    expect(albumService.indexFaces).toHaveBeenCalledWith(expect.objectContaining({ id: 3 }), expect.objectContaining({ id: 70 }), FACES, { analyzerVersion: 3 });
+    expect(res.json).toHaveBeenCalledWith({ faceStatus: 'done', faceCount: 2 });
+  });
+
+  it('남이 올린 사진은 403', async () => {
+    EventMedia.getById.mockResolvedValue(photo({ uploaderUserId: 7 }));
+
+    await saveOwnFaces(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(albumService.indexFaces).not.toHaveBeenCalled();
+  });
+
+  it('이미 지금 방식으로 분석된 사진은 덮어쓰지 않는다 (409)', async () => {
+    EventMedia.getById.mockResolvedValue(photo({ faceStatus: 'done', faceAnalyzerVersion: 3 }));
+
+    await saveOwnFaces(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json.mock.calls[0][0].reason).toBe('already_analyzed');
+    expect(albumService.indexFaces).not.toHaveBeenCalled();
+  });
+
+  it('다른 앨범의 사진·다 올라가지 않은 사진은 404', async () => {
+    EventMedia.getById.mockResolvedValue(photo({ eventId: 99 }));
+    await saveOwnFaces(req, res);
+    expect(res.status).toHaveBeenLastCalledWith(404);
+
+    EventMedia.getById.mockResolvedValue(photo({ status: 'uploading' }));
+    await saveOwnFaces(req, res);
+    expect(res.status).toHaveBeenLastCalledWith(404);
+    expect(albumService.indexFaces).not.toHaveBeenCalled();
+  });
+
+  it('볼 수 없는 앨범이면 사진을 읽지도 않는다', async () => {
+    Event.getPublishedForParent.mockResolvedValue(event({ albumPublished: false }));
+
+    await saveOwnFaces(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(EventMedia.getById).not.toHaveBeenCalled();
+  });
+
+  it('분석 결과가 배열이 아니면 400 — 실패(null)를 "얼굴 없음" 으로 바꾸지 않는다', async () => {
+    req.body = { faces: null };
+
+    await saveOwnFaces(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(albumService.indexFaces).not.toHaveBeenCalled();
+  });
+});
+

@@ -14,7 +14,7 @@ import { albumPeople, findPerson, toPersonView, parentPeopleOrder } from '../ser
 import { DriveError } from '../utils/googleDrive.js';
 import { isConfirmedParent, confirmedChildIds, canViewAlbum, canUpload, canDeleteMedia, reasonMessage } from '../utils/albumAccess.js';
 import { toParentMedia, toParentAlbum } from '../utils/mediaSerializer.js';
-import { encodeDescriptor, isValidDescriptor } from '../utils/faceVector.js';
+import { encodeDescriptor, isValidDescriptor, needsFaceAnalysis } from '../utils/faceVector.js';
 import { MAX_FILES_PER_UPLOAD } from '../utils/mediaValidation.js';
 
 /**
@@ -210,6 +210,42 @@ export const listMedia = async (req, res) => {
     });
   } catch (error) {
     console.error('학부모 앨범 조회 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/**
+ * POST /api/parent/events/:id/media/:mediaId/faces — 내가 올린 사진의 얼굴을 다시 찾아 저장한다.
+ *
+ * 업로드 때 분석이 실패한 사진(분석 서버가 깨어나는 중이었거나, 브라우저가 못 읽는 HEIC)을 업로드 시트가
+ * 다 올린 뒤 한 번 더 분석해 여기로 보낸다(선생님은 같은 일을 POST /api/events/:id/media/:mediaId/faces 로 한다).
+ * **내가 올린 사진, 아직 분석이 필요한 사진만** — 이미 지금 방식으로 분석된 사진은 덮어쓰지 않는다(409).
+ * 받는 값과 믿는 정도는 업로드 완료(completeUpload)에 실어 보내는 faces 와 같다.
+ */
+export const saveOwnFaces = async (req, res) => {
+  try {
+    const context = await loadAlbumContext(req);
+    if (context.error) return context.error(res);
+
+    const { event } = context;
+    const media = await EventMedia.getById(parseInt(req.params.mediaId, 10));
+    if (!media || media.eventId !== event.id || media.status !== 'ready') {
+      return res.status(404).json({ error: '사진을 찾을 수 없어요.' });
+    }
+    if (Number(media.uploaderUserId) !== Number(req.user.id)) {
+      return res.status(403).json({ error: '내가 올린 사진만 다시 분석할 수 있어요.' });
+    }
+    if (!needsFaceAnalysis(media)) {
+      return res.status(409).json({ error: '이미 분석한 사진이에요.', reason: 'already_analyzed' });
+    }
+    if (!Array.isArray(req.body?.faces)) return res.status(400).json({ error: '얼굴 분석 결과가 없어요.' });
+
+    const result = await albumService.indexFaces(event, media, req.body.faces, {
+      analyzerVersion: req.body?.analyzerVersion
+    });
+    res.json({ faceStatus: result.faceStatus, faceCount: result.faceCount });
+  } catch (error) {
+    console.error('학부모 얼굴 저장 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
   }
 };
@@ -501,6 +537,6 @@ export const deleteFace = async (req, res) => {
 };
 
 export default {
-  listAlbums, listMedia, listPeople, createUploads, completeUpload, deleteMedia, confirmTag,
+  listAlbums, listMedia, listPeople, createUploads, completeUpload, saveOwnFaces, deleteMedia, confirmTag,
   listFaces, addFace, deleteFace
 };

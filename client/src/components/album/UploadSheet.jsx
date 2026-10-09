@@ -3,7 +3,7 @@ import { fetchWithAuth } from '../../utils/api';
 import { partitionFiles, readTakenAt, makePreview, MAX_FILES } from '../../utils/imagePrep';
 import { uploadToDrive } from '../../utils/driveUpload';
 import { ANALYSIS_LONG_SIDE, FACE_ANALYZER_VERSION, detectFaces } from '../../utils/faceClient';
-import { formatSize } from '../../utils/mediaUrls';
+import { analysisImageUrl, formatSize } from '../../utils/mediaUrls';
 import { todayString } from '../../utils/eventFormat';
 import {
   folderNameFrom, formatShortDate, isPhotoFolder, newFolderProblem, publishPlaces, targetState, uploadPublishNote,
@@ -21,9 +21,12 @@ const NEW_FOLDER = 'new';
  *
  * 흐름: (이벤트 고르기) → 파일 선택 → (형식·크기로 거르기) → 서버에서 세션 발급
  *      → 브라우저가 Drive 로 직접 전송(진행률) → 사진이면 얼굴 특징값 계산
- *      → 완료 보고 → (선생님: "다 올리면 바로 공개" 를 골랐으면 공개).
+ *      → 완료 보고 → (얼굴 계산이 실패한 사진만 한 번 더) → (선생님: "다 올리면 바로 공개" 를 골랐으면 공개).
  *      얼굴 계산이 실패해도 업로드는 성공으로 끝난다 — faces 를 null 로 보내면 서버가
  *      '분석 안 됨'(skipped)으로 남긴다. [] 는 "얼굴 없음" 이라 실패에 쓰면 안 된다.
+ *      실패한 사진은 다 올린 뒤 **자동으로 한 번 더** 찾아 POST .../media/:id/faces 로 저장한다 — 분석 서버가 쉬다
+ *      깨어나느라 첫 요청이 실패했거나, 브라우저가 못 읽는 형식(안드로이드 HEIC)이면 Drive 가 만든 JPEG 로 본다.
+ *      그래도 안 되면 선생님이 앨범을 열 때 자동으로 다시 찾는다(FaceScanPanel autoStart).
  *
  * apiBase 예) '/api/events/3'  또는  '/api/parent/events/3'
  *
@@ -75,6 +78,7 @@ function UploadSheet({
   const [progress, setProgress] = useState({});     // index → 0~100
   const [failed, setFailed] = useState({});         // index → 메시지
   const [summary, setSummary] = useState(null);
+  const [retrying, setRetrying] = useState(null);   // { done, total } — 얼굴을 다시 찾는 중
   const [error, setError] = useState('');
   const inputRef = useRef(null);
 
@@ -147,6 +151,7 @@ function UploadSheet({
       let uploaded = 0;
       let analyzed = 0;
       let skipped = 0;
+      const retry = [];   // 올라갔지만 얼굴 계산이 실패한 사진 — 다 올린 뒤 한 번 더
 
       for (let i = 0; i < accepted.length; i += 1) {
         const entry = accepted[i];
@@ -167,8 +172,10 @@ function UploadSheet({
         }
 
         let faces = null;
+        let unreadable = false;
         if (entry.kind === 'image') {
           const preview = await makePreview(entry.file, ANALYSIS_LONG_SIDE);   // HEIC 처럼 브라우저가 못 읽으면 null
+          unreadable = !preview;
           if (preview) faces = await detectFaces(preview);  // 분석이 실패해도 null
           if (!faces) skipped += 1;
           else if (faces.length) analyzed += 1;
@@ -184,11 +191,40 @@ function UploadSheet({
           })
         });
 
-        if (completed.ok) uploaded += 1;
-        else {
+        if (completed.ok) {
+          uploaded += 1;
+          if (entry.kind === 'image' && !faces) {
+            retry.push({ mediaId: session.mediaId, file: entry.file, driveFileId: result.file?.id, unreadable });
+          }
+        } else {
           const body = await completed.json().catch(() => ({}));
           setFailed((prev) => ({ ...prev, [i]: body.error || '저장하지 못했어요' }));
         }
+      }
+
+      // 4') 얼굴 계산이 실패한 사진만 한 번 더 — 그 사이 분석 서버가 깨어났다. 브라우저가 못 읽은 사진은 Drive 가 만든
+      //     JPEG(lh3 =s1920)로 본다. 저장은 업로드 완료와 따로(POST .../faces) — 사진은 이미 올라가 있다.
+      if (retry.length) {
+        setRetrying({ done: 0, total: retry.length });
+        for (let r = 0; r < retry.length; r += 1) {
+          const item = retry[r];
+          const source = item.unreadable
+            ? analysisImageUrl(item.driveFileId)
+            : await makePreview(item.file, ANALYSIS_LONG_SIDE);
+          const faces = source ? await detectFaces(source) : null;
+          if (faces) {
+            const saved = await fetchWithAuth(`${base}/media/${item.mediaId}/faces`, {
+              method: 'POST',
+              body: JSON.stringify({ faces, analyzerVersion: FACE_ANALYZER_VERSION })
+            }).catch(() => null);
+            if (saved?.ok) {
+              skipped -= 1;
+              if (faces.length) analyzed += 1;
+            }
+          }
+          setRetrying({ done: r + 1, total: retry.length });
+        }
+        setRetrying(null);
       }
 
       // 5) "다 올리면 바로 공개" — 하나도 못 올렸으면 공개하지 않는다(빈 앨범을 공개하지 않게).
@@ -425,6 +461,11 @@ function UploadSheet({
       {phase === 'busy' && (
         <Stack gap={4}>
           <Callout tone="brand">앱을 닫지 말아 주세요. 사진은 Google Drive 로 바로 올라가요.</Callout>
+          {retrying && (
+            <Callout tone="neutral">
+              얼굴을 찾지 못한 사진을 한 번 더 보고 있어요… {retrying.done} / {retrying.total}장
+            </Callout>
+          )}
           <List>
             {accepted.map((entry, i) => (
               <FileRow
@@ -458,7 +499,7 @@ function UploadSheet({
           )}
           <Stack gap={2} className="ui-text-sm ui-text-muted">
             {summary.analyzed > 0 && <div>얼굴 분석 {summary.analyzed}장 완료 — 우리 아이 사진에 자동으로 모아드려요</div>}
-            {summary.skipped > 0 && <div>{summary.skipped}장은 분석하지 못했어요 (선생님이 다시 분석할 수 있어요)</div>}
+            {summary.skipped > 0 && <div>{summary.skipped}장은 아직 얼굴을 찾지 못했어요 — 선생님 앨범에서 자동으로 다시 찾아요</div>}
             {summary.videos > 0 && <div>영상은 얼굴을 찾지 않아요</div>}
             {Object.keys(failed).length > 0 && (
               <div className="ui-text-danger">{Object.keys(failed).length}개는 올리지 못했어요</div>

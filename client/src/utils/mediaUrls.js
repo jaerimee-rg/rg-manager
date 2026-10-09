@@ -12,6 +12,13 @@ const FILE_BASE = 'https://drive.google.com/file/d';
 export const thumbnailUrl = (driveFileId, size = 400) =>
   (driveFileId ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=w${size}-h${size}-c-rw` : null);
 
+/**
+ * 얼굴 분석용 사진 — 긴 변 1920, Drive 가 만든 JPEG(HEIC 도 JPEG 로 준다), CORS 허락(서버 albumController.analysisImageUrl 과 같은 주소).
+ * 업로드 직후 브라우저가 원본을 못 읽었을 때(안드로이드 HEIC) 이것으로 다시 분석한다.
+ */
+export const analysisImageUrl = (driveFileId) =>
+  (driveFileId ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=s1920` : null);
+
 export const originalUrl = (driveFileId) =>
   (driveFileId ? `${FILE_BASE}/${encodeURIComponent(driveFileId)}/view` : null);
 
