@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { existsSync, readFileSync } from 'fs';
+import { readFileSync } from 'fs';
 import { loginAs, api, stubPortraitThumbnails, FACELESS_PNG } from './helpers.mjs';
 import { FAKE_PLACE, stubKakaoMaps } from './kakao-fakes.mjs';
 
@@ -325,12 +325,18 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
   });
 
   test('[얼굴 찾기] — 찾은 얼굴을 작게 잘라 보여 준다 (그림은 브라우저에서만 쓰고 서버로 보내지 않는다)', async ({ page }) => {
-    test.setTimeout(120_000);
-    // 얼굴 셋이 나오는 사진 — 얼굴 분석 라이브러리(@vladmandic/face-api)에 들어 있는 예제 사진을 빌려 쓴다
-    const facesPhoto = new URL('../node_modules/@vladmandic/face-api/demo/sample1.jpg', import.meta.url);
-    test.skip(!existsSync(facesPhoto), '얼굴이 나오는 예제 사진이 없다(@vladmandic/face-api 미설치)');
+    // 잘라 내기는 저장된 상자(0~1)만 쓰므로 얼굴을 어떻게 찾았는지와 상관없다 — 분석 결과는 얼굴 셋으로 정해 주고,
+    // Drive 사진(lh3) 자리에는 아무 그림이나 넣는다. 진짜 분석(face_engine/)은 face_engine/tests 가 본다.
     await page.route('https://lh3.googleusercontent.com/**', (route) => route.fulfill({
-      contentType: 'image/jpeg', body: readFileSync(facesPhoto), headers: { 'Access-Control-Allow-Origin': '*' }
+      contentType: 'image/png', body: FACELESS_PNG.buffer, headers: { 'Access-Control-Allow-Origin': '*' }
+    }));
+    const descriptor = Array.from({ length: 512 }, (_, i) => (i % 2 ? -0.01 : 0.01));   // 픽스처 기준 얼굴과 직각 — 태그가 생기지 않게
+    await page.route('**/api/face-engine/detect', (route) => route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        analyzerVersion: 3,
+        faces: [0.1, 0.4, 0.7].map((x) => ({ box: { x, y: 0.2, w: 0.2, h: 0.3 }, score: 0.9, descriptor }))
+      })
     }));
     const saved = [];
     page.on('request', (request) => {
@@ -339,12 +345,12 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
 
     await page.goto(`/photos/${sessions.album.faceThumbEventId}`);
     await page.getByRole('button', { name: '얼굴 찾기' }).click();
-    await expect(page.getByText(/사진 1장을 다시 봤어요\. 1장에서 얼굴을 찾았어요\./)).toBeVisible({ timeout: 90_000 });
+    await expect(page.getByText(/사진 1장을 다시 봤어요\. 1장에서 얼굴을 찾았어요\./)).toBeVisible({ timeout: 20_000 });
 
     // 저장한 얼굴 수만큼 결과 안내 아래에 작은 얼굴 그림이 남는다
     expect(saved).toHaveLength(1);
     const found = saved[0].faces.length;
-    expect(found).toBeGreaterThanOrEqual(2);
+    expect(found).toBe(3);
     const strip = page.getByRole('list', { name: `찾은 얼굴 ${found}개` });
     await expect(strip.locator('img')).toHaveCount(found);
     const crops = await strip.locator('img').evaluateAll((images) => images.map((image) => ({
