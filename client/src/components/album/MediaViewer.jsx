@@ -43,10 +43,12 @@ import { formatTime, formatDayLabel, dayKeyOf, uploaderLabel } from '../../utils
  *
  * onCoverChange(item, on) 를 주면(선생님 화면) 정보 줄에 [대표 사진으로] 가 생긴다 — 사진 목록 카드의 표지로 쓸 사진(coverLimit 장까지).
  * coverIds 에 든 장에서는 [대표 사진 n] 으로 눌린 채 보이고, 다시 누르면 푼다. 이미 coverLimit 장이면 다른 장의 버튼은 잠긴다.
+ * coverPending 이면(고친 대표 사진을 아직 저장하지 않았다) 버튼 옆에 "[저장하기] 를 눌러야 반영돼요" 를 붙인다.
  * 숨긴 사진은 표지로 쓰이지 않아 버튼이 없다.
  */
 function MediaViewer({
-  items = [], startId, onClose, onDelete, onCaptionSave, coverIds = [], coverLimit = 4, onCoverChange, onShow, showViews = false
+  items = [], startId, onClose, onDelete, onCaptionSave, coverIds = [], coverLimit = 4, coverPending = false, onCoverChange,
+  onShow, showViews = false
 }) {
   const [index, setIndex] = useState(() => {
     const found = items.findIndex((item) => item.id === startId);
@@ -103,6 +105,7 @@ function MediaViewer({
     order: coverOrder,
     full: coverOrder === 0 && coverIds.length >= coverLimit,
     limit: coverLimit,
+    pending: coverPending,
     saving: coverSaving,
     toggle: async () => {
       setCoverSaving(true);
@@ -336,6 +339,7 @@ function MediaInfo({ item, overlay = false, onEditCaption, cover, showViews = fa
           {cover.on ? `대표 사진 ${cover.order}` : cover.full ? `대표 사진 ${cover.limit}장 다 골랐어요` : '대표 사진으로'}
         </button>
       )}
+      {cover?.pending && <span style={entry}>[저장하기] 를 눌러야 반영돼요</span>}
     </div>
   );
 }

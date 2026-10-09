@@ -15,6 +15,7 @@ import PublishPanel from './PublishPanel';
 import FolderEditDialog from './FolderEditDialog';
 import FaceScanPanel from './FaceScanPanel';
 import CoverOrderPanel from './CoverOrderPanel';
+import { coversFromPicks, dropCovers, sameCovers, toggleCover } from './coverDraft';
 import ViewStatsPanel from './ViewStatsPanel';
 import PhotoGrid from './PhotoGrid';
 import {
@@ -28,8 +29,9 @@ const PAGE = 60;
  * 선생님 사진 메뉴 — 앨범 하나 (docs/photo-menu FR-520~529).
  *
  * 위: 학부모 공개 패널 + Drive 폴더 카드. 아래: 얼굴 목록(누르면 그 사람 사진만), 필터 칩과 사진 칸,
- * 고르기 모드(숨기기 · 다시 보이기 · 지우기 · 대표 사진 만들기). 사진을 열어 [대표 사진으로] 를 눌러도 표지가 된다(4장까지).
- * 대표 사진 칸에서 끌어서 놓아 표지 순서를 바꾼다.
+ * 고르기 모드(숨기기 · 다시 보이기 · 지우기 · 대표 사진 만들기). 사진을 열어 [대표 사진으로] 를 눌러도 표지로 고른다(4장까지).
+ * 대표 사진 칸의 [수정] 에서 끌어서 놓아 순서를 바꾸고 ✕ 로 뺀다. 대표 사진은 이 세 곳 어디서 고쳐도 **[저장하기] 를 눌러야**
+ * 반영된다 — 그 전까지는 화면의 초안(coverDraft)일 뿐이다.
  * Google 연결이 끊기거나 폴더가 사라져도 읽기는 계속되고 쓰기 버튼만 막힌다.
  */
 function PhotoAlbum() {
@@ -54,6 +56,9 @@ function PhotoAlbum() {
   const [confirmFolderDelete, setConfirmFolderDelete] = useState(false);
   const [deletingFolder, setDeletingFolder] = useState(false);
   const [viewerId, setViewerId] = useState(null);
+  // 대표 사진 고치기 초안 — null 이면 고치는 중이 아니다. [저장하기] 를 누르기 전까지 서버에 보내지 않는다
+  const [coverDraft, setCoverDraft] = useState(null);
+  const coverPanelRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState('');
   const toastTimer = useRef(null);
@@ -197,6 +202,8 @@ function PhotoAlbum() {
       showToast(`${payload.affected ?? ids.length}장 ${done}`);
       setSelected([]);
       setSelecting(false);
+      // 숨기거나 지운 사진은 대표 사진이 될 수 없다 — 고치던 초안에서도 뺀다
+      if (action !== 'show') setCoverDraft((prev) => (prev ? dropCovers(prev, ids) : prev));
       reloadAll();
     } finally {
       setBusy(false);
@@ -220,21 +227,37 @@ function PhotoAlbum() {
   };
 
   // 대표 사진(최대 4장) — 사진 목록 카드의 표지. 고른 순서가 표지의 순서다. 앱 안의 값이라 Google 연결이 끊겨도 바꿀 수 있다.
-  // 됐다는 알림은 띄우지 않는다 — 뷰어의 버튼이 노란 [대표 사진 n] 으로 바뀌는 것이 알림이고, 토스트는 그 버튼을 덮는다
-  const setCover = (item, on) => patchAlbum(on ? { addCoverMediaId: item.id } : { removeCoverMediaId: item.id });
+  // 고르기 · 대표 사진 칸 · 사진 보기 어디서 고쳐도 초안만 바뀌고, [저장하기] 가 PATCH {coverMediaIds} 로 한 번에 보낸다.
+  const savedCovers = album?.covers || [];
+  const maxCovers = album?.maxCovers || 4;
+  const shownCovers = coverDraft ?? savedCovers;
+  const shownCoverIds = shownCovers.map((cover) => cover.id);
+  const coverDirty = Boolean(coverDraft) && !sameCovers(coverDraft, savedCovers);
 
-  // 고르기에서 고른 것(1~4장)을 고른 순서대로 한 번에 대표 사진으로 — 지금 대표 사진은 이것으로 바뀐다
-  const makeCovers = async (ids) => {
-    const ok = await patchAlbum({ coverMediaIds: ids }, `대표 사진 ${ids.length}장을 정했어요 · 고른 순서대로 표지에 놓여요`);
-    if (ok) {
-      setSelected([]);
-      setSelecting(false);
-    }
+  // 저장하지 않은 대표 사진이 있는데 새로고침·창 닫기를 하면 브라우저가 한 번 묻는다
+  useEffect(() => {
+    if (!coverDirty) return undefined;
+    const warn = (event) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [coverDirty]);
+
+  // 사진 보기의 [대표 사진으로] / [대표 사진 n] — 초안에 넣거나 뺀다(고치는 중이 아니었으면 지금 대표 사진에서 시작한다)
+  const toggleCoverDraft = (item) => setCoverDraft((prev) => toggleCover(prev ?? savedCovers, item, maxCovers));
+
+  // 고르기에서 고른 것(1~4장)을 고른 순서대로 초안으로 — 대표 사진 칸에서 확인하고 고친 뒤 [저장하기]
+  const makeCovers = (ids) => {
+    setCoverDraft(coversFromPicks(ids, items));
+    setSelected([]);
+    setSelecting(false);
+    coverPanelRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
   };
 
-  // 대표 사진 칸에서 끌어 바꾼 순서 저장 — 안 되면 앨범을 다시 읽어 칸을 되돌린다
-  const reorderCovers = async (ids) => {
-    if (!(await patchAlbum({ coverMediaIds: ids }))) loadAlbum();
+  const saveCovers = async () => {
+    const ok = await patchAlbum({ coverMediaIds: shownCoverIds }, shownCoverIds.length
+      ? `대표 사진 ${shownCoverIds.length}장을 저장했어요 · 사진 목록 카드에 반영돼요`
+      : '대표 사진을 모두 뺐어요 · 사진 목록 카드에는 최근 사진이 보여요');
+    if (ok) setCoverDraft(null);
   };
 
   if (notFound) {
@@ -265,7 +288,6 @@ function PhotoAlbum() {
   const anyHidden = selectedItems.some((item) => item.isHidden);
   const anyVisible = selectedItems.some((item) => !item.isHidden);
   // 고른 것을 한 번에 대표 사진으로 — 1~maxCovers 장, 숨긴 사진 없이
-  const maxCovers = album.maxCovers || 4;
   const coverBlock = selected.length > maxCovers ? `대표 사진은 ${maxCovers}장까지 골라 주세요`
     : anyHidden ? '숨긴 사진은 대표 사진이 될 수 없어요' : '';
   const nameDrift = hasAlbum && album.expectedFolderName && album.driveFolderName && album.expectedFolderName !== album.driveFolderName;
@@ -436,13 +458,17 @@ function PhotoAlbum() {
             </Card>
           </div>
 
-          <CoverOrderPanel
-            className="ui-mt-4"
-            covers={album.covers || []}
-            max={maxCovers}
-            disabled={busy}
-            onReorder={reorderCovers}
-          />
+          <div ref={coverPanelRef}>
+            <CoverOrderPanel
+              className="ui-mt-4"
+              covers={shownCovers}
+              max={maxCovers}
+              editing={Boolean(coverDraft)}
+              disabled={busy}
+              onEdit={() => setCoverDraft(savedCovers)}
+              onChange={setCoverDraft}
+            />
+          </div>
 
           <ViewStatsPanel className="ui-mt-4" stats={album.viewStats} top={album.topViewed || []} onOpen={setViewerId} />
 
@@ -488,7 +514,7 @@ function PhotoAlbum() {
               showUploader
               selectable={selecting}
               selected={selected}
-              coverIds={album.coverMediaIds || []}
+              coverIds={shownCoverIds}
               onOpen={(item) => setViewerId(item.id)}
               onToggle={(item) => setSelected((prev) => (prev.includes(item.id) ? prev.filter((id) => id !== item.id) : [...prev, item.id]))}
             />
@@ -510,11 +536,22 @@ function PhotoAlbum() {
               <Button
                 icon="star"
                 disabled={busy || !selected.length || Boolean(coverBlock)}
-                title={coverBlock || `고른 ${selected.length}장을 고른 순서대로 대표 사진으로 정해요`}
+                title={coverBlock || `고른 ${selected.length}장을 고른 순서대로 대표 사진 칸에 놓아요 — [저장하기] 를 눌러야 반영돼요`}
                 onClick={() => makeCovers(selected)}
               >
                 대표 사진 만들기
               </Button>
+            </StickyActions>
+          )}
+
+          {/* 대표 사진을 고치는 동안 — 어느 폭에서나 화면 아래에 붙어 있다(대표 사진 칸은 위쪽이라 고르기 막대처럼 맨 끝에 두면 안 보인다) */}
+          {coverDraft && !selecting && (
+            <StickyActions className="ui-cover-save-bar" role="region" aria-label="대표 사진 저장">
+              <span className="ui-cover-save-bar__note">
+                {coverDirty ? '대표 사진을 고쳤어요 — [저장하기] 를 눌러야 사진 목록에 반영돼요' : '대표 사진 수정 중 — 바꾼 것이 아직 없어요'}
+              </span>
+              <Button disabled={busy} onClick={() => setCoverDraft(null)}>취소</Button>
+              <Button variant="primary" icon="check" loading={busy} disabled={busy || !coverDirty} onClick={saveCovers}>저장하기</Button>
             </StickyActions>
           )}
         </>
@@ -554,9 +591,10 @@ function PhotoAlbum() {
           onDelete={locked ? undefined : (item) => { setViewerId(null); setConfirmDelete([item.id]); }}
           onCaptionSave={saveCaption}
           showViews
-          coverIds={album.coverMediaIds || []}
-          coverLimit={album.maxCovers || 4}
-          onCoverChange={setCover}
+          coverIds={shownCoverIds}
+          coverLimit={maxCovers}
+          coverPending={coverDirty}
+          onCoverChange={toggleCoverDraft}
         />
       )}
 

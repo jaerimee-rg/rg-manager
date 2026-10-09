@@ -3539,6 +3539,37 @@ a.ui-btn { text-decoration: none; }
 .ui-cover-order__preview-box { overflow: hidden; border: var(--stroke-thin); border-radius: var(--shape-box); }
 .ui-cover-order__preview-box .ui-album-card__cover { border-bottom: 0; }
 .ui-cover-order__hint { margin-top: var(--space-1); font-size: var(--text-xs); color: var(--pencil); }
+/* 고치는 중 칸 귀퉁이의 ✕ — 끄는 버튼과 따로 둔다(누르기가 끌기로 시작되지 않게) */
+.ui-cover-order__remove {
+  position: absolute;
+  top: -6px; right: -6px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 22px; height: 22px;
+  padding: 0;
+  border: var(--stroke-thin);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+.ui-cover-order__remove:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ui-cover-order__remove:disabled { cursor: progress; opacity: .6; }
+/* 대표 사진 저장 막대 — 고르기 막대와 달리 넓은 화면에서도 화면 아래에 붙는다(대표 사진 칸이 위쪽에 있어서) */
+.ui-cover-save-bar { flex-wrap: wrap; align-items: center; }
+.ui-sticky-actions.ui-cover-save-bar > .ui-cover-save-bar__note { flex: 1 1 100%; font-size: var(--text-xs); color: var(--pencil); }
+@media (min-width: 768px) {
+  .ui-sticky-actions.ui-cover-save-bar {
+    position: sticky;
+    flex-wrap: nowrap;
+    padding-inline: var(--shell-gutter);
+    border-top: var(--stroke);
+    background-color: var(--paper);
+    background-image: var(--grain);
+  }
+  .ui-sticky-actions.ui-cover-save-bar > .ui-cover-save-bar__note { flex: 1 1 auto; }
+}
 .ui-album-card__cover[data-empty] {
   display: flex;
   align-items: center;
