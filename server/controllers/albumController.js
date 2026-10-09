@@ -494,21 +494,39 @@ export const deletePerson = async (req, res) => {
   try {
     const event = await loadEvent(req);
     if (!event) return notFound(res);
-
-    const seenPhotoCount = req.query.photoCount === undefined ? undefined : Number(req.query.photoCount);
-    const result = await removePerson(event.id, req.params.key, { seenPhotoCount });
-    if (!result) return res.status(404).json({ error: '얼굴 목록이 바뀌었어요. 새로고침해 주세요.', personMissing: true });
-    if (result.blocked === 'student_person') {
-      return res.status(409).json({ error: '등록된 아이 얼굴은 목록에서 뺄 수 없어요.', reason: 'student_person' });
-    }
-    if (result.blocked === 'person_changed') {
-      return res.status(409).json({ error: '얼굴 목록이 바뀌었어요. 다시 확인해 주세요.', reason: 'person_changed' });
-    }
-    res.json(result);
+    removePersonResponse(res, await removePerson(event.id, req.params.key, { seenPhotoCount: seenPhotoCountOf(req) }));
   } catch (error) {
     console.error('얼굴 목록에서 빼기 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
   }
+};
+
+/**
+ * DELETE /api/albums/people/:key — 전체 사진(모든 폴더)의 얼굴 목록에서 관계없는 사람을 뺀다. 앨범 화면과 같은 규칙·응답이고,
+ * 모든 폴더를 함께 묶은 그 사람의 얼굴을 **내 모든 폴더에서** 지운다(사진은 그대로). 앨범이 하나도 없으면 그 사람도 없다(404).
+ */
+export const deleteAllPerson = async (req, res) => {
+  try {
+    const eventIds = (await myAlbums(req)).map((event) => event.id);
+    if (!eventIds.length) return removePersonResponse(res, null);
+    removePersonResponse(res, await removePerson(eventIds, req.params.key, { seenPhotoCount: seenPhotoCountOf(req) }));
+  } catch (error) {
+    console.error('전체 사진 얼굴 목록에서 빼기 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+const seenPhotoCountOf = (req) => (req.query.photoCount === undefined ? undefined : Number(req.query.photoCount));
+
+const removePersonResponse = (res, result) => {
+  if (!result) return res.status(404).json({ error: '얼굴 목록이 바뀌었어요. 새로고침해 주세요.', personMissing: true });
+  if (result.blocked === 'student_person') {
+    return res.status(409).json({ error: '등록된 아이 얼굴은 목록에서 뺄 수 없어요.', reason: 'student_person' });
+  }
+  if (result.blocked === 'person_changed') {
+    return res.status(409).json({ error: '얼굴 목록이 바뀌었어요. 다시 확인해 주세요.', reason: 'person_changed' });
+  }
+  return res.json(result);
 };
 
 /** 사진 빼기·되돌리기 결과 → 응답. 화면은 바뀐 key 로 그 사람을 계속 고르고 목록을 다시 읽는다 */
@@ -861,7 +879,7 @@ export const deleteMedia = async (req, res) => {
 };
 
 export default {
-  getAlbum, listPeople, deletePerson, listAllMedia, listAllPeople,
+  getAlbum, listPeople, deletePerson, deleteAllPerson, listAllMedia, listAllPeople,
   excludeAlbumPersonPhotos, restoreAlbumPersonPhotos, excludeAllPersonPhotos, restoreAllPersonPhotos,
   createAlbum, updateAlbum, refreshAlbum,
   listMedia, createUploads, completeUpload, bulkAction,

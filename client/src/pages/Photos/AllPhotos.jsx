@@ -19,7 +19,9 @@ const PAGE = 60;
  * 누르면 그 아이가 나온 사진만 모든 폴더에서 모아 보고, 다시 누르거나 [전체] 를 누르면 푼다.
  * 얼굴을 고르면 다른 사람 사진이 섞였을 때 [고르기] 로 골라 **이 얼굴에서 뺀다**("이 얼굴 아님", 사진은 그대로) — 뺀 사진은
  * [뺀 사진] 에서 다시 넣는다(PersonPhotosBar · personPhotos.js).
- * 사진을 열면 어느 폴더의 사진인지 보이고 설명을 고칠 수 있다. 숨기기 · 지우기 · 대표 사진 · 얼굴 통째로 빼기는 폴더 화면에서 한다 —
+ * 관계없는 사람(관중·다른 팀)은 얼굴을 **길게 눌러** 나온 X 로 얼굴 목록에서 통째로 뺀다 — 앨범 화면과 같고, 모든 폴더에서 그 사람의
+ * 얼굴만 지운다(사진은 그대로). 등록된 아이로 묶인 사람에게는 X 가 없다(removable: false).
+ * 사진을 열면 어느 폴더의 사진인지 보이고 설명을 고칠 수 있다. 숨기기 · 지우기 · 대표 사진은 폴더 화면에서 한다 —
  * 공개 여부와 Drive 연결이 폴더마다 다르다.
  */
 function AllPhotos() {
@@ -115,6 +117,33 @@ function AllPhotos() {
     if (removedView && chosen && !chosen.removedCount) setRemovedView(false);
   }, [removedView, chosen]);
 
+  // 얼굴 목록에서 관계없는 사람을 뺀다(길게 눌러 X) — 모든 폴더에서 그 사람의 얼굴과 자동 태그만, 사진은 그대로.
+  // 화면이 본 사진 수를 함께 보내 서버가 "같은 사람" 인지 확인한다 — 그 사이 묶음이 바뀌었으면 409 로 아무것도 지우지 않는다.
+  const removePerson = async (key) => {
+    const seen = people.find((one) => one.key === key);
+    try {
+      const response = await fetchWithAuth(
+        `/api/albums/people/${encodeURIComponent(key)}?photoCount=${seen?.photoCount ?? ''}`,
+        { method: 'DELETE' }
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const changed = payload.personMissing || payload.reason === 'person_changed';
+        showToast(changed ? '얼굴 목록이 바뀌었어요. 다시 확인해 주세요.' : (payload.error || '얼굴을 빼지 못했어요.'));
+        if (changed) loadPeople();
+        return;
+      }
+      showToast('얼굴을 목록에서 뺐어요 · 사진은 그대로 있어요');
+      // 고른 사람을 뺐으면 고른 것을 푼다 — 사진 목록은 그 변화로 다시 읽는다
+      if (person === key) choosePerson(null);
+      else loadMedia();
+      loadPeople();
+    } catch (removeError) {
+      console.error('얼굴 빼기 실패:', removeError);
+      showToast('얼굴을 빼지 못했어요.');
+    }
+  };
+
   // 고른 사진을 이 얼굴에서 빼거나(이 얼굴 아님) 다시 넣는다 — 사진은 그대로. 얼굴의 key 가 바뀌면 그 key 로 계속 본다
   const editSelected = async () => {
     const action = removedView ? 'restore' : 'exclude';
@@ -177,7 +206,7 @@ function AllPhotos() {
         </Card>
       ) : (
         <>
-          <FacePeopleStrip className="ui-mb-4" people={people} selected={person} onSelect={choosePerson} />
+          <FacePeopleStrip className="ui-mb-4" people={people} selected={person} onSelect={choosePerson} onRemove={removePerson} />
 
           {chosen && (
             <div className="ui-row ui-mb-3" data-gap="2" data-justify="between" data-align="start">

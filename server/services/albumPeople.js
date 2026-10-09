@@ -85,11 +85,12 @@ export const findPerson = (people, key) => (key ? people.find((person) => person
  * 되돌릴 길이 없다(blocked: 'student_person'). 선생님이 본 그 사람인지도 확인한다: 화면이 본 사진 수(seenPhotoCount)가
  * 지금 다시 묶은 사진 수와 다르면 그 사이 묶음이 바뀐 것이라 아무것도 지우지 않는다(blocked: 'person_changed').
  *
+ * scope: 앨범 하나(eventId — 앨범 화면) 또는 여러 앨범(eventIds — 전체 사진: 모든 폴더를 함께 묶은 그 사람을 모든 폴더에서 뺀다).
  * 한 트랜잭션: 태그 → 얼굴 → 사진별 얼굴 수. 태그를 먼저 지운다(얼굴을 먼저 지우면 "faceId" 가 NULL 이 돼 못 찾는다).
  * → { removedFaces, photos, removedTags } · { blocked } · 그 사이 묶음이 바뀌어 없는 사람이면 null
  */
-export const removePerson = async (eventId, key, { seenPhotoCount } = {}) => {
-  const person = findPerson(await albumPeople(eventId, { includeHidden: true }), key);
+export const removePerson = async (scope, key, { seenPhotoCount } = {}) => {
+  const person = findPerson(peopleOf(await loadScope(scope, { includeHidden: true })), key);
   if (!person) return null;
   if (person.studentId != null) return { blocked: 'student_person' };
   if (!Number.isInteger(seenPhotoCount) || seenPhotoCount !== person.photoCount) return { blocked: 'person_changed' };
@@ -98,7 +99,9 @@ export const removePerson = async (eventId, key, { seenPhotoCount } = {}) => {
   try {
     await client.query('BEGIN');
     const removedTags = await MediaTag.removeAutoTagsForFaces(person.faceIds, client);
-    const mediaIds = await MediaFace.deleteForAlbum(person.faceIds, eventId, client);
+    const mediaIds = Array.isArray(scope)
+      ? await MediaFace.deleteForAlbums(person.faceIds, scope, client)
+      : await MediaFace.deleteForAlbum(person.faceIds, scope, client);
     const photos = [...new Set(mediaIds)];
     await EventMedia.refreshFaceCounts(photos, client);
     await client.query('COMMIT');

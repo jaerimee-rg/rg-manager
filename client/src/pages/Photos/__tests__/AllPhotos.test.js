@@ -91,10 +91,46 @@ describe('AllPhotos — 전체 사진 (모든 폴더)', () => {
     expect(screen.getByRole('button', { name: '모든 사진' })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('여기서는 얼굴을 빼지 않는다 — 길게 눌러도(오른쪽 클릭) X 가 없다', async () => {
+  it('얼굴을 길게 누르면(오른쪽 클릭) X — 누르면 모든 폴더에서 그 사람을 빼고(본 사진 수와 함께) 목록·사진을 다시 읽는다', async () => {
+    const calls = await renderPage();
+    const before = calls.people;
+    const removeCalls = () => fetchWithAuth.mock.calls.filter(([, options]) => options?.method === 'DELETE');
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: '얼굴 2 · 사진 1장' }));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '얼굴 2 목록에서 빼기' })); });
+
+    expect(removeCalls()).toEqual([['/api/albums/people/p42?photoCount=1', { method: 'DELETE' }]]);
+    expect(screen.getByText('얼굴을 목록에서 뺐어요 · 사진은 그대로 있어요')).toBeInTheDocument();
+    expect(calls.people).toBeGreaterThan(before);
+  });
+
+  it('고른 사람을 빼면 고른 것을 풀고 전체 사진으로 돌아간다', async () => {
     await renderPage();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '얼굴 1 · 사진 2장' })); });
+    expect(mediaUrls().at(-1)).toContain('person=p11');
+
     fireEvent.contextMenu(screen.getByRole('button', { name: '얼굴 1 · 사진 2장' }));
-    expect(screen.queryByRole('button', { name: /목록에서 빼기/ })).not.toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '얼굴 1 목록에서 빼기' })); });
+
+    expect(mediaUrls().at(-1)).toBe('/api/albums/media?limit=60');
+  });
+
+  it('그 사이 묶음이 바뀌었으면(409 person_changed) 아무것도 안 지워졌다고 알리고 목록을 다시 읽는다 · 등록된 아이(removable: false)에는 X 가 없다', async () => {
+    const calls = await renderPage({ people: [{ ...PEOPLE[0], removable: false }, PEOPLE[1]] });
+    const base = fetchWithAuth.getMockImplementation();
+    fetchWithAuth.mockImplementation((url, options = {}) => (
+      options.method === 'DELETE' ? ok({ error: '얼굴 목록이 바뀌었어요.', reason: 'person_changed' }, 409) : base(url, options)
+    ));
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: '얼굴 1 · 사진 2장' }));
+    expect(screen.queryByRole('button', { name: '얼굴 1 목록에서 빼기' })).not.toBeInTheDocument();
+
+    const before = calls.people;
+    fireEvent.contextMenu(screen.getByRole('button', { name: '얼굴 2 · 사진 1장' }));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '얼굴 2 목록에서 빼기' })); });
+
+    expect(screen.getByText('얼굴 목록이 바뀌었어요. 다시 확인해 주세요.')).toBeInTheDocument();
+    expect(calls.people).toBeGreaterThan(before);
   });
 
   it('고른 사람이 그 사이 사라졌으면 고른 것을 풀고 얼굴 목록을 다시 읽는다', async () => {

@@ -26,7 +26,8 @@ jest.unstable_mockModule('../../models/MediaFace.js', () => ({
     listByMediaIds: jest.fn().mockResolvedValue({}),
     listForAlbum: jest.fn().mockResolvedValue([]),
     listForAlbums: jest.fn().mockResolvedValue([]),
-    deleteForAlbum: jest.fn().mockResolvedValue([])
+    deleteForAlbum: jest.fn().mockResolvedValue([]),
+    deleteForAlbums: jest.fn().mockResolvedValue([])
   }
 }));
 jest.unstable_mockModule('../../models/FaceExclusion.js', () => ({
@@ -102,7 +103,7 @@ const AlbumView = (await import('../../models/AlbumView.js')).default;
 const FaceExclusion = (await import('../../models/FaceExclusion.js')).default;
 const { DriveError } = await import('../../utils/googleDrive.js');
 const {
-  getAlbum, createAlbum, updateAlbum, listMedia, listPeople, deletePerson, listAllMedia, listAllPeople, createUploads, completeUpload,
+  getAlbum, createAlbum, updateAlbum, listMedia, listPeople, deletePerson, deleteAllPerson, listAllMedia, listAllPeople, createUploads, completeUpload,
   excludeAlbumPersonPhotos, restoreAlbumPersonPhotos, excludeAllPersonPhotos, restoreAllPersonPhotos,
   bulkAction, addTag, updateMedia, deleteMedia, listUnanalyzed, saveFaces, analysisImageUrl
 } = await import('../albumController.js');
@@ -1367,6 +1368,63 @@ describe('전체 사진 — 모든 폴더 (GET /api/albums/media · /people)', (
 
     expect(res.status).toHaveBeenNthCalledWith(1, 500);
     expect(res.status).toHaveBeenNthCalledWith(2, 500);
+  });
+});
+
+describe('전체 사진 — 얼굴 목록에서 사람 빼기 (DELETE /api/albums/people/:key)', () => {
+  const axis = (i) => Float32Array.from({ length: 8 }, (_, k) => (k === i ? 1 : 0));
+  const face = (id, mediaId, descriptor) => ({
+    id, mediaId, box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 }, score: 0.9, descriptor, driveFileId: `file-${mediaId}`
+  });
+
+  beforeEach(() => {
+    Event.listForPhotos.mockResolvedValue([event({ id: 3 }), event({ id: 5, driveFolderId: 'folder-5' }), event({ id: 6, driveFolderId: null })]);
+    // 관계없는 사람(p21) 이 앨범 3·5 에 걸쳐 사진 1·8 · 등록된 아이(p31, 학생 9) 는 사진 8
+    MediaFace.listForAlbums.mockResolvedValue([face(21, 1, axis(0)), face(22, 8, axis(0)), face(31, 8, axis(4))]);
+    MediaTag.listForAlbums.mockResolvedValue([{ mediaId: 8, studentId: 9, source: 'face', faceId: 31 }]);
+    MediaFace.deleteForAlbums.mockResolvedValue([1, 8]);
+    mockClient.query.mockClear();
+    req.params = { key: 'p21' };
+  });
+
+  it('내 앨범 전부를 함께 묶은 그 사람을 모든 폴더에서 뺀다 — 앨범 화면과 같은 트랜잭션', async () => {
+    req.query = { photoCount: '2' };
+
+    await deleteAllPerson(req, res);
+
+    expect(Event.listForPhotos).toHaveBeenCalledWith(7);
+    expect(MediaFace.listForAlbums).toHaveBeenCalledWith([3, 5], { includeHidden: true });
+    expect(MediaFace.deleteForAlbums).toHaveBeenCalledWith([21, 22], [3, 5], mockClient);
+    expect(mockClient.query.mock.calls.map(([sql]) => sql)).toEqual(['BEGIN', 'COMMIT']);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ removedFaces: 2, photos: 2 }));
+  });
+
+  it('등록된 아이면 409 student_person, 본 사진 수가 다르면 409 person_changed, 없는 사람이면 404 — 아무것도 지우지 않는다', async () => {
+    req.params.key = 'p31';
+    req.query = { photoCount: '1' };
+    await deleteAllPerson(req, res);
+    expect(res.json).toHaveBeenLastCalledWith(expect.objectContaining({ reason: 'student_person' }));
+
+    req.params.key = 'p21';
+    req.query = { photoCount: '5' };
+    await deleteAllPerson(req, res);
+    expect(res.json).toHaveBeenLastCalledWith(expect.objectContaining({ reason: 'person_changed' }));
+
+    req.params.key = 'p999';
+    await deleteAllPerson(req, res);
+    expect(res.status).toHaveBeenLastCalledWith(404);
+    expect(res.json).toHaveBeenLastCalledWith(expect.objectContaining({ personMissing: true }));
+    expect(MediaFace.deleteForAlbums).not.toHaveBeenCalled();
+  });
+
+  it('앨범이 하나도 없으면 404 — 묶지도 않는다', async () => {
+    Event.listForPhotos.mockResolvedValue([]);
+    req.query = { photoCount: '2' };
+
+    await deleteAllPerson(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(MediaFace.listForAlbums).not.toHaveBeenCalled();
   });
 });
 

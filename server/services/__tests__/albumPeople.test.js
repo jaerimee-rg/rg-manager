@@ -11,7 +11,8 @@ jest.unstable_mockModule('../../models/MediaFace.js', () => ({
   default: {
     listForAlbum: jest.fn(),
     listForAlbums: jest.fn(),
-    deleteForAlbum: jest.fn(async () => { calls.push('deleteFaces'); return [1, 2, 2]; })
+    deleteForAlbum: jest.fn(async () => { calls.push('deleteFaces'); return [1, 2, 2]; }),
+    deleteForAlbums: jest.fn(async () => { calls.push('deleteFacesAcross'); return [1, 8]; })
   }
 }));
 jest.unstable_mockModule('../../models/FaceExclusion.js', () => ({
@@ -251,6 +252,33 @@ describe('뺀 사진 — removedMediaIds · restorePhotos', () => {
     FaceExclusion.listForAlbums.mockResolvedValue([]);
 
     await expect(restorePhotos([3], 'p21', [1])).resolves.toEqual({ blocked: 'not_removed' });
+    expect(calls).toEqual([]);
+  });
+});
+
+describe('removePerson — 전체 사진(모든 폴더)에서 사람 빼기', () => {
+  it('모든 폴더를 함께 묶은 그 사람을 찾아 모든 폴더에서 얼굴만 지운다 — 같은 순서, 한 트랜잭션', async () => {
+    // 앨범 3 의 사진 1 · 앨범 5 의 사진 8 에 같은 관계없는 사람(p21)
+    MediaFace.listForAlbums.mockResolvedValue([face(21, 1, axis(0)), face(41, 8, axis(0)), face(42, 8, axis(4))]);
+    MediaTag.listForAlbums.mockResolvedValue([]);
+
+    const result = await removePerson([3, 5], 'p21', { seenPhotoCount: 2 });
+
+    expect(MediaFace.listForAlbums).toHaveBeenCalledWith([3, 5], { includeHidden: true });
+    expect(calls).toEqual(['BEGIN', 'removeTags', 'deleteFacesAcross', 'refreshCounts', 'COMMIT']);
+    expect(MediaFace.deleteForAlbums).toHaveBeenCalledWith([21, 41], [3, 5], mockClient);
+    expect(MediaFace.deleteForAlbum).not.toHaveBeenCalled();
+    expect(EventMedia.refreshFaceCounts).toHaveBeenCalledWith([1, 8], mockClient);
+    expect(result).toEqual({ removedFaces: 2, photos: 2, removedTags: 1 });
+  });
+
+  it('등록된 아이로 묶인 사람·사진 수가 다른 사람은 빼지 않는다', async () => {
+    MediaFace.listForAlbums.mockResolvedValue([face(21, 1, axis(0)), face(41, 8, axis(0))]);
+    MediaTag.listForAlbums.mockResolvedValue([{ mediaId: 8, studentId: 9, source: 'face', faceId: 41 }]);
+    await expect(removePerson([3, 5], 'p21', { seenPhotoCount: 2 })).resolves.toEqual({ blocked: 'student_person' });
+
+    MediaTag.listForAlbums.mockResolvedValue([]);
+    await expect(removePerson([3, 5], 'p21', { seenPhotoCount: 1 })).resolves.toEqual({ blocked: 'person_changed' });
     expect(calls).toEqual([]);
   });
 });

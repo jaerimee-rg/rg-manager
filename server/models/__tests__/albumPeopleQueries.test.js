@@ -147,6 +147,18 @@ describe('얼굴 목록에서 사람 빼기', () => {
     expect(params).toEqual([[11, 12, 13], 3]);
   });
 
+  it('MediaFace.deleteForAlbums — 전체 사진: 이 앨범들의 얼굴만 지우고 사진 id 를 돌려준다', async () => {
+    client.query.mockResolvedValue({ rows: [{ mediaId: 4 }, { mediaId: 9 }] });
+
+    await expect(MediaFace.deleteForAlbums([11, 12], [3, 5], client)).resolves.toEqual([4, 9]);
+
+    const [sql, params] = client.query.mock.calls[0];
+    expect(squash(sql)).toContain(`WHERE f.id = ANY($1::int[]) AND m.id = f."mediaId" AND m."eventId" = ANY($2::int[]) RETURNING f."mediaId"`);
+    expect(params).toEqual([[11, 12], [3, 5]]);
+    await expect(MediaFace.deleteForAlbums([11], [], client)).resolves.toEqual([]);
+    expect(client.query).toHaveBeenCalledTimes(1);
+  });
+
   it('EventMedia.refreshFaceCounts — 얼굴 수를 다시 세고, 0 이면 none, 분석 버전은 건드리지 않는다', async () => {
     client.query.mockResolvedValue({ rowCount: 2 });
 
