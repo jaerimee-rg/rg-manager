@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { loginAs, api, stubPortraitThumbnails, FACELESS_PNG } from './helpers.mjs';
 import { FAKE_PLACE, stubKakaoMaps } from './kakao-fakes.mjs';
 
@@ -322,6 +322,40 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     expect(album.body.counts.unanalyzed).toBe(0);
     await page.reload();
     await expect(page.getByRole('button', { name: '얼굴 찾기' })).toHaveCount(0);
+  });
+
+  test('[얼굴 찾기] — 찾은 얼굴을 작게 잘라 보여 준다 (그림은 브라우저에서만 쓰고 서버로 보내지 않는다)', async ({ page }) => {
+    test.setTimeout(120_000);
+    // 얼굴 셋이 나오는 사진 — 얼굴 분석 라이브러리(@vladmandic/face-api)에 들어 있는 예제 사진을 빌려 쓴다
+    const facesPhoto = new URL('../node_modules/@vladmandic/face-api/demo/sample1.jpg', import.meta.url);
+    test.skip(!existsSync(facesPhoto), '얼굴이 나오는 예제 사진이 없다(@vladmandic/face-api 미설치)');
+    await page.route('https://lh3.googleusercontent.com/**', (route) => route.fulfill({
+      contentType: 'image/jpeg', body: readFileSync(facesPhoto), headers: { 'Access-Control-Allow-Origin': '*' }
+    }));
+    const saved = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && /\/media\/\d+\/faces$/.test(request.url())) saved.push(request.postDataJSON());
+    });
+
+    await page.goto(`/photos/${sessions.album.faceThumbEventId}`);
+    await page.getByRole('button', { name: '얼굴 찾기' }).click();
+    await expect(page.getByText(/사진 1장을 다시 봤어요\. 1장에서 얼굴을 찾았어요\./)).toBeVisible({ timeout: 90_000 });
+
+    // 저장한 얼굴 수만큼 결과 안내 아래에 작은 얼굴 그림이 남는다
+    expect(saved).toHaveLength(1);
+    const found = saved[0].faces.length;
+    expect(found).toBeGreaterThanOrEqual(2);
+    const strip = page.getByRole('list', { name: `찾은 얼굴 ${found}개` });
+    await expect(strip.locator('img')).toHaveCount(found);
+    const crops = await strip.locator('img').evaluateAll((images) => images.map((image) => ({
+      width: image.naturalWidth, height: image.naturalHeight, jpeg: image.src.startsWith('data:image/jpeg;base64,')
+    })));
+    expect(crops.every((crop) => crop.width === 96 && crop.height === 96 && crop.jpeg)).toBe(true);
+    const shown = await strip.locator('.ui-avatar').first().boundingBox();
+    expect(Math.round(shown.width)).toBe(40);
+
+    // 서버에는 분석 결과만 갔다 — 잘라 낸 그림은 없다
+    expect(saved[0].faces.every((face) => Object.keys(face).sort().join() === 'box,descriptor,score')).toBe(true);
   });
 
   test('예전 규칙으로 붙은 자동 태그는 앨범을 열 때 다시 매칭돼 사라진다 (임계값·규칙이 바뀐 뒤)', async ({ request }) => {

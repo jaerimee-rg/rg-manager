@@ -1,5 +1,6 @@
 import { fetchWithAuth } from './api';
 import { FACE_ANALYZER_VERSION, detectFaces } from './faceClient';
+import { cropFaces } from './faceCrops';
 
 /**
  * 앨범에서 얼굴을 (다시) 찾아야 하는 사진을 선생님 브라우저에서 한 바퀴 돈다.
@@ -11,9 +12,11 @@ import { FACE_ANALYZER_VERSION, detectFaces } from './faceClient';
  * afterId 로 넘기기 때문에 이번 바퀴에서 같은 사진을 다시 받지는 않는다.
  *
  * onProgress({ done, total }) — 한 장 끝날 때마다
+ * onFaces([{ mediaId, src }]) — 얼굴을 찾아 저장한 사진마다, 그 얼굴들을 잘라 낸 작은 그림(utils/faceCrops.js).
+ *   화면에 보여 주기만 한다 — 서버로는 보내지 않는다.
  * → { done, found, failed }  found = 얼굴을 찾은 사진, failed = 읽지 못했거나 저장하지 못한 사진
  */
-export const reanalyzeAlbum = async (apiBase, { onProgress, batch = 5 } = {}) => {
+export const reanalyzeAlbum = async (apiBase, { onProgress, onFaces, batch = 5 } = {}) => {
   let afterId = 0;
   let total = null;
   const counts = { done: 0, found: 0, failed: 0 };
@@ -43,6 +46,10 @@ export const reanalyzeAlbum = async (apiBase, { onProgress, batch = 5 } = {}) =>
       counts.done += 1;
       if (!saved) counts.failed += 1;
       else if (faces.length) counts.found += 1;
+      if (saved && faces.length && onFaces) {
+        const crops = (await cropFaces(item.largeUrl, faces)).filter(Boolean);
+        if (crops.length) onFaces(crops.map((src) => ({ mediaId: item.id, src })));
+      }
       onProgress?.({ done: counts.done, total: Math.max(total, counts.done) });
     }
   }
