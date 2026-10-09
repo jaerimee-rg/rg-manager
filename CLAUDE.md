@@ -684,8 +684,15 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   `GET …/album` returns the current `coverMediaIds`, their thumbnails as `covers` (`EventMedia.coverRows`; they may not be on the
   loaded grid page) and `maxCovers`; grid tiles get a ★ 대표 n badge. **Both list cards show only the covers** — teacher 사진 list and parent
   사진 tab share `components/album/AlbumCovers.jsx` (`.ui-album-card__cover[data-covers]`: 1 fills the 16:10 box, 2 side by side,
-  3 = first one big on the left, 4 = 2×2). URLs come from `mediaSerializer.coverUrls` (one cover → lh3 `=w800-h500-c-rw`, several →
-  the square thumbnails) as `covers` on `GET /api/albums` and `toParentAlbum` (parent whitelist test pins the keys; no ids go out).
+  3 = first one big on the left, 4 = 2×2). URLs come from `mediaSerializer.coverUrls` — **uncropped** (one cover → lh3 `=w800-rw`,
+  several → `=s640-rw`), because the teacher picks **which part shows**: tapping a tile in the 대표 사진 panel (a tap, not a drag —
+  `draggedRef` swallows the click that ends a drag) opens `CoverFocusDialog`, a frame shaped like that cover's cell
+  (`utils/coverFocus.coverCellAspect`: 16:10 · 8:10 · 8:5) where the photo is dragged (pointer events) or nudged with arrow keys;
+  `panFocus` turns the drag into `{x, y}` 0–100 from the object-fit overflow. Saved per photo in `event_media."coverFocusX/Y"`
+  (REAL, null = centre) via `PATCH …/media/:mediaId {coverFocus}` (`normalizeCoverFocus`, 400 `cover_focus`), so removing and
+  re-adding a cover keeps its framing; it reaches both list cards as `coverPositions` (CSS object-position strings, null = centre)
+  next to `covers`. Each panel tile also has an **✕** (or Delete key) → `removeCoverMediaId`, and **[모두 빼기]** → `coverMediaIds: []`.
+  `covers` on `GET /api/albums` and `toParentAlbum` (parent whitelist test pins the keys; no ids go out).
   A video shows its Drive frame with **no play mark** (owner's call 2026-10-09). No covers → the old newest-four box / strip.
   The covers are **re-checked on every read** (`EventMedia` `previewRows`, `array_position … NULLS LAST`), and parent previews put them first.
 - **Deletes go to the Drive trash** (`files.update {trashed:true}`), never permanent — 30 days to

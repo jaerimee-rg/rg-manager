@@ -783,6 +783,10 @@ const initDatabase = async () => {
     await client.query('ALTER TABLE event_media ADD COLUMN IF NOT EXISTS "faceAnalyzerVersion" INTEGER');
     // 선생님이 붙이는 사진·영상 설명. 학부모 뷰어 아래쪽에 보인다. 없으면 NULL.
     await client.query('ALTER TABLE event_media ADD COLUMN IF NOT EXISTS caption TEXT');
+    // 대표 사진으로 쓸 때 보일 부분(0~100, CSS object-position 의 %). 비어 있으면 가운데. 사진에 붙여 두어 대표에서 뺐다가
+    // 다시 넣어도 그대로다
+    await client.query('ALTER TABLE event_media ADD COLUMN IF NOT EXISTS "coverFocusX" REAL');
+    await client.query('ALTER TABLE event_media ADD COLUMN IF NOT EXISTS "coverFocusY" REAL');
 
     // 사진에서 찾은 얼굴. 이미지는 저장하지 않고 특징값(128차원)과 위치만 남긴다.
     // descriptor 는 base64(Float32Array) — pgvector 는 운영 DB 계정 권한으로 설치할 수 없어

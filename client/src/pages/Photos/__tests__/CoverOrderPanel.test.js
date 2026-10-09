@@ -1,11 +1,11 @@
 import React from 'react';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, act } from '@testing-library/react';
 import CoverOrderPanel from '../CoverOrderPanel';
 
 const cover = (id, kind = 'image') => ({ id, kind, thumbnailUrl: `https://lh3/c${id}` });
 const COVERS = [cover(1), cover(2, 'video'), cover(3)];
 
-const slots = () => screen.getAllByRole('button', { name: /^대표 사진 \d/ });
+const slots = () => screen.getAllByRole('button', { name: /^대표 사진 \d.*—/ });
 const order = () => slots().map((button) => button.getAttribute('data-cover-id'));
 
 describe('CoverOrderPanel — 대표 사진 칸', () => {
@@ -32,7 +32,7 @@ describe('CoverOrderPanel — 대표 사진 칸', () => {
     render(<CoverOrderPanel covers={[]} onReorder={jest.fn()} />);
 
     expect(screen.getByText(/\[대표 사진 만들기\] 를 누르면/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^대표 사진 \d/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^대표 사진 \d.*—/ })).not.toBeInTheDocument();
     expect(screen.getByText('0/4')).toBeInTheDocument();
   });
 
@@ -67,6 +67,59 @@ describe('CoverOrderPanel — 대표 사진 칸', () => {
 
     rerender(<CoverOrderPanel covers={[...COVERS]} onReorder={jest.fn()} />);
     expect(order()).toEqual(['1', '2', '3']);
+  });
+
+  describe('빼기 · 보일 부분', () => {
+    const renderFull = (extra = {}) => {
+      const handlers = { onReorder: jest.fn(), onRemove: jest.fn(), onClear: jest.fn(), onSaveFocus: jest.fn().mockResolvedValue(undefined) };
+      render(<CoverOrderPanel covers={COVERS} {...handlers} {...extra} />);
+      return handlers;
+    };
+
+    it('칸마다 ✕ — 누르면 그 사진을 뺀다 · 칸에서 Delete 키도', () => {
+      const { onRemove } = renderFull();
+
+      fireEvent.click(screen.getByRole('button', { name: '대표 사진 2 빼기' }));
+      expect(onRemove).toHaveBeenLastCalledWith(2);
+
+      fireEvent.keyDown(slots()[2], { key: 'Delete' });
+      expect(onRemove).toHaveBeenLastCalledWith(3);
+    });
+
+    it('[모두 빼기] — 대표 사진이 없으면 버튼도 없다', () => {
+      const { onClear } = renderFull();
+      fireEvent.click(screen.getByRole('button', { name: '모두 빼기' }));
+      expect(onClear).toHaveBeenCalled();
+    });
+
+    it('대표 사진이 없으면 [모두 빼기] 도 없다', () => {
+      renderFull({ covers: [] });
+      expect(screen.queryByRole('button', { name: '모두 빼기' })).not.toBeInTheDocument();
+    });
+
+    it('칸을 누르면 보일 부분 고르기 창 — 저장하면 onSaveFocus(그 사진, 보일 부분) 후 닫힌다', async () => {
+      const { onSaveFocus } = renderFull();
+
+      fireEvent.click(slots()[1]);
+      const dialog = screen.getByRole('dialog', { name: '보일 부분 고르기' });
+      // 2번 칸(3장 중) 모양 = 8:5
+      expect(screen.getByTestId('cover-focus-frame').style.aspectRatio).toBe('1.6');
+      fireEvent.keyDown(screen.getByTestId('cover-focus-frame'), { key: 'ArrowRight' });
+      await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: '저장' })); });
+
+      expect(onSaveFocus).toHaveBeenCalledWith(COVERS[1], { x: 45, y: 50 });
+      expect(screen.queryByRole('dialog', { name: '보일 부분 고르기' })).not.toBeInTheDocument();
+    });
+
+    it('칸과 미리 보기는 저장된 보일 부분을 그대로 보여 준다(자르지 않은 사진 위에)', () => {
+      render(<CoverOrderPanel covers={[{ ...cover(1), imageUrl: 'https://lh3/i1', focus: { x: 20, y: 80 } }, cover(2)]} onReorder={jest.fn()} />);
+
+      expect(slots()[0].querySelector('img')).toHaveAttribute('src', 'https://lh3/i1');
+      expect(slots()[0].querySelector('img').style.objectPosition).toBe('20% 80%');
+      const previewImages = screen.getByTestId('cover-preview').querySelectorAll('img');
+      expect(previewImages[0].style.objectPosition).toBe('20% 80%');
+      expect(previewImages[1].style.objectPosition).toBe('');
+    });
   });
 
   describe('끌어서 놓기 (마우스·손가락 = 포인터 이벤트)', () => {
@@ -115,6 +168,20 @@ describe('CoverOrderPanel — 대표 사진 칸', () => {
       expect(onReorder).toHaveBeenCalledWith([2, 3, 1]);
       expect(order()).toEqual(['2', '3', '1']);
       expect(document.querySelector('[data-dragging]')).toBeNull();
+    });
+
+    it('끈 뒤 손을 떼며 오는 click 은 보일 부분 창을 열지 않는다', () => {
+      render(<CoverOrderPanel covers={COVERS} onReorder={jest.fn()} onSaveFocus={jest.fn()} />);
+      layout();
+
+      fireEvent.pointerDown(slots()[0], { clientX: 36, button: 0 });
+      fireEvent.pointerMove(slots()[0], { clientX: 230 });
+      fireEvent.pointerUp(slots()[0], { clientX: 230 });
+      fireEvent.click(slots()[2]);   // 옮겨진 첫 칸(이제 3번째)에 오는 click
+
+      expect(screen.queryByRole('dialog', { name: '보일 부분 고르기' })).not.toBeInTheDocument();
+      fireEvent.click(slots()[0]);   // 그다음 누르기는 연다
+      expect(screen.getByRole('dialog', { name: '보일 부분 고르기' })).toBeInTheDocument();
     });
 
     it('가운데로 끌면 그 앞에 들어간다', () => {

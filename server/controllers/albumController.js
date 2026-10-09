@@ -8,10 +8,10 @@ import albumService from '../services/albumService.js';
 import { DriveError, isDriveConfigured, getStorageQuota } from '../utils/googleDrive.js';
 import { getAccessToken } from '../services/driveAccess.js';
 import {
-  sanitizeFolderName, folderNameFromEvent, normalizeCaption, MAX_FILES_PER_UPLOAD, MAX_ALBUM_COVERS
+  sanitizeFolderName, folderNameFromEvent, normalizeCaption, normalizeCoverFocus, MAX_FILES_PER_UPLOAD, MAX_ALBUM_COVERS
 } from '../utils/mediaValidation.js';
 import { canUpload, canManageAlbum, canDeleteMedia, reasonMessage, isValidAudience, isPhotoFolder } from '../utils/albumAccess.js';
-import { toTeacherMedia, thumbnailUrl } from '../utils/mediaSerializer.js';
+import { toTeacherMedia, thumbnailUrl, coverImageUrl, coverEditUrl, focusOf } from '../utils/mediaSerializer.js';
 import { sharePathFor } from '../services/albumShare.js';
 import { albumPeople, findPerson, removePerson, toPersonView } from '../services/albumPeople.js';
 
@@ -89,7 +89,15 @@ export const getAlbum = async (req, res) => {
       // 대표 사진(사진 목록 카드의 표지)으로 고른 사진 id 들, 고른 순서. 숨겼거나 지운 것은 빠진 지금 목록이다.
       // covers 는 같은 순서의 썸네일 — 대표 사진 칸이 순서를 바꿀 때 그린다(지금 불러온 사진 칸에 없을 수도 있다)
       coverMediaIds: coverRows.map((row) => row.id),
-      covers: coverRows.map((row) => ({ id: row.id, kind: row.kind, thumbnailUrl: thumbnailUrl(row.driveFileId, 400) })),
+      // imageUrl 은 자르지 않은 사진(미리 보기가 보일 부분을 맞춘다), editUrl 은 보일 부분 고르기 창의 큰 사진
+      covers: coverRows.map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        thumbnailUrl: thumbnailUrl(row.driveFileId, 400),
+        imageUrl: coverImageUrl(row.driveFileId, { many: true }),
+        editUrl: coverEditUrl(row.driveFileId),
+        focus: focusOf(row)
+      })),
       maxCovers: MAX_ALBUM_COVERS,
       // 학부모에게 보낼 링크 (FR-518) — 앨범 주소 + 이 선생님의 학부모 초대 토큰 (services/albumShare)
       sharePath,
@@ -659,19 +667,32 @@ export const updateMedia = async (req, res) => {
 
     const mediaId = parseInt(req.params.mediaId, 10);
     if (isNaN(mediaId)) return res.status(404).json({ error: '사진을 찾을 수 없습니다.' });
-    if (!req.body || !Object.prototype.hasOwnProperty.call(req.body, 'caption')) {
+    const has = (key) => Boolean(req.body) && Object.prototype.hasOwnProperty.call(req.body, key);
+    if (!has('caption') && !has('coverFocus')) {
       return res.status(400).json({ error: '바꿀 내용이 없습니다.' });
     }
 
-    const checked = normalizeCaption(req.body.caption);
-    if (!checked.ok) return res.status(400).json({ error: checked.message, reason: 'caption' });
+    // 둘 다 먼저 확인한 뒤 저장한다 — 하나만 저장되고 다른 하나가 거절되는 일이 없게
+    const caption = has('caption') ? normalizeCaption(req.body.caption) : null;
+    if (caption && !caption.ok) return res.status(400).json({ error: caption.message, reason: 'caption' });
+    const focus = has('coverFocus') ? normalizeCoverFocus(req.body.coverFocus) : null;
+    if (focus && !focus.ok) return res.status(400).json({ error: focus.message, reason: 'cover_focus' });
 
-    const updated = await EventMedia.setCaption(mediaId, checked.caption, event.id);
-    if (!updated) return res.status(404).json({ error: '사진을 찾을 수 없습니다.' });
-
-    res.json({ id: updated.id, caption: updated.caption ?? null });
+    const result = { id: mediaId };
+    if (caption) {
+      const updated = await EventMedia.setCaption(mediaId, caption.caption, event.id);
+      if (!updated) return res.status(404).json({ error: '사진을 찾을 수 없습니다.' });
+      result.caption = updated.caption ?? null;
+    }
+    if (focus) {
+      // 대표 사진으로 쓸 때 보일 부분 — 앱 안의 값이라 Google 연결이 끊겨도 고친다
+      const updated = await EventMedia.setCoverFocus(mediaId, focus.focus, event.id);
+      if (!updated) return res.status(404).json({ error: '사진을 찾을 수 없습니다.' });
+      result.coverFocus = focusOf(updated);
+    }
+    res.json(result);
   } catch (error) {
-    console.error('사진 설명 저장 오류:', error);
+    console.error('사진 설명·보일 부분 저장 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
   }
 };

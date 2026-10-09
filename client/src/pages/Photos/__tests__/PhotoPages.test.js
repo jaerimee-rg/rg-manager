@@ -115,6 +115,14 @@ describe('PhotoAlbums — 대표 사진 표지', () => {
   const withCovers = (covers) => ({ ...LIST, albums: [{ ...LIST.albums[0], previews: ['https://drive/t1', 'https://drive/t2'], covers }] });
   const coverOf = () => screen.getByRole('button', { name: /회장배 대회/ }).querySelector('.ui-album-card__cover');
 
+  it('선생님이 고른 보일 부분을 칸마다 object-position 으로 — 없으면 가운데', async () => {
+    await renderList({ ...withCovers(['https://lh3/c1', 'https://lh3/c2']), albums: [{ ...withCovers(['https://lh3/c1', 'https://lh3/c2']).albums[0], coverPositions: ['10% 90%', null] }] });
+
+    const images = coverOf().querySelectorAll('img');
+    expect(images[0].style.objectPosition).toBe('10% 90%');
+    expect(images[1].style.objectPosition).toBe('');
+  });
+
   it('대표 사진을 한 장 골랐으면 그 한 장이 표지를 채운다 — 최근 사진 대신', async () => {
     await renderList(withCovers(['https://lh3/c1=w800-h500-c-rw']));
 
@@ -559,14 +567,14 @@ describe('PhotoAlbum — 대표 사진 고르기 (4장까지)', () => {
 
   describe('대표 사진 칸 — 순서 바꾸기', () => {
     const panel = () => screen.getByRole('region', { name: '대표 사진' });
-    const panelOrder = () => within(panel()).getAllByRole('button', { name: /^대표 사진 \d/ }).map((b) => b.getAttribute('data-cover-id'));
+    const panelOrder = () => within(panel()).getAllByRole('button', { name: /^대표 사진 \d.*—/ }).map((b) => b.getAttribute('data-cover-id'));
 
     it('지금 대표 사진을 순서대로 보여 주고, ←→ 로 옮기면 그 순서를 PATCH {coverMediaIds} 로 저장한다', async () => {
       await renderCover({ covers: [1, 2] });
 
       expect(panelOrder()).toEqual(['1', '2']);
       await act(async () => {
-        fireEvent.keyDown(within(panel()).getAllByRole('button', { name: /^대표 사진 \d/ })[0], { key: 'ArrowRight' });
+        fireEvent.keyDown(within(panel()).getAllByRole('button', { name: /^대표 사진 \d.*—/ })[0], { key: 'ArrowRight' });
       });
 
       expect(JSON.parse(patches()[0][1].body)).toEqual({ coverMediaIds: [2, 1] });
@@ -580,7 +588,7 @@ describe('PhotoAlbum — 대표 사진 고르기 (4장까지)', () => {
       const before = albumReads();
 
       await act(async () => {
-        fireEvent.keyDown(within(panel()).getAllByRole('button', { name: /^대표 사진 \d/ })[0], { key: 'ArrowRight' });
+        fireEvent.keyDown(within(panel()).getAllByRole('button', { name: /^대표 사진 \d.*—/ })[0], { key: 'ArrowRight' });
       });
 
       expect(screen.getByText('바꾸지 못했어요.')).toBeInTheDocument();
@@ -591,6 +599,55 @@ describe('PhotoAlbum — 대표 사진 고르기 (4장까지)', () => {
     it('대표 사진이 없으면 정하는 방법을 알려 준다', async () => {
       await renderCover();
       expect(within(panel()).getByText(/\[고르기\] 로 4장까지/)).toBeInTheDocument();
+    });
+
+    it('✕ 는 PATCH {removeCoverMediaId}, [모두 빼기] 는 PATCH {coverMediaIds: []}', async () => {
+      await renderCover({ covers: [1, 2] });
+
+      await act(async () => { fireEvent.click(within(panel()).getByRole('button', { name: '대표 사진 1 빼기' })); });
+      expect(JSON.parse(patches()[0][1].body)).toEqual({ removeCoverMediaId: 1 });
+      expect(panelOrder()).toEqual(['2']);
+      expect(screen.getByText('대표 사진에서 뺐어요')).toBeInTheDocument();
+
+      await act(async () => { fireEvent.click(within(panel()).getByRole('button', { name: '모두 빼기' })); });
+      expect(JSON.parse(patches()[1][1].body)).toEqual({ coverMediaIds: [] });
+      expect(within(panel()).getByText('0/4')).toBeInTheDocument();
+    });
+
+    it('칸을 눌러 보일 부분을 고르고 저장하면 그 사진에 PATCH {coverFocus} 한 뒤 앨범을 다시 읽는다', async () => {
+      await renderCover({ covers: [1] });
+      const base = fetchWithAuth.getMockImplementation();
+      fetchWithAuth.mockImplementation((url, options = {}) => {
+        if (url === '/api/events/31/media/1' && options.method === 'PATCH') return ok({ id: 1, coverFocus: JSON.parse(options.body).coverFocus });
+        return base(url, options);
+      });
+
+      fireEvent.click(within(panel()).getAllByRole('button', { name: /^대표 사진 \d.*—/ })[0]);
+      const dialog = screen.getByRole('dialog', { name: '보일 부분 고르기' });
+      fireEvent.keyDown(within(dialog).getByTestId('cover-focus-frame'), { key: 'ArrowDown' });
+      await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: '저장' })); });
+
+      expect(fetchWithAuth).toHaveBeenCalledWith('/api/events/31/media/1', {
+        method: 'PATCH', body: JSON.stringify({ coverFocus: { x: 50, y: 45 } })
+      });
+      expect(screen.queryByRole('dialog', { name: '보일 부분 고르기' })).not.toBeInTheDocument();
+      expect(screen.getByText('보일 부분을 바꿨어요')).toBeInTheDocument();
+    });
+
+    it('보일 부분 저장이 거절되면 창에 이유를 보여 주고 열어 둔다', async () => {
+      await renderCover({ covers: [1] });
+      const base = fetchWithAuth.getMockImplementation();
+      fetchWithAuth.mockImplementation((url, options = {}) => {
+        if (url === '/api/events/31/media/1' && options.method === 'PATCH') return ok({ error: '보일 부분을 다시 골라 주세요.' }, 400);
+        return base(url, options);
+      });
+
+      fireEvent.click(within(panel()).getAllByRole('button', { name: /^대표 사진 \d.*—/ })[0]);
+      fireEvent.keyDown(screen.getByTestId('cover-focus-frame'), { key: 'ArrowDown' });
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: '저장' })); });
+
+      expect(screen.getByRole('alert')).toHaveTextContent('보일 부분을 다시 골라 주세요.');
+      expect(screen.getByRole('dialog', { name: '보일 부분 고르기' })).toBeInTheDocument();
     });
   });
 

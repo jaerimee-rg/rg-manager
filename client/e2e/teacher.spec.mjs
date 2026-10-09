@@ -373,7 +373,7 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
       expect((await patchAlbum(folderId, { addCoverMediaId: oldest.id })).status).toBe(200);
       const parentRes = await api(request, sessions.parentMulti, 'GET', '/api/parent/albums');
       const parentAlbum = parentRes.body.items.find((item) => item.eventId === folderId);
-      expect(parentAlbum.covers).toEqual([expect.stringContaining(`${oldest.driveFileId}=w800-h500-c-rw`)]);
+      expect(parentAlbum.covers).toEqual([expect.stringContaining(`${oldest.driveFileId}=w800-rw`)]);
       expect(parentAlbum).not.toHaveProperty('coverMediaIds');
 
       const parentContext = await browser.newContext({ baseURL });
@@ -476,6 +476,75 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
       expect(tooMany.body.reason).toBe('too_many_covers');
     } finally {
       await clearCovers();
+    }
+  });
+
+  test('대표 사진 — 칸의 ✕ 로 빼고 [모두 빼기] 로 비우며, 칸을 눌러 사진 목록 카드에 보일 부분을 고른다', async ({ page, request }) => {
+    // 픽스처: mediaIds = [선생님 사진 1, 선생님 사진 2, 학부모 사진 3, 영상 4]
+    const eventId = sessions.album.eventId;
+    const [photo1, photo2, , videoId] = sessions.album.mediaIds;
+    const albumOf = async () => (await api(request, sessions.teacher, 'GET', `/api/events/${eventId}/album`)).body;
+    const cardOf = async () => (await api(request, sessions.teacher, 'GET', '/api/albums')).body.albums.find((a) => a.eventId === eventId);
+    const setCovers = (ids) => api(request, sessions.teacher, 'PATCH', `/api/events/${eventId}/album`, { coverMediaIds: ids });
+    const panel = page.getByRole('region', { name: '대표 사진' });
+    const tiles = panel.locator('[data-cover-id]');
+
+    try {
+      expect((await setCovers([photo2, videoId, photo1])).status).toBe(200);
+      await stubPortraitThumbnails(page);   // 세로로 긴 그림(400×711) — 16:10 틀에서 세로로 넘친다
+      await page.goto(`/photos/${eventId}`);
+      await expect(tiles).toHaveCount(3);
+
+      // ✕ 로 하나 빼기 — 나머지는 순서 그대로 당겨진다
+      await panel.getByRole('button', { name: '대표 사진 2 빼기' }).click();
+      await expect.poll(async () => (await albumOf()).coverMediaIds).toEqual([photo2, photo1]);
+      await expect(tiles).toHaveCount(2);
+
+      // [모두 빼기]
+      await panel.getByRole('button', { name: '모두 빼기' }).click();
+      await expect.poll(async () => (await albumOf()).coverMediaIds).toEqual([]);
+      await expect(panel.getByText('0/4')).toBeVisible();
+
+      // 한 장을 대표로 두고 칸을 누르면 보일 부분 고르기 — 카드와 같은 16:10 틀, 사진을 아래로 끌면 위쪽이 보인다
+      expect((await setCovers([photo1])).status).toBe(200);
+      await page.reload();
+      await tiles.first().click();
+      const dialog = page.getByRole('dialog', { name: '보일 부분 고르기' });
+      const frame = dialog.getByTestId('cover-focus-frame');
+      await expect(frame).toBeVisible();
+      await expect.poll(() => frame.locator('img').evaluate((img) => img.naturalHeight)).toBe(711);
+      const box = await frame.boundingBox();
+      expect(Math.abs(box.width / box.height - 1.6)).toBeLessThan(0.02);
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 400, { steps: 8 });
+      await page.mouse.up();
+      await expect(frame.locator('img')).toHaveCSS('object-position', /^\S+ 0%$/);
+      await dialog.getByRole('button', { name: '저장' }).click();
+      await expect(dialog).toHaveCount(0);
+      await expect(page.getByText('보일 부분을 바꿨어요')).toBeVisible();
+
+      // 저장된 보일 부분 — 앨범의 대표 사진 칸 · 사진 목록 카드 · 학부모 카드가 같은 값을 쓴다
+      const saved = (await albumOf()).covers[0].focus;
+      expect(saved).toEqual({ x: 50, y: 0 });
+      expect((await cardOf()).coverPositions).toEqual(['50% 0%']);
+      expect((await cardOf()).covers[0]).toMatch(/=w800-rw$/);   // 자르지 않은 사진(브라우저가 맞춘다)
+      await page.goto('/photos');
+      const card = page.getByRole('button', { name: new RegExp((await cardOf()).title) });
+      await expect(card.locator('.ui-album-card__cover img')).toHaveCSS('object-position', '50% 0%');
+
+      // 대표에서 뺐다가 다시 넣어도 보일 부분은 사진에 남아 있다
+      expect((await setCovers([])).status).toBe(200);
+      expect((await setCovers([photo1])).status).toBe(200);
+      expect((await cardOf()).coverPositions).toEqual(['50% 0%']);
+
+      // API — 범위 밖 값은 400
+      const bad = await api(request, sessions.teacher, 'PATCH', `/api/events/${eventId}/media/${photo1}`, { coverFocus: { x: 120, y: 0 } });
+      expect(bad.status).toBe(400);
+      expect(bad.body.reason).toBe('cover_focus');
+    } finally {
+      await api(request, sessions.teacher, 'PATCH', `/api/events/${eventId}/media/${photo1}`, { coverFocus: null });
+      await setCovers([]);
     }
   });
 

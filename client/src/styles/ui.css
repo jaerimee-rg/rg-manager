@@ -3496,10 +3496,46 @@ a.ui-btn { text-decoration: none; }
 }
 .ui-cover-order__slot[data-drop="before"]::after { left: calc(-1 * var(--space-3) / 2 - 2px); }
 .ui-cover-order__slot[data-drop="after"]::after { right: calc(-1 * var(--space-3) / 2 - 2px); }
+/* 대표에서 빼기 — 칸 오른쪽 위 모서리에 걸친 작은 ✕ */
+.ui-cover-order__remove {
+  position: absolute;
+  top: -8px; right: -8px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 24px; height: 24px;
+  padding: 0;
+  border: var(--stroke-thin);
+  border-radius: var(--shape-blob);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.ui-cover-order__remove:hover { background: var(--star-tint); }
+.ui-cover-order__remove:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ui-cover-order__item { cursor: pointer; }
 .ui-cover-order__preview { margin: 0; width: 176px; }
 .ui-cover-order__preview-box { overflow: hidden; border: var(--stroke-thin); border-radius: var(--shape-box); }
 .ui-cover-order__preview-box .ui-album-card__cover { border-bottom: 0; }
 .ui-cover-order__hint { margin-top: var(--space-1); font-size: var(--text-xs); color: var(--pencil); }
+
+/* 보일 부분 고르기 — 카드의 그 칸과 같은 모양의 틀(aspect-ratio 는 화면이 정한다) 안에서 사진을 끈다 */
+.ui-cover-focus { display: flex; flex-direction: column; gap: var(--space-3); }
+.ui-cover-focus__frame {
+  position: relative;
+  margin-inline: auto;
+  overflow: hidden;
+  border: var(--stroke);
+  border-radius: var(--shape-box);
+  background: var(--rule-soft);
+  cursor: grab;
+  touch-action: none; /* 손가락으로 끌 때 시트·페이지가 대신 움직이지 않게 */
+  user-select: none;
+  -webkit-user-select: none;
+}
+.ui-cover-focus__frame:active { cursor: grabbing; }
+.ui-cover-focus__frame:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ui-cover-focus__frame img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; -webkit-user-drag: none; }
 .ui-album-card__cover[data-empty] {
   display: flex;
   align-items: center;

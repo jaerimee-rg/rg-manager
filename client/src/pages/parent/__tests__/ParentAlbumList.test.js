@@ -92,6 +92,14 @@ describe('ParentAlbumList — 선생님이 고른 대표 사진', () => {
     expect(within(card).getByText('⭐ 스페셜')).toBeInTheDocument();
   });
 
+  it('선생님이 고른 보일 부분을 그대로 — 선생님 목록과 같은 표지', async () => {
+    await renderList([album({ covers: ['https://lh3/c1', 'https://lh3/c2'], coverPositions: [null, '30% 0%'] })]);
+
+    const images = screen.getByTestId('album-covers').querySelectorAll('img');
+    expect(images[0].style.objectPosition).toBe('');
+    expect(images[1].style.objectPosition).toBe('30% 0%');
+  });
+
   it('한 장이면 표지를 꽉 채운다', async () => {
     await renderList([album({ covers: ['https://lh3/c1=w800-h500-c-rw'] })]);
 

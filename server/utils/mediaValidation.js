@@ -151,6 +151,20 @@ export const normalizeCaption = (value) => {
   return { ok: true, caption };
 };
 
+/**
+ * 대표 사진의 보일 부분 — { x, y } (0~100, 가로·세로 %) 또는 null(가운데로). 소수 첫째 자리까지만 남긴다.
+ * → { ok: true, focus } | { ok: false, message }
+ */
+export const normalizeCoverFocus = (value) => {
+  if (value === null) return { ok: true, focus: null };
+  const inRange = (n) => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 100;
+  if (!value || typeof value !== 'object' || !inRange(value.x) || !inRange(value.y)) {
+    return { ok: false, message: '보일 부분을 다시 골라 주세요.' };
+  }
+  const round = (n) => Math.round(n * 10) / 10;
+  return { ok: true, focus: { x: round(value.x), y: round(value.y) } };
+};
+
 export default {
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
@@ -167,5 +181,6 @@ export default {
   defaultFolderName,
   folderNameFromEvent,
   CAPTION_MAX,
-  normalizeCaption
+  normalizeCaption,
+  normalizeCoverFocus
 };

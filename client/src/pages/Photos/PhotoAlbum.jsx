@@ -236,6 +236,25 @@ function PhotoAlbum() {
     if (!(await patchAlbum({ coverMediaIds: ids }))) loadAlbum();
   };
 
+  // 대표 사진 칸의 ✕ · [모두 빼기]
+  const removeCover = (id) => patchAlbum({ removeCoverMediaId: id }, '대표 사진에서 뺐어요');
+  const clearCovers = () => patchAlbum({ coverMediaIds: [] }, '대표 사진을 모두 뺐어요 · 최근 사진이 표지가 돼요');
+
+  // 대표 사진의 보일 부분 — 사진에 붙여 저장한다(대표에서 뺐다가 다시 넣어도 그대로). 실패하면 창에 그 이유를 보여 준다
+  const saveCoverFocus = async (cover, focus) => {
+    let response;
+    try {
+      response = await fetchWithAuth(`${apiBase}/media/${cover.id}`, { method: 'PATCH', body: JSON.stringify({ coverFocus: focus }) });
+    } catch (saveError) {
+      console.error('보일 부분 저장 실패:', saveError);
+      throw new Error('저장하지 못했어요. 잠시 뒤 다시 해 주세요.');
+    }
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || '저장하지 못했어요.');
+    showToast('보일 부분을 바꿨어요');
+    await loadAlbum();
+  };
+
   if (notFound) {
     return (
       <>
@@ -443,6 +462,9 @@ function PhotoAlbum() {
             max={maxCovers}
             disabled={busy}
             onReorder={reorderCovers}
+            onRemove={removeCover}
+            onClear={clearCovers}
+            onSaveFocus={saveCoverFocus}
           />
 
           <FacePeopleStrip className="ui-mt-5" people={people} selected={person} onSelect={setPerson} onRemove={removePerson} />

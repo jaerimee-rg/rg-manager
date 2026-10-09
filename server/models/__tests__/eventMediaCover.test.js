@@ -15,17 +15,17 @@ const previewSql = () => pool.query.mock.calls.map(([sql]) => sql).find((sql) =>
 describe('앨범 카드 미리보기와 대표 사진', () => {
   beforeEach(() => pool.query.mockReset());
 
-  it('대표 사진들을 고른 순서로 맨 앞에 두고 covers 로 알려 준다 (선생님 목록)', async () => {
+  it('대표 사진들을 고른 순서로 맨 앞에 두고 covers · coverFocus(보일 부분) 로 알려 준다 (선생님 목록)', async () => {
     answer([
-      { eventId: 31, driveFileId: 'c2', isCover: true },
-      { eventId: 31, driveFileId: 'c1', isCover: true },
+      { eventId: 31, driveFileId: 'c2', isCover: true, coverFocusX: 20, coverFocusY: 70 },
+      { eventId: 31, driveFileId: 'c1', isCover: true, coverFocusX: null, coverFocusY: null },
       { eventId: 31, driveFileId: 'd1', isCover: false },
       { eventId: 32, driveFileId: 'd2', isCover: false }
     ]);
 
     const out = await EventMedia.summariesForTeacher([31, 32]);
 
-    expect(out[31]).toMatchObject({ previews: ['c2', 'c1', 'd1'], covers: ['c2', 'c1'] });
+    expect(out[31]).toMatchObject({ previews: ['c2', 'c1', 'd1'], covers: ['c2', 'c1'], coverFocus: [{ x: 20, y: 70 }, null] });
     expect(out[32]).toMatchObject({ previews: ['d2'], covers: [] });
   });
 
@@ -46,6 +46,7 @@ describe('앨범 카드 미리보기와 대표 사진', () => {
     expect(sql).toMatch(/JOIN events e ON e\.id = m\."eventId"/);
     expect(sql).toMatch(/m\.status = 'ready' AND NOT m\."isHidden" AND m\."driveFileId" IS NOT NULL/);
     expect(sql).toMatch(/\(m\.id = ANY\(e\."albumCoverMediaIds"\)\) IS TRUE AS "isCover"/);
+    expect(sql).toMatch(/m\."coverFocusX", m\."coverFocusY"/);
     // 대표가 아닌 사진은 array_position 이 NULL — 뒤로 보내야 대표 사진이 없는 앨범도 최근 순 그대로다
     expect(sql).toMatch(/ORDER BY array_position\(e\."albumCoverMediaIds", m\.id\) ASC NULLS LAST, m\."takenAt" DESC, m\.id DESC/);
     expect(sql).toMatch(/rn <= 4/);
@@ -78,7 +79,7 @@ describe('EventMedia.coverRows · coverableIds — 저장된 대표 사진 중 �
       { id: 9, kind: 'video', driveFileId: 'v9' },
       { id: 4, kind: 'image', driveFileId: 'd4' }
     ]);
-    expect(pool.query.mock.calls[0][0]).toMatch(/SELECT id, kind, "driveFileId" FROM event_media/);
+    expect(pool.query.mock.calls[0][0]).toMatch(/SELECT id, kind, "driveFileId", "coverFocusX", "coverFocusY" FROM event_media/);
   });
 
   it('이 앨범의 준비된·숨기지 않은 것만, 저장된 순서 그대로(중복은 한 번)', async () => {

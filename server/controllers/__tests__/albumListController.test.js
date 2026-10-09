@@ -78,27 +78,30 @@ describe('GET /api/albums — 선생님 사진 목록 (docs/photo-menu 5.1)', ()
     expect(albums[0].previews[0]).toContain('d1');
   });
 
-  it('대표 사진이 한 장이면 표지 전체(16:10) 주소, 여러 장이면 고른 순서대로 정사각형 썸네일 — 없으면 빈 목록이라 최근 4장을 쓴다', async () => {
+  it('대표 사진 주소(한 장: 폭 800, 여러 장: 긴 변 640, 자르지 않음)와 보일 부분을 고른 순서로 — 없으면 빈 목록이라 최근 4장을 쓴다', async () => {
     Event.listForPhotos.mockResolvedValue([
       event({ driveFolderId: 'f-31', albumStatus: 'ready' }),
       event({ id: 32, driveFolderId: 'f-32', albumStatus: 'ready' }),
       event({ id: 33, driveFolderId: 'f-33', albumStatus: 'ready' })
     ]);
     EventMedia.summariesForTeacher.mockResolvedValue({
-      31: { images: 3, previews: ['c1', 'd1', 'd2'], covers: ['c1'] },
-      32: { images: 4, previews: ['c3', 'c2', 'd3'], covers: ['c3', 'c2'] },
+      31: { images: 3, previews: ['c1', 'd1', 'd2'], covers: ['c1'], coverFocus: [{ x: 30, y: 10 }] },
+      32: { images: 4, previews: ['c3', 'c2', 'd3'], covers: ['c3', 'c2'], coverFocus: [null, { x: 0, y: 100 }] },
       33: { images: 2, previews: ['d4', 'd5'], covers: [] }
     });
 
     await listAlbums(req, res);
 
     const { albums } = res.json.mock.calls[0][0];
-    expect(albums[0].covers).toEqual(['https://lh3.googleusercontent.com/d/c1=w800-h500-c-rw']);
+    expect(albums[0].covers).toEqual(['https://lh3.googleusercontent.com/d/c1=w800-rw']);
+    expect(albums[0].coverPositions).toEqual(['30% 10%']);
     expect(albums[1].covers).toEqual([
-      'https://lh3.googleusercontent.com/d/c3=w400-h400-c-rw',
-      'https://lh3.googleusercontent.com/d/c2=w400-h400-c-rw'
+      'https://lh3.googleusercontent.com/d/c3=s640-rw',
+      'https://lh3.googleusercontent.com/d/c2=s640-rw'
     ]);
+    expect(albums[1].coverPositions).toEqual([null, '0% 100%']);
     expect(albums[2].covers).toEqual([]);
+    expect(albums[2].coverPositions).toEqual([]);
     expect(albums[2].previews).toHaveLength(2);
   });
 

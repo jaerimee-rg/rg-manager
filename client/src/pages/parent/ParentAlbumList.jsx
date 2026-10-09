@@ -71,7 +71,7 @@ function ParentAlbumList() {
               안 골랐으면 최근 사진 줄. 줄은 행 높이를 묶고 넘침을 자른다 — 안 그러면 세로 사진(휴대폰 영상)이 원래 비율대로
               행을 늘려 아래 제목·날짜 글자를 덮는다. 4:1 이라 어느 폭에서도 칸이 정사각형이다. */}
           {album.covers?.length ? (
-            <AlbumCovers urls={album.covers} data-testid="album-covers" />
+            <AlbumCovers urls={album.covers} positions={album.coverPositions} data-testid="album-covers" />
           ) : (
             <div
               data-testid="album-previews"

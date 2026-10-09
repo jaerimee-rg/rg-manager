@@ -26,19 +26,33 @@ export const thumbnailUrl = (driveFileId, size = 400) =>
   (driveFileId ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=w${size}-h${size}-c-rw` : null);
 
 /**
- * 선생님 사진 목록 카드의 대표 사진 — 표지 칸(16:10)과 같은 비율로 가운데를 잘라 받는다(800×500 WebP, 2026-10-09 운영 사진으로 확인).
- * 정사각형 썸네일을 늘려 쓰면 위아래가 한 번 더 잘리고 흐려진다.
+ * 앨범 카드 표지의 대표 사진 — **자르지 않고** 받는다. 선생님이 고른 보일 부분(object-position)을 브라우저가 맞추려면 사진 전체가
+ * 있어야 한다(Google 이 가운데를 잘라 보내면 다른 부분은 아예 없다). 한 장이면 표지 전체를 채우니 폭 800(세로 사진은 800×1067),
+ * 여러 장이면 칸이 작아 긴 변 640 — 2026-10-09 운영 사진·영상으로 확인(WebP).
  */
-export const coverImageUrl = (driveFileId) =>
-  (driveFileId ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=w800-h500-c-rw` : null);
+export const coverImageUrl = (driveFileId, { many = false } = {}) =>
+  (driveFileId ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=${many ? 's640' : 'w800'}-rw` : null);
+
+/** 보일 부분 고르기 창에 띄울 큰 사진(긴 변 1200, 자르지 않음) */
+export const coverEditUrl = (driveFileId) =>
+  (driveFileId ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=s1200-rw` : null);
+
+/** 행의 보일 부분 { x, y } (event_media."coverFocusX/Y") — 비어 있으면 null(가운데) */
+export const focusOf = (row) => (row?.coverFocusX == null || row?.coverFocusY == null
+  ? null
+  : { x: Number(row.coverFocusX), y: Number(row.coverFocusY) });
+
+/** 보일 부분 { x, y } → CSS object-position. 없으면 null(브라우저 기본 = 가운데) */
+export const focusPosition = (focus) => (focus ? `${focus.x}% ${focus.y}%` : null);
 
 /**
  * 앨범 카드 표지의 대표 사진 주소들(고른 순서) — 선생님 사진 목록과 학부모 사진 탭이 같은 표지를 그린다.
- * 한 장이면 표지 전체(16:10)를 채우니 그 비율로 잘라 받고, 여러 장이면 칸이 작아 정사각형 썸네일로 충분하다.
+ * 한 장이면 폭 800, 여러 장이면 긴 변 640. 보일 부분은 coverPositions 로 따로 간다.
  */
-export const coverUrls = (driveFileIds = []) => (driveFileIds.length === 1
-  ? [coverImageUrl(driveFileIds[0])]
-  : driveFileIds.map((id) => thumbnailUrl(id, 400)));
+export const coverUrls = (driveFileIds = []) => {
+  const many = driveFileIds.length > 1;
+  return driveFileIds.map((id) => coverImageUrl(id, { many }));
+};
 
 /** 뷰어용 큰 사진 — 폭 기준, 원래 비율 그대로 */
 export const largeImageUrl = (driveFileId, width = 1600) =>
@@ -125,8 +139,10 @@ export const toParentAlbum = (event, counts = {}) => ({
     mine: counts.mine || 0
   },
   previews: (counts.previews || []).map((id) => thumbnailUrl(id, 400)),
-  // 선생님이 고른 대표 사진들 — 있으면 카드가 이것만 보여 준다(학부모에게 보이는 사진만 남는다: EventMedia previewRows)
-  covers: coverUrls(counts.covers || [])
+  // 선생님이 고른 대표 사진들 — 있으면 카드가 이것만 보여 준다(학부모에게 보이는 사진만 남는다: EventMedia previewRows).
+  // coverPositions 는 같은 순서의 보일 부분(CSS object-position, null = 가운데)
+  covers: coverUrls(counts.covers || []),
+  coverPositions: (counts.coverFocus || []).map(focusPosition)
 });
 
 /**
@@ -181,7 +197,10 @@ export const toTeacherMedia = (media, { studentNames = {} } = {}) => ({
 export default {
   thumbnailUrl,
   coverImageUrl,
+  coverEditUrl,
   coverUrls,
+  focusOf,
+  focusPosition,
   largeImageUrl,
   originalUrl,
   previewUrl,

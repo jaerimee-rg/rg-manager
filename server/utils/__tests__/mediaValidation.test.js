@@ -11,7 +11,8 @@ import {
   MAX_VIDEO_BYTES,
   CAPTION_MAX,
   normalizeCaption,
-  sameFileKey
+  sameFileKey,
+  normalizeCoverFocus
 } from '../mediaValidation.js';
 
 describe('getExtension / lookupType', () => {
@@ -225,4 +226,21 @@ describe('normalizeCaption — 사진·영상 설명', () => {
     expect(normalizeCaption(42).ok).toBe(false);
     expect(normalizeCaption({ text: '무대' }).ok).toBe(false);
   });
+});
+
+describe('normalizeCoverFocus — 대표 사진의 보일 부분', () => {
+  it('0~100 의 x·y 를 소수 첫째 자리까지 남긴다', () => {
+    expect(normalizeCoverFocus({ x: 0, y: 100 })).toEqual({ ok: true, focus: { x: 0, y: 100 } });
+    expect(normalizeCoverFocus({ x: 33.333, y: 66.66 })).toEqual({ ok: true, focus: { x: 33.3, y: 66.7 } });
+  });
+
+  it('null 은 가운데로(비우기)', () => {
+    expect(normalizeCoverFocus(null)).toEqual({ ok: true, focus: null });
+  });
+
+  it.each([[undefined], [{}], [{ x: 101, y: 0 }], [{ x: NaN, y: 1 }], [{ x: Infinity, y: 1 }], [{ x: '1', y: '2' }], ['50% 50%']])(
+    '%p 는 거절한다', (value) => {
+      expect(normalizeCoverFocus(value).ok).toBe(false);
+    }
+  );
 });

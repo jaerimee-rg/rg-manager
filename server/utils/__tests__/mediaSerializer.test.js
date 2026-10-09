@@ -1,5 +1,6 @@
 import {
-  toParentMedia, toTeacherMedia, toParentAlbum, thumbnailUrl, coverImageUrl, coverUrls, largeImageUrl, downloadUrl
+  toParentMedia, toTeacherMedia, toParentAlbum, thumbnailUrl, coverImageUrl, coverEditUrl, coverUrls, focusOf, focusPosition,
+  largeImageUrl, downloadUrl
 } from '../mediaSerializer.js';
 
 const media = {
@@ -169,8 +170,14 @@ describe('toParentAlbum', () => {
 
   it('학부모 카드에 나가는 칸은 정해져 있다 — 대표 사진 id 같은 선생님 값은 나가지 않는다', () => {
     expect(Object.keys(toParentAlbum({ id: 3 }, { covers: ['c1'] })).sort()).toEqual([
-      'albumStatus', 'counts', 'covers', 'date', 'eventId', 'location', 'previews', 'title', 'type', 'uploadOpen'
+      'albumStatus', 'counts', 'coverPositions', 'covers', 'date', 'eventId', 'location', 'previews', 'title', 'type', 'uploadOpen'
     ]);
+  });
+
+  it('대표 사진의 보일 부분을 같은 순서로 싣는다 — 고르지 않은 것은 null(가운데)', () => {
+    const album = toParentAlbum({ id: 3 }, { covers: ['c1', 'c2'], coverFocus: [{ x: 20, y: 75.5 }, null] });
+    expect(album.coverPositions).toEqual(['20% 75.5%', null]);
+    expect(toParentAlbum({ id: 3 }, {}).coverPositions).toEqual([]);
   });
 });
 
@@ -190,15 +197,26 @@ describe('URL 만들기', () => {
     expect(thumbnailUrl('f1', 200)).toBe('https://lh3.googleusercontent.com/d/f1=w200-h200-c-rw');
   });
 
-  it('앨범 카드의 대표 사진은 표지 칸과 같은 16:10 으로 잘라 받는다', () => {
-    expect(coverImageUrl('f1')).toBe('https://lh3.googleusercontent.com/d/f1=w800-h500-c-rw');
+  it('앨범 카드의 대표 사진은 자르지 않고 받는다 — 브라우저가 보일 부분을 맞춘다 (한 장: 폭 800, 여러 장: 긴 변 640)', () => {
+    expect(coverImageUrl('f1')).toBe('https://lh3.googleusercontent.com/d/f1=w800-rw');
+    expect(coverImageUrl('f1', { many: true })).toBe('https://lh3.googleusercontent.com/d/f1=s640-rw');
     expect(coverImageUrl('a b')).toContain('/d/a%20b=');
     expect(coverImageUrl(null)).toBeNull();
+    expect(coverEditUrl('f1')).toBe('https://lh3.googleusercontent.com/d/f1=s1200-rw');
   });
 
-  it('표지 주소들: 한 장이면 16:10, 여러 장이면 정사각형 썸네일 — 고른 순서 그대로', () => {
+  it('보일 부분: 행의 두 칸 → { x, y } (하나라도 비면 null) → CSS object-position', () => {
+    expect(focusOf({ coverFocusX: 12.5, coverFocusY: 80 })).toEqual({ x: 12.5, y: 80 });
+    expect(focusOf({ coverFocusX: '12.5', coverFocusY: '0' })).toEqual({ x: 12.5, y: 0 });
+    expect(focusOf({ coverFocusX: 10, coverFocusY: null })).toBeNull();
+    expect(focusOf(null)).toBeNull();
+    expect(focusPosition({ x: 0, y: 100 })).toBe('0% 100%');
+    expect(focusPosition(null)).toBeNull();
+  });
+
+  it('표지 주소들: 한 장이면 폭 800, 여러 장이면 긴 변 640 — 고른 순서 그대로', () => {
     expect(coverUrls(['a'])).toEqual([coverImageUrl('a')]);
-    expect(coverUrls(['b', 'a'])).toEqual([thumbnailUrl('b'), thumbnailUrl('a')]);
+    expect(coverUrls(['b', 'a'])).toEqual([coverImageUrl('b', { many: true }), coverImageUrl('a', { many: true })]);
     expect(coverUrls([])).toEqual([]);
   });
 

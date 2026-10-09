@@ -1,20 +1,26 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Badge, Card } from '../../components/ui';
+import { Badge, Button, Card, Icon } from '../../components/ui';
 import RetryImage from '../../components/album/RetryImage';
 import AlbumCovers from '../../components/album/AlbumCovers';
 import { dropIndex, dropMarker, moveItem } from '../../utils/reorder';
+import { focusToPosition } from '../../utils/coverFocus';
+import CoverFocusDialog from './CoverFocusDialog';
 
 const DRAG_SLOP = 6; // 이만큼은 움직여야 끌기다 — 누르기만 한 손가락이 순서를 바꾸지 않게
 
 /**
  * 앨범의 대표 사진(사진 목록 카드의 표지) 칸 — 고른 순서대로 번호를 달아 보여 주고, 끌어서 놓아(마우스·손가락) 또는
- * 칸에 포커스를 두고 ←→ 키로 순서를 바꾼다. 옆에는 사진 목록 카드에 어떻게 놓이는지 미리 보기(AlbumCovers 그대로).
+ * 칸에 포커스를 두고 ←→ 키로 순서를 바꾼다. 칸을 누르면(끌지 않고) 보일 부분 고르기 창, 칸 모서리 ✕(또는 Delete 키)는
+ * 대표에서 빼기, [모두 빼기] 는 다 빼기. 옆에는 사진 목록 카드에 어떻게 놓이는지 미리 보기(AlbumCovers 그대로).
  *
- * covers   — [{ id, kind, thumbnailUrl }] 지금 대표 사진, 고른 순서 (GET …/album 의 covers)
+ * covers   — [{ id, kind, thumbnailUrl, imageUrl, editUrl, focus }] 지금 대표 사진, 고른 순서 (GET …/album 의 covers)
  * onReorder(ids) — 바뀐 순서. 저장이 실패하면 화면이 covers 를 다시 받아 되돌린다.
+ * onRemove(id) · onClear() — 빼기. onSaveFocus(cover, focus) — 보일 부분 저장(실패하면 Error 를 던진다).
  * 끌 자리 계산은 추천 상품 순서 바꾸기와 같다(utils/reorder.js) — 세로 대신 가로 가운데를 잰다.
  */
-function CoverOrderPanel({ covers = [], max = 4, disabled = false, onReorder, className }) {
+function CoverOrderPanel({
+  covers = [], max = 4, disabled = false, onReorder, onRemove, onClear, onSaveFocus, className
+}) {
   const [order, setOrder] = useState(covers);   // 끈 결과를 저장이 끝나기 전에 먼저 보여 준다
   useEffect(() => { setOrder(covers); }, [covers]);
   const [drag, setDrag] = useState(null);       // { from, to, dx } — 끄는 중
@@ -22,6 +28,8 @@ function CoverOrderPanel({ covers = [], max = 4, disabled = false, onReorder, cl
   const dragRef = useRef(null);
   const listRef = useRef(null);
   const refocusId = useRef(null);
+  const draggedRef = useRef(false);               // 방금 끈 손가락이 놓일 때 오는 click 은 "누르기" 가 아니다
+  const [editing, setEditing] = useState(null);   // 보일 부분 고르는 중인 { cover, index }
 
   // 키보드로 옮기면 그 사진 칸에 포커스를 남긴다(칸이 옮겨지며 포커스가 빠지지 않게)
   useLayoutEffect(() => {
@@ -82,10 +90,21 @@ function CoverOrderPanel({ covers = [], max = 4, disabled = false, onReorder, cl
     const state = dragRef.current;
     dragRef.current = null;
     setDrag(null);
+    draggedRef.current = Boolean(state?.moved);
     if (save && state?.moved) commit(state.from, state.to);
   };
 
+  const openFocus = (cover, index) => () => {
+    if (draggedRef.current) { draggedRef.current = false; return; }
+    if (!disabled && onSaveFocus) setEditing({ cover, index });
+  };
+
   const onKeyDown = (index, cover) => (event) => {
+    if ((event.key === 'Delete' || event.key === 'Backspace') && !disabled && onRemove) {
+      event.preventDefault();
+      onRemove(cover.id);
+      return;
+    }
     const step = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
     if (!step || disabled) return;
     event.preventDefault();
@@ -101,9 +120,14 @@ function CoverOrderPanel({ covers = [], max = 4, disabled = false, onReorder, cl
   return (
     <Card as="section" padding="md" className={className} aria-label="대표 사진">
       <div className="ui-stack" data-gap="3">
-        <div className="ui-row" data-gap="2">
-          <h3 className="ui-card__title">대표 사진</h3>
-          <Badge tone={order.length ? 'neutral' : 'muted'}>{order.length}/{max}</Badge>
+        <div className="ui-row" data-gap="2" data-justify="between">
+          <div className="ui-row" data-gap="2">
+            <h3 className="ui-card__title">대표 사진</h3>
+            <Badge tone={order.length ? 'neutral' : 'muted'}>{order.length}/{max}</Badge>
+          </div>
+          {order.length > 0 && onClear && (
+            <Button size="sm" variant="ghost" icon="x" disabled={disabled} onClick={onClear}>모두 빼기</Button>
+          )}
         </div>
 
         {order.length === 0 ? (
@@ -130,17 +154,35 @@ function CoverOrderPanel({ covers = [], max = 4, disabled = false, onReorder, cl
                       className="ui-cover-order__item"
                       data-cover-id={cover.id}
                       disabled={disabled}
-                      aria-label={`대표 사진 ${index + 1}${cover.kind === 'video' ? ' (영상)' : ''} — 끌거나 ←→ 키로 순서 바꾸기`}
-                      title="끌어서 순서 바꾸기"
+                      aria-label={`대표 사진 ${index + 1}${cover.kind === 'video' ? ' (영상)' : ''} — 누르면 보일 부분 고르기, 끌거나 ←→ 키로 순서 바꾸기`}
+                      title="눌러서 보일 부분 고르기 · 끌어서 순서 바꾸기"
                       onPointerDown={startDrag(index)}
                       onPointerMove={moveDrag}
                       onPointerUp={endDrag(true)}
                       onPointerCancel={endDrag(false)}
+                      onClick={openFocus(cover, index)}
                       onKeyDown={onKeyDown(index, cover)}
                     >
-                      <RetryImage src={cover.thumbnailUrl} draggable={false} />
+                      <RetryImage
+                        src={cover.imageUrl || cover.thumbnailUrl}
+                        draggable={false}
+                        style={{ objectPosition: focusToPosition(cover.focus) }}
+                      />
                       <span className="ui-cover-order__num" aria-hidden="true">{index + 1}</span>
                     </button>
+                    {onRemove && !dragging && (
+                      <button
+                        type="button"
+                        className="ui-cover-order__remove"
+                        disabled={disabled}
+                        aria-label={`대표 사진 ${index + 1} 빼기`}
+                        title="대표 사진에서 빼기"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={() => onRemove(cover.id)}
+                      >
+                        <Icon name="x" size={12} strokeWidth={3} />
+                      </button>
+                    )}
                   </li>
                 );
               })}
@@ -152,14 +194,35 @@ function CoverOrderPanel({ covers = [], max = 4, disabled = false, onReorder, cl
             </ol>
             <figure className="ui-cover-order__preview">
               <div className="ui-cover-order__preview-box">
-                <AlbumCovers urls={order.map((cover) => cover.thumbnailUrl)} data-testid="cover-preview" />
+                <AlbumCovers
+                  urls={order.map((cover) => cover.imageUrl || cover.thumbnailUrl)}
+                  positions={order.map((cover) => (cover.focus ? focusToPosition(cover.focus) : null))}
+                  data-testid="cover-preview"
+                />
               </div>
               <figcaption className="ui-cover-order__hint">사진 목록에서 이렇게 보여요</figcaption>
             </figure>
           </div>
         )}
-        {order.length > 1 && <p className="ui-hand">끌어서 놓으면 순서가 바뀌어요 · 1번이 표지 맨 앞(3장이면 가장 크게)이에요.</p>}
+        {order.length > 0 && (
+          <p className="ui-hand">
+            {order.length > 1 ? '끌어서 놓으면 순서가 바뀌어요 · 1번이 표지 맨 앞(3장이면 가장 크게)이에요. ' : ''}
+            사진을 누르면 보일 부분을 고르고, ✕ 로 대표에서 빼요.
+          </p>
+        )}
       </div>
+      {editing && (
+        <CoverFocusDialog
+          cover={editing.cover}
+          count={order.length}
+          index={editing.index}
+          onClose={() => setEditing(null)}
+          onSave={async (focus) => {
+            await onSaveFocus(editing.cover, focus);
+            setEditing(null);
+          }}
+        />
+      )}
     </Card>
   );
 }

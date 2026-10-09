@@ -1,6 +1,7 @@
 import pool from '../database.js';
 import { parentAwareDisplayNameSql } from '../utils/usernames.js';
 import { FACE_ANALYZER_VERSION } from '../utils/faceVector.js';
+import { focusOf } from '../utils/mediaSerializer.js';
 
 /**
  * 얼굴을 (다시) 찾아야 하는 사진 — 아직 못 찾았거나(pending·failed·skipped), 예전 방식으로 찾은 것.
@@ -23,8 +24,9 @@ const COVERABLE_SQL = (prefix = '') => `${prefix}status = 'ready' AND NOT ${pref
  * 대표가 아닌 사진은 array_position 이 NULL 이라 NULLS LAST 로 뒤에 선다.
  */
 const previewRows = async (eventIds) => (await pool.query(
-  `SELECT "eventId", "driveFileId", "isCover" FROM (
+  `SELECT "eventId", "driveFileId", "isCover", "coverFocusX", "coverFocusY" FROM (
      SELECT m."eventId", m."driveFileId", (m.id = ANY(e."albumCoverMediaIds")) IS TRUE AS "isCover",
+            m."coverFocusX", m."coverFocusY",
             ROW_NUMBER() OVER (
               PARTITION BY m."eventId"
               ORDER BY array_position(e."albumCoverMediaIds", m.id) ASC NULLS LAST, m."takenAt" DESC, m.id DESC
@@ -37,15 +39,19 @@ const previewRows = async (eventIds) => (await pool.query(
   [eventIds]
 )).rows;
 
-/** previewRows 를 요약(out[eventId])의 previews · covers(고른 순서) 에 싣는다 */
+/** previewRows 를 요약(out[eventId])의 previews · covers(고른 순서) · coverFocus(같은 순서, 보일 부분) 에 싣는다 */
 const addPreviews = (out, rows) => {
   for (const row of rows) {
     const summary = out[row.eventId];
     if (!summary) continue;
     summary.previews.push(row.driveFileId);
-    if (row.isCover) summary.covers.push(row.driveFileId);
+    if (row.isCover) {
+      summary.covers.push(row.driveFileId);
+      summary.coverFocus.push(focusOf(row));
+    }
   }
 };
+
 
 /**
  * 앨범의 사진·영상 한 건. 바이트는 Drive 에 있고 여기에는 파일 id 와 메타만 둔다.
@@ -80,13 +86,14 @@ class EventMedia {
 
   /**
    * 저장된 대표 사진 중 지금도 쓸 수 있는 것만, 저장된 순서 그대로 — 숨겼거나 지웠거나 다른 앨범의 것은 빠진다.
-   * → [{ id, kind, driveFileId }]. 선생님 앨범 화면의 대표 사진 칸(썸네일·순서)이 이것을 쓴다.
+   * → [{ id, kind, driveFileId, coverFocusX, coverFocusY }]. 선생님 앨범 화면의 대표 사진 칸(썸네일·순서·보일 부분)이 쓴다.
    */
   static async coverRows(eventId, ids) {
     const wanted = (Array.isArray(ids) ? ids : []).map(Number).filter((id) => Number.isInteger(id) && id > 0);
     if (!wanted.length) return [];
     const result = await pool.query(
-      `SELECT id, kind, "driveFileId" FROM event_media WHERE "eventId" = $1 AND id = ANY($2::int[]) AND ${COVERABLE_SQL()}`,
+      `SELECT id, kind, "driveFileId", "coverFocusX", "coverFocusY" FROM event_media
+        WHERE "eventId" = $1 AND id = ANY($2::int[]) AND ${COVERABLE_SQL()}`,
       [eventId, wanted]
     );
     const byId = new Map(result.rows.map((row) => [Number(row.id), { ...row, id: Number(row.id) }]));
@@ -167,6 +174,18 @@ class EventMedia {
   }
 
   /** 설명을 바꾼다(null 이면 지운다). 이 이벤트의 사진이 아니면 null */
+  /** 대표 사진으로 쓸 때 보일 부분 — focus 가 null 이면 가운데로(비운다). 다른 이벤트의 사진은 고치지 못한다 */
+  static async setCoverFocus(id, focus, eventId) {
+    const now = new Date().toISOString();
+    const result = await pool.query(
+      `UPDATE event_media SET "coverFocusX" = $2, "coverFocusY" = $3, "updatedAt" = $4
+        WHERE id = $1 AND "eventId" = $5
+        RETURNING id, "coverFocusX", "coverFocusY"`,
+      [id, focus ? focus.x : null, focus ? focus.y : null, now, eventId]
+    );
+    return result.rows[0] || null;
+  }
+
   static async setCaption(id, caption, eventId) {
     const now = new Date().toISOString();
     const result = await pool.query(
@@ -347,7 +366,7 @@ class EventMedia {
     const previews = await previewRows(eventIds);
 
     const out = {};
-    for (const id of eventIds) out[id] = { images: 0, videos: 0, mine: 0, previews: [], covers: [] };
+    for (const id of eventIds) out[id] = { images: 0, videos: 0, mine: 0, previews: [], covers: [], coverFocus: [] };
     for (const row of counts.rows) Object.assign(out[row.eventId], { images: row.images, videos: row.videos });
     for (const row of mine.rows) out[row.eventId].mine = row.mine;
     addPreviews(out, previews);
@@ -377,7 +396,7 @@ class EventMedia {
     const previews = await previewRows(eventIds);
 
     const out = {};
-    for (const id of eventIds) out[id] = { images: 0, videos: 0, hidden: 0, fromParents: 0, previews: [], covers: [] };
+    for (const id of eventIds) out[id] = { images: 0, videos: 0, hidden: 0, fromParents: 0, previews: [], covers: [], coverFocus: [] };
     for (const row of counts.rows) {
       Object.assign(out[row.eventId], { images: row.images, videos: row.videos, hidden: row.hidden, fromParents: row.fromParents });
     }

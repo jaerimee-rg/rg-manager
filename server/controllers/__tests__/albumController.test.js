@@ -13,6 +13,7 @@ jest.unstable_mockModule('../../models/EventMedia.js', () => ({
     getById: jest.fn(),
     setHidden: jest.fn().mockResolvedValue(2),
     setCaption: jest.fn(),
+    setCoverFocus: jest.fn(),
     coverableIds: jest.fn().mockResolvedValue([]),
     coverRows: jest.fn().mockResolvedValue([]),
     listUnanalyzed: jest.fn().mockResolvedValue([]),
@@ -576,8 +577,8 @@ describe('updateAlbum — 대표 사진 (사진 목록 카드의 표지, 최대 
   it('getAlbum 은 지금 쓸 수 있는 대표 사진 목록(고른 순서)·썸네일과 최대 장수를 준다', async () => {
     Event.getById.mockResolvedValue(event({ albumCoverMediaIds: [41, 2, 7] }));
     EventMedia.coverRows.mockResolvedValue([
-      { id: 7, kind: 'video', driveFileId: 'v-7' },
-      { id: 41, kind: 'image', driveFileId: 'd-41' }
+      { id: 7, kind: 'video', driveFileId: 'v-7', coverFocusX: 25, coverFocusY: 60 },
+      { id: 41, kind: 'image', driveFileId: 'd-41', coverFocusX: null, coverFocusY: null }
     ]);
 
     await getAlbum(req, res);
@@ -586,8 +587,15 @@ describe('updateAlbum — 대표 사진 (사진 목록 카드의 표지, 최대 
     expect(res.json.mock.calls[0][0]).toMatchObject({
       coverMediaIds: [7, 41],
       covers: [
-        { id: 7, kind: 'video', thumbnailUrl: 'https://lh3.googleusercontent.com/d/v-7=w400-h400-c-rw' },
-        { id: 41, kind: 'image', thumbnailUrl: 'https://lh3.googleusercontent.com/d/d-41=w400-h400-c-rw' }
+        {
+          id: 7,
+          kind: 'video',
+          thumbnailUrl: 'https://lh3.googleusercontent.com/d/v-7=w400-h400-c-rw',
+          imageUrl: 'https://lh3.googleusercontent.com/d/v-7=s640-rw',
+          editUrl: 'https://lh3.googleusercontent.com/d/v-7=s1200-rw',
+          focus: { x: 25, y: 60 }
+        },
+        { id: 41, kind: 'image', thumbnailUrl: 'https://lh3.googleusercontent.com/d/d-41=w400-h400-c-rw', focus: null }
       ],
       maxCovers: 4
     });
@@ -986,6 +994,60 @@ describe('updateMedia — 사진·영상 설명', () => {
 
     expect(res.status).not.toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith({ id: 5, caption: '무대' });
+  });
+});
+
+describe('updateMedia — 대표 사진으로 쓸 때 보일 부분', () => {
+  beforeEach(() => {
+    Event.getById.mockResolvedValue(event());
+    req.params = { id: '3', mediaId: '41' };
+  });
+
+  it('{coverFocus: {x, y}} 를 소수 첫째 자리까지 저장하고 돌려준다 — 설명은 건드리지 않는다', async () => {
+    EventMedia.setCoverFocus.mockResolvedValue({ id: 41, coverFocusX: 12.3, coverFocusY: 80 });
+    req.body = { coverFocus: { x: 12.34, y: 80 } };
+
+    await updateMedia(req, res);
+
+    expect(EventMedia.setCoverFocus).toHaveBeenCalledWith(41, { x: 12.3, y: 80 }, 3);
+    expect(EventMedia.setCaption).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ id: 41, coverFocus: { x: 12.3, y: 80 } });
+  });
+
+  it('null 이면 가운데로 되돌린다', async () => {
+    EventMedia.setCoverFocus.mockResolvedValue({ id: 41, coverFocusX: null, coverFocusY: null });
+    req.body = { coverFocus: null };
+
+    await updateMedia(req, res);
+
+    expect(EventMedia.setCoverFocus).toHaveBeenCalledWith(41, null, 3);
+    expect(res.json).toHaveBeenCalledWith({ id: 41, coverFocus: null });
+  });
+
+  it.each([
+    ['범위 밖', { x: -1, y: 50 }],
+    ['100 넘음', { x: 50, y: 100.5 }],
+    ['숫자 아님', { x: '50', y: 50 }],
+    ['한쪽 없음', { x: 50 }],
+    ['객체 아님', 50]
+  ])('%s 이면 400 cover_focus — 아무것도 저장하지 않는다', async (_label, value) => {
+    req.body = { coverFocus: value, caption: '함께 보낸 설명' };
+
+    await updateMedia(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0].reason).toBe('cover_focus');
+    expect(EventMedia.setCaption).not.toHaveBeenCalled();
+    expect(EventMedia.setCoverFocus).not.toHaveBeenCalled();
+  });
+
+  it('다른 이벤트의 사진이면 404', async () => {
+    EventMedia.setCoverFocus.mockResolvedValue(null);
+    req.body = { coverFocus: { x: 10, y: 10 } };
+
+    await updateMedia(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
   });
 });
 
