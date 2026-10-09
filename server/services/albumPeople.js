@@ -19,6 +19,24 @@ export const albumPeople = async (eventId, { includeHidden = false } = {}) => {
     MediaFace.listForAlbum(eventId, { includeHidden }),
     MediaTag.listForAlbum(eventId, { includeHidden })
   ]);
+  return peopleOf(faces, tags);
+};
+
+/**
+ * 여러 앨범의 얼굴을 **함께** 묶는다 — 선생님 사진 메뉴의 "전체 사진"(모든 폴더). 앨범마다 따로 묶으면 같은 아이가
+ * 폴더 수만큼 나오므로 한 번에 묶어 한 아이 = 얼굴 하나로 만든다. 묶는 규칙·key 는 albumPeople 과 같다.
+ * mediaIds 는 여러 앨범에 걸친다(사진 id 는 앨범을 넘어 하나뿐이다).
+ */
+export const teacherPeople = async (eventIds, { includeHidden = false } = {}) => {
+  if (!eventIds?.length) return [];
+  const [faces, tags] = await Promise.all([
+    MediaFace.listForAlbums(eventIds, { includeHidden }),
+    MediaTag.listForAlbums(eventIds, { includeHidden })
+  ]);
+  return peopleOf(faces, tags);
+};
+
+const peopleOf = (faces, tags) => {
   const fileOf = new Map(faces.map((face) => [face.mediaId, face.driveFileId]));
   return groupFaces(faces, tags).map((person) => ({
     ...person,
@@ -91,4 +109,4 @@ export const toPersonView = (person, { myStudentIds = null, teacher = false } = 
 /** 학부모 목록 순서 — 우리 아이 먼저, 그다음 사진 많은 사람부터(groupFaces 순서 그대로) */
 export const parentPeopleOrder = (views) => [...views].sort((a, b) => Number(b.mine) - Number(a.mine));
 
-export default { albumPeople, findPerson, removePerson, toPersonView, parentPeopleOrder };
+export default { albumPeople, teacherPeople, findPerson, removePerson, toPersonView, parentPeopleOrder };

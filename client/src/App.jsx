@@ -25,6 +25,7 @@ import ShopManager from './pages/Shop/ShopManager';
 import EventList from './pages/Events/EventList';
 import PhotoAlbums from './pages/Photos/PhotoAlbums';
 import PhotoAlbum from './pages/Photos/PhotoAlbum';
+import AllPhotos from './pages/Photos/AllPhotos';
 import EventForm from './pages/Events/EventForm';
 import ParentList from './pages/Parents/ParentList';
 import InviteLanding from './pages/parent/InviteLanding';
@@ -350,6 +351,8 @@ function App() {
           <Route path="/events/new" element={<ProtectedRoute><EventForm /></ProtectedRoute>} />
           <Route path="/events/edit" element={<ProtectedRoute><EventForm /></ProtectedRoute>} />
           <Route path="/photos" element={<ProtectedRoute><PhotoAlbums /></ProtectedRoute>} />
+          {/* 전체 사진(모든 폴더) — 정적 경로라 아래 /photos/:eventId 보다 먼저 맞는다 */}
+          <Route path="/photos/all" element={<ProtectedRoute><AllPhotos /></ProtectedRoute>} />
           <Route path="/photos/:eventId" element={<ProtectedRoute><PhotoAlbum /></ProtectedRoute>} />
           <Route path="/parent/photos/:eventId" element={<SharedAlbumForTeacher />} />
           <Route path="/parents" element={<ProtectedRoute><ParentList /></ProtectedRoute>} />

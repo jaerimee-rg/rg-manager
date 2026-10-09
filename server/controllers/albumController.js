@@ -13,7 +13,7 @@ import {
 import { canUpload, canManageAlbum, canDeleteMedia, reasonMessage, isValidAudience, isPhotoFolder } from '../utils/albumAccess.js';
 import { toTeacherMedia, thumbnailUrl } from '../utils/mediaSerializer.js';
 import { sharePathFor } from '../services/albumShare.js';
-import { albumPeople, findPerson, removePerson, toPersonView } from '../services/albumPeople.js';
+import { albumPeople, teacherPeople, findPerson, removePerson, toPersonView } from '../services/albumPeople.js';
 import AlbumView from '../models/AlbumView.js';
 
 /**
@@ -405,6 +405,77 @@ export const listPeople = async (req, res) => {
 };
 
 /**
+ * 선생님 사진 메뉴의 **전체 사진** — 내 앨범 전부(이벤트 앨범 + 사진 전용 폴더)를 한 화면에.
+ * 관리자 역할이어도 자기 것만 본다(GET /api/albums 와 같은 범위). Drive 를 부르지 않는다.
+ */
+const myAlbums = async (req) => (await Event.listForPhotos(req.user.id)).filter((event) => event.driveFolderId);
+
+const pageOf = (query) => ({
+  limit: Math.min(parseInt(query.limit, 10) || 60, 200),
+  cursor: query.cursorTakenAt && query.cursorId ? { takenAt: query.cursorTakenAt, id: parseInt(query.cursorId, 10) } : null
+});
+
+/** 사진마다 어느 폴더의 것인지 — 화면이 폴더 이름을 보여 주고, 설명 저장은 그 앨범 주소로 보낸다 */
+const albumOf = (event) => ({ eventId: event.id, title: event.title, date: event.date, type: event.type });
+
+/**
+ * GET /api/albums/media — 모든 폴더의 사진을 찍은 순서(최근 먼저)로. 앨범 화면처럼 숨긴 사진도 넣는다.
+ * ?person=<key> 는 GET /api/albums/people 의 사람 — 모든 폴더를 함께 다시 묶어 그 사람이 나온 사진만.
+ * 그 사이 묶음이 바뀌어 없는 사람이면 빈 목록 + personMissing.
+ */
+export const listAllMedia = async (req, res) => {
+  try {
+    const albums = await myAlbums(req);
+    if (!albums.length) return res.json({ items: [], nextCursor: null });
+    await albumService.ensureAlbumsMatched(albums);
+
+    const eventIds = albums.map((event) => event.id);
+    const { limit, cursor } = pageOf(req.query);
+    const personKey = req.query.person ? String(req.query.person) : null;
+    const person = personKey ? findPerson(await teacherPeople(eventIds, { includeHidden: true }), personKey) : null;
+    const mediaIds = personKey ? (person?.mediaIds || []) : null;
+
+    const rows = await EventMedia.listAcross(eventIds, {
+      filter: String(req.query.filter || 'all'), limit, cursor, includeHidden: true, uploaderUserId: req.user.id, mediaIds
+    });
+    const items = await decorate(rows, req.user.id, req.user.role);
+    const byId = new Map(albums.map((event) => [event.id, event]));
+    const last = rows[rows.length - 1];
+
+    res.json({
+      items: items.map((item, index) => {
+        const event = byId.get(rows[index].eventId);
+        return { ...item, eventId: rows[index].eventId, album: event ? albumOf(event) : null };
+      }),
+      nextCursor: rows.length === limit && last ? { takenAt: last.takenAt, id: last.id } : null,
+      ...(personKey && !person ? { personMissing: true } : {})
+    });
+  } catch (error) {
+    console.error('전체 사진 목록 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/**
+ * GET /api/albums/people — 모든 폴더에 나온 사람마다 얼굴 하나(같은 아이는 폴더가 달라도 하나로 묶인다).
+ * 앨범 화면의 얼굴 목록과 같은 모양이다. 여기서는 사람을 빼지 않으므로 removable 은 싣지 않는다
+ * (빼기는 앨범 화면에서 — 그 앨범의 얼굴만 지운다).
+ */
+export const listAllPeople = async (req, res) => {
+  try {
+    const albums = await myAlbums(req);
+    if (!albums.length) return res.json({ people: [] });
+    await albumService.ensureAlbumsMatched(albums);
+
+    const people = await teacherPeople(albums.map((event) => event.id), { includeHidden: true });
+    res.json({ people: people.map((person) => toPersonView(person)) });
+  } catch (error) {
+    console.error('전체 사진 얼굴 목록 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/**
  * DELETE /api/events/:id/album/people/:key — 얼굴 목록에서 관계없는 사람을 뺀다(선생님만).
  * 사진은 지우지 않고 그 사람의 얼굴과 그 얼굴로 붙은 자동 태그만 지운다(services/albumPeople.js removePerson).
  * Drive 를 건드리지 않으므로 Google 연결이 끊겨도 된다. 그 사이 묶음이 바뀌어 없는 사람이면 404 + personMissing.
@@ -739,7 +810,7 @@ export const deleteMedia = async (req, res) => {
 };
 
 export default {
-  getAlbum, listPeople, deletePerson, createAlbum, updateAlbum, refreshAlbum,
+  getAlbum, listPeople, deletePerson, listAllMedia, listAllPeople, createAlbum, updateAlbum, refreshAlbum,
   listMedia, createUploads, completeUpload, bulkAction,
   addTag, removeTag, listUnanalyzed, saveFaces, rematch, updateMedia, deleteMedia
 };

@@ -76,6 +76,17 @@ describe('PhotoAlbums — 사진 목록 (docs/photo-menu FR-510~516)', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/photos/31');
   });
 
+  it('[전체 사진 보기] 는 모든 폴더의 사진 화면으로 간다', async () => {
+    await renderList();
+    fireEvent.click(screen.getByRole('button', { name: '전체 사진 보기' }));
+    expect(mockNavigate).toHaveBeenCalledWith('/photos/all');
+  });
+
+  it('앨범이 하나도 없으면 [전체 사진 보기] 가 없다', async () => {
+    await renderList({ ...LIST, albums: [] });
+    expect(screen.queryByRole('button', { name: '전체 사진 보기' })).not.toBeInTheDocument();
+  });
+
   it('[사진 올리기] 는 이벤트 고르기부터 연다', async () => {
     await renderList();
     await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: '사진 올리기' })[0]); });

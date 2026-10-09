@@ -646,6 +646,15 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   tags and parent "아니에요" answers stay. Bumping `FACE_ANALYZER_VERSION` re-analyses the album and would find those
   faces again. While the X shows, tapping another face, [전체], outside or Esc only closes it (no selection); the
   long-press release click never selects.
+- **전체 사진 (teacher, `/photos/all`, `pages/Photos/AllPhotos.jsx`)** — the 사진 list's **[전체 사진 보기]** (shown once an album
+  exists) opens every folder's photos in one grid, newest `takenAt` first, hidden ones included: `GET /api/albums/media`
+  (`albumController.listAllMedia` → `EventMedia.listAcross`, same filters/cursor as one album; each item also carries `eventId` +
+  `album {eventId,title,date,type}`). The face strip above it is `GET /api/albums/people` (`listAllPeople` →
+  `services/albumPeople.js:teacherPeople`): **all of the teacher's albums grouped together**, so a child is one face whatever the
+  folder, and `?person=<key>` regroups the same way. Scope is `Event.listForPhotos(req.user.id)` with a Drive folder (admins see
+  their own, like `GET /api/albums`); both routes sit under the `rejectParents` mount. The page is view + caption only — the
+  viewer shows the folder name (`item.albumTitle`) and saves captions to that photo's own album (`mediaCaptionSave.js`); hide,
+  delete, covers and removing a face stay on the album page (no X on this strip, no `removable` in its people).
 - **Parents**: 사진 tab (`/parent/photos`, published albums only — and only those with at least one visible ready photo/video:
   an album whose photos were all deleted or hidden drops out of `GET /api/parent/albums` (owner's call 2026-10-09) but still opens
   from the event detail's [앨범 열기] and share links, so parents can still upload; the teacher list keeps showing it), gallery (`/parent/photos/:eventId`) with the

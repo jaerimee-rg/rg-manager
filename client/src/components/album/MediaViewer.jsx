@@ -291,6 +291,13 @@ function MediaInfo({ item, overlay = false, onEditCaption, cover, showViews = fa
       }}
     >
       {item.caption && <MediaCaption key={item.id} text={item.caption} />}
+      {/* 선생님 전체 사진 — 여러 폴더의 사진이 섞여 있어 어느 폴더의 것인지 보여 준다 */}
+      {item.albumTitle && (
+        <span style={entry} data-testid="media-album">
+          <Icon name="folder" size={14} />
+          {item.albumTitle}
+        </span>
+      )}
       <span style={entry}>
         <Icon name="calendar" size={14} />
         {formatDayLabel(dayKeyOf(item.takenAt))} {formatTime(item.takenAt)}

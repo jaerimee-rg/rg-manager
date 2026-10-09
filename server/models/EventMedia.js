@@ -48,6 +48,65 @@ const addPreviews = (out, rows) => {
 };
 
 /**
+ * EventMedia.list · listAcross 의 몸통 — 첫 조건(앨범 하나 / 여러 앨범)과 그 값($1)만 다르다.
+ */
+const listWhere = async (scopeSql, scopeParam, {
+  filter = 'all', studentIds = null, uploaderUserId = null, mediaIds = null,
+  includeHidden = false, limit = 60, cursor = null
+} = {}) => {
+  const params = [scopeParam];
+  const where = [scopeSql, `m.status = 'ready'`];
+
+  if (!includeHidden) where.push('m."isHidden" = FALSE');
+  if (filter === 'hidden') { where.push('m."isHidden" = TRUE'); }
+  if (filter === 'photo') where.push(`m.kind = 'image'`);
+  if (filter === 'video') where.push(`m.kind = 'video'`);
+  if (filter === 'uploaded' && uploaderUserId) {
+    params.push(uploaderUserId);
+    where.push(`m."uploaderUserId" = $${params.length}`);
+  }
+  if (filter === 'teacher') where.push(`m."uploaderRole" = 'teacher'`);
+  if (filter === 'parent') where.push(`m."uploaderRole" = 'parent'`);
+  if (filter === 'unanalyzed') where.push(needsFaceAnalysisSql('m.'));
+  if (filter === 'untagged') {
+    where.push(`NOT EXISTS (SELECT 1 FROM media_tags t WHERE t."mediaId" = m.id AND t.source <> 'candidate' AND t.source <> 'excluded')`);
+  }
+  if (filter === 'candidates') {
+    where.push(`EXISTS (SELECT 1 FROM media_tags t WHERE t."mediaId" = m.id AND t.source = 'candidate')`);
+  }
+  // "우리 아이만" — 자녀 태그가 있는 것만
+  if (studentIds?.length) {
+    params.push(studentIds);
+    where.push(`EXISTS (SELECT 1 FROM media_tags t WHERE t."mediaId" = m.id
+                  AND t."studentId" = ANY($${params.length}::int[])
+                  AND t.source IN ('face','manual','parent_confirmed'))`);
+  }
+  if (mediaIds) {
+    params.push(mediaIds);
+    where.push(`m.id = ANY($${params.length}::int[])`);
+  }
+  if (cursor?.takenAt && cursor?.id) {
+    params.push(cursor.takenAt, cursor.id);
+    where.push(`(m."takenAt", m.id) < ($${params.length - 1}, $${params.length})`);
+  }
+
+  params.push(Math.min(Number(limit) || 60, 200));
+
+  const result = await pool.query(
+    // 올린 사람 이름: 학부모면 본인이 정한 학부모명("예림엄마")이 먼저다 — username 은 카카오 식별자다
+    `SELECT m.*, ${parentAwareDisplayNameSql('u', 'pa')} AS "uploaderName"
+       FROM event_media m
+       LEFT JOIN users u ON u.id = m."uploaderUserId"
+       LEFT JOIN parent_accounts pa ON pa."userId" = m."uploaderUserId"
+      WHERE ${where.join(' AND ')}
+      ORDER BY m."takenAt" DESC, m.id DESC
+      LIMIT $${params.length}`,
+    params
+  );
+  return result.rows;
+};
+
+/**
  * 앨범의 사진·영상 한 건. 바이트는 Drive 에 있고 여기에는 파일 id 와 메타만 둔다.
  * 갤러리 조회는 커서(takenAt, id) 로 페이지를 넘긴다.
  */
@@ -233,60 +292,17 @@ class EventMedia {
    * filter: all | photo | video | uploaded(내가 올린 것) | untagged | candidates | unanalyzed | hidden
    * mediaIds: 이 사진들만 — 얼굴 목록에서 한 사람을 골랐을 때(services/albumPeople.js 가 묶은 그 사람의 사진)
    */
-  static async list(eventId, {
-    filter = 'all', studentIds = null, uploaderUserId = null, mediaIds = null,
-    includeHidden = false, limit = 60, cursor = null
-  } = {}) {
-    const params = [eventId];
-    const where = [`m."eventId" = $1`, `m.status = 'ready'`];
+  static async list(eventId, options = {}) {
+    return listWhere(`m."eventId" = $1`, eventId, options);
+  }
 
-    if (!includeHidden) where.push('m."isHidden" = FALSE');
-    if (filter === 'hidden') { where.push('m."isHidden" = TRUE'); }
-    if (filter === 'photo') where.push(`m.kind = 'image'`);
-    if (filter === 'video') where.push(`m.kind = 'video'`);
-    if (filter === 'uploaded' && uploaderUserId) {
-      params.push(uploaderUserId);
-      where.push(`m."uploaderUserId" = $${params.length}`);
-    }
-    if (filter === 'teacher') where.push(`m."uploaderRole" = 'teacher'`);
-    if (filter === 'parent') where.push(`m."uploaderRole" = 'parent'`);
-    if (filter === 'unanalyzed') where.push(needsFaceAnalysisSql('m.'));
-    if (filter === 'untagged') {
-      where.push(`NOT EXISTS (SELECT 1 FROM media_tags t WHERE t."mediaId" = m.id AND t.source <> 'candidate' AND t.source <> 'excluded')`);
-    }
-    if (filter === 'candidates') {
-      where.push(`EXISTS (SELECT 1 FROM media_tags t WHERE t."mediaId" = m.id AND t.source = 'candidate')`);
-    }
-    // "우리 아이만" — 자녀 태그가 있는 것만
-    if (studentIds?.length) {
-      params.push(studentIds);
-      where.push(`EXISTS (SELECT 1 FROM media_tags t WHERE t."mediaId" = m.id
-                    AND t."studentId" = ANY($${params.length}::int[])
-                    AND t.source IN ('face','manual','parent_confirmed'))`);
-    }
-    if (mediaIds) {
-      params.push(mediaIds);
-      where.push(`m.id = ANY($${params.length}::int[])`);
-    }
-    if (cursor?.takenAt && cursor?.id) {
-      params.push(cursor.takenAt, cursor.id);
-      where.push(`(m."takenAt", m.id) < ($${params.length - 1}, $${params.length})`);
-    }
-
-    params.push(Math.min(Number(limit) || 60, 200));
-
-    const result = await pool.query(
-      // 올린 사람 이름: 학부모면 본인이 정한 학부모명("예림엄마")이 먼저다 — username 은 카카오 식별자다
-      `SELECT m.*, ${parentAwareDisplayNameSql('u', 'pa')} AS "uploaderName"
-         FROM event_media m
-         LEFT JOIN users u ON u.id = m."uploaderUserId"
-         LEFT JOIN parent_accounts pa ON pa."userId" = m."uploaderUserId"
-        WHERE ${where.join(' AND ')}
-        ORDER BY m."takenAt" DESC, m.id DESC
-        LIMIT $${params.length}`,
-      params
-    );
-    return result.rows;
+  /**
+   * 여러 앨범을 한 목록으로 — 선생님 사진 메뉴의 "전체 사진"(모든 폴더). 조건·순서·커서는 list 와 같다.
+   * eventIds 가 비면 쿼리 없이 빈 목록.
+   */
+  static async listAcross(eventIds, options = {}) {
+    if (!eventIds?.length) return [];
+    return listWhere(`m."eventId" = ANY($1::int[])`, eventIds, options);
   }
 
   /** 이벤트의 통계 한 번에 */

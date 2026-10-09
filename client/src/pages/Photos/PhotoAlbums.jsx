@@ -65,13 +65,22 @@ function PhotoAlbums() {
       사진 올리기
     </Button>
   );
+  // 모든 폴더의 사진을 한 화면에 — 얼굴 목록(모든 아이)으로 거를 수 있다. 앨범이 있을 때만
+  const headerActions = (
+    <>
+      {albums.length > 0 && (
+        <Button icon="image" onClick={() => navigate('/photos/all')}>전체 사진 보기</Button>
+      )}
+      {uploadButton}
+    </>
+  );
 
   return (
     <>
       <PageHeader
         title="사진"
         description="사진을 올릴 때 이벤트를 고르면 그 이벤트에 연결되고, 이벤트가 없으면 새 폴더를 만들어 올려요. 공개한 앨범만 학부모 ‘사진’ 탭(이벤트면 이벤트 상세에도)에 보여요."
-        actions={uploadButton}
+        actions={headerActions}
       />
 
       {error && <Callout tone="danger">{error}</Callout>}
