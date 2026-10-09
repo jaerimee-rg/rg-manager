@@ -109,6 +109,8 @@ const saveLog = async (req, action, target, responseData) => {
       details = `사진: ${responseData.media.fileName}`;
     } else if (action === 'UPDATE_ALBUM_MEDIA' && req.body) {
       details = `${req.body.action} · ${(req.body.mediaIds || []).length}건`;
+    } else if (action === 'CAPTION_ALBUM_MEDIA' && req.params) {
+      details = `사진 ID: ${req.params.mediaId} · 설명 ${responseData?.caption ? '저장' : '지움'}`;
     } else if (action === 'DELETE_ALBUM_MEDIA' && req.params) {
       details = `사진 ID: ${req.params.mediaId}`;
     } else if ((action === 'TAG_ALBUM_MEDIA' || action === 'UNTAG_ALBUM_MEDIA') && req.params) {

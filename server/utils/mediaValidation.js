@@ -8,6 +8,7 @@ export const MAX_VIDEO_BYTES = 500 * 1024 * 1024;  // 영상 500MB
 export const MAX_FILES_PER_UPLOAD = 30;
 export const FOLDER_NAME_MAX = 100;
 export const ORIGINAL_NAME_MAX = 200;
+export const CAPTION_MAX = 500;
 
 /** 확장자 → 종류·MIME. 브라우저가 주는 Content-Type 은 믿지 않고 확장자로 정한다(FAQ 파일과 같은 규칙). */
 const TYPES = {
@@ -124,6 +125,23 @@ export const folderNameFromEvent = ({ date, title } = {}) => {
   return name || '앨범';
 };
 
+/**
+ * 사진·영상 설명(선생님이 쓴다). 앞뒤 공백을 지우고 줄바꿈은 \n 으로 맞춘다. 빈 글이면 설명을 지운다(null).
+ * → { ok: true, caption } | { ok: false, message }
+ */
+export const normalizeCaption = (value) => {
+  if (value === null || value === undefined) return { ok: true, caption: null };
+  if (typeof value !== 'string') return { ok: false, message: '설명은 글자로 보내 주세요.' };
+  const caption = value
+    .replace(/\r\n?/g, '\n')
+    // 줄바꿈·탭 말고 보이지 않는 제어 문자는 지운다
+    .replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '')
+    .trim();
+  if (!caption) return { ok: true, caption: null };
+  if ([...caption].length > CAPTION_MAX) return { ok: false, message: `설명은 ${CAPTION_MAX}자까지 쓸 수 있어요.` };
+  return { ok: true, caption };
+};
+
 export default {
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
@@ -137,5 +155,7 @@ export default {
   buildDriveName,
   sanitizeFolderName,
   defaultFolderName,
-  folderNameFromEvent
+  folderNameFromEvent,
+  CAPTION_MAX,
+  normalizeCaption
 };

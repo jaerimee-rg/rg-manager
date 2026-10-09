@@ -603,6 +603,15 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   longer match**, while 맞아요/아니에요 answers stay), and a **6-photo grid on the event detail**
   (view only — uploads happen in the album). Parents upload only to published albums with 업로드 받기 on, and
   may delete only what they uploaded. A private album opened by URL shows "선생님이 아직 공개하지 않은 앨범이에요".
+- **Photo/video captions** (`event_media.caption`, nullable TEXT, ≤ 500 characters): the teacher taps a photo in
+  the 사진 menu album → the viewer shows [설명 추가]/[설명 수정] in its bottom info line → an editor opens **inside
+  the viewer** (the app `Modal` sits below the viewer's z-index 240), with the buttons above the textarea and lifted
+  over the phone keyboard (`hooks/useKeyboardInset`). `PATCH /api/events/:id/media/:mediaId {caption}`
+  (`albumController.updateMedia`, owner only; `''`/`null` clears; rule in `mediaValidation.normalizeCaption`, client
+  copy `utils/mediaCaption.js`) works while Google is disconnected — it never touches Drive. `caption` is in both
+  serializers (the parent whitelist test lists it); `MediaViewer` shows it above the date line — over the photo, or
+  under the Drive player for videos — clamped to 3 lines with [더 보기]. While the editor is open, swipe and arrow
+  keys are off and Esc closes only the editor. No toast on save: it would cover the caption that just appeared.
 - **Deletes go to the Drive trash** (`files.update {trashed:true}`), never permanent — 30 days to
   recover. The DB row is removed, cascading faces and tags.
 

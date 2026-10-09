@@ -103,6 +103,22 @@ describe('ParentAlbum', () => {
     expect(save).toHaveAttribute('href', 'https://drive.google.com/uc?export=download&id=f1');
   });
 
+  it('선생님이 붙인 설명이 뷰어 아래쪽에 보인다 — 학부모는 고칠 수 없다', async () => {
+    fetchWithAuth.mockImplementation(() => jsonResponse(payload({
+      items: [media({ id: 1, caption: '단체전 결승 무대' }), media({ id: 2, kind: 'video', caption: '개인전 곤봉' })]
+    })));
+    await renderAlbum();
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: '사진 열기' })[0]);
+    });
+    expect(screen.getByTestId('media-caption')).toHaveTextContent('단체전 결승 무대');
+    expect(screen.queryByRole('button', { name: /설명 (추가|수정)/ })).not.toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'ArrowRight' });
+    expect(screen.getByTestId('media-caption')).toHaveTextContent('개인전 곤봉');
+  });
+
   it('내가 올린 사진에만 삭제가 보인다', async () => {
     fetchWithAuth.mockImplementation(() => jsonResponse(payload({
       items: [media({ id: 1, uploader: 'me', canDelete: true })]

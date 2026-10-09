@@ -1,8 +1,10 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Icon } from '../ui';
+import { Button, Field, Icon, Textarea } from '../ui';
 import { formatDuration } from '../../utils/mediaUrls';
 import { PAGE_GAP } from '../../utils/viewerSwipe';
+import { CAPTION_MAX, captionChanged, cleanCaption } from '../../utils/mediaCaption';
 import { useSwipeToPage } from '../../hooks/useSwipeToPage';
+import { useKeyboardInset } from '../../hooks/useKeyboardInset';
 import {
   drivePlayerFrame, hasSeenFrameTap, isTouchDevice, readyPreviewUrl, rememberFrameTap, shouldCoverForSwipe, shouldPrewarm,
   swipeBands
@@ -33,8 +35,13 @@ import { formatTime, formatDayLabel, dayKeyOf, uploaderLabel } from '../../utils
  * 미리 그려 두어 밀 때 손가락을 따라 들어온다(영상은 미리보기 사진으로). Drive 플레이어 안의 터치는 다른 출처의
  * iframe 이라 우리에게 오지 않으므로, 플레이어 위에 Drive 버튼 자리만 비운 투명한 판을 덮어 그 위에서 민 것을 받는다
  * (어디를 비우는지는 utils/drivePlayer.js).
+ *
+ * 선생님이 붙인 설명(item.caption)은 아래 정보 줄 위에 보인다 — 사진이면 사진 위에 겹쳐, 영상이면 플레이어 아래에.
+ * onCaptionSave(item, caption) 를 주면(선생님 화면) 그 자리에 [설명 추가]·[설명 수정] 이 생기고, 누르면 뷰어 안에서
+ * 아래쪽 입력 창이 열린다. 저장에 실패하면 Error(message) 를 던진다 — 창에 그 글을 보여 주고 열어 둔다.
+ * 쓰는 동안에는 넘기기(밀기 · 화살표 키)를 멈추고, Esc 는 뷰어가 아니라 입력 창을 닫는다.
  */
-function MediaViewer({ items = [], startId, onClose, onDelete }) {
+function MediaViewer({ items = [], startId, onClose, onDelete, onCaptionSave }) {
   const [index, setIndex] = useState(() => {
     const found = items.findIndex((item) => item.id === startId);
     return found >= 0 ? found : 0;
@@ -44,9 +51,11 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
   const dialogRef = useRef(null);
   const trackRef = useRef(null);
   const hasNav = items.length > 1;
+  const [editing, setEditing] = useState(false);
+  const canEditCaption = typeof onCaptionSave === 'function';
 
   useSwipeToPage({
-    enabled: hasNav,
+    enabled: hasNav && !editing,
     areaRef: dialogRef,
     trackRef,
     onStep: (step) => setIndex((i) => (i + step + items.length) % items.length)
@@ -54,13 +63,15 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
 
   useEffect(() => {
     const onKey = (event) => {
+      // 설명을 쓰는 중 — 화살표는 글 안에서 커서를 옮기고, Esc 는 입력 창이 받는다(CaptionEditor)
+      if (editing) return;
       if (event.key === 'Escape') onClose?.();
       if (event.key === 'ArrowLeft') setIndex((i) => (i - 1 + items.length) % items.length);
       if (event.key === 'ArrowRight') setIndex((i) => (i + 1) % items.length);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [items.length, onClose]);
+  }, [items.length, onClose, editing]);
 
   // 목록이 바뀌어(삭제 등) 인덱스가 넘치면 되돌린다.
   useEffect(() => {
@@ -71,6 +82,7 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
 
   const move = (step) => setIndex((i) => (i + step + items.length) % items.length);
   const isVideo = item.kind === 'video';
+  const onEditCaption = canEditCaption ? () => setEditing(true) : undefined;
 
   return (
     <div
@@ -136,7 +148,7 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
                 poster={item.largeUrl || item.thumbnailUrl}
                 canPage={hasNav}
               />
-              <MediaInfo item={item} />
+              <MediaInfo item={item} onEditCaption={onEditCaption} />
             </div>
           ) : (
             <>
@@ -145,7 +157,7 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
                 alt={item.fileName || '사진'}
                 style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
               />
-              <MediaInfo item={item} overlay />
+              <MediaInfo item={item} overlay onEditCaption={onEditCaption} />
             </>
           )}
 
@@ -164,6 +176,19 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
           </>
         )}
       </div>
+
+      {editing && (
+        <CaptionEditor
+          key={item.id}
+          kind={item.kind}
+          initial={item.caption}
+          onCancel={() => setEditing(false)}
+          onSave={async (caption) => {
+            await onCaptionSave(item, caption);
+            setEditing(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -201,10 +226,11 @@ function PeekPage({ item, side }) {
 }
 
 /**
- * 날짜 · 올린 사람 · (영상 길이) · 우리 아이 태그.
- * overlay 면 사진 아래쪽에 겹쳐 뜬다 — 누를 것이 없으므로 터치는 그대로 사진으로 지나간다.
+ * 선생님이 붙인 설명 · 날짜 · 올린 사람 · (영상 길이).
+ * overlay 면 사진 아래쪽에 겹쳐 뜬다 — 누를 것([더 보기] · [설명 수정])만 터치를 받고 나머지는 그대로 사진으로 지나간다.
+ * onEditCaption 이 있으면(선생님 화면) 정보 줄 끝에 [설명 추가]·[설명 수정] 이 붙는다.
  */
-function MediaInfo({ item, overlay = false }) {
+function MediaInfo({ item, overlay = false, onEditCaption }) {
   const duration = formatDuration(item.durationMs);
   const entry = { display: 'inline-flex', alignItems: 'center', gap: '5px' };
 
@@ -224,6 +250,7 @@ function MediaInfo({ item, overlay = false }) {
         color: '#fff', fontSize: '0.8125rem'
       }}
     >
+      {item.caption && <MediaCaption key={item.id} text={item.caption} />}
       <span style={entry}>
         <Icon name="calendar" size={14} />
         {formatDayLabel(dayKeyOf(item.takenAt))} {formatTime(item.takenAt)}
@@ -240,6 +267,157 @@ function MediaInfo({ item, overlay = false }) {
         </span>
       )}
       {/* 얼굴 매칭으로 붙은 아이 이름은 보이지 않는다 — 매칭이 틀릴 수 있다(2026-10) */}
+      {onEditCaption && (
+        <button
+          type="button"
+          onClick={onEditCaption}
+          style={{
+            ...entry, pointerEvents: 'auto', border: 'none', borderRadius: '999px', padding: '5px 11px',
+            background: 'rgba(255,255,255,.18)', color: '#fff', textShadow: 'none',
+            fontFamily: 'inherit', fontSize: '0.8125rem', fontWeight: 700, cursor: 'pointer'
+          }}
+        >
+          <Icon name={item.caption ? 'edit' : 'plus'} size={14} />
+          {item.caption ? '설명 수정' : '설명 추가'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 설명 글. 세 줄까지 보이고, 넘치면 [더 보기] 로 펼친다 — 긴 설명이 사진을 덮지 않게.
+ * 펼친 글은 화면 높이의 40% 안에서 위아래로 넘겨 읽는다. 줄바꿈은 쓴 그대로 보인다.
+ */
+function MediaCaption({ text }) {
+  const textRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [clamped, setClamped] = useState(false);
+
+  useLayoutEffect(() => {
+    const element = textRef.current;
+    if (!element || open) return undefined;
+    const measure = () => setClamped(element.scrollHeight > element.clientHeight + 1);
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [text, open]);
+
+  return (
+    <div data-testid="media-caption" style={{ flexBasis: '100%', minWidth: 0 }}>
+      <p
+        ref={textRef}
+        style={{
+          margin: 0, fontSize: '0.9375rem', lineHeight: 1.5, fontWeight: 500,
+          whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'keep-all',
+          ...(open ? {
+            maxHeight: '40vh', overflowY: 'auto', pointerEvents: 'auto', overscrollBehavior: 'contain'
+          } : {
+            display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 3, overflow: 'hidden'
+          })
+        }}
+      >
+        {text}
+      </p>
+      {(clamped || open) && (
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+          style={{
+            pointerEvents: 'auto', border: 'none', background: 'none', padding: '2px 0 0', color: 'rgba(255,255,255,.75)',
+            fontFamily: 'inherit', fontSize: '0.8125rem', fontWeight: 700, cursor: 'pointer', textShadow: 'inherit'
+          }}
+        >
+          {open ? '접기' : '더 보기'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 설명 입력 창 — 뷰어 안 아래쪽에 열린다(앱의 Modal 은 뷰어보다 아래 층에 그려진다).
+ * 버튼은 글 칸 위에 둔다: 휴대폰 키보드가 올라와도 [저장] 이 키보드 뒤로 숨지 않는다.
+ * 뒤쪽 사진을 눌러도 닫히지 않는다 — 쓰던 글이 실수로 사라지지 않게.
+ */
+function CaptionEditor({ kind, initial, onCancel, onSave }) {
+  const [text, setText] = useState(initial || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const keyboard = useKeyboardInset();
+  const changed = captionChanged(text, initial);
+  const label = kind === 'video' ? '영상 설명' : '사진 설명';
+
+  // Esc 는 뷰어가 아니라 이 창만 닫는다. 한글을 조합하는 중의 Esc 와 저장하는 중에는 닫지 않는다
+  // (저장 중에 닫으면 실패했을 때 알릴 곳이 없다)
+  const cancelRef = useRef(onCancel);
+  cancelRef.current = onCancel;
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.key !== 'Escape' || event.isComposing || saving) return;
+      cancelRef.current?.();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [saving]);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (saving || !changed) return;
+    setSaving(true);
+    setError('');
+    try {
+      await onSave(cleanCaption(text));
+    } catch (saveError) {
+      setError(saveError?.message || '설명을 저장하지 못했어요.');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      data-testid="caption-editor"
+      style={{
+        position: 'absolute', inset: 0, zIndex: 5, background: 'rgba(0,0,0,.55)',
+        display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', paddingBottom: `${keyboard}px`
+      }}
+    >
+      <form
+        aria-label={label}
+        onSubmit={submit}
+        style={{
+          width: '100%', maxWidth: '640px', margin: '0 auto', boxSizing: 'border-box',
+          background: 'var(--surface)', color: 'var(--ink)',
+          borderRadius: 'var(--radius-2xl) var(--radius-2xl) 0 0',
+          padding: `14px 16px ${keyboard ? '14px' : 'calc(14px + env(safe-area-inset-bottom))'}`,
+          display: 'flex', flexDirection: 'column', gap: '10px'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <b style={{ flex: 1, fontSize: '1rem' }}>{initial ? `${label} 수정` : `${label} 추가`}</b>
+          <Button size="sm" variant="ghost" disabled={saving} onClick={onCancel}>취소</Button>
+          <Button size="sm" variant="primary" type="submit" loading={saving} disabled={!changed}>저장</Button>
+        </div>
+        <Field
+          hint="학부모가 사진·영상을 볼 때 화면 아래쪽에 보여요. 비우고 저장하면 설명이 지워져요."
+          error={error}
+          counter={{ value: text.length, max: CAPTION_MAX }}
+        >
+          {(props) => (
+            <Textarea
+              {...props}
+              aria-label={label}
+              value={text}
+              maxLength={CAPTION_MAX}
+              rows={3}
+              autoFocus
+              placeholder="예) 단체전 결승 무대 — 리본 연기"
+              onChange={(event) => { setText(event.target.value); if (error) setError(''); }}
+            />
+          )}
+        </Field>
+      </form>
     </div>
   );
 }

@@ -70,6 +70,8 @@ export const toParentMedia = (media, { myStudentIds = [], myUserId = null } = {}
     downloadUrl: downloadUrl(media.driveFileId),
     fileName: media.originalName,
     takenAt: media.takenAt,
+    // 선생님이 붙인 설명 — 학부모에게 보여 주려고 쓰는 글이다
+    caption: media.caption || null,
     width: media.width ?? null,
     height: media.height ?? null,
     durationMs: media.durationMs ?? null,
@@ -126,6 +128,7 @@ export const toTeacherMedia = (media, { studentNames = {} } = {}) => ({
   height: media.height ?? null,
   durationMs: media.durationMs ?? null,
   takenAt: media.takenAt,
+  caption: media.caption || null,
   uploaderRole: media.uploaderRole,
   uploaderName: uploaderNameOf(media),
   status: media.status,

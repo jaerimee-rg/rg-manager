@@ -9,6 +9,7 @@ jest.unstable_mockModule('../../models/EventMedia.js', () => ({
     list: jest.fn().mockResolvedValue([]),
     getById: jest.fn(),
     setHidden: jest.fn().mockResolvedValue(2),
+    setCaption: jest.fn(),
     listUnanalyzed: jest.fn().mockResolvedValue([])
   }
 }));
@@ -66,7 +67,7 @@ const albumService = (await import('../../services/albumService.js')).default;
 const { DriveError } = await import('../../utils/googleDrive.js');
 const {
   getAlbum, createAlbum, updateAlbum, listMedia, createUploads, completeUpload,
-  bulkAction, addTag, deleteMedia, listUnanalyzed, saveFaces, analysisImageUrl
+  bulkAction, addTag, updateMedia, deleteMedia, listUnanalyzed, saveFaces, analysisImageUrl
 } = await import('../albumController.js');
 
 const teacher = { id: 7, username: '이재림', role: 'user' };
@@ -610,6 +611,85 @@ describe('addTag', () => {
     await addTag(req, res);
 
     expect(MediaTag.upsert).toHaveBeenCalledWith(expect.objectContaining({ source: 'manual', studentId: 5 }));
+  });
+});
+
+describe('updateMedia — 사진·영상 설명', () => {
+  beforeEach(() => {
+    req.params.mediaId = '5';
+    EventMedia.setCaption.mockImplementation(async (id, caption) => ({ id, caption }));
+  });
+
+  it('설명을 다듬어 이 이벤트의 사진에만 저장한다', async () => {
+    Event.getById.mockResolvedValue(event());
+    req.body = { caption: '  단체전 결승 무대\r\n리본 연기 ' };
+
+    await updateMedia(req, res);
+
+    expect(EventMedia.setCaption).toHaveBeenCalledWith(5, '단체전 결승 무대\n리본 연기', 3);
+    expect(res.json).toHaveBeenCalledWith({ id: 5, caption: '단체전 결승 무대\n리본 연기' });
+  });
+
+  it('빈 글이면 설명을 지운다(null)', async () => {
+    Event.getById.mockResolvedValue(event());
+    req.body = { caption: '   ' };
+
+    await updateMedia(req, res);
+
+    expect(EventMedia.setCaption).toHaveBeenCalledWith(5, null, 3);
+    expect(res.json).toHaveBeenCalledWith({ id: 5, caption: null });
+  });
+
+  it('너무 길면 저장하지 않고 이유를 알려 준다', async () => {
+    Event.getById.mockResolvedValue(event());
+    req.body = { caption: '가'.repeat(501) };
+
+    await updateMedia(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0].error).toContain('500자');
+    expect(EventMedia.setCaption).not.toHaveBeenCalled();
+  });
+
+  it('caption 을 보내지 않으면 아무것도 바꾸지 않는다', async () => {
+    Event.getById.mockResolvedValue(event());
+    req.body = { isHidden: true };
+
+    await updateMedia(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(EventMedia.setCaption).not.toHaveBeenCalled();
+  });
+
+  it('남의 이벤트면 404 — 사진이 있는지도 알려 주지 않는다', async () => {
+    Event.getById.mockResolvedValue(null);
+    req.body = { caption: '무대' };
+
+    await updateMedia(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(EventMedia.setCaption).not.toHaveBeenCalled();
+  });
+
+  it('다른 이벤트의 사진이면 404', async () => {
+    Event.getById.mockResolvedValue(event());
+    EventMedia.setCaption.mockResolvedValue(null);
+    req.body = { caption: '무대' };
+
+    await updateMedia(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('Google 연결이 끊겨도 설명은 고칠 수 있다 — Drive 를 거치지 않는다', async () => {
+    Event.getById.mockResolvedValue(event());
+    GoogleDriveAccount.getByUserId.mockResolvedValue({ id: 11, status: 'error' });
+    req.body = { caption: '무대' };
+
+    await updateMedia(req, res);
+
+    expect(res.status).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ id: 5, caption: '무대' });
   });
 });
 
