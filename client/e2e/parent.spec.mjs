@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'fs';
-import { loginAs, api, stubPortraitThumbnails, FACELESS_PNG } from './helpers.mjs';
+import { loginAs, api, stubPortraitThumbnails, swipeTouch, PORTRAIT_SVG, FACELESS_PNG } from './helpers.mjs';
 import { stubKakaoMaps } from './kakao-fakes.mjs';
 
 const sessions = JSON.parse(readFileSync(new URL('./.sessions.json', import.meta.url)));
@@ -487,6 +487,107 @@ test.describe('학부모 — 사진', () => {
     // 다음으로 넘기면 플레이어가 사라지고 사진이 뜬다
     await viewer.getByRole('button', { name: '다음 사진' }).click();
     await expect(player).toHaveCount(0);
+  });
+
+  test('휴대폰에서 사진을 옆으로 밀면 다음·이전 장으로 넘어가고, 영상으로도 넘어간다', async ({ page }) => {
+    await stubPortraitThumbnails(page);
+    await page.route('https://drive.google.com/file/d/**', (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<body style="margin:0;background:#222"></body>' }));
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/parent/photos/${sessions.album.eventId}`);
+    await page.getByRole('button', { name: '사진 열기' }).first().click();
+
+    const viewer = page.getByRole('dialog', { name: '사진 보기' });
+    const counter = viewer.getByTestId('viewer-top').getByText(/^\d+ \/ \d+$/);
+    const position = async () => (await counter.textContent()).split(' / ').map(Number);
+    const [start, total] = await position();
+    expect(total).toBeGreaterThan(2);
+    const after = (n, step) => ((n - 1 + step + total) % total) + 1;
+    const middle = { y: 844 / 2 };
+
+    // 왼쪽으로 밀면 다음 장, 오른쪽으로 밀면 다시 이전 장
+    await swipeTouch(page, { x: 320, ...middle }, { x: 70, ...middle });
+    await expect(counter).toHaveText(`${after(start, 1)} / ${total}`);
+    await swipeTouch(page, { x: 70, ...middle }, { x: 320, ...middle });
+    await expect(counter).toHaveText(`${start} / ${total}`);
+
+    // 조금만 밀거나 위아래로 움직이면 그대로
+    await swipeTouch(page, { x: 200, ...middle }, { x: 180, ...middle }, { steps: 20 });
+    await swipeTouch(page, { x: 200, y: 300 }, { x: 190, y: 600 });
+    await expect(counter).toHaveText(`${start} / ${total}`);
+    // 밀던 장은 제자리로 돌아와 있다
+    await expect.poll(() => viewer.getByTestId('viewer-track').evaluate((el) => el.style.transform)).toBe('');
+
+    // 영상이 나올 때까지 넘긴다 — 사진에서 영상으로도 밀어서 간다
+    const player = viewer.locator('iframe');
+    for (let i = 0; i < total && !(await player.count()); i += 1) {
+      const [now] = await position();
+      await swipeTouch(page, { x: 320, ...middle }, { x: 70, ...middle });
+      await expect(counter).toHaveText(`${after(now, 1)} / ${total}`);
+    }
+    await expect(player).toHaveCount(1);
+
+    // 영상일 때는 플레이어 안이 아니라 위쪽 막대를 밀어 넘긴다
+    const [onVideo] = await position();
+    const top = await viewer.getByTestId('viewer-top').boundingBox();
+    const bar = { y: top.y + top.height / 2 };
+    await swipeTouch(page, { x: 320, ...bar }, { x: 70, ...bar });
+    await expect(counter).toHaveText(`${after(onVideo, 1)} / ${total}`);
+  });
+
+  test('앨범 썸네일은 Drive 사진 주소(lh3)를 바로 부른다 — drive.google.com/thumbnail 의 302 를 거치지 않는다', async ({ page }) => {
+    const thumbnailHops = [];
+    page.on('request', (req) => { if (req.url().startsWith('https://drive.google.com/thumbnail')) thumbnailHops.push(req.url()); });
+    await stubPortraitThumbnails(page);
+    await page.goto(`/parent/photos/${sessions.album.eventId}`);
+
+    const thumbs = page.getByRole('button', { name: /사진 열기|영상 열기/ }).locator('img');
+    await expect(thumbs).toHaveCount(sessions.album.totalCount);
+    for (const thumb of await thumbs.all()) {
+      await expect(thumb).toHaveAttribute('src', /^https:\/\/lh3\.googleusercontent\.com\/d\/e2e-file-.+=w400-h400-c-rw$/);
+      await expect.poll(() => thumb.evaluate((img) => img.naturalWidth)).toBeGreaterThan(0);
+    }
+
+    // 뷰어의 큰 사진도 같은 곳에서 자르지 않고
+    await page.getByRole('button', { name: '사진 열기' }).first().click();
+    await expect(page.getByRole('dialog', { name: '사진 보기' }).getByRole('img'))
+      .toHaveAttribute('src', /^https:\/\/lh3\.googleusercontent\.com\/d\/e2e-file-.+=w1600$/);
+    expect(thumbnailHops).toEqual([]);
+  });
+
+  test('썸네일이 처음에 실패해도 잠시 뒤 다시 불러 뜬다', async ({ page }) => {
+    const failedOnce = new Set();
+    await page.route('https://lh3.googleusercontent.com/d/**', (route) => {
+      const url = new URL(route.request().url());
+      // 처음 부를 때는 Drive 가 아직 썸네일을 못 만든 것처럼 실패
+      if (!url.searchParams.has('retry')) {
+        failedOnce.add(url.pathname);
+        return route.fulfill({ status: 404, contentType: 'text/html', body: 'not ready' });
+      }
+      return route.fulfill({ contentType: 'image/svg+xml', body: PORTRAIT_SVG });
+    });
+    await page.goto(`/parent/photos/${sessions.album.eventId}`);
+
+    const thumbs = page.getByRole('button', { name: /사진 열기|영상 열기/ }).locator('img');
+    await expect(thumbs).toHaveCount(sessions.album.totalCount);
+    for (const thumb of await thumbs.all()) {
+      await expect(thumb).toHaveAttribute('src', /\?retry=1$/);
+      await expect.poll(() => thumb.evaluate((img) => img.naturalWidth)).toBeGreaterThan(0);
+      await expect(thumb).toBeVisible();
+    }
+    expect(failedOnce.size).toBeGreaterThanOrEqual(sessions.album.totalCount);
+  });
+
+  test('썸네일이 끝내 안 뜨면 빈칸 대신 사진 아이콘이 보인다', async ({ page }) => {
+    await page.route('https://lh3.googleusercontent.com/d/**', (route) =>
+      route.fulfill({ status: 404, contentType: 'text/html', body: 'gone' }));
+    await page.goto(`/parent/photos/${sessions.album.eventId}`);
+
+    // 1초 · 3초 · 8초 뒤 세 번 더 불러 보고 그만둔다
+    const tiles = page.getByRole('button', { name: /사진 열기|영상 열기/ });
+    await expect(tiles.getByTestId('image-failed')).toHaveCount(sessions.album.totalCount, { timeout: 20_000 });
+    await expect(tiles.locator('img')).toHaveCount(0);
+    await expect(tiles.getByTestId('image-failed').first().locator('svg')).toBeVisible();
   });
 
   test('내가 올린 사진에만 삭제가 보인다', async ({ page }) => {

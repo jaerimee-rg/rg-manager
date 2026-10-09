@@ -1,6 +1,8 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Icon } from '../ui';
 import { formatDuration } from '../../utils/mediaUrls';
+import { PAGE_GAP } from '../../utils/viewerSwipe';
+import { useSwipeToPage } from '../../hooks/useSwipeToPage';
 import {
   drivePlayerFrame, hasSeenFrameTap, isTouchDevice, readyPreviewUrl, rememberFrameTap, shouldPrewarm
 } from '../../utils/drivePlayer';
@@ -25,6 +27,10 @@ import { formatTime, formatDayLabel, dayKeyOf, uploaderLabel } from '../../utils
  * 사진 위에 겹쳐 뜬다. 영상은 겹치지 않는다 — 위쪽 막대는 플레이어 위에, 정보는 플레이어 아래에
  * 자리를 잡는다(겹치면 맨 아래 Drive 컨트롤과 오른쪽 위 Drive 버튼을 가린다).
  * 저장·삭제는 위쪽 막대 오른쪽의 동그란 아이콘 버튼이다.
+ *
+ * 휴대폰에서는 옆으로 밀어 이전·다음 장(사진이든 영상이든)으로 넘긴다(hooks/useSwipeToPage). 양옆 장은 화면 밖에
+ * 미리 그려 두어 밀 때 손가락을 따라 들어온다(영상은 미리보기 사진으로). 단 Drive 플레이어 안의 터치는 다른 출처의
+ * iframe 이라 우리에게 오지 않는다 — 영상일 때는 위쪽 막대나 아래 정보 줄을 밀거나 위쪽 화살표를 누른다.
  */
 function MediaViewer({ items = [], startId, onClose, onDelete }) {
   const [index, setIndex] = useState(() => {
@@ -33,6 +39,16 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
   });
 
   const item = items[index];
+  const dialogRef = useRef(null);
+  const trackRef = useRef(null);
+  const hasNav = items.length > 1;
+
+  useSwipeToPage({
+    enabled: hasNav,
+    areaRef: dialogRef,
+    trackRef,
+    onStep: (step) => setIndex((i) => (i + step + items.length) % items.length)
+  });
 
   useEffect(() => {
     const onKey = (event) => {
@@ -53,10 +69,10 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
 
   const move = (step) => setIndex((i) => (i + step + items.length) % items.length);
   const isVideo = item.kind === 'video';
-  const hasNav = items.length > 1;
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-label="사진 보기"
       style={{
@@ -99,30 +115,44 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
         </div>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-        {isVideo ? (
-          <div
-            data-testid="video-stage"
-            style={{ alignSelf: 'stretch', width: '100%', maxWidth: '900px', display: 'flex', flexDirection: 'column' }}
-          >
-            <DrivePlayer
-              key={item.id}
-              src={item.previewUrl}
-              title={item.fileName || '영상'}
-              poster={item.largeUrl || item.thumbnailUrl}
-            />
-            <MediaInfo item={item} />
-          </div>
-        ) : (
-          <>
-            <img
-              src={item.largeUrl || item.thumbnailUrl}
-              alt={item.fileName || '사진'}
-              style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
-            />
-            <MediaInfo item={item} overlay />
-          </>
-        )}
+      <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' }}>
+        {/* 손가락을 따라 옆으로 움직이는 줄 — 지금 장 + 양옆 장. 장이 바뀌어도 같은 요소로 남아야 한다 */}
+        <div
+          ref={trackRef}
+          data-testid="viewer-track"
+          style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          {isVideo ? (
+            <div
+              data-testid="video-stage"
+              style={{ alignSelf: 'stretch', width: '100%', maxWidth: '900px', display: 'flex', flexDirection: 'column' }}
+            >
+              <DrivePlayer
+                key={item.id}
+                src={item.previewUrl}
+                title={item.fileName || '영상'}
+                poster={item.largeUrl || item.thumbnailUrl}
+              />
+              <MediaInfo item={item} />
+            </div>
+          ) : (
+            <>
+              <img
+                src={item.largeUrl || item.thumbnailUrl}
+                alt={item.fileName || '사진'}
+                style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
+              />
+              <MediaInfo item={item} overlay />
+            </>
+          )}
+
+          {hasNav && (
+            <>
+              <PeekPage item={items[(index - 1 + items.length) % items.length]} side={-1} />
+              <PeekPage item={items[(index + 1) % items.length]} side={1} />
+            </>
+          )}
+        </div>
 
         {!isVideo && hasNav && (
           <>
@@ -131,6 +161,38 @@ function MediaViewer({ items = [], startId, onClose, onDelete }) {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * 화면 밖에 대기하는 옆 장 — 밀면 손가락을 따라 들어온다. 그림만 있고(영상은 미리보기 사진 + 재생 표시)
+ * 화면 읽기 프로그램에는 보이지 않는다. 미리 받아 두므로 넘기는 순간 그 장이 바로 뜬다.
+ */
+function PeekPage({ item, side }) {
+  const src = item.largeUrl || item.thumbnailUrl;
+  return (
+    <div
+      data-testid="viewer-peek"
+      aria-hidden="true"
+      style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none',
+        transform: `translateX(calc(${side * 100}% + ${side * PAGE_GAP}px))`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center'
+      }}
+    >
+      {src ? (
+        <img src={src} alt="" style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }} />
+      ) : null}
+      {item.kind === 'video' && (
+        <span style={{
+          position: 'absolute', width: '64px', height: '64px', borderRadius: '50%', paddingLeft: '4px',
+          background: 'rgba(0,0,0,.55)', color: '#fff',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <Icon name="play" size={28} />
+        </span>
+      )}
     </div>
   );
 }

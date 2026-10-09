@@ -1,12 +1,13 @@
 import React from 'react';
 import { formatDuration } from '../../utils/mediaUrls';
 import { groupByDay } from '../../utils/albumFilter';
+import RetryImage from './RetryImage';
 
 /**
  * 썸네일 그리드. 선생님·학부모가 같이 쓴다.
  *
  * - 날짜별로 묶어 최신이 위로 온다
- * - 썸네일은 Drive 주소를 그대로 쓴다 (앨범 폴더가 링크 공유되어 있어야 보인다)
+ * - 썸네일은 Drive 주소를 그대로 쓴다 (앨범 폴더가 링크 공유되어 있어야 보인다). 못 뜨면 잠시 뒤 다시 부른다
  * - 선택 모드(selectable)에서는 눌러도 열리지 않고 선택만 된다 (선생님 일괄 작업)
  */
 function MediaGrid({
@@ -78,15 +79,11 @@ function Tile({ item, selectable, isSelected, onOpen, onToggleSelect, renderBadg
         outline: isSelected ? '3px solid var(--color-primary)' : 'none', outlineOffset: '-3px'
       }}
     >
-      {item.thumbnailUrl ? (
-        <img
-          src={item.thumbnailUrl}
-          alt=""
-          loading="lazy"
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-          onError={(event) => { event.currentTarget.style.visibility = 'hidden'; }}
-        />
-      ) : null}
+      <RetryImage
+        src={item.thumbnailUrl}
+        loading="lazy"
+        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+      />
 
       {isVideo && (
         <>

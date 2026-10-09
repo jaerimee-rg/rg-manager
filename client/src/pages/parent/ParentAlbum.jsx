@@ -5,6 +5,7 @@ import { Button, EmptyState, IconButton, Spinner } from '../../components/ui';
 import MediaGrid from '../../components/album/MediaGrid';
 import MediaViewer from '../../components/album/MediaViewer';
 import UploadSheet from '../../components/album/UploadSheet';
+import RetryImage from '../../components/album/RetryImage';
 import { fetchWithAuth } from '../../utils/api';
 import { copyToClipboard } from '../../utils/copyToClipboard';
 import { albumShareUrl } from '../../utils/albumShare';
@@ -323,9 +324,8 @@ function ParentAlbum() {
               display: 'flex', gap: '10px', alignItems: 'center', padding: '8px 0',
               borderTop: '1px solid var(--color-gray-100)'
             }}>
-              <img
+              <RetryImage
                 src={item.thumbnailUrl}
-                alt=""
                 onClick={() => setViewerId(item.id)}
                 style={{ width: '58px', height: '58px', borderRadius: 'var(--radius-sm)', objectFit: 'cover', flexShrink: 0, background: 'var(--color-gray-200)', cursor: 'pointer' }}
               />

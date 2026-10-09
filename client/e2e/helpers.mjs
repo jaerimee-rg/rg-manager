@@ -41,16 +41,38 @@ export const expectVisible = async (locator) => {
   await expect(locator).toBeVisible();
 };
 
+/** 세로로 긴 그림(400×711 — 휴대폰으로 찍은 영상 비율) */
+export const PORTRAIT_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="711"><rect width="400" height="711" fill="#8a8"/></svg>';
+
 /**
- * Drive 썸네일을 세로로 긴 그림(400×711 — 휴대폰으로 찍은 영상 비율)으로 바꿔 끼운다.
+ * Drive 사진(lh3 — 썸네일과 뷰어의 큰 사진)을 세로로 긴 그림으로 바꿔 끼운다.
  * 픽스처의 파일 id 는 Drive 에 없어서 진짜 썸네일이 안 뜨는데, 미리보기 칸이 세로 사진에 늘어나
  * 글자를 덮는지(2026-10-08 학부모 사진 탭) 보려면 세로 그림이 실제로 그려져야 한다.
+ * (진짜 정사각형 썸네일은 Drive 가 잘라 주지만, 칸은 어떤 비율이 와도 넘치지 않아야 한다)
  */
 export const stubPortraitThumbnails = (page) =>
-  page.route('https://drive.google.com/thumbnail**', (route) => route.fulfill({
+  page.route('https://lh3.googleusercontent.com/d/**', (route) => route.fulfill({
     contentType: 'image/svg+xml',
-    body: '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="711"><rect width="400" height="711" fill="#8a8"/></svg>'
+    body: PORTRAIT_SVG
   }));
+
+/**
+ * 손가락으로 from → to 를 민다. Chromium 의 진짜 터치 입력(CDP)이라 passive·기본 동작 처리까지 브라우저가 한다.
+ * page.touchscreen 은 탭만 있어서 따로 둔다. 컨텍스트가 hasTouch 여야 한다.
+ */
+export const swipeTouch = async (page, from, to, { steps = 8 } = {}) => {
+  const cdp = await page.context().newCDPSession(page);
+  const at = (t) => [{ x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t }];
+  try {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(0) });
+    for (let i = 1; i <= steps; i += 1) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(i / steps) });
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } finally {
+    await cdp.detach();
+  }
+};
 
 /** 얼굴이 없는 64×64 PNG — 브라우저가 읽을 수는 있는 사진 (얼굴 등록 · 얼굴 찾기 테스트) */
 export const FACELESS_PNG = {

@@ -4,11 +4,13 @@
  * 주소 형식이 바뀌면 여기 한 곳만 고치면 된다.
  */
 
-const THUMBNAIL_BASE = 'https://drive.google.com/thumbnail';
+// 서버 utils/mediaSerializer.js 와 같은 주소 — 왜 lh3 를 바로 부르는지는 그쪽 주석
+const IMAGE_BASE = 'https://lh3.googleusercontent.com/d';
 const FILE_BASE = 'https://drive.google.com/file/d';
 
+/** 갤러리 칸용 정사각형 썸네일(WebP) */
 export const thumbnailUrl = (driveFileId, size = 400) =>
-  (driveFileId ? `${THUMBNAIL_BASE}?id=${encodeURIComponent(driveFileId)}&sz=w${size}` : null);
+  (driveFileId ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=w${size}-h${size}-c-rw` : null);
 
 export const originalUrl = (driveFileId) =>
   (driveFileId ? `${FILE_BASE}/${encodeURIComponent(driveFileId)}/view` : null);
