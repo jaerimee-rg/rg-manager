@@ -14,6 +14,7 @@ jest.unstable_mockModule('../../models/EventMedia.js', () => ({
     setHidden: jest.fn().mockResolvedValue(2),
     setCaption: jest.fn(),
     coverableIds: jest.fn().mockResolvedValue([]),
+    coverRows: jest.fn().mockResolvedValue([]),
     listUnanalyzed: jest.fn().mockResolvedValue([]),
     refreshFaceCounts: jest.fn().mockResolvedValue(0)
   }
@@ -572,14 +573,119 @@ describe('updateAlbum — 대표 사진 (사진 목록 카드의 표지, 최대 
     expect(res.json.mock.calls[0][0].coverMediaIds).toEqual([41]);
   });
 
-  it('getAlbum 은 지금 쓸 수 있는 대표 사진 목록(고른 순서)과 최대 장수를 준다', async () => {
-    Event.getById.mockResolvedValue(event({ albumCoverMediaIds: [41, 2] }));
-    current([41]);
+  it('getAlbum 은 지금 쓸 수 있는 대표 사진 목록(고른 순서)·썸네일과 최대 장수를 준다', async () => {
+    Event.getById.mockResolvedValue(event({ albumCoverMediaIds: [41, 2, 7] }));
+    EventMedia.coverRows.mockResolvedValue([
+      { id: 7, kind: 'video', driveFileId: 'v-7' },
+      { id: 41, kind: 'image', driveFileId: 'd-41' }
+    ]);
 
     await getAlbum(req, res);
 
-    expect(EventMedia.coverableIds).toHaveBeenCalledWith(3, [41, 2]);
-    expect(res.json.mock.calls[0][0]).toMatchObject({ coverMediaIds: [41], maxCovers: 4 });
+    expect(EventMedia.coverRows).toHaveBeenCalledWith(3, [41, 2, 7]);
+    expect(res.json.mock.calls[0][0]).toMatchObject({
+      coverMediaIds: [7, 41],
+      covers: [
+        { id: 7, kind: 'video', thumbnailUrl: 'https://lh3.googleusercontent.com/d/v-7=w400-h400-c-rw' },
+        { id: 41, kind: 'image', thumbnailUrl: 'https://lh3.googleusercontent.com/d/d-41=w400-h400-c-rw' }
+      ],
+      maxCovers: 4
+    });
+  });
+});
+
+describe('updateAlbum — 대표 사진 통째로 바꾸기 (고르기에서 한 번에 · 순서 바꾸기)', () => {
+  beforeEach(() => {
+    Event.updateAlbum.mockImplementation(async (id, fields) => event(fields));
+    Event.getById.mockResolvedValue(event({ albumCoverMediaIds: [1, 2, 3] }));
+  });
+
+  it('{coverMediaIds} 를 그 순서 그대로 저장한다 — 순서 바꾸기', async () => {
+    EventMedia.coverableIds.mockResolvedValue([3, 1, 2]);
+    req.body = { coverMediaIds: [3, 1, 2] };
+
+    await updateAlbum(req, res);
+
+    expect(EventMedia.coverableIds).toHaveBeenCalledWith(3, [3, 1, 2]);
+    expect(Event.updateAlbum).toHaveBeenCalledWith(3, { albumCoverMediaIds: [3, 1, 2] });
+    expect(res.json.mock.calls[0][0].coverMediaIds).toEqual([3, 1, 2]);
+  });
+
+  it('지금 대표와 상관없이 고른 것으로 바꾼다 — 고르기에서 한 번에 정하기', async () => {
+    EventMedia.coverableIds.mockResolvedValue([9, 8]);
+    req.body = { coverMediaIds: [9, 8] };
+
+    await updateAlbum(req, res);
+
+    expect(Event.updateAlbum).toHaveBeenCalledWith(3, { albumCoverMediaIds: [9, 8] });
+  });
+
+  it('빈 목록이면 모두 푼다(NULL) — 사진을 읽지 않는다', async () => {
+    req.body = { coverMediaIds: [] };
+
+    await updateAlbum(req, res);
+
+    expect(EventMedia.coverableIds).not.toHaveBeenCalled();
+    expect(Event.updateAlbum).toHaveBeenCalledWith(3, { albumCoverMediaIds: null });
+  });
+
+  it('5장 이상은 400 too_many_covers', async () => {
+    req.body = { coverMediaIds: [1, 2, 3, 4, 5] };
+
+    await updateAlbum(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0].reason).toBe('too_many_covers');
+    expect(Event.updateAlbum).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['배열이 아님', 41],
+    ['같은 사진이 두 번', [4, 4]],
+    ['id 가 아닌 값', [4, '5']],
+    ['null', null]
+  ])('%s 이면 400 invalid_cover', async (_label, value) => {
+    req.body = { coverMediaIds: value };
+
+    await updateAlbum(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0].reason).toBe('invalid_cover');
+    expect(EventMedia.coverableIds).not.toHaveBeenCalled();
+    expect(Event.updateAlbum).not.toHaveBeenCalled();
+  });
+
+  it('더하기·빼기와 함께 오면 400 — 무엇을 할지 모호하다', async () => {
+    req.body = { coverMediaIds: [1], addCoverMediaId: 2 };
+
+    await updateAlbum(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(Event.updateAlbum).not.toHaveBeenCalled();
+  });
+
+  it('숨긴 사진이 섞였으면 400 hidden_cover', async () => {
+    EventMedia.coverableIds.mockResolvedValue([1]);
+    EventMedia.getById.mockResolvedValue({ id: 5, eventId: 3, status: 'ready', isHidden: true, driveFileId: 'd-5' });
+    req.body = { coverMediaIds: [1, 5] };
+
+    await updateAlbum(req, res);
+
+    expect(EventMedia.getById).toHaveBeenCalledWith(5);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0].reason).toBe('hidden_cover');
+    expect(Event.updateAlbum).not.toHaveBeenCalled();
+  });
+
+  it('다른 앨범의 사진·없는 사진이 섞였으면 400 invalid_cover', async () => {
+    EventMedia.coverableIds.mockResolvedValue([1]);
+    EventMedia.getById.mockResolvedValue({ id: 5, eventId: 99, status: 'ready', isHidden: true, driveFileId: 'd-5' });
+    req.body = { coverMediaIds: [1, 5] };
+
+    await updateAlbum(req, res);
+
+    expect(res.json.mock.calls[0][0].reason).toBe('invalid_cover');
+    expect(Event.updateAlbum).not.toHaveBeenCalled();
   });
 });
 

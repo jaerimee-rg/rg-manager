@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'fs';
-import { loginAs, api, stubPortraitThumbnails, FACELESS_PNG } from './helpers.mjs';
+import { loginAs, api, stubPortraitThumbnails, swipeTouch, FACELESS_PNG } from './helpers.mjs';
 import { FAKE_PLACE, stubKakaoMaps } from './kakao-fakes.mjs';
 
 const sessions = JSON.parse(readFileSync(new URL('./.sessions.json', import.meta.url)));
@@ -396,6 +396,86 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
       await bulk('show');
       await clearCovers(eventId);
       await clearCovers(folderId);
+    }
+  });
+
+  test('대표 사진 — 고르기에서 한 번에 정하고, 대표 사진 칸에서 끌어서 놓아(마우스·손가락) 순서를 바꾼다', async ({ page, request, browser, baseURL }) => {
+    // 픽스처: mediaIds = [선생님 사진 1, 선생님 사진 2, 학부모 사진 3, 영상 4]
+    const eventId = sessions.album.eventId;
+    const [photo1, photo2, , videoId] = sessions.album.mediaIds;
+    const albumOf = async () => (await api(request, sessions.teacher, 'GET', `/api/events/${eventId}/album`)).body;
+    const clearCovers = () => api(request, sessions.teacher, 'PATCH', `/api/events/${eventId}/album`, { coverMediaIds: [] });
+    const panel = (p) => p.getByRole('region', { name: '대표 사진' });
+    const panelOrder = (p) => panel(p).locator('[data-cover-id]').evaluateAll((els) => els.map((el) => Number(el.dataset.coverId)));
+    const centerOf = async (locator) => {
+      const box = await locator.boundingBox();
+      return { x: box.x + box.width / 2, y: box.y + box.height / 2, box };
+    };
+
+    try {
+      expect((await clearCovers()).status).toBe(200);
+      const list = await api(request, sessions.teacher, 'GET', `/api/events/${eventId}/media?filter=all&limit=60`);
+      const indexOf = (id) => list.body.items.findIndex((item) => item.id === id);
+      await stubPortraitThumbnails(page);
+      await page.goto(`/photos/${eventId}`);
+      await expect(panel(page).getByText('0/4')).toBeVisible();
+
+      // 고르기 → 사진 2 · 영상 · 사진 1 순서로 고른다 → [대표 사진 만들기]
+      await page.getByRole('button', { name: '고르기' }).click();
+      for (const id of [photo2, videoId, photo1]) await page.locator('.ui-media-tile').nth(indexOf(id)).click();
+      await page.getByRole('button', { name: '대표 사진 만들기' }).click();
+      await expect(page.getByText('대표 사진 3장을 정했어요 · 고른 순서대로 표지에 놓여요')).toBeVisible();
+      await expect(page.getByRole('button', { name: '대표 사진 만들기' })).toHaveCount(0);
+      expect((await albumOf()).coverMediaIds).toEqual([photo2, videoId, photo1]);
+      await expect.poll(() => panelOrder(page)).toEqual([photo2, videoId, photo1]);
+      await expect(panel(page).getByTestId('cover-preview')).toHaveAttribute('data-covers', '3');
+
+      // 마우스로 첫 칸을 끝으로 끌어 놓는다
+      const slots = panel(page).locator('[data-cover-id]');
+      const first = await centerOf(slots.nth(0));
+      const last = await centerOf(slots.nth(2));
+      await page.mouse.move(first.x, first.y);
+      await page.mouse.down();
+      await page.mouse.move(first.x + 20, first.y, { steps: 4 });
+      await page.mouse.move(last.box.x + last.box.width - 4, last.y, { steps: 8 });
+      await expect(panel(page).locator('[data-drop="after"]')).toHaveCount(1);
+      await page.mouse.up();
+      await expect.poll(async () => (await albumOf()).coverMediaIds).toEqual([videoId, photo1, photo2]);
+      await expect.poll(() => panelOrder(page)).toEqual([videoId, photo1, photo2]);
+      // 사진 칸의 [대표 n] 도 새 순서
+      await expect(page.locator('.ui-media-tile').nth(indexOf(videoId)).getByText('대표 1', { exact: true })).toBeVisible();
+
+      // 사진 목록 카드도 그 순서 — 첫 장(영상)이 왼쪽에 크게
+      const cards = await api(request, sessions.teacher, 'GET', '/api/albums');
+      const card = cards.body.albums.find((album) => album.eventId === eventId);
+      const fileOf = (id) => list.body.items[indexOf(id)].driveFileId;
+      expect(card.covers.map((url) => [videoId, photo1, photo2].findIndex((id) => url.includes(fileOf(id))))).toEqual([0, 1, 2]);
+
+      // 휴대폰 — 손가락으로 끌어도 된다(끄는 동안 페이지가 대신 스크롤되지 않는다)
+      const phone = await browser.newContext({ baseURL, hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+      try {
+        const mobile = await phone.newPage();
+        await stubPortraitThumbnails(mobile);
+        await loginAs(mobile, sessions.teacher);
+        await mobile.goto(`/photos/${eventId}`);
+        const mobileSlots = panel(mobile).locator('[data-cover-id]');
+        await mobileSlots.nth(2).scrollIntoViewIfNeeded();
+        const from = await centerOf(mobileSlots.nth(2));
+        const to = await centerOf(mobileSlots.nth(0));
+        const scrollBefore = await mobile.evaluate(() => window.scrollY);
+        await swipeTouch(mobile, { x: from.x, y: from.y }, { x: to.box.x + 4, y: to.y }, { steps: 12 });
+        await expect.poll(async () => (await albumOf()).coverMediaIds).toEqual([photo2, videoId, photo1]);
+        expect(await mobile.evaluate(() => window.scrollY)).toBe(scrollBefore);
+      } finally {
+        await phone.close();
+      }
+
+      // 대표 사진 칸이 4장을 넘게 받지 않는다(API) — 5장은 400
+      const tooMany = await api(request, sessions.teacher, 'PATCH', `/api/events/${eventId}/album`, { coverMediaIds: [1, 2, 3, 4, 5] });
+      expect(tooMany.status).toBe(400);
+      expect(tooMany.body.reason).toBe('too_many_covers');
+    } finally {
+      await clearCovers();
     }
   });
 

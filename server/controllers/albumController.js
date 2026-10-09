@@ -11,7 +11,7 @@ import {
   sanitizeFolderName, folderNameFromEvent, normalizeCaption, MAX_FILES_PER_UPLOAD, MAX_ALBUM_COVERS
 } from '../utils/mediaValidation.js';
 import { canUpload, canManageAlbum, canDeleteMedia, reasonMessage, isValidAudience, isPhotoFolder } from '../utils/albumAccess.js';
-import { toTeacherMedia } from '../utils/mediaSerializer.js';
+import { toTeacherMedia, thumbnailUrl } from '../utils/mediaSerializer.js';
 import { sharePathFor } from '../services/albumShare.js';
 import { albumPeople, findPerson, removePerson, toPersonView } from '../services/albumPeople.js';
 
@@ -66,6 +66,7 @@ export const getAlbum = async (req, res) => {
 
     // 자동 태그가 예전 규칙으로 계산된 앨범이면 여기서 다시 매칭한다 (개수·후보 수가 맞게)
     await albumService.ensureAlbumsMatched(event);
+    const coverRows = await EventMedia.coverRows(event.id, event.albumCoverMediaIds);
 
     const [{ account, driveStatus, foreignAccount }, sharePath] = await Promise.all([
       driveStatusOf(event),
@@ -85,8 +86,10 @@ export const getAlbum = async (req, res) => {
       published: event.albumPublished === true,
       audience: event.albumAudience || 'participants',
       publishedAt: event.albumPublishedAt || null,
-      // 대표 사진(사진 목록 카드의 표지)으로 고른 사진 id 들, 고른 순서. 숨겼거나 지운 것은 빠진 지금 목록이다
-      coverMediaIds: await EventMedia.coverableIds(event.id, event.albumCoverMediaIds),
+      // 대표 사진(사진 목록 카드의 표지)으로 고른 사진 id 들, 고른 순서. 숨겼거나 지운 것은 빠진 지금 목록이다.
+      // covers 는 같은 순서의 썸네일 — 대표 사진 칸이 순서를 바꿀 때 그린다(지금 불러온 사진 칸에 없을 수도 있다)
+      coverMediaIds: coverRows.map((row) => row.id),
+      covers: coverRows.map((row) => ({ id: row.id, kind: row.kind, thumbnailUrl: thumbnailUrl(row.driveFileId, 400) })),
       maxCovers: MAX_ALBUM_COVERS,
       // 학부모에게 보낼 링크 (FR-518) — 앨범 주소 + 이 선생님의 학부모 초대 토큰 (services/albumShare)
       sharePath,
@@ -161,27 +164,54 @@ export const createAlbum = async (req, res) => {
 
 const isId = (value) => Number.isInteger(value) && value > 0;
 
+const INVALID_COVER = { status: 400, body: { error: '이 앨범의 사진만 대표 사진으로 고를 수 있어요.', reason: 'invalid_cover' } };
+const HIDDEN_COVER = {
+  status: 400, body: { error: '숨긴 사진은 대표 사진으로 고를 수 없어요. 먼저 다시 보이게 해 주세요.', reason: 'hidden_cover' }
+};
+
 /**
- * 대표 사진 고치기 — { removeCoverMediaId } 는 빼고, { addCoverMediaId } 는 끝에 붙인다(고른 순서가 카드 표지의 순서).
+ * { coverMediaIds: [...] } — 대표 사진을 통째로 바꾼다(고르기에서 한 번에 정하기 · 대표 사진 칸에서 순서 바꾸기).
+ * 빈 목록이면 모두 푼다. 전부 이 앨범의 준비된·숨기지 않은 사진이어야 하고, 같은 것이 두 번 오면 안 되며, MAX_ALBUM_COVERS 장까지.
+ */
+const replaceCovers = async (event, list) => {
+  if (!Array.isArray(list) || !list.every(isId) || new Set(list).size !== list.length) return INVALID_COVER;
+  if (list.length > MAX_ALBUM_COVERS) {
+    return { status: 400, body: { error: `대표 사진은 ${MAX_ALBUM_COVERS}장까지 고를 수 있어요.`, reason: 'too_many_covers' } };
+  }
+  if (!list.length) return { ids: [] };
+  const usable = await EventMedia.coverableIds(event.id, list);
+  if (usable.length === list.length) return { ids: list };
+  // 쓸 수 없는 것이 섞였다 — 숨긴 사진 때문이면 그렇게 알린다(다시 보이게 하면 된다)
+  for (const id of list.filter((one) => !usable.includes(one))) {
+    const media = await EventMedia.getById(id);
+    if (media && Number(media.eventId) === Number(event.id) && media.isHidden) return HIDDEN_COVER;
+  }
+  return INVALID_COVER;
+};
+
+/**
+ * 대표 사진 고치기 — { coverMediaIds } 는 통째로 바꾸고(replaceCovers), { removeCoverMediaId } 는 빼고,
+ * { addCoverMediaId } 는 끝에 붙인다(고른 순서가 카드 표지의 순서). 통째로 바꾸기는 더하기·빼기와 함께 오면 안 된다.
  * "지금 목록" 은 저장된 것 중 아직 쓸 수 있는 것만 친다 — 숨겼거나 지운 것은 여기서 저절로 빠진다.
  * 붙일 것은 이 앨범의 준비된(ready) 사진·영상이어야 하고(영상은 Drive 가 만든 장면이 표지), 숨긴 것은 안 되며
  * (표지는 학부모 카드에도 쓰인다), 이미 MAX_ALBUM_COVERS 장이면 409. → { ids } | { status, body } | null(바꿀 것 없음)
  */
 const nextCovers = async (event, body) => {
-  const { addCoverMediaId: add, removeCoverMediaId: remove } = body;
+  const { addCoverMediaId: add, removeCoverMediaId: remove, coverMediaIds: list } = body;
+  if (list !== undefined) {
+    if (add !== undefined || remove !== undefined) return INVALID_COVER;
+    return replaceCovers(event, list);
+  }
   if (add === undefined && remove === undefined) return null;
-  const invalid = { status: 400, body: { error: '이 앨범의 사진만 대표 사진으로 고를 수 있어요.', reason: 'invalid_cover' } };
-  if ((add !== undefined && !isId(add)) || (remove !== undefined && !isId(remove))) return invalid;
+  if ((add !== undefined && !isId(add)) || (remove !== undefined && !isId(remove))) return INVALID_COVER;
 
   let ids = await EventMedia.coverableIds(event.id, event.albumCoverMediaIds);
   if (remove !== undefined) ids = ids.filter((id) => id !== remove);
   if (add === undefined || ids.includes(add)) return { ids };
 
   const media = await EventMedia.getById(add);
-  if (!media || Number(media.eventId) !== Number(event.id) || media.status !== 'ready' || !media.driveFileId) return invalid;
-  if (media.isHidden) {
-    return { status: 400, body: { error: '숨긴 사진은 대표 사진으로 고를 수 없어요. 먼저 다시 보이게 해 주세요.', reason: 'hidden_cover' } };
-  }
+  if (!media || Number(media.eventId) !== Number(event.id) || media.status !== 'ready' || !media.driveFileId) return INVALID_COVER;
+  if (media.isHidden) return HIDDEN_COVER;
   if (ids.length >= MAX_ALBUM_COVERS) {
     return {
       status: 409,
@@ -191,7 +221,7 @@ const nextCovers = async (event, body) => {
   return { ids: [...ids, media.id] };
 };
 
-/** PATCH /api/events/:id/album — 이름 변경 · 업로드 받기 토글 · 공개 · 공개 범위 · 대표 사진 더하기/빼기 */
+/** PATCH /api/events/:id/album — 이름 변경 · 업로드 받기 토글 · 공개 · 공개 범위 · 대표 사진(더하기·빼기·통째로 바꾸기) */
 export const updateAlbum = async (req, res) => {
   try {
     const event = await loadEvent(req);

@@ -672,8 +672,17 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   **[대표 사진 4장 다 골랐어요]**) → `PATCH /api/events/:id/album {addCoverMediaId}` / `{removeCoverMediaId}`
   (`albumController.nextCovers`: appends/removes on the *current* list — `EventMedia.coverableIds`, the stored ids that are still this
   album's `ready`, non-hidden media — so hidden/deleted ones drop out by themselves; 400 `invalid_cover` / `hidden_cover`, 409
-  `covers_full`; works while Google is disconnected; no success toast — it would cover the button). `GET …/album` returns the current
-  `coverMediaIds` + `maxCovers`; grid tiles get a ★ 대표 n badge. **Both list cards show only the covers** — teacher 사진 list and parent
+  `covers_full`; works while Google is disconnected; no success toast — it would cover the button). **Two more ways, both
+  `PATCH …/album {coverMediaIds: [...]}`** (`replaceCovers`: the whole list in order, 0–4 unique ids of this album's ready, non-hidden
+  media; `[]` clears; 400 `too_many_covers` / `invalid_cover` / `hidden_cover`; never mixed with add/remove): **고르기** has
+  **[대표 사진 만들기]** in its button row (1–4 picked, none hidden — the pick order becomes the cover order and replaces the old
+  covers; on phones that row is 2×2, `.ui-photo-select-actions`, or the fourth button falls off screen), and the album page's
+  **대표 사진 panel** (`pages/Photos/CoverOrderPanel.jsx`) shows the covers numbered in order plus an `AlbumCovers` preview of the card,
+  and **reorders by drag and drop** — pointer events, so mouse and finger (`touch-action: none` on the tiles), landing slot from the
+  other tiles' horizontal midpoints (`utils/reorder.js:dropIndex/dropMarker`, same as the shop list), clamped to the filled tiles,
+  6 px slop so a tap is not a drag — or ←→ on a focused tile. It shows the new order at once and re-reads the album if the save fails.
+  `GET …/album` returns the current `coverMediaIds`, their thumbnails as `covers` (`EventMedia.coverRows`; they may not be on the
+  loaded grid page) and `maxCovers`; grid tiles get a ★ 대표 n badge. **Both list cards show only the covers** — teacher 사진 list and parent
   사진 tab share `components/album/AlbumCovers.jsx` (`.ui-album-card__cover[data-covers]`: 1 fills the 16:10 box, 2 side by side,
   3 = first one big on the left, 4 = 2×2). URLs come from `mediaSerializer.coverUrls` (one cover → lh3 `=w800-h500-c-rw`, several →
   the square thumbnails) as `covers` on `GET /api/albums` and `toParentAlbum` (parent whitelist test pins the keys; no ids go out).

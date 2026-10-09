@@ -14,6 +14,7 @@ import {
 import PublishPanel from './PublishPanel';
 import FolderEditDialog from './FolderEditDialog';
 import FaceScanPanel from './FaceScanPanel';
+import CoverOrderPanel from './CoverOrderPanel';
 import PhotoGrid from './PhotoGrid';
 import {
   albumProblem, filterChips, folderDeleteMessage, formatEventDate, isPhotoFolder, publishLocked, typeLabel, toViewerItem,
@@ -26,7 +27,8 @@ const PAGE = 60;
  * 선생님 사진 메뉴 — 앨범 하나 (docs/photo-menu FR-520~529).
  *
  * 위: 학부모 공개 패널 + Drive 폴더 카드. 아래: 얼굴 목록(누르면 그 사람 사진만), 필터 칩과 사진 칸,
- * 고르기 모드(숨기기 · 다시 보이기 · 지우기). 사진을 열어 [대표 사진으로] 를 누르면 사진 목록 카드의 표지가 된다(4장까지).
+ * 고르기 모드(숨기기 · 다시 보이기 · 지우기 · 대표 사진 만들기). 사진을 열어 [대표 사진으로] 를 눌러도 표지가 된다(4장까지).
+ * 대표 사진 칸에서 끌어서 놓아 표지 순서를 바꾼다.
  * Google 연결이 끊기거나 폴더가 사라져도 읽기는 계속되고 쓰기 버튼만 막힌다.
  */
 function PhotoAlbum() {
@@ -149,14 +151,20 @@ function PhotoAlbum() {
     }
   };
 
+  // 앨범 설정 바꾸기 → 됐으면 true. 안 됐으면 이유를 알리고 false
   const patchAlbum = async (body, message) => {
     setBusy(true);
     try {
       const response = await fetchWithAuth(`${apiBase}/album`, { method: 'PATCH', body: JSON.stringify(body) });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) { showToast(payload.error || '바꾸지 못했어요.'); return; }
+      if (!response.ok) { showToast(payload.error || '바꾸지 못했어요.'); return false; }
       if (message) showToast(message);
       await loadAlbum();
+      return true;
+    } catch (patchError) {
+      console.error('앨범 설정 저장 실패:', patchError);
+      showToast('바꾸지 못했어요. 잠시 뒤 다시 해 주세요.');
+      return false;
     } finally {
       setBusy(false);
     }
@@ -214,6 +222,20 @@ function PhotoAlbum() {
   // 됐다는 알림은 띄우지 않는다 — 뷰어의 버튼이 노란 [대표 사진 n] 으로 바뀌는 것이 알림이고, 토스트는 그 버튼을 덮는다
   const setCover = (item, on) => patchAlbum(on ? { addCoverMediaId: item.id } : { removeCoverMediaId: item.id });
 
+  // 고르기에서 고른 것(1~4장)을 고른 순서대로 한 번에 대표 사진으로 — 지금 대표 사진은 이것으로 바뀐다
+  const makeCovers = async (ids) => {
+    const ok = await patchAlbum({ coverMediaIds: ids }, `대표 사진 ${ids.length}장을 정했어요 · 고른 순서대로 표지에 놓여요`);
+    if (ok) {
+      setSelected([]);
+      setSelecting(false);
+    }
+  };
+
+  // 대표 사진 칸에서 끌어 바꾼 순서 저장 — 안 되면 앨범을 다시 읽어 칸을 되돌린다
+  const reorderCovers = async (ids) => {
+    if (!(await patchAlbum({ coverMediaIds: ids }))) loadAlbum();
+  };
+
   if (notFound) {
     return (
       <>
@@ -241,6 +263,10 @@ function PhotoAlbum() {
   const selectedItems = items.filter((item) => selected.includes(item.id));
   const anyHidden = selectedItems.some((item) => item.isHidden);
   const anyVisible = selectedItems.some((item) => !item.isHidden);
+  // 고른 것을 한 번에 대표 사진으로 — 1~maxCovers 장, 숨긴 사진 없이
+  const maxCovers = album.maxCovers || 4;
+  const coverBlock = selected.length > maxCovers ? `대표 사진은 ${maxCovers}장까지 골라 주세요`
+    : anyHidden ? '숨긴 사진은 대표 사진이 될 수 없어요' : '';
   const nameDrift = hasAlbum && album.expectedFolderName && album.driveFolderName && album.expectedFolderName !== album.driveFolderName;
 
   const uploadButton = (
@@ -411,12 +437,23 @@ function PhotoAlbum() {
             </Card>
           </div>
 
+          <CoverOrderPanel
+            className="ui-mt-4"
+            covers={album.covers || []}
+            max={maxCovers}
+            disabled={busy}
+            onReorder={reorderCovers}
+          />
+
           <FacePeopleStrip className="ui-mt-5" people={people} selected={person} onSelect={setPerson} onRemove={removePerson} />
 
           <div className={`ui-row ${people.length ? 'ui-mt-3' : 'ui-mt-5'} ui-mb-3`} data-gap="2" data-justify="between">
             {selecting ? (
               <>
-                <b>{selected.length}장 골랐어요</b>
+                <span className="ui-row" data-gap="2">
+                  <b>{selected.length}장 골랐어요</b>
+                  {selected.length > maxCovers && <span className="ui-text-subtle">대표 사진은 {maxCovers}장까지</span>}
+                </span>
                 <div className="ui-row" data-gap="2">
                   <Button size="sm" variant="ghost" onClick={() => setSelected(items.map((item) => item.id))}>모두 고르기</Button>
                   <Button size="sm" onClick={() => { setSelecting(false); setSelected([]); }}>취소</Button>
@@ -465,10 +502,18 @@ function PhotoAlbum() {
           )}
 
           {selecting && (
-            <StickyActions>
+            <StickyActions className="ui-photo-select-actions">
               <Button icon="eyeOff" disabled={busy || !anyVisible} onClick={() => bulk('hide', selected)}>숨기기</Button>
               <Button icon="eye" disabled={busy || !anyHidden} onClick={() => bulk('show', selected)}>다시 보이기</Button>
               <Button variant="danger-quiet" icon="trash" disabled={busy || locked || !selected.length} onClick={() => setConfirmDelete(selected)}>지우기</Button>
+              <Button
+                icon="star"
+                disabled={busy || !selected.length || Boolean(coverBlock)}
+                title={coverBlock || `고른 ${selected.length}장을 고른 순서대로 대표 사진으로 정해요`}
+                onClick={() => makeCovers(selected)}
+              >
+                대표 사진 만들기
+              </Button>
             </StickyActions>
           )}
         </>
