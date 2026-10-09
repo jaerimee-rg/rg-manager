@@ -423,7 +423,14 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     await page.waitForTimeout(700);
     await page.mouse.up();
     await expect(second).toHaveAttribute('aria-pressed', 'false');
-    await faces.getByRole('button', { name: '얼굴 2 목록에서 빼기' }).click();
+    // X 는 그 얼굴 칸 안, 보이는 목록 안에 온전히 그려진다(칸 밖으로 내밀었을 때 목록 끝 얼굴에서 잘렸다)
+    const remove = faces.getByRole('button', { name: '얼굴 2 목록에서 빼기' });
+    const inside = (inner, outer) => inner.x >= outer.x - 0.5 && inner.y >= outer.y - 0.5
+      && inner.x + inner.width <= outer.x + outer.width + 0.5 && inner.y + inner.height <= outer.y + outer.height + 0.5;
+    const xBox = await remove.boundingBox();
+    expect(inside(xBox, await remove.locator('xpath=..').boundingBox())).toBe(true);
+    expect(inside(xBox, await faces.boundingBox())).toBe(true);
+    await remove.click();
 
     await expect(page.getByText('얼굴을 목록에서 뺐어요', { exact: false })).toBeVisible();
     await expect(faces.getByRole('button', { name: /^얼굴 \d+ · / })).toHaveCount(2);   // 가 + 등록된 아이(다)
