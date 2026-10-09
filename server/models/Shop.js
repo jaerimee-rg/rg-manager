@@ -13,6 +13,16 @@ class Shop {
     return result.rows[0] || null;
   }
 
+  /** 학부모 [추천 상품] 탭 — 연결된 선생님들의 공개 중인 상점 (닫힌 상점은 빼고, 순서는 부르는 쪽이 정한다) */
+  static async listActiveByUserIds(userIds = []) {
+    if (!userIds.length) return [];
+    const result = await pool.query(
+      'SELECT "userId", "publicId", title FROM shops WHERE "userId" = ANY($1::int[]) AND "isActive" = TRUE',
+      [userIds]
+    );
+    return result.rows;
+  }
+
   /**
    * 상점과 기본 카테고리를 한 트랜잭션으로 만든다.
    * 동시에 두 번 들어와도 상점은 하나다("userId" UNIQUE) — 늦은 쪽은 이미 있는 상점을 받는다.

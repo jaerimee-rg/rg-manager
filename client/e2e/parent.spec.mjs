@@ -1321,3 +1321,87 @@ test.describe('학부모 — 앨범 얼굴 목록', () => {
   });
 });
 
+
+test.describe('학부모 — 추천 상품 탭', () => {
+  const teacher2 = { token: sessions.teacher2Token };
+
+  /** 선생님 상점을 열어 두고(처음 부르면 만들어진다) 이 실행만의 상품을 하나 올린다 */
+  const openShopWith = async (request, session, title) => {
+    const { body } = await api(request, session, 'GET', '/api/shop');
+    const { shop } = body;
+    if (!shop.isActive) {
+      await api(request, session, 'PUT', '/api/shop', { title: shop.title, intro: shop.intro, notice: shop.notice, isActive: true });
+    }
+    const created = await api(request, session, 'POST', '/api/shop/products', { title });
+    expect(created.status).toBe(201);
+    return { shop, productId: created.body.product.id };
+  };
+
+  test('탭을 누르면 공유 링크와 같은 상품 전체 화면이 뜨고, [돌아가기] 로 누르기 전 화면에 온다', async ({ page, request }) => {
+    const title = `e2e 추천탭 ${run}`;
+    const { shop, productId } = await openShopWith(request, sessions.teacher, title);
+    try {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await loginAs(page, sessions.parentSolo);
+      await page.goto('/parent/photos');
+      await expect(page.getByRole('heading', { level: 1, name: '사진' })).toBeVisible();
+
+      await page.getByRole('navigation', { name: '학부모 메뉴' }).getByRole('link', { name: '추천 상품' }).click();
+
+      // 선생님이 보내는 공유 링크 주소 그대로 — 하단 탭 없는 전체 화면
+      await expect(page).toHaveURL(new RegExp(`/shop/${shop.publicId}$`));
+      await expect(page.getByRole('heading', { level: 1, name: shop.title })).toBeVisible();
+      await expect(page.getByText(title)).toBeVisible();
+      await expect(page.getByRole('navigation', { name: '학부모 메뉴' })).toHaveCount(0);
+
+      await page.getByRole('button', { name: '돌아가기', exact: true }).click();
+      await expect(page).toHaveURL(/\/parent\/photos$/);
+      await expect(page.getByRole('heading', { level: 1, name: '사진' })).toBeVisible();
+
+      // 같은 링크를 탭을 거치지 않고 열면(공유 링크) 돌아가기가 없다 — 지금과 같다
+      await page.goto(`/shop/${shop.publicId}`);
+      await expect(page.getByText(title)).toBeVisible();
+      await expect(page.getByRole('button', { name: '돌아가기', exact: true })).toHaveCount(0);
+    } finally {
+      await api(request, sessions.teacher, 'DELETE', `/api/shop/products/${productId}`);
+    }
+  });
+
+  test('선생님이 둘이면 상점을 고르고, 고른 상점의 [돌아가기] 는 그 목록으로 온다', async ({ page, request }) => {
+    const mine = await openShopWith(request, sessions.teacher, `e2e 추천탭A ${run}`);
+    const other = await openShopWith(request, teacher2, `e2e 추천탭B ${run}`);
+    try {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await loginAs(page, sessions.parentMulti);
+      await page.goto('/parent/schedule');
+      await page.getByRole('navigation', { name: '학부모 메뉴' }).getByRole('link', { name: '추천 상품' }).click();
+
+      await expect(page).toHaveURL(/\/parent\/shop$/);
+      const list = page.getByLabel('선생님별 추천 상품');
+      await expect(list.getByRole('button')).toHaveCount(2);
+
+      await list.getByRole('button', { name: new RegExp(sessions.teacher2.displayName) }).click();
+      await expect(page).toHaveURL(new RegExp(`/shop/${other.shop.publicId}$`));
+      await expect(page.getByText(`e2e 추천탭B ${run}`)).toBeVisible();
+      await expect(page.getByText(`e2e 추천탭A ${run}`)).toHaveCount(0);
+
+      await page.getByRole('button', { name: '돌아가기', exact: true }).click();
+      await expect(page).toHaveURL(/\/parent\/shop$/);
+      await expect(list.getByRole('button')).toHaveCount(2);
+    } finally {
+      await api(request, sessions.teacher, 'DELETE', `/api/shop/products/${mine.productId}`);
+      await api(request, teacher2, 'DELETE', `/api/shop/products/${other.productId}`);
+    }
+  });
+
+  test('상점 목록 API 는 학부모 전용이고 연결된 선생님의 공개 링크만 준다', async ({ request }) => {
+    const { body: teacherShop } = await api(request, sessions.teacher, 'GET', '/api/shop');
+
+    const solo = await api(request, sessions.parentSolo, 'GET', '/api/parent/shops');
+    expect(solo.status).toBe(200);
+    expect(solo.body.shops.map((s) => s.publicId)).toEqual([teacherShop.shop.publicId]);
+    expect(Object.keys(solo.body.shops[0]).sort()).toEqual(['publicId', 'teacherName', 'title']);
+
+    expect((await api(request, sessions.teacher, 'GET', '/api/parent/shops')).status).toBe(403);
+  });
+});
