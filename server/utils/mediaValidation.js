@@ -6,6 +6,8 @@
 export const MAX_IMAGE_BYTES = 25 * 1024 * 1024;   // 사진 25MB
 export const MAX_VIDEO_BYTES = 500 * 1024 * 1024;  // 영상 500MB
 export const MAX_FILES_PER_UPLOAD = 30;
+/** 앨범 대표 사진(사진 목록 카드의 표지)은 몇 장까지 — 카드 표지 칸이 2×2 라 4 */
+export const MAX_ALBUM_COVERS = 4;
 export const FOLDER_NAME_MAX = 100;
 export const ORIGINAL_NAME_MAX = 200;
 export const CAPTION_MAX = 500;
@@ -153,6 +155,7 @@ export default {
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
   MAX_FILES_PER_UPLOAD,
+  MAX_ALBUM_COVERS,
   FOLDER_NAME_MAX,
   ALLOWED_EXTENSIONS,
   getExtension,

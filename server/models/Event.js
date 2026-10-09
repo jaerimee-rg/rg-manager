@@ -206,7 +206,7 @@ class Event {
   static async updateAlbum(id, fields) {
     const allowed = [
       'driveFolderId', 'driveFolderName', 'driveAccountId', 'albumUploadOpen', 'albumStatus', 'albumCheckedAt', 'albumCreatedAt',
-      'albumPublished', 'albumAudience', 'albumPublishedAt', 'albumCoverMediaId'
+      'albumPublished', 'albumAudience', 'albumPublishedAt', 'albumCoverMediaIds'
     ];
     const sets = [];
     const params = [id];

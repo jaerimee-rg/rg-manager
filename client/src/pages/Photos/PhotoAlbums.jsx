@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import UploadSheet from '../../components/album/UploadSheet';
 import RetryImage from '../../components/album/RetryImage';
+import AlbumCovers from '../../components/album/AlbumCovers';
 import {
   Badge, Button, Callout, Card, EmptyState, Icon, PageHeader, SkeletonList, Toast
 } from '../../components/ui';
@@ -130,16 +131,14 @@ function PhotoAlbums() {
   );
 }
 
-/** 앨범 카드 — 표지는 선생님이 고른 대표 사진·영상 한 장(cover, 영상도 표시 없이 그 장면만), 없으면 최근 사진 4장 */
+/** 앨범 카드 — 표지는 선생님이 고른 대표 사진·영상들(covers, 최대 4장 · 영상도 표시 없이 그 장면만), 없으면 최근 사진 4장 */
 function AlbumCard({ album, onOpen }) {
   const counts = album.counts || {};
   const previews = (album.previews || []).slice(0, 4);
   return (
     <button type="button" className="ui-album-card" onClick={onOpen}>
-      {album.cover ? (
-        <div className="ui-album-card__cover" data-single>
-          <RetryImage src={album.cover} loading="lazy" />
-        </div>
+      {album.covers?.length ? (
+        <AlbumCovers urls={album.covers} />
       ) : previews.length ? (
         <div className="ui-album-card__cover">
           {previews.map((url) => <RetryImage key={url} src={url} loading="lazy" />)}

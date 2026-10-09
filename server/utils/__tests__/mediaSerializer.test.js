@@ -1,5 +1,5 @@
 import {
-  toParentMedia, toTeacherMedia, toParentAlbum, thumbnailUrl, coverImageUrl, largeImageUrl, downloadUrl
+  toParentMedia, toTeacherMedia, toParentAlbum, thumbnailUrl, coverImageUrl, coverUrls, largeImageUrl, downloadUrl
 } from '../mediaSerializer.js';
 
 const media = {
@@ -161,6 +161,17 @@ describe('toParentAlbum', () => {
   it('개수가 없으면 0 으로 채운다', () => {
     expect(toParentAlbum({ id: 1 }).counts).toEqual({ images: 0, videos: 0, mine: 0 });
   });
+
+  it('선생님이 고른 대표 사진이 있으면 그 주소들을 싣는다 — 학부모 카드는 이것만 보여 준다', () => {
+    expect(toParentAlbum({ id: 3 }, { previews: ['c1', 'd1'], covers: ['c1'] }).covers).toEqual([coverImageUrl('c1')]);
+    expect(toParentAlbum({ id: 3 }, { previews: ['d1'] }).covers).toEqual([]);
+  });
+
+  it('학부모 카드에 나가는 칸은 정해져 있다 — 대표 사진 id 같은 선생님 값은 나가지 않는다', () => {
+    expect(Object.keys(toParentAlbum({ id: 3 }, { covers: ['c1'] })).sort()).toEqual([
+      'albumStatus', 'counts', 'covers', 'date', 'eventId', 'location', 'previews', 'title', 'type', 'uploadOpen'
+    ]);
+  });
 });
 
 describe('URL 만들기', () => {
@@ -183,6 +194,12 @@ describe('URL 만들기', () => {
     expect(coverImageUrl('f1')).toBe('https://lh3.googleusercontent.com/d/f1=w800-h500-c-rw');
     expect(coverImageUrl('a b')).toContain('/d/a%20b=');
     expect(coverImageUrl(null)).toBeNull();
+  });
+
+  it('표지 주소들: 한 장이면 16:10, 여러 장이면 정사각형 썸네일 — 고른 순서 그대로', () => {
+    expect(coverUrls(['a'])).toEqual([coverImageUrl('a')]);
+    expect(coverUrls(['b', 'a'])).toEqual([thumbnailUrl('b'), thumbnailUrl('a')]);
+    expect(coverUrls([])).toEqual([]);
   });
 
   it('뷰어용 큰 사진은 자르지 않고 폭 1600 — 원래 비율 그대로', () => {

@@ -41,10 +41,13 @@ import { formatTime, formatDayLabel, dayKeyOf, uploaderLabel } from '../../utils
  * 아래쪽 입력 창이 열린다. 저장에 실패하면 Error(message) 를 던진다 — 창에 그 글을 보여 주고 열어 둔다.
  * 쓰는 동안에는 넘기기(밀기 · 화살표 키)를 멈추고, Esc 는 뷰어가 아니라 입력 창을 닫는다.
  *
- * onCoverChange(item, on) 를 주면(선생님 화면) 정보 줄에 [대표 사진으로] 가 생긴다 — 사진 목록 카드의 표지로 쓸 사진.
- * coverId 와 같은 장에서는 [대표 사진] 으로 눌린 채 보이고, 다시 누르면 푼다. 숨긴 사진은 표지로 쓰이지 않아 버튼이 없다.
+ * onCoverChange(item, on) 를 주면(선생님 화면) 정보 줄에 [대표 사진으로] 가 생긴다 — 사진 목록 카드의 표지로 쓸 사진(coverLimit 장까지).
+ * coverIds 에 든 장에서는 [대표 사진 n] 으로 눌린 채 보이고, 다시 누르면 푼다. 이미 coverLimit 장이면 다른 장의 버튼은 잠긴다.
+ * 숨긴 사진은 표지로 쓰이지 않아 버튼이 없다.
  */
-function MediaViewer({ items = [], startId, onClose, onDelete, onCaptionSave, coverId = null, onCoverChange }) {
+function MediaViewer({
+  items = [], startId, onClose, onDelete, onCaptionSave, coverIds = [], coverLimit = 4, onCoverChange
+}) {
   const [index, setIndex] = useState(() => {
     const found = items.findIndex((item) => item.id === startId);
     return found >= 0 ? found : 0;
@@ -87,13 +90,17 @@ function MediaViewer({ items = [], startId, onClose, onDelete, onCaptionSave, co
   const move = (step) => setIndex((i) => (i + step + items.length) % items.length);
   const isVideo = item.kind === 'video';
   const onEditCaption = canEditCaption ? () => setEditing(true) : undefined;
+  const coverOrder = coverIds.indexOf(item.id) + 1;
   const cover = typeof onCoverChange === 'function' && !item.isHidden ? {
-    on: item.id === coverId,
+    on: coverOrder > 0,
+    order: coverOrder,
+    full: coverOrder === 0 && coverIds.length >= coverLimit,
+    limit: coverLimit,
     saving: coverSaving,
     toggle: async () => {
       setCoverSaving(true);
       try {
-        await onCoverChange(item, item.id !== coverId);
+        await onCoverChange(item, coverOrder === 0);
       } finally {
         setCoverSaving(false);
       }
@@ -245,7 +252,8 @@ function PeekPage({ item, side }) {
  * 선생님이 붙인 설명 · 날짜 · 올린 사람 · (영상 길이).
  * overlay 면 사진 아래쪽에 겹쳐 뜬다 — 누를 것([더 보기] · [설명 수정])만 터치를 받고 나머지는 그대로 사진으로 지나간다.
  * onEditCaption 이 있으면(선생님 화면) 정보 줄 끝에 [설명 추가]·[설명 수정] 이 붙는다.
- * cover 가 있으면(선생님 화면) 그 뒤에 [대표 사진으로] — 지금 대표 사진이면 노란 [대표 사진] 으로 눌려 있다.
+ * cover 가 있으면(선생님 화면) 그 뒤에 [대표 사진으로] — 지금 대표 사진이면 노란 [대표 사진 n] 으로 눌려 있고,
+ * 대표가 꽉 찼으면 [대표 사진 4장 다 골랐어요] 로 잠긴다.
  */
 function MediaInfo({ item, overlay = false, onEditCaption, cover }) {
   const duration = formatDuration(item.durationMs);
@@ -299,17 +307,19 @@ function MediaInfo({ item, overlay = false, onEditCaption, cover }) {
         <button
           type="button"
           aria-pressed={cover.on}
-          disabled={cover.saving}
-          title={cover.on ? '누르면 대표 사진을 풀어요' : '사진 목록에서 이 폴더의 표지가 돼요'}
+          disabled={cover.saving || cover.full}
+          title={cover.on ? '누르면 대표 사진을 풀어요'
+            : cover.full ? '다른 대표 사진을 먼저 풀어 주세요' : `사진 목록에서 이 폴더의 표지가 돼요 (${cover.limit}장까지)`}
           onClick={cover.toggle}
           style={{
             ...pill,
             ...(cover.on ? { background: 'var(--star)', color: 'var(--ink)' } : {}),
-            ...(cover.saving ? { opacity: 0.6, cursor: 'wait' } : {})
+            ...(cover.saving ? { opacity: 0.6, cursor: 'wait' } : {}),
+            ...(cover.full ? { opacity: 0.6, cursor: 'not-allowed' } : {})
           }}
         >
           <Icon name="star" size={14} fill={cover.on ? 'currentColor' : 'none'} />
-          {cover.on ? '대표 사진' : '대표 사진으로'}
+          {cover.on ? `대표 사진 ${cover.order}` : cover.full ? `대표 사진 ${cover.limit}장 다 골랐어요` : '대표 사진으로'}
         </button>
       )}
     </div>
