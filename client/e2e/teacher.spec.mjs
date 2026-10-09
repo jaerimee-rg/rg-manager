@@ -741,6 +741,107 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
  * 좁은 화면(휴대폰)에서는 신청 현황을 목록 아래에 끼워 넣지 않고 화면 전체로 띄운다.
  * teacher 프로젝트는 데스크탑 뷰포트라 여기서만 폭을 바꾼다.
  */
+// 사진을 올릴 때 그 앨범(폴더)에 같은 파일(원래 이름 + 크기)이 이미 있으면 건너뛰고 알려 준다.
+// 따로 된 선생님(sessions.sameFile)은 Google 연결 행이 있어 서버의 업로드 권한 검사를 통과한다 — 토큰은 가짜라,
+// 진짜 서버로 도는 것은 "전부 이미 있는" 경우뿐이다(그때는 Drive 를 부르지 않는다).
+test.describe('선생님 — 앨범에 이미 있는 파일은 다시 올리지 않는다', () => {
+  const same = sessions.sameFile;
+  const jpeg = (file) => ({ name: file.name, mimeType: 'image/jpeg', buffer: Buffer.alloc(file.size, 1) });
+
+  test.beforeEach(async ({ page }) => {
+    await loginAs(page, same.teacher);
+    // e2e 서버에는 Google 키가 없어 [사진 올리기] 가 잠긴다 — 앨범 응답의 '설정됨' 만 켠다(연결 행은 setup 이 넣었다).
+    await page.route(`**/api/events/${same.eventId}/album`, async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      const response = await route.fetch();
+      const body = await response.json();
+      await route.fulfill({ response, json: { ...body, drive: { ...body.drive, configured: true } } });
+    });
+  });
+
+  test('이미 있는 파일만 고르면 올리지 않고 "이미 앨범에 있어요" 로 알려 준다 (진짜 서버)', async ({ page, request }) => {
+    const before = await api(request, same.teacher, 'GET', `/api/events/${same.eventId}/album`);
+    expect(before.body.counts.images).toBe(2);
+
+    await page.goto(`/photos/${same.eventId}`);
+    await page.getByRole('button', { name: '사진 올리기' }).first().click();
+    const sheet = page.getByRole('dialog');
+    await page.getByTestId('album-file-input').setInputFiles(same.files.map(jpeg));
+    await sheet.getByRole('button', { name: '2개 올리기' }).click();
+
+    await expect(sheet.getByRole('heading', { name: '이미 앨범에 있어요' })).toBeVisible();
+    await expect(sheet.getByText(/고른 파일 2개가 모두 이미 앨범에 있어서 새로 올리지 않았어요/)).toBeVisible();
+    await expect(sheet.getByText('같은 이름·크기의 파일이 있어요.')).toBeVisible();
+    for (const file of same.files) {
+      await expect(sheet.getByText(file.name, { exact: true })).toBeVisible();
+    }
+    await expect(sheet.getByText('이미 있어요', { exact: true })).toHaveCount(2);
+    await expect(sheet.getByText(/올렸어요/)).toHaveCount(0);
+
+    const after = await api(request, same.teacher, 'GET', `/api/events/${same.eventId}/album`);
+    expect(after.body.counts.images).toBe(2);
+  });
+
+  test('업로드 세션 API — 이미 있는 파일은 세션 대신 건너뜀으로 답한다 (자모가 나뉜 한글 이름도)', async ({ request }) => {
+    const files = [
+      { name: 'IMG_dup.jpg', size: 4 },
+      { name: '대회사진.jpg'.normalize('NFD'), size: 5 },
+      { name: '문서.pdf', size: 10 }
+    ];
+    const response = await api(request, same.teacher, 'POST', `/api/events/${same.eventId}/media/uploads`, { files });
+
+    expect(response.status).toBe(201);
+    expect(response.body.items).toEqual([
+      { name: 'IMG_dup.jpg', skipped: true, reason: 'duplicate' },
+      { name: files[1].name, skipped: true, reason: 'duplicate' },
+      expect.objectContaining({ name: '문서.pdf', reason: 'type' })
+    ]);
+
+    // 이름이 같아도 크기가 다르면 다른 파일 — 올리려고 Drive 를 부른다(e2e 에는 Google 이 없어 여기서 멈춘다)
+    const differentSize = await api(request, same.teacher, 'POST', `/api/events/${same.eventId}/media/uploads`,
+      { files: [{ name: 'IMG_dup.jpg', size: 6 }] });
+    expect(differentSize.status).toBe(400);
+    expect(differentSize.body.reason).toBe('not_configured');
+  });
+
+  test('새 파일과 섞여 있으면 새 파일만 올리고, 건너뛴 파일은 처음부터 "이미 있어요" 로 따로 알려 준다', async ({ page }) => {
+    // 새 파일은 Drive 가 있어야 올라간다 — 세션 발급 · Drive 전송 · 완료 보고만 가짜로 바꾼다
+    const sessionUri = 'https://drive-upload.e2e.invalid/session-1';
+    let releaseUpload;
+    const uploadHeld = new Promise((resolve) => { releaseUpload = resolve; });
+    await page.route(`**/api/events/${same.eventId}/media/uploads`, (route) => route.fulfill({
+      status: 201,
+      json: { items: [{ name: 'IMG_dup.jpg', skipped: true, reason: 'duplicate' }, { name: 'IMG_new.jpg', mediaId: 999999, sessionUri }] }
+    }));
+    const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'PUT', 'Access-Control-Allow-Headers': '*' };
+    await page.route('https://drive-upload.e2e.invalid/**', async (route) => {
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+      await uploadHeld;
+      return route.fulfill({ status: 200, headers: cors, json: { id: 'e2e-new-drive-file' } });
+    });
+    await page.route(`**/api/events/${same.eventId}/media/999999/**`, (route) => route.fulfill({ json: { media: {} } }));
+    await page.route('https://lh3.googleusercontent.com/**', (route) => route.abort());
+
+    await page.goto(`/photos/${same.eventId}`);
+    await page.getByRole('button', { name: '사진 올리기' }).first().click();
+    const sheet = page.getByRole('dialog');
+    await page.getByTestId('album-file-input').setInputFiles([jpeg({ name: 'IMG_dup.jpg', size: 4 }), jpeg({ name: 'IMG_new.jpg', size: 7 })]);
+    await sheet.getByRole('button', { name: '2개 올리기' }).click();
+
+    // 새 파일이 올라가는 동안 — 건너뛸 파일은 진행률 없이 "이미 있어요"
+    await expect(sheet.getByRole('button', { name: /올리는 중/ })).toBeVisible();
+    await expect(sheet.getByText('이미 있어요', { exact: true })).toBeVisible();
+    await expect(sheet.getByRole('progressbar', { name: 'IMG_new.jpg 업로드 진행률' })).toBeVisible();
+    await expect(sheet.getByRole('progressbar', { name: 'IMG_dup.jpg 업로드 진행률' })).toHaveCount(0);
+    releaseUpload();
+
+    await expect(sheet.getByRole('heading', { name: '다 올렸어요' })).toBeVisible({ timeout: 15_000 });
+    await expect(sheet.getByText(/사진 1장 올렸어요/)).toBeVisible();
+    await expect(sheet.getByText(/이미 앨범에 있는 파일 1개는 건너뛰었어요/)).toBeVisible();
+    await expect(sheet.getByText('IMG_dup.jpg', { exact: true })).toBeVisible();
+  });
+});
+
 test.describe('선생님 — 좁은 화면의 신청 현황', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 

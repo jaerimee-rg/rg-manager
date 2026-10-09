@@ -25,7 +25,7 @@ import { runWithDrive, ensureRootFolder } from './driveAccess.js';
 import { encodeDescriptor, isValidDescriptor, decodeDescriptor, classifyDistance, bestPerStudent,
   parseAnalyzerVersion, matchRulesSignature, DEFAULT_MATCH_THRESHOLD, DEFAULT_CANDIDATE_THRESHOLD } from '../utils/faceVector.js';
 import { mergeMatches } from '../utils/faceMatch.js';
-import { buildDriveName, validateUpload, kindFromMime, folderNameFromEvent } from '../utils/mediaValidation.js';
+import { buildDriveName, validateUpload, kindFromMime, folderNameFromEvent, sameFileKey } from '../utils/mediaValidation.js';
 import { APP_URL } from '../utils/appUrl.js';
 
 /** 관리자가 조정할 수 있는 임계값. 실패해도 기본값으로 계속 간다 (aiSettings 와 같은 규칙). */
@@ -185,15 +185,28 @@ export const refreshAlbum = async (userId, event) => runWithDrive(userId, async 
 /**
  * 업로드 세션을 만든다 (FR-232 ①).
  * 브라우저는 돌려받은 주소로 Drive 에 직접 올린다 — 서버는 파일 바이트를 만지지 않는다.
+ *
+ * 앨범에 이미 있는 파일(같은 이름 + 같은 크기, sameFileKey)은 세션을 만들지 않고 { skipped: true, reason: 'duplicate' } 로
+ * 돌려준다. 같은 요청에 두 번 온 파일도 두 번째부터 건너뛴다. 결과는 files 와 같은 순서·같은 길이다(화면이 번호로 맞춘다).
+ * 세션을 만들 파일이 하나도 없으면(전부 이미 있거나 형식이 틀림) Drive 토큰도 꺼내지 않는다.
  */
 export const createUploadSessions = async (userId, event, files, uploader) => {
   const results = [];
+  const existing = await EventMedia.listReadyNamesBySize(event.id, files.map((file) => file?.size));
+  const inAlbum = new Set(existing.map((row) => sameFileKey(row.originalName, row.size)));
+  const needsSession = files.some((file) => validateUpload(file).ok && !inAlbum.has(sameFileKey(file.name, file.size)));
 
-  await runWithDrive(userId, async (accessToken) => {
+  const createSessions = async (accessToken) => {
     for (const file of files) {
       const check = validateUpload(file);
       if (!check.ok) {
         results.push({ name: file.name, error: check.message, reason: check.reason });
+        continue;
+      }
+
+      const key = sameFileKey(file.name, file.size);
+      if (inAlbum.has(key)) {
+        results.push({ name: file.name, skipped: true, reason: 'duplicate' });
         continue;
       }
 
@@ -227,6 +240,7 @@ export const createUploadSessions = async (userId, event, files, uploader) => {
         });
 
         results.push({ name: file.name, mediaId: media.id, sessionUri, driveName });
+        inAlbum.add(key);
       } catch (error) {
         if (error instanceof DriveError && error.code === 'quota') {
           results.push({ name: file.name, error: '선생님의 Drive 용량이 부족해요. 선생님께 알려 주세요.', reason: 'quota' });
@@ -235,7 +249,10 @@ export const createUploadSessions = async (userId, event, files, uploader) => {
         throw error;
       }
     }
-  });
+  };
+
+  if (needsSession) await runWithDrive(userId, createSessions);
+  else await createSessions(null);
 
   return results;
 };

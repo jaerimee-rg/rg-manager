@@ -70,6 +70,13 @@ export const validateUpload = ({ name, size } = {}) => {
 };
 
 /**
+ * "같은 파일" 의 열쇠 — 원래 이름 + 크기(바이트). 앨범에 이미 있는 파일은 다시 올리지 않고 건너뛴다.
+ * 내용 해시는 없다(브라우저가 500MB 영상을 다 읽어야 한다) — 이름과 바이트 수가 둘 다 같은 다른 사진은 사실상 없다.
+ * 이름은 NFC 로 맞춘다: 맥은 한글 파일 이름을 자모로 나눠(NFD) 주고, 휴대폰은 붙여(NFC) 준다.
+ */
+export const sameFileKey = (name, size) => `${String(name ?? '').normalize('NFC')}\u0000${Number(size)}`;
+
+/**
  * Drive 에 저장할 파일 이름: 20260912_하은_IMG_1234.jpg
  * 누가 올렸는지 폴더에서 바로 보이게 한다. 원본 이름은 DB 에 따로 남는다.
  */
