@@ -17,6 +17,7 @@ import { fetchWithAuth } from '../../../utils/api';
 import { copyToClipboard } from '../../../utils/copyToClipboard';
 import PhotoAlbums from '../PhotoAlbums';
 import PhotoAlbum from '../PhotoAlbum';
+import { pickDate } from '../../../components/ui/__tests__/pickDate';
 
 const ok = (body, status = 200) => Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) });
 const DRIVE = { configured: true, connected: true, status: 'connected', email: 't@gmail.com', rootFolderName: 'RG Manager' };
@@ -1145,12 +1146,12 @@ describe('PhotoAlbum — 사진 폴더 관리 (FR-519)', () => {
 
     const dialog = screen.getByRole('dialog', { name: '폴더 이름 · 날짜 수정' });
     expect(within(dialog).getByLabelText(/이름/)).toHaveValue('가을 소풍');
-    expect(within(dialog).getByLabelText(/날짜/)).toHaveValue('2026-09-27');
+    expect(within(dialog).getByRole('button', { name: /^날짜/ })).toHaveAccessibleName('날짜 2026년 9월 27일 (일)');
     // 바꾼 것이 없으면 저장할 것이 없다
     expect(within(dialog).getByRole('button', { name: '저장' })).toBeDisabled();
 
     await act(async () => { fireEvent.change(within(dialog).getByLabelText(/이름/), { target: { value: '가을: 운동회' } }); });
-    await act(async () => { fireEvent.change(within(dialog).getByLabelText(/날짜/), { target: { value: '2026-10-03' } }); });
+    await pickDate(within(dialog), /^날짜/, '2026-10-03');
 
     expect(within(dialog).getByText('바뀔 Drive 폴더 이름')).toBeInTheDocument();
     expect(within(dialog).getByText('2026-10-03 가을 운동회')).toBeInTheDocument();
@@ -1162,7 +1163,7 @@ describe('PhotoAlbum — 사진 폴더 관리 (FR-519)', () => {
     await openEdit();
     const dialog = screen.getByRole('dialog', { name: '폴더 이름 · 날짜 수정' });
     await act(async () => { fireEvent.change(within(dialog).getByLabelText(/이름/), { target: { value: '  가을 운동회 ' } }); });
-    await act(async () => { fireEvent.change(within(dialog).getByLabelText(/날짜/), { target: { value: '2026-10-03' } }); });
+    await pickDate(within(dialog), /^날짜/, '2026-10-03');
     const reads = () => fetchWithAuth.mock.calls.filter(([url, options]) => url === '/api/events/31/album' && !options?.method).length;
     const before = reads();
 

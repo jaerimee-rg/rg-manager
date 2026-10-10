@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'fs';
-import { loginAs, api, stubPortraitThumbnails, swipeTouch, pinchTouch, FACELESS_PNG } from './helpers.mjs';
+import { loginAs, api, stubPortraitThumbnails, swipeTouch, pinchTouch, pickDate, FACELESS_PNG } from './helpers.mjs';
 import { FAKE_PLACE, stubKakaoMaps } from './kakao-fakes.mjs';
 
 const sessions = JSON.parse(readFileSync(new URL('./.sessions.json', import.meta.url)));
@@ -982,6 +982,46 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     await expect(page.getByText(/사진 · 영상/)).toHaveCount(0);
   });
 
+  // iPad Safari 의 기본 날짜 피커는 연·월 바퀴만 떠서 날을 고를 수 없었다(2026-10) — 앱 달력으로 바꿨다.
+  test('iPad 크기·터치 화면에서 새 폴더의 날짜 칸을 누르면 날까지 고르는 달력이 펼쳐진다', async ({ browser, baseURL }) => {
+    const tablet = await browser.newContext({ baseURL, hasTouch: true, isMobile: true, viewport: { width: 820, height: 1180 } });
+    try {
+      const page = await tablet.newPage();
+      await loginAs(page, sessions.teacher);
+      await page.route('**/api/albums', async (route) => {
+        if (route.request().method() !== 'GET') return route.fallback();
+        const response = await route.fetch();
+        const body = await response.json();
+        await route.fulfill({ response, json: { ...body, drive: { ...body.drive, configured: true, connected: true, status: 'connected' } } });
+      });
+
+      await page.goto('/photos');
+      await page.getByRole('button', { name: '사진 올리기' }).first().tap();
+      const sheet = page.getByRole('dialog');
+      await sheet.getByRole('radio', { name: /새 폴더 만들기/ }).tap();
+      await sheet.getByLabel('이름').fill(`e2e 아이패드 ${run}`);
+
+      // 브라우저 날짜 피커가 아니라 앱의 날짜 칸이다
+      await expect(sheet.locator('input[type="date"]')).toHaveCount(0);
+      const field = sheet.getByRole('button', { name: /^날짜/ });
+      await field.tap();
+      await expect(field).toHaveAttribute('aria-expanded', 'true');
+      const grid = sheet.getByRole('grid');
+      await expect(grid).toBeVisible();
+      await expect(grid.getByRole('columnheader')).toHaveCount(7);
+      expect(await grid.locator('.ui-calendar__day').count()).toBeGreaterThanOrEqual(28);   // 그 달의 날이 다 있다
+      await expect(grid.getByRole('button', { name: /^\d+월 1일 / })).toBeInViewport();
+
+      // 다른 달의 날을 고르면 닫히고, 칸과 만들 폴더 이름이 그 날짜로 바뀐다
+      await pickDate(sheet, '날짜', '2026-09-27');
+      await expect(field).toHaveAccessibleName('날짜 2026년 9월 27일 (일)');
+      await expect(sheet.getByText(`2026-09-27 e2e 아이패드 ${run}`)).toBeVisible();
+      await expect(sheet.getByRole('button', { name: '사진 고르기' })).toBeEnabled();
+    } finally {
+      await tablet.close();
+    }
+  });
+
   // FR-517 — 맞는 이벤트가 없으면 올리는 시트에서 이름·날짜로 **사진 전용 폴더**를 만든다 (이벤트는 생기지 않는다)
   test('사진을 올릴 때 이벤트가 없어도 새 폴더를 만든다 — 이벤트 관리·학부모 일정에는 나오지 않는다', async ({ page, request }) => {
     const title = `e2e 새폴더 ${run}`;
@@ -1006,7 +1046,7 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     await sheet.getByRole('radio', { name: /새 폴더 만들기/ }).click();
     await expect(sheet.getByRole('button', { name: '사진 고르기' })).toBeDisabled();
     await sheet.getByLabel('이름').fill(title);
-    await sheet.getByLabel('날짜').fill('2026-09-27');
+    await pickDate(sheet, '날짜', '2026-09-27');
     await expect(sheet.getByText(`2026-09-27 ${title}`)).toBeVisible();
     await expect(sheet.getByText('Drive 에 새로 만들 폴더')).toBeVisible();
     await expect(sheet.getByText(/이벤트와 상관없는 사진 폴더예요/)).toBeVisible();
@@ -1117,7 +1157,7 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
       await expect(dialog.getByRole('button', { name: '저장' })).toBeDisabled();   // 바꾼 것이 없다
 
       await dialog.getByLabel('이름').fill(renamed);
-      await dialog.getByLabel('날짜').fill('2026-10-03');
+      await pickDate(dialog, '날짜', '2026-10-03');
       await expect(dialog.getByText(`2026-10-03 ${renamed}`)).toBeVisible();   // Drive 에 생길 폴더 이름
       await dialog.getByRole('button', { name: '저장' }).click();
 

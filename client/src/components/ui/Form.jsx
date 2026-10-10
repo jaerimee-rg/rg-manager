@@ -1,5 +1,7 @@
-import React, { useId } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import Icon from './Icon';
+import Calendar from './Calendar';
+import { formatIsoDate } from '../../utils/calendar';
 
 const cx = (...parts) => parts.filter(Boolean).join(' ');
 
@@ -30,7 +32,7 @@ export function Field({
   return (
     <div className={cx('ui-field', className)} {...rest}>
       {label && (
-        <label className="ui-field__label" htmlFor={id}>
+        <label className="ui-field__label" htmlFor={id} id={`${id}-label`}>
           {label}
           {required && <span className="ui-field__required" aria-hidden="true">*</span>}
         </label>
@@ -85,6 +87,78 @@ export function ClearableInput({ value, onClear, clearLabel = '지우기', disab
         >
           <Icon name="x" size={14} />
         </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 날짜 하나를 고르는 칸 — 누르면 바로 아래에 앱의 달력(Calendar)이 펼쳐지고, 날을 누르면 닫힌다.
+ *
+ * <input type="date"> 대신 쓴다. iPad Safari 의 기본 피커는 연·월 바퀴만 보이는 상태로 떠
+ * 날을 고를 수 없는 일이 있었다(2026-10). 브라우저 피커에 기대지 않으니 어디서나 같은 달력이다.
+ * Field 안에 두면 라벨 + 지금 값이 이 칸의 이름이 된다(예: "날짜 2026년 10월 10일 (토)").
+ * value · onChange 는 'YYYY-MM-DD' 문자열. Esc 는 달력만 닫는다(모달까지 닫지 않는다).
+ */
+export function DateField({
+  id: idProp, value, onChange, min, max, placeholder = '날짜 선택', disabled = false, invalid, className = '',
+  'aria-describedby': describedBy, 'aria-invalid': ariaInvalid
+}) {
+  const autoId = useId();
+  const id = idProp || autoId;
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const buttonRef = useRef(null);
+
+  // 시트·모달 아래쪽에서 열면 달력이 버튼 줄에 가려 안 보인다 — 펼친 달력까지 보이게 스크롤한다
+  useEffect(() => {
+    if (open) rootRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+  }, [open]);
+
+  const close = () => {
+    setOpen(false);
+    buttonRef.current?.focus();
+  };
+
+  const onKeyDown = (event) => {
+    if (!open || event.key !== 'Escape') return;
+    event.stopPropagation();
+    close();
+  };
+
+  return (
+    <div ref={rootRef} className={cx('ui-date-field', className)} data-open={open || undefined} onKeyDown={onKeyDown}>
+      <button
+        ref={buttonRef}
+        type="button"
+        id={id}
+        className="ui-input ui-date-field__button"
+        aria-labelledby={`${id}-label ${id}-value`}
+        aria-describedby={describedBy}
+        aria-invalid={invalid || ariaInvalid === 'true' ? 'true' : undefined}
+        aria-expanded={open}
+        aria-controls={open ? `${id}-calendar` : undefined}
+        disabled={disabled}
+        onClick={() => setOpen((was) => !was)}
+      >
+        <Icon name="calendar" size={16} />
+        <span className="ui-date-field__value" id={`${id}-value`} data-empty={value ? undefined : 'true'}>
+          {value ? formatIsoDate(value, { withYear: true }) : placeholder}
+        </span>
+        <Icon name="chevronDown" size={16} className="ui-date-field__chevron" />
+      </button>
+      {open && (
+        <Calendar
+          id={`${id}-calendar`}
+          className="ui-date-field__calendar"
+          value={value}
+          min={min}
+          max={max}
+          onChange={(iso) => {
+            onChange?.(iso);
+            close();
+          }}
+        />
       )}
     </div>
   );

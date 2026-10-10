@@ -10,7 +10,7 @@ import {
   NEW_FOLDER_TITLE_MAX, PHOTO_FOLDER_TYPE
 } from '../../pages/Photos/albumState';
 import {
-  Badge, Button, Callout, Checkbox, Field, Icon, Input, List, ListRow, Modal, Progress, Stack
+  Badge, Button, Callout, Checkbox, DateField, Field, Icon, Input, List, ListRow, Modal, Progress, Stack
 } from '../ui';
 
 // 이벤트 고르기에서 "새 폴더 만들기"(이벤트 없는 사진 전용 폴더)를 고른 상태 (FR-517)
@@ -398,9 +398,9 @@ function UploadSheet({
                   </Field>
                   <Field label="날짜" required htmlFor="new-folder-date">
                     {(props) => (
-                      <Input
-                        {...props} type="date" value={draft.date}
-                        onChange={(event) => setDraft((prev) => ({ ...prev, date: event.target.value }))}
+                      <DateField
+                        {...props} value={draft.date}
+                        onChange={(date) => setDraft((prev) => ({ ...prev, date }))}
                       />
                     )}
                   </Field>

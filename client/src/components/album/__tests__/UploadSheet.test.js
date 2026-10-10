@@ -16,6 +16,7 @@ jest.mock('../../../utils/imagePrep', () => ({
 import { fetchWithAuth } from '../../../utils/api';
 import { uploadToDrive } from '../../../utils/driveUpload';
 import UploadSheet from '../UploadSheet';
+import { pickDate } from '../../ui/__tests__/pickDate';
 
 const TARGETS = [
   { eventId: 40, title: '전국 꿈나무 대회', date: '2026-11-20', type: 'competition', upcoming: true, hasAlbum: false, published: false, count: 0, folderName: '2026-11-20 전국 꿈나무 대회' },
@@ -157,7 +158,7 @@ describe('UploadSheet — 새 폴더 만들기 · 사진 전용 폴더 (docs/pho
   const fillNewFolder = async ({ title = '가을 소풍', date = '2026-09-27' } = {}) => {
     await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /새 폴더 만들기/ })); });
     await act(async () => { fireEvent.change(screen.getByLabelText(/이름/), { target: { value: title } }); });
-    await act(async () => { fireEvent.change(screen.getByLabelText(/날짜/), { target: { value: date } }); });
+    await pickDate(screen, /^날짜/, date);
   };
 
   const uploadOne = async () => {
@@ -172,7 +173,7 @@ describe('UploadSheet — 새 폴더 만들기 · 사진 전용 폴더 (docs/pho
     expect(screen.getByRole('radio', { name: /새 폴더 만들기/ })).toHaveAttribute('aria-checked', 'true');
     expect(screen.queryByText(/이벤트 관리에서 먼저 등록/)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/이름/)).toHaveValue('');
-    expect(screen.getByLabelText(/날짜/).value).toMatch(/^\d{4}-\d{2}-\d{2}$/);   // 오늘
+    expect(screen.getByRole('button', { name: /^날짜/ })).toHaveAccessibleName(/^날짜 \d{4}년 \d{1,2}월 \d{1,2}일 \(.\)$/);   // 오늘
     expect(screen.getByRole('button', { name: '사진 고르기' })).toBeDisabled();
   });
 
