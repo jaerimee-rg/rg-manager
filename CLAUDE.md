@@ -885,6 +885,11 @@ notifications. The teacher decides per save: the event form's **[학부모에게
   Vercel PR 미리보기 도메인에서는 지도가 안 뜬다(정상).
 - 지도 미리보기는 끌기·휠 확대를 끈다 — 휴대폰에서 페이지를 내리다 지도가 스크롤을 가로채지 않게. 크게 보기·길찾기는
   카카오맵 링크(`map.kakao.com/link/map|to/<이름>,<위도>,<경도>`)가 맡는다.
+- **[지도에서 고르기]** (`components/common/MapPickerDialog.jsx`, 키가 있을 때만 보인다) — 핀이 어긋났거나 주소 검색에 안 나오는
+  곳을 지도에서 직접 고친다. 핀은 지도 가운데에 고정하고 지도를 움직이며(누르면 그곳이 가운데로), 지도가 멈추면(`idle`) 가운데
+  좌표로 주소를 찾는다(`Geocoder.coord2Address` → `utils/kakaoMap.js:addressAt`, 도로명 우선·없으면 지번). [이 위치로] 는 그
+  **주소와 좌표를 함께** 폼에 넣고 **주소로 다시 찾지 않는다** — 다시 찾으면 핀이 건물 가운데로 돌아간다. 처음 열 때 이미 고른
+  주소는 다시 묻지 않고 그대로 보여 준다(고른 지번 주소가 도로명으로 바뀌지 않게). 서버·학부모 화면은 바뀐 것이 없다.
 - **e2e** 는 두 스크립트와 `/api/maps/config` 를 `e2e/kakao-fakes.mjs` 로 바꿔 끼운다(localhost 는 카카오 콘솔에 없는 도메인이고
   우편번호 창은 다른 출처의 iframe 이다). 진짜 SDK·키·도메인은 운영에서 눈으로 확인한다.
 

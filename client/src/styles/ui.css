@@ -2285,6 +2285,57 @@ html { font-synthesis: none; }
   .ui-address-search { height: 60vh; }
 }
 
+/* 지도에서 고르기 (components/common/MapPickerDialog) — 핀은 지도 가운데에 고정하고 지도를 움직인다.
+   핀 끝이 정확히 가운데에 오도록 올린다 — mapPin 아이콘의 끝은 24 칸 중 22 에 있어 22/24 만큼만 올린다.
+   지도는 자기 쌓임 맥락(z-index 0)에 가둬서 카카오 지도 안쪽의 z-index 가 핀 위로 올라오지 않게 한다. */
+.ui-map-picker {
+  position: relative;
+  isolation: isolate;
+}
+.ui-map-picker[hidden] { display: none; }
+.ui-map-picker__map {
+  position: relative;
+  z-index: 0;
+  width: 100%;
+  height: 420px;
+  border: var(--stroke-thin);
+  border-radius: var(--shape-box);
+  overflow: hidden;
+  background: var(--surface-muted);
+}
+.ui-map-picker__pin {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -91.6667%);
+  line-height: 0;
+  color: var(--ink-900);
+  pointer-events: none;
+}
+.ui-map-picker__pin svg {
+  fill: var(--star);
+  fill-rule: evenodd;
+}
+.ui-map-picker__spot {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--ink-900);
+  word-break: keep-all;
+}
+.ui-map-picker__spot svg { flex-shrink: 0; }
+.ui-map-picker__spot[data-status="looking"],
+.ui-map-picker__spot[data-status="not_found"],
+.ui-map-picker__spot[data-status="error"] { color: var(--ink-600); }
+.ui-map-picker__place { color: var(--ink-600); }
+@media (max-width: 767px) {
+  .ui-map-picker__map { height: 50vh; }
+}
+
 /* ---------------------------------------------------------------- *
  * 여백 유틸 — style={{ marginBottom: ... }} 를 대신한다.
  * 토큰 밖 숫자가 화면에 흩어지는 걸 막는 최소 세트만 둔다.

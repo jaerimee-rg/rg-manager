@@ -11,6 +11,8 @@ import {
   getKakaoMapKey,
   locateAddress,
   pickPostcodeAddress,
+  pickCoordAddress,
+  addressAt,
   hasCoordinates,
   kakaoMapLinks,
   resetKakaoMapState
@@ -257,5 +259,70 @@ describe('locateAddress — 주소 → 좌표', () => {
   it('빈 주소는 묻지 않는다', async () => {
     await expect(locateAddress('')).resolves.toEqual({ ok: false, reason: 'not_found' });
     expect(fetchWithAuth).not.toHaveBeenCalled();
+  });
+});
+
+describe('pickCoordAddress — 좌표로 찾은 주소에서 저장할 주소 고르기', () => {
+  const road = { address_name: '서울 송파구 올림픽로 424', building_name: '올림픽공원' };
+  const jibun = { address_name: '서울 송파구 방이동 88' };
+
+  it('도로명 주소가 있으면 도로명과 건물명', () => {
+    expect(pickCoordAddress([{ road_address: road, address: jibun }]))
+      .toEqual({ address: '서울 송파구 올림픽로 424', placeName: '올림픽공원' });
+  });
+
+  it('도로명 주소가 없는 자리(공원 안·운동장)는 지번 주소, 건물명 없음', () => {
+    expect(pickCoordAddress([{ road_address: null, address: jibun }]))
+      .toEqual({ address: '서울 송파구 방이동 88', placeName: '' });
+  });
+
+  it('결과가 비었으면 빈 주소', () => {
+    expect(pickCoordAddress([])).toEqual({ address: '', placeName: '' });
+    expect(pickCoordAddress(undefined)).toEqual({ address: '', placeName: '' });
+  });
+});
+
+describe('addressAt — 좌표 → 주소', () => {
+  const mapsWith = (coord2Address) => ({
+    services: {
+      Status: { OK: 'OK', ZERO_RESULT: 'ZERO_RESULT', ERROR: 'ERROR' },
+      Geocoder: jest.fn(() => ({ coord2Address }))
+    }
+  });
+
+  it('경도(x)·위도(y) 순서로 묻고, 찾은 주소를 돌려준다', async () => {
+    const coord2Address = jest.fn((x, y, cb) => cb([{
+      road_address: { address_name: '서울 송파구 올림픽로 25', building_name: '서울종합운동장' },
+      address: { address_name: '서울 송파구 잠실동 10' }
+    }], 'OK'));
+
+    await expect(addressAt(mapsWith(coord2Address), { latitude: 37.5153, longitude: 127.0733 }))
+      .resolves.toEqual({ ok: true, address: '서울 송파구 올림픽로 25', placeName: '서울종합운동장' });
+    expect(coord2Address).toHaveBeenCalledWith(127.0733, 37.5153, expect.any(Function));
+  });
+
+  it('결과가 없으면(바다 위 등) not_found', async () => {
+    const maps = mapsWith((x, y, cb) => cb([], 'ZERO_RESULT'));
+
+    await expect(addressAt(maps, { latitude: 37, longitude: 126 })).resolves.toEqual({ ok: false, reason: 'not_found' });
+  });
+
+  it('SDK 오류는 error', async () => {
+    const maps = mapsWith((x, y, cb) => cb(null, 'ERROR'));
+
+    await expect(addressAt(maps, { latitude: 37, longitude: 126 })).resolves.toEqual({ ok: false, reason: 'error' });
+  });
+
+  it('SDK 가 던져도 error 로 끝난다', async () => {
+    const maps = mapsWith(() => { throw new Error('boom'); });
+
+    await expect(addressAt(maps, { latitude: 37, longitude: 126 })).resolves.toEqual({ ok: false, reason: 'error' });
+  });
+
+  it('응답이 없으면 시간 제한 뒤 error — [이 위치로] 가 영영 잠기지 않게', async () => {
+    const maps = mapsWith(() => {});
+
+    await expect(addressAt(maps, { latitude: 37, longitude: 126 }, { timeoutMs: 20 }))
+      .resolves.toEqual({ ok: false, reason: 'error' });
   });
 });

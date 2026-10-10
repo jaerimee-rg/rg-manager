@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'fs';
 import { loginAs, api, stubPortraitThumbnails, swipeTouch, pinchTouch, pickDate, FACELESS_PNG } from './helpers.mjs';
-import { FAKE_PLACE, stubKakaoMaps } from './kakao-fakes.mjs';
+import { FAKE_MOVED_PLACE, FAKE_PLACE, stubKakaoMaps } from './kakao-fakes.mjs';
 
 const sessions = JSON.parse(readFileSync(new URL('./.sessions.json', import.meta.url)));
 // 같은 DB 에 여러 번 돌려도 서로 부딪히지 않도록 실행마다 다른 이름을 쓴다
@@ -109,6 +109,48 @@ test.describe('선생님 — 이벤트 관리', () => {
     expect(after.body).toMatchObject({ location: FAKE_PLACE.placeName, address: null, latitude: null, longitude: null });
   });
 
+  test('주소를 고른 뒤 [지도에서 고르기] 로 지도를 옮기면 가운데 핀 자리의 주소·좌표로 저장된다', async ({ page, request }) => {
+    await stubKakaoMaps(page);
+    const placeTitle = `e2e 지도 고르기 ${run}`;
+    await page.goto('/events/new');
+
+    await page.getByLabel('이벤트 이름').fill(placeTitle);
+    await page.getByLabel('날짜', { exact: false }).first().fill('2026-11-23');
+    await page.getByRole('button', { name: '주소 검색' }).click();
+    await page.getByRole('dialog', { name: '주소 검색' }).getByRole('button', { name: '가짜 주소 고르기' }).click();
+    await expect(page.getByTestId('event-address')).toHaveText(FAKE_PLACE.address);
+
+    await page.getByRole('button', { name: '지도에서 고르기' }).click();
+    const picker = page.getByRole('dialog', { name: '지도에서 고르기' });
+    // 지금 고른 자리에서 열리고, 고른 주소를 그대로 보여 준다
+    await expect(picker.getByTestId('map-picker')).toContainText(`가짜 지도 ${FAKE_PLACE.latitude},${FAKE_PLACE.longitude}`);
+    await expect(picker.getByTestId('map-picker-address')).toHaveText(FAKE_PLACE.address);
+
+    await picker.getByRole('button', { name: '가짜 지도 옮기기' }).click();
+    await expect(picker.getByTestId('map-picker-address'))
+      .toHaveText(`${FAKE_MOVED_PLACE.address} · ${FAKE_MOVED_PLACE.placeName}`);
+    await picker.getByRole('button', { name: '이 위치로' }).click();
+    await expect(picker).toHaveCount(0);
+
+    await expect(page.getByTestId('event-address')).toHaveText(FAKE_MOVED_PLACE.address);
+    // 이미 채워진 장소 이름은 그대로 둔다
+    await expect(page.getByLabel('장소')).toHaveValue(FAKE_PLACE.placeName);
+    // 주소로 다시 찾지 않는다 — 가짜 addressSearch 는 늘 올림픽공원 좌표라, 다시 찾았다면 핀이 돌아간 게 여기서 드러난다
+    await expect(page.getByRole('img', { name: /위치 지도/ }))
+      .toContainText(`가짜 지도 ${FAKE_MOVED_PLACE.latitude},${FAKE_MOVED_PLACE.longitude}`);
+
+    await page.getByRole('button', { name: '저장', exact: true }).click();
+    await expect(page).toHaveURL(/\/events$/);
+
+    const events = await api(request, sessions.teacher, 'GET', '/api/events?includePast=true');
+    expect(events.body.find((e) => e.title === placeTitle)).toMatchObject({
+      location: FAKE_PLACE.placeName,
+      address: FAKE_MOVED_PLACE.address,
+      latitude: FAKE_MOVED_PLACE.latitude,
+      longitude: FAKE_MOVED_PLACE.longitude
+    });
+  });
+
   test('지도 키가 없는 서버에서도 주소는 고를 수 있고, 지도 대신 안내가 나온다', async ({ page }) => {
     await stubKakaoMaps(page, { key: null });
     await page.goto('/events/new');
@@ -123,6 +165,8 @@ test.describe('선생님 — 이벤트 관리', () => {
     await expect(page.getByTestId('event-address')).toHaveText(FAKE_PLACE.address);
     await expect(page.getByRole('img', { name: /위치 지도/ })).toHaveCount(0);
     await expect(page.getByRole('status').filter({ hasText: '지도 키가 아직 설정되지 않아' })).toBeVisible();
+    // 열리지 않는 지도 창은 내밀지 않는다
+    await expect(page.getByRole('button', { name: '지도에서 고르기' })).toHaveCount(0);
   });
 
   test('지도 설정 API 는 로그인한 선생님·학부모 모두 읽고, 비로그인은 401', async ({ request }) => {
