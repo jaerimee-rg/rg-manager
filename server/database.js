@@ -883,6 +883,22 @@ const initDatabase = async () => {
     `);
     await client.query('CREATE INDEX IF NOT EXISTS idx_face_exclusions_other ON face_exclusions ("otherFaceId")');
 
+    // 학부모 브라우저 알림 구독 — 기기(브라우저)마다 한 줄. endpoint 는 푸시 서비스(구글·애플·모질라)가 정한 주소라 기기를 가리킨다.
+    // 선생님이 이벤트 저장 때 [학부모에게 알림 보내기] 를 체크하면 그 선생님과 연결된 학부모의 구독으로 보낸다(services/eventPush.js).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id SERIAL PRIMARY KEY,
+        "userId" INTEGER NOT NULL,
+        endpoint TEXT NOT NULL UNIQUE,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        "createdAt" TEXT NOT NULL,
+        "updatedAt" TEXT NOT NULL,
+        FOREIGN KEY ("userId") REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+    await client.query('CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions ("userId")');
+
     // 추천 상품 (docs/recommended-shop) — 선생님당 상점 1개, 로그인 없이 /shop/:publicId 로 열린다
     await client.query(`
       CREATE TABLE IF NOT EXISTS shops (

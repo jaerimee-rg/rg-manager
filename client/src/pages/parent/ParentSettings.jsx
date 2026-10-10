@@ -3,6 +3,7 @@ import { fetchWithAuth } from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import ParentLayout from '../../components/parent/ParentLayout';
 import ChildFaceCard from './ChildFaceCard';
+import EventPushCard from './EventPushCard';
 import RoleSwitcher from '../../components/common/RoleSwitcher';
 import { ConfirmDialog, IconButton } from '../../components/ui';
 
@@ -317,6 +318,9 @@ function ParentSettings({ onChildrenChanged }) {
           </button>
         )}
       </div>
+
+      {/* 선생님이 새 일정을 열면 이 기기로 알림 (서버에 알림 키가 없으면 그리지 않는다) */}
+      <EventPushCard />
 
       <ChildFaceCard children={me?.children || []} onChanged={load} />
 

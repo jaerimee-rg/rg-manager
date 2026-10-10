@@ -6,6 +6,7 @@ jest.mock('../../../utils/api', () => ({ fetchWithAuth: jest.fn() }));
 jest.mock('../../../context/AuthContext', () => ({ useAuth: () => ({ logout: jest.fn() }) }));
 // 이 화면의 다른 카드들은 각자 테스트가 있다 — 여기서는 "내 아이" 만 본다.
 jest.mock('../ChildFaceCard', () => () => null);
+jest.mock('../EventPushCard', () => () => null);
 jest.mock('../../../components/common/RoleSwitcher', () => () => null);
 
 import { fetchWithAuth } from '../../../utils/api';
