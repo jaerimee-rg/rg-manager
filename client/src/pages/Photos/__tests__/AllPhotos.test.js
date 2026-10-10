@@ -115,6 +115,31 @@ describe('AllPhotos — 전체 사진 (모든 폴더)', () => {
     expect(mediaUrls().at(-1)).toBe('/api/albums/media?limit=60');
   });
 
+  it('[얼굴 빼기] 로 여러 얼굴을 골라 한 번에 — 모든 폴더에서 빼고(본 사진 수와 함께) 목록·사진을 다시 읽는다', async () => {
+    const calls = await renderPage({ people: [{ ...PEOPLE[0], removable: false }, PEOPLE[1], { key: 'p57', photoCount: 4, cover }] });
+    const base = fetchWithAuth.getMockImplementation();
+    fetchWithAuth.mockImplementation((url, options = {}) => (
+      url === '/api/albums/people/remove' ? ok({ removedPeople: 2, removedFaces: 5, photos: 5, removedTags: 0 }) : base(url, options)
+    ));
+    const before = calls.people;
+    const bar = () => screen.getByRole('region', { name: '얼굴 빼기' });
+
+    await act(async () => { fireEvent.click(within(bar()).getByRole('button', { name: '얼굴 빼기' })); });
+    expect(screen.getByRole('button', { name: '얼굴 1 · 사진 2장' })).toBeDisabled();   // 등록된 아이는 고를 수 없다
+    fireEvent.click(screen.getByRole('button', { name: '얼굴 2 · 사진 1장' }));
+    fireEvent.click(screen.getByRole('button', { name: '얼굴 3 · 사진 4장' }));
+    fireEvent.click(within(bar()).getByRole('button', { name: '2개 빼기' }));
+    await act(async () => { fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '빼기' })); });
+
+    const removeCalls = fetchWithAuth.mock.calls.filter(([url]) => url === '/api/albums/people/remove');
+    expect(removeCalls).toEqual([['/api/albums/people/remove', {
+      method: 'POST', body: JSON.stringify({ people: [{ key: 'p42', photoCount: 1 }, { key: 'p57', photoCount: 4 }] })
+    }]]);
+    expect(screen.getByText('얼굴 2개를 목록에서 뺐어요 · 사진은 그대로 있어요')).toBeInTheDocument();
+    expect(calls.people).toBeGreaterThan(before);
+    expect(mediaUrls().length).toBeGreaterThan(1);   // 사진도 다시 읽었다
+  });
+
   it('그 사이 묶음이 바뀌었으면(409 person_changed) 아무것도 안 지워졌다고 알리고 목록을 다시 읽는다 · 등록된 아이(removable: false)에는 X 가 없다', async () => {
     const calls = await renderPage({ people: [{ ...PEOPLE[0], removable: false }, PEOPLE[1]] });
     const base = fetchWithAuth.getMockImplementation();

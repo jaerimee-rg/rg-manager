@@ -117,6 +117,8 @@ const saveLog = async (req, action, target, responseData) => {
       details = `사진 ID: ${req.params.mediaId}`;
     } else if (action === 'REMOVE_ALBUM_PERSON' && req.params) {
       details = `얼굴 목록에서 뺌 · 얼굴 ${responseData?.removedFaces ?? 0}개 · 사진 ${responseData?.photos ?? 0}장 · 자동 태그 ${responseData?.removedTags ?? 0}개`;
+    } else if (action === 'REMOVE_ALBUM_PEOPLE' && responseData) {
+      details = `얼굴 목록에서 ${responseData.removedPeople ?? 0}명 뺌 · 얼굴 ${responseData.removedFaces ?? 0}개 · 사진 ${responseData.photos ?? 0}장 · 자동 태그 ${responseData.removedTags ?? 0}개`;
     } else if (action === 'DISCONNECT_DRIVE') {
       details = 'Google Drive 연결 해제';
     } else if (action === 'CREATE_FAQ' && responseData) {

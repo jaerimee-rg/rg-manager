@@ -656,6 +656,16 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   tags and parent "아니에요" answers stay. Bumping `FACE_ANALYZER_VERSION` re-analyses the album and would find those
   faces again. While the X shows, tapping another face, [전체], outside or Esc only closes it (no selection); the
   long-press release click never selects.
+  **Several at once — [얼굴 빼기] (teacher, 2026-10-10)**: the row above the teacher strip (`pages/Photos/FacePeoplePicker.jsx`,
+  shown while any face is removable) has **[얼굴 빼기]**; it turns the strip into picking mode (`FacePeopleStrip`
+  `picking`/`picked`/`onPick`: group label "뺄 얼굴 고르기", no [전체], no long-press X, tapping toggles a check instead of filtering,
+  `removable:false` faces are disabled). The same row then shows the count, [취소] and **[N개 빼기]** → `ConfirmDialog` →
+  `POST /api/events/:id/album/people/remove` or `POST /api/albums/people/remove` `{people:[{key, photoCount}]}` (≤ 500,
+  `albumController.deletePeople/deleteAllPeople` → `services/albumPeople.js:removePeople`). One grouping, one transaction for all of
+  them — removing people one by one can regroup the rest and change their keys/counts — and **all or nothing**: any vanished key
+  → 404 `personMissing`, any child-grouped person → 409 `student_person`, any count mismatch → 409 `person_changed`.
+  `removePerson` is `removePeople` with one entry. The buttons sit in that row, not a sticky bar (`StickyActions` is sticky
+  inside its parent, so it would float mid-page); face picking and photo [고르기] switch each other off.
 - **전체 사진 (teacher, `/photos/all`, `pages/Photos/AllPhotos.jsx`)** — the 사진 list's **[전체 사진 보기]** (shown once an album
   exists) opens every folder's photos in one grid, newest `takenAt` first, hidden ones included: `GET /api/albums/media`
   (`albumController.listAllMedia` → `EventMedia.listAcross`, same filters/cursor as one album; each item also carries `eventId` +
@@ -666,7 +676,7 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   (`item.albumTitle`) and saves captions to that photo's own album (`mediaCaptionSave.js`); hide, delete and covers stay on the album
   page. **Long-pressing a face shows the same X as the album strip** (2026-10-10): `DELETE /api/albums/people/:key?photoCount=N`
   (`albumController.deleteAllPerson` → `removePerson(eventIds, …)`, same rules/409s as the album page) removes that person's faces from
-  **every** folder (`MediaFace.deleteForAlbums`), photos stay.
+  **every** folder (`MediaFace.deleteForAlbums`), photos stay. [얼굴 빼기] (several at once) works here too, from every folder.
 - **전체 사진 (parent, `/parent/photos/all`, `pages/parent/ParentAllPhotos.jsx`)** — [전체 사진 보기] text link at the top right of the
   사진 tab (only when there are albums). `GET /api/parent/albums/media` + `/people` (`parentAlbumController.listAllMedia/listAllPeople`)
   use the **same visibility as the 사진 tab** (`visibleAlbums`: linked teachers' published albums inside their audience), hidden photos

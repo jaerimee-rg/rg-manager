@@ -2,9 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import MediaViewer from '../../components/album/MediaViewer';
-import FacePeopleStrip from '../../components/album/FacePeopleStrip';
 import { Button, Callout, Card, EmptyState, Icon, PageHeader, SkeletonList, StickyActions, Toast } from '../../components/ui';
 import PhotoGrid from './PhotoGrid';
+import FacePeoplePicker from './FacePeoplePicker';
 import PersonPhotosBar from './PersonPhotosBar';
 import { saveMediaCaption } from './mediaCaptionSave';
 import { editPersonPhotos, excludeBlock, personPhotosToast } from './personPhotos';
@@ -21,6 +21,7 @@ const PAGE = 60;
  * [뺀 사진] 에서 다시 넣는다(PersonPhotosBar · personPhotos.js).
  * 관계없는 사람(관중·다른 팀)은 얼굴을 **길게 눌러** 나온 X 로 얼굴 목록에서 통째로 뺀다 — 앨범 화면과 같고, 모든 폴더에서 그 사람의
  * 얼굴만 지운다(사진은 그대로). 등록된 아이로 묶인 사람에게는 X 가 없다(removable: false).
+ * 여럿이면 목록 위 [얼굴 빼기] 로 얼굴을 여러 개 골라 한 번에 뺀다(FacePeoplePicker) — 역시 모든 폴더에서.
  * 사진을 열면 어느 폴더의 사진인지 보이고 설명을 고칠 수 있다. 숨기기 · 지우기 · 대표 사진은 폴더 화면에서 한다 —
  * 공개 여부와 Drive 연결이 폴더마다 다르다.
  */
@@ -28,6 +29,7 @@ function AllPhotos() {
   const navigate = useNavigate();
   const [people, setPeople] = useState([]);       // 모든 폴더에 나온 사람마다 얼굴 하나
   const [person, setPerson] = useState(null);     // 고른 사람의 key — 그 사람이 나온 사진만
+  const [facePicking, setFacePicking] = useState(false);   // 얼굴 목록에서 뺄 얼굴을 여러 개 고르는 중
   const [items, setItems] = useState(null);       // null = 처음 읽는 중
   const [cursor, setCursor] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -117,6 +119,18 @@ function AllPhotos() {
     if (removedView && chosen && !chosen.removedCount) setRemovedView(false);
   }, [removedView, chosen]);
 
+  // 얼굴 목록에서 사람을 뺀 뒤 — 고른 사람을 뺐으면 고른 것을 푼다(사진 목록은 그 변화로 다시 읽는다)
+  const peopleRemoved = (keys) => {
+    if (person && keys.includes(person)) choosePerson(null);
+    else loadMedia();
+    loadPeople();
+  };
+  // 여러 얼굴 빼기를 고르는 동안에는 사진 고르기를 끈다
+  const changeFacePicking = useCallback((on) => {
+    setFacePicking(on);
+    if (on) { setSelecting(false); setSelected([]); }
+  }, []);
+
   // 얼굴 목록에서 관계없는 사람을 뺀다(길게 눌러 X) — 모든 폴더에서 그 사람의 얼굴과 자동 태그만, 사진은 그대로.
   // 화면이 본 사진 수를 함께 보내 서버가 "같은 사람" 인지 확인한다 — 그 사이 묶음이 바뀌었으면 409 로 아무것도 지우지 않는다.
   const removePerson = async (key) => {
@@ -134,10 +148,7 @@ function AllPhotos() {
         return;
       }
       showToast('얼굴을 목록에서 뺐어요 · 사진은 그대로 있어요');
-      // 고른 사람을 뺐으면 고른 것을 푼다 — 사진 목록은 그 변화로 다시 읽는다
-      if (person === key) choosePerson(null);
-      else loadMedia();
-      loadPeople();
+      peopleRemoved([key]);
     } catch (removeError) {
       console.error('얼굴 빼기 실패:', removeError);
       showToast('얼굴을 빼지 못했어요.');
@@ -206,7 +217,19 @@ function AllPhotos() {
         </Card>
       ) : (
         <>
-          <FacePeopleStrip className="ui-mb-4" people={people} selected={person} onSelect={choosePerson} onRemove={removePerson} />
+          <FacePeoplePicker
+            className="ui-mb-4"
+            base="/api/albums"
+            people={people}
+            selected={person}
+            onSelect={choosePerson}
+            onRemove={removePerson}
+            picking={facePicking}
+            onPickingChange={changeFacePicking}
+            onRemoved={peopleRemoved}
+            onStale={loadPeople}
+            onToast={showToast}
+          />
 
           {chosen && (
             <div className="ui-row ui-mb-3" data-gap="2" data-justify="between" data-align="start">
@@ -221,7 +244,7 @@ function AllPhotos() {
               ) : (
                 <>
                   <PersonPhotosBar person={chosen} removedView={removedView} onViewChange={chooseView} />
-                  <Button size="sm" icon="check" disabled={!items.length} onClick={() => setSelecting(true)}>고르기</Button>
+                  <Button size="sm" icon="check" disabled={!items.length} onClick={() => { setFacePicking(false); setSelecting(true); }}>고르기</Button>
                 </>
               )}
             </div>

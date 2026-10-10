@@ -3819,6 +3819,24 @@ button.ui-album-card__cover-slot:hover::after {
 }
 .ui-face-people__remove::before { content: ''; position: absolute; inset: calc(-1 * var(--space-2)); }   /* 손가락 닿는 자리를 넓힌다 */
 .ui-face-people__remove:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* 여러 얼굴 빼기 — 고른 얼굴은 X 자리(칸 안쪽 오른쪽 위)에 체크. 누르는 것은 얼굴 버튼이라 체크는 눌리지 않는다 */
+.ui-face-people__check {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: var(--stroke-width-thin) solid var(--paper);
+  border-radius: var(--shape-blob);
+  background: var(--ink);
+  color: var(--paper);
+  pointer-events: none;
+}
+/* 등록된 아이로 묶인 얼굴은 뺄 수 없다 — 고르는 동안 흐리게 */
+.ui-face-people__item:disabled { cursor: not-allowed; opacity: 0.4; }
 
 /* ---------------------------------------------------------------- *
  * 공개 패널 — 앨범 화면 위쪽

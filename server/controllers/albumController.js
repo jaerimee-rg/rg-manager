@@ -14,7 +14,7 @@ import { canUpload, canManageAlbum, canDeleteMedia, reasonMessage, isValidAudien
 import { toTeacherMedia, thumbnailUrl } from '../utils/mediaSerializer.js';
 import { sharePathFor } from '../services/albumShare.js';
 import {
-  albumPeople, peopleAcross, findPerson, removePerson, excludePhotos, restorePhotos, toPersonView
+  albumPeople, peopleAcross, findPerson, removePerson, removePeople, excludePhotos, restorePhotos, toPersonView
 } from '../services/albumPeople.js';
 import AlbumView from '../models/AlbumView.js';
 
@@ -518,6 +518,46 @@ export const deleteAllPerson = async (req, res) => {
 
 const seenPhotoCountOf = (req) => (req.query.photoCount === undefined ? undefined : Number(req.query.photoCount));
 
+/** 한 번에 뺄 수 있는 얼굴(사람) 수 — 화면은 얼굴 목록에서 고른 만큼 보낸다 */
+export const MAX_REMOVE_PEOPLE = 500;
+
+/**
+ * 여러 사람 빼기 본문 { people: [{ key, photoCount }] } → [{ key, seenPhotoCount }] | { error }.
+ * photoCount 는 화면이 본 그 사람의 사진 수 — 빠지면 한 사람 빼기처럼 409 person_changed 가 된다.
+ */
+const removeListOf = (body) => {
+  const list = body?.people;
+  if (!Array.isArray(list) || !list.length) return { error: '뺄 얼굴을 골라 주세요.' };
+  if (list.length > MAX_REMOVE_PEOPLE) return { error: `얼굴은 한 번에 ${MAX_REMOVE_PEOPLE}개까지 뺄 수 있어요.` };
+  if (!list.every((one) => typeof one?.key === 'string' && one.key)) return { error: '잘못된 요청입니다.' };
+  return list.map((one) => ({ key: one.key, seenPhotoCount: one.photoCount === undefined ? undefined : Number(one.photoCount) }));
+};
+
+const deletePeopleIn = async (req, res, scopeOf) => {
+  try {
+    const wanted = removeListOf(req.body);
+    if (wanted.error) return res.status(400).json({ error: wanted.error });
+    const scope = await scopeOf(req);
+    if (scope == null) return notFound(res);
+    // 앨범이 하나도 없으면 그 사람들도 없다
+    if (Array.isArray(scope) && !scope.length) return removePersonResponse(res, null);
+    removePersonResponse(res, await removePeople(scope, wanted));
+  } catch (error) {
+    console.error('얼굴 목록에서 여러 얼굴 빼기 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+};
+
+/**
+ * POST /api/events/:id/album/people/remove { people: [{ key, photoCount }] } — 얼굴 목록에서 고른 여러 사람을 한 번에 뺀다.
+ * 한 사람 빼기(DELETE .../people/:key)와 같은 규칙·응답이고, **하나라도 안 되면 아무것도 지우지 않는다**
+ * (없어진 사람 404 personMissing · 등록된 아이 409 student_person · 본 사진 수가 다르면 409 person_changed).
+ * → { removedPeople, removedFaces, photos, removedTags }
+ */
+export const deletePeople = (req, res) => deletePeopleIn(req, res, albumScope);
+/** POST /api/albums/people/remove — 전체 사진(모든 폴더)에서 같은 일. 고른 사람들의 얼굴을 내 모든 폴더에서 지운다 */
+export const deleteAllPeople = (req, res) => deletePeopleIn(req, res, allAlbumsScope);
+
 const removePersonResponse = (res, result) => {
   if (!result) return res.status(404).json({ error: '얼굴 목록이 바뀌었어요. 새로고침해 주세요.', personMissing: true });
   if (result.blocked === 'student_person') {
@@ -879,7 +919,7 @@ export const deleteMedia = async (req, res) => {
 };
 
 export default {
-  getAlbum, listPeople, deletePerson, deleteAllPerson, listAllMedia, listAllPeople,
+  getAlbum, listPeople, deletePerson, deleteAllPerson, deletePeople, deleteAllPeople, listAllMedia, listAllPeople,
   excludeAlbumPersonPhotos, restoreAlbumPersonPhotos, excludeAllPersonPhotos, restoreAllPersonPhotos,
   createAlbum, updateAlbum, refreshAlbum,
   listMedia, createUploads, completeUpload, bulkAction,

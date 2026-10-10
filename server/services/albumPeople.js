@@ -86,26 +86,48 @@ export const findPerson = (people, key) => (key ? people.find((person) => person
  * 지금 다시 묶은 사진 수와 다르면 그 사이 묶음이 바뀐 것이라 아무것도 지우지 않는다(blocked: 'person_changed').
  *
  * scope: 앨범 하나(eventId — 앨범 화면) 또는 여러 앨범(eventIds — 전체 사진: 모든 폴더를 함께 묶은 그 사람을 모든 폴더에서 뺀다).
- * 한 트랜잭션: 태그 → 얼굴 → 사진별 얼굴 수. 태그를 먼저 지운다(얼굴을 먼저 지우면 "faceId" 가 NULL 이 돼 못 찾는다).
  * → { removedFaces, photos, removedTags } · { blocked } · 그 사이 묶음이 바뀌어 없는 사람이면 null
  */
 export const removePerson = async (scope, key, { seenPhotoCount } = {}) => {
-  const person = findPerson(peopleOf(await loadScope(scope, { includeHidden: true })), key);
-  if (!person) return null;
-  if (person.studentId != null) return { blocked: 'student_person' };
-  if (!Number.isInteger(seenPhotoCount) || seenPhotoCount !== person.photoCount) return { blocked: 'person_changed' };
+  const result = await removePeople(scope, [{ key, seenPhotoCount }]);
+  if (!result || result.blocked) return result;
+  const { removedPeople, ...counts } = result;
+  return counts;
+};
 
+/**
+ * 얼굴 목록에서 **여러 사람을 한 번에** 뺀다(선생님이 얼굴을 여러 개 골라 [빼기]). 한 사람씩 빼는 것(removePerson)과 규칙이 같다.
+ * 한 번 묶은 결과로 모두 찾고 한 트랜잭션에서 지운다 — 한 사람씩 지우면 앞 사람이 빠지며 묶음이 바뀌어 뒷사람의 key·사진 수가
+ * 달라질 수 있다. **하나라도 안 되면 아무것도 지우지 않는다**: 없어진 사람이 있으면 null, 등록된 아이로 묶인 사람이 있으면
+ * 'student_person', 화면이 본 사진 수와 다른 사람이 있으면 'person_changed'.
+ * wanted: [{ key, seenPhotoCount }] — 같은 key 가 두 번 오면 하나로.
+ * 한 트랜잭션: 태그 → 얼굴 → 사진별 얼굴 수. 태그를 먼저 지운다(얼굴을 먼저 지우면 "faceId" 가 NULL 이 돼 못 찾는다).
+ * → { removedPeople, removedFaces, photos, removedTags } · { blocked } · null
+ */
+export const removePeople = async (scope, wanted) => {
+  const unique = [...new Map((wanted || []).map((one) => [String(one.key), one])).values()];
+  const byKey = new Map(peopleOf(await loadScope(scope, { includeHidden: true })).map((person) => [person.key, person]));
+  const people = unique.map((one) => byKey.get(String(one.key)));
+  if (!people.length || people.some((person) => !person)) return null;
+  if (people.some((person) => person.studentId != null)) return { blocked: 'student_person' };
+  const changed = people.some((person, index) => {
+    const seen = unique[index].seenPhotoCount;
+    return !Number.isInteger(seen) || seen !== person.photoCount;
+  });
+  if (changed) return { blocked: 'person_changed' };
+
+  const faceIds = people.flatMap((person) => person.faceIds);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const removedTags = await MediaTag.removeAutoTagsForFaces(person.faceIds, client);
+    const removedTags = await MediaTag.removeAutoTagsForFaces(faceIds, client);
     const mediaIds = Array.isArray(scope)
-      ? await MediaFace.deleteForAlbums(person.faceIds, scope, client)
-      : await MediaFace.deleteForAlbum(person.faceIds, scope, client);
+      ? await MediaFace.deleteForAlbums(faceIds, scope, client)
+      : await MediaFace.deleteForAlbum(faceIds, scope, client);
     const photos = [...new Set(mediaIds)];
     await EventMedia.refreshFaceCounts(photos, client);
     await client.query('COMMIT');
-    return { removedFaces: mediaIds.length, photos: photos.length, removedTags };
+    return { removedPeople: people.length, removedFaces: mediaIds.length, photos: photos.length, removedTags };
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     throw error;
@@ -243,5 +265,5 @@ export const toPersonView = (person, { myStudentIds = null, teacher = false } = 
 export const parentPeopleOrder = (views) => [...views].sort((a, b) => Number(b.mine) - Number(a.mine));
 
 export default {
-  albumPeople, peopleAcross, findPerson, removePerson, excludePhotos, restorePhotos, toPersonView, parentPeopleOrder
+  albumPeople, peopleAcross, findPerson, removePerson, removePeople, excludePhotos, restorePhotos, toPersonView, parentPeopleOrder
 };

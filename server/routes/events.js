@@ -15,6 +15,7 @@ import {
   getAlbum,
   listPeople,
   deletePerson,
+  deletePeople,
   createAlbum,
   updateAlbum,
   refreshAlbum,
@@ -57,6 +58,8 @@ router.delete('/:id/registrations/student/:studentId', verifyToken, logAction('T
 router.get('/:id/album', verifyToken, getAlbum);
 router.get('/:id/album/people', verifyToken, listPeople);
 router.delete('/:id/album/people/:key', verifyToken, logAction('REMOVE_ALBUM_PERSON'), deletePerson);
+// 얼굴 목록에서 고른 여러 사람을 한 번에 뺀다 — 하나라도 안 되면 아무것도 지우지 않는다
+router.post('/:id/album/people/remove', verifyToken, logAction('REMOVE_ALBUM_PEOPLE'), deletePeople);
 // 얼굴 목록에서 고른 사람의 잘못 묶인 사진을 빼고(이 얼굴 아님) 되돌린다 — 사진은 그대로
 router.post('/:id/album/people/:key/exclude', verifyToken, logAction('EXCLUDE_PERSON_PHOTOS'), excludeAlbumPersonPhotos);
 router.post('/:id/album/people/:key/restore', verifyToken, logAction('RESTORE_PERSON_PHOTOS'), restoreAlbumPersonPhotos);

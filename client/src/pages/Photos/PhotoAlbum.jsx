@@ -7,7 +7,6 @@ import { albumShareUrl, albumShareToast, canShareAlbum, ALBUM_SHARE_DISABLED_HIN
 import UploadSheet from '../../components/album/UploadSheet';
 import { TEACHER_MAX_FILES } from '../../utils/imagePrep';
 import MediaViewer from '../../components/album/MediaViewer';
-import FacePeopleStrip from '../../components/album/FacePeopleStrip';
 import {
   Button, Callout, Card, Chip, ConfirmDialog, EmptyState, Icon, IconButton, Menu, MenuItem, PageHeader, SkeletonList,
   StickyActions, Toast, Toolbar
@@ -19,6 +18,7 @@ import CoverOrderPanel from './CoverOrderPanel';
 import CoverCropDialog from './CoverCropDialog';
 import { coverCropsBody, coversFromPicks, dropCovers, sameCovers, setCoverCrops, toggleCover } from './coverDraft';
 import PhotoGrid from './PhotoGrid';
+import FacePeoplePicker from './FacePeoplePicker';
 import PersonPhotosBar from './PersonPhotosBar';
 import { saveMediaCaption } from './mediaCaptionSave';
 import { editPersonPhotos, excludeBlock, personPhotosToast } from './personPhotos';
@@ -49,6 +49,7 @@ function PhotoAlbum() {
   const [filter, setFilter] = useState('all');
   const [people, setPeople] = useState([]);       // 얼굴 목록 — 앨범에 나온 사람마다 얼굴 하나
   const [person, setPerson] = useState(null);     // 고른 사람의 key — 그 사람이 나온 사진만
+  const [facePicking, setFacePicking] = useState(false);   // 얼굴 목록에서 뺄 얼굴을 여러 개 고르는 중
   const [removedView, setRemovedView] = useState(false);   // 고른 얼굴에서 "이 얼굴 아님" 으로 뺀 사진 보기
   const [items, setItems] = useState([]);
   const [cursor, setCursor] = useState(null);
@@ -172,6 +173,23 @@ function PhotoAlbum() {
     loadPeople();
   };
 
+  // 얼굴 목록에서 사람을 뺀 뒤 — 고른 사람을 뺐으면 고른 것을 풀고(사진 목록은 그 변화로 다시 읽는다), 아니면 모두 다시 읽는다
+  const peopleRemoved = (keys) => {
+    if (person && keys.includes(person)) {
+      setPerson(null);
+      loadAlbum();
+      loadPeople();
+    } else {
+      reloadAll();
+    }
+  };
+  // 여러 얼굴 빼기를 고르는 동안에는 사진 고르기를 끈다 — 둘 다 켜 두면 어느 것을 고르는지 헷갈린다
+  const changeFacePicking = useCallback((on) => {
+    setFacePicking(on);
+    if (on) { setSelecting(false); setSelected([]); }
+  }, []);
+  const startSelecting = () => { setFacePicking(false); setSelecting(true); };
+
   // 얼굴 목록에서 관계없는 사람을 뺀다(길게 눌러 X). 사진은 그대로 — 그 사람의 얼굴과 자동 태그만 지운다.
   // 화면이 본 사진 수를 함께 보내 서버가 "같은 사람" 인지 확인한다 — 그 사이 묶음이 바뀌었으면 409 로 아무것도 지우지 않는다.
   const removePerson = async (key) => {
@@ -189,14 +207,7 @@ function PhotoAlbum() {
         return;
       }
       showToast('얼굴을 목록에서 뺐어요 · 사진은 그대로 있어요');
-      if (person === key) {
-        // 고른 것을 풀면 사진 목록은 그 변화로 다시 읽는다
-        setPerson(null);
-        loadAlbum();
-        loadPeople();
-      } else {
-        reloadAll();
-      }
+      peopleRemoved([key]);
     } catch (error) {
       console.error('얼굴 빼기 실패:', error);
       showToast('얼굴을 빼지 못했어요.');
@@ -519,7 +530,19 @@ function PhotoAlbum() {
             />
           </div>
 
-          <FacePeopleStrip className="ui-mt-5" people={people} selected={person} onSelect={choosePerson} onRemove={removePerson} />
+          <FacePeoplePicker
+            className="ui-mt-5"
+            base={`${apiBase}/album`}
+            people={people}
+            selected={person}
+            onSelect={choosePerson}
+            onRemove={removePerson}
+            picking={facePicking}
+            onPickingChange={changeFacePicking}
+            onRemoved={peopleRemoved}
+            onStale={loadPeople}
+            onToast={showToast}
+          />
           {chosen && !selecting && (
             <PersonPhotosBar className="ui-mt-3" person={chosen} removedView={removedView} onViewChange={chooseView} />
           )}
@@ -545,7 +568,7 @@ function PhotoAlbum() {
                     </Chip>
                   ))}
                 </Toolbar>
-                <Button size="sm" icon="check" disabled={!items.length} onClick={() => setSelecting(true)}>고르기</Button>
+                <Button size="sm" icon="check" disabled={!items.length} onClick={startSelecting}>고르기</Button>
               </>
             )}
           </div>
