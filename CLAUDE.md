@@ -787,6 +787,7 @@ are all non-sensitive → no Google review) removes both limits. Without the key
 
 Parents get **no Kakao messages** (decided 2026-08), so new events reach them as **Web Push** browser
 notifications. The teacher decides per save: the event form's **[학부모에게 알림 보내기]** checkbox (공개 · 접수 card).
+Sequence diagrams (subscribe → send → deliver → click, keys, environment branches): **`docs/event-push/`**.
 
 - **Teacher side**: the checkbox starts **checked for a new event, unchecked when editing** (an edit should not re-announce
   unless asked) and is locked off while 학부모에게 공개 is off. The form sends `notifyParents: true`; `createEvent` /
