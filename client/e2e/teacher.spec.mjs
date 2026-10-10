@@ -1456,6 +1456,83 @@ test.describe('선생님 — 앨범에 이미 있는 파일은 다시 올리지 
   });
 });
 
+test.describe('선생님 — 한 번에 30개 넘게 올리기', () => {
+  const album = sessions.sameFile;
+
+  test.beforeEach(async ({ page }) => {
+    await loginAs(page, album.teacher);
+    // e2e 서버에는 Google 키가 없어 [사진 올리기] 가 잠긴다 — 앨범 응답의 '설정됨' 만 켠다(연결 행은 setup 이 넣었다).
+    await page.route(`**/api/events/${album.eventId}/album`, async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      const response = await route.fetch();
+      const body = await response.json();
+      await route.fulfill({ response, json: { ...body, drive: { ...body.drive, configured: true } } });
+    });
+  });
+
+  test('35개를 고르면 세션을 30 · 5 로 나눠 받아 전부 올린다', async ({ page }) => {
+    // 세션 발급 · Drive 전송 · 완료 보고만 가짜로 바꾼다(e2e 에는 Google 이 없다). 세션은 요청에 담긴 파일 수만큼 준다.
+    const sessionBatches = [];
+    let nextId = 990000;
+    await page.route(`**/api/events/${album.eventId}/media/uploads`, (route) => {
+      const { files } = route.request().postDataJSON();
+      sessionBatches.push(files.map((file) => file.name));
+      return route.fulfill({
+        status: 201,
+        json: { items: files.map((file) => { nextId += 1; return { name: file.name, mediaId: nextId, sessionUri: `https://drive-upload.e2e.invalid/session-${nextId}` }; }) }
+      });
+    });
+    const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'PUT', 'Access-Control-Allow-Headers': '*' };
+    await page.route('https://drive-upload.e2e.invalid/**', (route) => (route.request().method() === 'OPTIONS'
+      ? route.fulfill({ status: 204, headers: cors })
+      : route.fulfill({ status: 200, headers: cors, json: { id: 'e2e-batch-drive-file' } })));
+    const completed = [];
+    await page.route(new RegExp(`/api/events/${album.eventId}/media/99\\d{4}/complete$`), (route) => {
+      completed.push(route.request().url());
+      return route.fulfill({ json: { media: {} } });
+    });
+    await page.route('https://lh3.googleusercontent.com/**', (route) => route.abort());
+
+    await page.goto(`/photos/${album.eventId}`);
+    await page.getByRole('button', { name: '사진 올리기' }).first().click();
+    const sheet = page.getByRole('dialog');
+    await expect(sheet.getByText(/한 번에 500개/)).toBeVisible();
+
+    const names = Array.from({ length: 35 }, (_, i) => `IMG_batch_${String(i + 1).padStart(2, '0')}.jpg`);
+    await page.getByTestId('album-file-input').setInputFiles(
+      names.map((name, i) => ({ name, mimeType: 'image/jpeg', buffer: Buffer.alloc(100 + i, 1) }))
+    );
+    await expect(sheet.getByText('올릴 파일 35개')).toBeVisible();
+    await sheet.getByRole('button', { name: '35개 올리기' }).click();
+
+    await expect(sheet.getByRole('heading', { name: '다 올렸어요' })).toBeVisible({ timeout: 60_000 });
+    await expect(sheet.getByText(/사진 35장 올렸어요/)).toBeVisible();
+    await expect(sheet.getByText(/올리지 못했어요/)).toHaveCount(0);
+    expect(sessionBatches).toEqual([names.slice(0, 30), names.slice(30)]);
+    expect(completed).toHaveLength(35);
+  });
+
+  test('500개를 넘게 고르면 500개만 받고, 나머지는 빠졌다고 목록 위에 알린다', async ({ page }) => {
+    await page.goto(`/photos/${album.eventId}`);
+    await page.getByRole('button', { name: '사진 올리기' }).first().click();
+    const sheet = page.getByRole('dialog');
+
+    await page.getByTestId('album-file-input').setInputFiles(
+      Array.from({ length: 503 }, (_, i) => ({ name: `IMG_many_${i + 1}.jpg`, mimeType: 'image/jpeg', buffer: Buffer.alloc(10 + i, 1) }))
+    );
+
+    await expect(sheet.getByRole('button', { name: '500개 올리기' })).toBeEnabled();
+    await expect(sheet.getByText('올릴 파일 500개')).toBeVisible();
+    const notice = sheet.getByText(/한 번에 500개까지 올릴 수 있어요. 나머지 3개는 빠졌어요/);
+    await expect(notice).toBeVisible();
+    // 목록(500줄) 아래가 아니라 위에 있어야 바로 보인다
+    const noticeBox = await notice.boundingBox();
+    const firstRowBox = await sheet.getByText('IMG_many_1.jpg', { exact: true }).boundingBox();
+    expect(noticeBox.y).toBeLessThan(firstRowBox.y);
+    await expect(sheet.getByText('IMG_many_501.jpg', { exact: true })).toHaveCount(0);
+  });
+});
+
 test.describe('선생님 — 좁은 화면의 신청 현황', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 

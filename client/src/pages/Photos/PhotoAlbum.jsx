@@ -5,6 +5,7 @@ import { formatSize } from '../../utils/mediaUrls';
 import { copyToClipboard } from '../../utils/copyToClipboard';
 import { albumShareUrl, albumShareToast, canShareAlbum, ALBUM_SHARE_DISABLED_HINT } from '../../utils/albumShare';
 import UploadSheet from '../../components/album/UploadSheet';
+import { TEACHER_MAX_FILES } from '../../utils/imagePrep';
 import MediaViewer from '../../components/album/MediaViewer';
 import FacePeopleStrip from '../../components/album/FacePeopleStrip';
 import {
@@ -689,6 +690,7 @@ function PhotoAlbum() {
           published={album.published}
           photoFolder={album.eventType === 'folder'}
           audienceHint="공개하면 학부모도 볼 수 있어요"
+          maxFiles={TEACHER_MAX_FILES}
           onClose={() => setUploading(false)}
           onDone={() => reloadAll()}
         />

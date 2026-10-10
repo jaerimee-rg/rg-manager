@@ -13,7 +13,8 @@ jest.mock('../../../utils/driveUpload', () => ({
 }));
 jest.mock('../../../utils/imagePrep', () => ({
   MAX_FILES: 30,
-  partitionFiles: (list) => ({ accepted: Array.from(list).map((file) => ({ file, kind: 'image' })), rejected: [] }),
+  partitionFiles: (list) => ({ accepted: Array.from(list).map((file) => ({ file, kind: 'image' })), rejected: [], overflow: 0 }),
+  batchRanges: jest.requireActual('../../../utils/imagePrep').batchRanges,
   readTakenAt: jest.fn().mockResolvedValue('2026-10-12T01:00:00Z'),
   makePreview: jest.fn()
 }));

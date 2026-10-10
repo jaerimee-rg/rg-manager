@@ -6,7 +6,19 @@
 /** mediaValidation.js(서버)와 같은 규칙 — 화면에서 먼저 걸러 헛수고를 줄인다. */
 export const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 export const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
+/** 한 번에 고를 수 있는 수 — 학부모(기본값) */
 export const MAX_FILES = 30;
+/**
+ * 선생님은 한 번에 500개까지 — 대회 하나가 150장 남짓이라 한 번에 다 올린다.
+ * 한 장에 약 7.5초(Drive 전송 + 얼굴 계산 + 완료 보고, 운영 2026-10 측정)라 500개면 1시간쯤 화면을 켜 둬야 한다.
+ * 올리는 요청 수는 서버 rateLimits.js UPLOAD_IP_MAX 가 받아 준다 — 이 값을 올리면 그것도 같이 본다.
+ */
+export const TEACHER_MAX_FILES = 500;
+/**
+ * 업로드 세션 요청 하나에 담는 수 — 서버 mediaValidation.js MAX_FILES_PER_UPLOAD 와 같은 값.
+ * 서버가 세션을 하나씩 Drive 에 받아 오느라(개당 약 0.5초) 요청 하나가 너무 길어지지 않게, 더 많이 고르면 이만큼씩 나눠 보낸다.
+ */
+export const MAX_FILES_PER_REQUEST = 30;
 
 const IMAGE_EXT = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'];
 const VIDEO_EXT = ['mp4', 'mov', 'webm'];
@@ -43,12 +55,16 @@ export const sameFileKey = (name, size) => `${String(name ?? '').normalize('NFC'
 
 export const DUPLICATE_PICK_MESSAGE = '같은 파일을 두 번 골랐어요';
 
-/** 고른 파일들을 통과·거절로 나눈다. 같은 파일(이름·크기)을 두 번 골랐으면 두 번째부터 거절한다. */
-export const partitionFiles = (files) => {
+/**
+ * 고른 파일들을 통과·거절로 나눈다. 같은 파일(이름·크기)을 두 번 골랐으면 두 번째부터 거절한다.
+ * 통과한 파일이 maxFiles 개가 되면 나머지 사진·영상은 받지 않고 그 수만 overflow 로 센다(거절 줄로 늘어놓지 않는다).
+ */
+export const partitionFiles = (files, maxFiles = MAX_FILES) => {
   const accepted = [];
   const rejected = [];
   const picked = new Set();
-  for (const file of Array.from(files || []).slice(0, MAX_FILES)) {
+  let overflow = 0;
+  for (const file of Array.from(files || [])) {
     const check = checkFile(file);
     if (!check.ok) {
       rejected.push({ file, message: check.message });
@@ -60,9 +76,20 @@ export const partitionFiles = (files) => {
       continue;
     }
     picked.add(key);
+    if (accepted.length >= maxFiles) {
+      overflow += 1;
+      continue;
+    }
     accepted.push({ file, kind: check.kind });
   }
-  return { accepted, rejected };
+  return { accepted, rejected, overflow };
+};
+
+/** 0..total 을 size 개씩 자른 [from, to) 목록 — 업로드 세션을 몇 번에 나눠 받을지 */
+export const batchRanges = (total, size = MAX_FILES_PER_REQUEST) => {
+  const ranges = [];
+  for (let from = 0; from < total; from += size) ranges.push([from, Math.min(from + size, total)]);
+  return ranges;
 };
 
 /**
@@ -174,6 +201,6 @@ export const makePreview = async (file, maxSide = 1280) => {
 };
 
 export default {
-  MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_FILES,
-  extensionOf, kindOf, checkFile, sameFileKey, partitionFiles, readTakenAt, parseExifDate, makePreview
+  MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_FILES, TEACHER_MAX_FILES, MAX_FILES_PER_REQUEST,
+  extensionOf, kindOf, checkFile, sameFileKey, partitionFiles, batchRanges, readTakenAt, parseExifDate, makePreview
 };

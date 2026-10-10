@@ -11,9 +11,12 @@ import {
   PUBLIC_SHOP_TRACK_IP_MAX,
   PHOTO_VIEW_IP_MAX,
   isPhotoViewBeacon,
+  UPLOAD_IP_MAX,
+  isAlbumUploadRequest,
   PUBLIC_SHOP_RESERVE_IP_MAX,
   visitorKeyGenerator
 } from '../rateLimits.js';
+import { MAX_FILES_PER_UPLOAD } from '../mediaValidation.js';
 
 describe('공개 채팅 한도 값', () => {
   it('폴링만으로는 읽기 한도를 소진하지 못한다', () => {
@@ -207,5 +210,33 @@ describe('학부모 사진 보기 기록 — 일반 API 한도와 따로 센다'
 
   it('같은 와이파이에서 여럿이 사진을 넘겨 봐도 넉넉하다 — 일반 한도(200)의 10배', () => {
     expect(PHOTO_VIEW_IP_MAX).toBeGreaterThanOrEqual(1000);
+  });
+});
+
+describe('사진·영상 올리기 — 일반 API 한도와 따로 센다', () => {
+  it('선생님·학부모의 세션 발급 · 완료 보고 · 얼굴 저장(POST)만 해당한다', () => {
+    const post = (url) => isAlbumUploadRequest({ method: 'POST', originalUrl: url });
+    expect(post('/api/events/31/media/uploads')).toBe(true);
+    expect(post('/api/events/31/media/912/complete')).toBe(true);
+    expect(post('/api/events/31/media/912/faces')).toBe(true);
+    expect(post('/api/parent/events/31/media/uploads')).toBe(true);
+    expect(post('/api/parent/events/31/media/912/complete?x=1')).toBe(true);
+    expect(post('/api/parent/events/31/media/912/faces')).toBe(true);
+
+    expect(isAlbumUploadRequest({ method: 'GET', originalUrl: '/api/events/31/media/uploads' })).toBe(false);
+    expect(post('/api/events/31/media')).toBe(false);
+    expect(post('/api/events/31/media/bulk')).toBe(false);
+    expect(post('/api/events/31/media/912/tags')).toBe(false);
+    expect(post('/api/events/31/media/912/complete/extra')).toBe(false);
+    expect(post('/api/parent/events/31/views')).toBe(false);
+    expect(post('/api/events/abc/media/uploads')).toBe(false);
+    expect(isAlbumUploadRequest(undefined)).toBe(false);
+  });
+
+  it('선생님이 한 번에 고를 수 있는 500개를 올려도 막히지 않는다 — 파일마다 완료 보고 + 얼굴 다시 찾기, 30개마다 세션 발급', () => {
+    const TEACHER_PICK = 500;   // client/src/utils/imagePrep.js TEACHER_MAX_FILES
+    const requests = TEACHER_PICK * 2 + Math.ceil(TEACHER_PICK / MAX_FILES_PER_UPLOAD);
+    expect(requests).toBe(1017);
+    expect(UPLOAD_IP_MAX).toBeGreaterThanOrEqual(requests);
   });
 });
