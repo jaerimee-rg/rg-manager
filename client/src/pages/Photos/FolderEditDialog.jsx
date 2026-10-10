@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { fetchWithAuth } from '../../utils/api';
-import { Button, Callout, Field, Icon, Input, Modal, Stack } from '../../components/ui';
+import { Button, Callout, DateField, Field, Icon, Input, Modal, Stack } from '../../components/ui';
 import { folderNameFrom, newFolderProblem, NEW_FOLDER_TITLE_MAX } from './albumState';
 
 /**
@@ -63,9 +63,9 @@ function FolderEditDialog({ album, onClose, onSaved }) {
           </Field>
           <Field label="날짜" required htmlFor="edit-folder-date">
             {(props) => (
-              <Input
-                {...props} type="date" value={draft.date}
-                onChange={(event) => setDraft((prev) => ({ ...prev, date: event.target.value }))}
+              <DateField
+                {...props} value={draft.date}
+                onChange={(date) => setDraft((prev) => ({ ...prev, date }))}
               />
             )}
           </Field>

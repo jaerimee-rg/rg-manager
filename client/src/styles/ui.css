@@ -731,6 +731,25 @@ html { font-synthesis: none; }
   .ui-clearable__clear { width: 32px; height: 32px; right: var(--space-2); }
 }
 
+/* 날짜 칸(DateField) — 입력칸 모양의 버튼 + 누르면 바로 아래에 펼쳐지는 달력 */
+.ui-date-field {
+  display: block;
+  scroll-margin-bottom: var(--space-4);   /* 펼칠 때 스크롤로 버튼 줄(sticky footer) 위에 여유를 둔다 */
+}
+.ui-date-field__button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: left;
+  cursor: pointer;
+}
+.ui-date-field__button:disabled { cursor: not-allowed; }
+.ui-date-field__value { flex: 1; min-width: 0; font-variant-numeric: tabular-nums; }
+.ui-date-field__value[data-empty="true"] { color: var(--ink-400); }
+.ui-date-field__chevron { color: var(--ink-600); transition: transform var(--duration-fast) var(--ease); }
+.ui-date-field[data-open] .ui-date-field__chevron { transform: rotate(180deg); }
+.ui-date-field__calendar { margin-top: var(--space-2); }
+
 /* 인풋 앞뒤 붙는 아이콘/단위 — 입력칸 모양을 둘로 나눠 이어 붙인다 */
 .ui-input-group { display: flex; align-items: stretch; }
 .ui-input-group > .ui-input { border-radius: 10px 0 0 4px / 4px 0 0 10px; }
@@ -3923,9 +3942,8 @@ button.ui-album-card__cover-slot:hover::after {
   border-radius: var(--shape-box);
 }
 .ui-event-pick__foot p { margin: 0; }
-/* 새 폴더 만들기 — 이름은 넓게, 날짜는 내용만큼. 좁은 화면에서는 위아래로 */
-.ui-event-pick__new { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); }
-@media (max-width: 480px) { .ui-event-pick__new { grid-template-columns: minmax(0, 1fr); } }
+/* 새 폴더 만들기 — 이름 위, 날짜 아래 — 날짜 칸을 누르면 펼쳐지는 달력(DateField)이 한 줄을 다 쓴다 */
+.ui-event-pick__new { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
 
 /* 앨범 화면의 필터 칩 줄 — [고르기] 버튼 옆에서 남는 폭만 쓰고 넘치면 가로로 민다 */
 .ui-photo-filters { flex: 1; min-width: 0; }

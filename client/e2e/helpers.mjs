@@ -95,6 +95,26 @@ export const pinchTouch = async (page, center, fromGap, toGap, { steps = 8 } = {
   }
 };
 
+/**
+ * DateField(앱 달력 날짜 칸)에서 iso('YYYY-MM-DD') 를 고른다 — 칸을 열고, 그 달까지 넘긴 뒤 그 날을 누른다.
+ * 처음 보이는 달은 지금 값(보통 오늘)이라 몇 달을 넘길지는 달력 제목을 읽어 정한다. name 은 칸 이름의 앞부분(예: '날짜').
+ */
+export const pickDate = async (scope, name, iso) => {
+  const field = scope.getByRole('button', { name: new RegExp(`^${name}`) });
+  if ((await field.getAttribute('aria-expanded')) !== 'true') await field.click();
+  const calendar = scope.locator(`[id="${await field.getAttribute('aria-controls')}"]`);
+  const [year, month, day] = iso.split('-').map(Number);
+  for (let guard = 0; guard < 1200; guard += 1) {
+    const [, shownYear, shownMonth] = (await calendar.locator('.ui-calendar__title').textContent()).match(/(\d+)년 (\d+)월/).map(Number);
+    const diff = (year - shownYear) * 12 + (month - shownMonth);
+    if (diff === 0) break;
+    await calendar.getByRole('button', { name: diff < 0 ? '이전 달' : '다음 달' }).click();
+    await expect(calendar.locator('.ui-calendar__title')).not.toHaveText(`${shownYear}년 ${shownMonth}월`);
+  }
+  await calendar.getByRole('button', { name: new RegExp(`^${month}월 ${day}일 `) }).click();
+  await expect(field).toHaveAttribute('aria-expanded', 'false');
+};
+
 /** 얼굴이 없는 64×64 PNG — 브라우저가 읽을 수는 있는 사진 (얼굴 등록 · 얼굴 찾기 테스트) */
 export const FACELESS_PNG = {
   name: 'no-face.png',
