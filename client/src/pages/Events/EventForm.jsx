@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import { EVENT_TYPES, splitDeadline, joinDeadline } from '../../utils/eventFormat';
-import { hasCoordinates, locateAddress } from '../../utils/kakaoMap';
+import { getKakaoMapKey, hasCoordinates, locateAddress } from '../../utils/kakaoMap';
 import { notifyResultMessage } from '../../utils/pushNotifications';
 import OptionsEditor from './OptionsEditor';
 import AddressSearchDialog from '../../components/common/AddressSearchDialog';
+import MapPickerDialog from '../../components/common/MapPickerDialog';
 import PlaceMap from '../../components/common/PlaceMap';
 import {
   Button, Callout, Card, Checkbox, ClearableInput, Container, Field, Icon, Input, PageHeader, Row, Spinner, SwitchField, Textarea
@@ -20,11 +21,14 @@ const TYPE_HINTS = {
 // 주소를 골랐는데 지도에 못 올렸을 때의 안내. 어느 경우든 주소는 저장된다.
 const MAP_NOTES = {
   no_key: '지도 키가 아직 설정되지 않아 지도는 보이지 않아요. 주소는 저장되고, 학부모에게는 카카오맵 링크로 보여요.',
-  not_found: '이 주소를 지도에서 찾지 못했어요. 주소는 저장되고, 학부모에게는 카카오맵 링크로 보여요.',
+  not_found: '이 주소를 지도에서 찾지 못했어요. [지도에서 고르기] 로 직접 고를 수 있고, 그대로 두면 학부모에게는 카카오맵 링크로 보여요.',
   error: '지도를 불러오지 못했어요. 주소는 그대로 저장돼요.'
 };
 
 const toCoordinate = (value) => (value === null || value === undefined || value === '' ? null : Number(value));
+
+// 장소 이름을 아직 비워 뒀으면 건물명(없으면 주소)으로 채운다 — 그대로 고쳐 쓸 수 있다
+const fillLocation = (location, { address, placeName }) => (location.trim() ? location : (placeName || address));
 
 const emptyForm = {
   type: 'competition',
@@ -85,6 +89,9 @@ function EventForm({ basePath = '/events' }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [locating, setLocating] = useState(false);
   const [mapNote, setMapNote] = useState(null);
+  const [mapPickerOpen, setMapPickerOpen] = useState(false);
+  // 지도 키가 있어야 [지도에서 고르기] 를 보여 준다 — 키 없는 서버에서 열리지 않는 창을 내밀지 않게
+  const [mapAvailable, setMapAvailable] = useState(false);
   // 저장할 때 학부모 브라우저 알림을 보낼지. 새 이벤트는 켜 두고, 수정은 꺼 둔다 — 고칠 때마다 다시 알리지 않게.
   const [notifyParents, setNotifyParents] = useState(!editing);
   // 주소를 연달아 바꾸면 늦게 도착한 좌표가 새 주소를 덮지 않도록 요청마다 번호를 붙인다
@@ -108,6 +115,16 @@ function EventForm({ basePath = '/events' }) {
       setMapNote(found.reason);
     }
   };
+
+  useEffect(() => {
+    let alive = true;
+    getKakaoMapKey().then((key) => {
+      if (alive) setMapAvailable(Boolean(key));
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!editing) return;
@@ -165,10 +182,26 @@ function EventForm({ basePath = '/events' }) {
       address,
       latitude: null,
       longitude: null,
-      // 장소 이름을 아직 비워 뒀으면 건물명(없으면 주소)으로 채운다 — 그대로 고쳐 쓸 수 있다
-      location: prev.location.trim() ? prev.location : (placeName || address)
+      location: fillLocation(prev.location, { address, placeName })
     }));
     locate(address);
+  };
+
+  /** 지도에서 고른 자리 — 주소와 좌표가 함께 온다. 주소로 다시 찾지 않는다(찾으면 건물 가운데로 핀이 돌아간다). */
+  const pickOnMap = ({ address, placeName, latitude, longitude }) => {
+    setMapPickerOpen(false);
+    if (!address || !hasCoordinates({ latitude, longitude })) return;
+
+    locateSeq.current += 1;
+    setLocating(false);
+    setMapNote(null);
+    setForm((prev) => ({
+      ...prev,
+      address,
+      latitude,
+      longitude,
+      location: fillLocation(prev.location, { address, placeName })
+    }));
   };
 
   const clearAddress = () => {
@@ -312,7 +345,7 @@ function EventForm({ basePath = '/events' }) {
               )}
 
               {/* 주소는 선택이다. 고르면 아래에 지도가 떠서 맞는 곳인지 바로 확인하고,
-                  학부모 일정 상세에도 같은 지도가 보인다. */}
+                  학부모 일정 상세에도 같은 지도가 보인다. 핀이 어긋나면 [지도에서 고르기] 로 옮긴다. */}
               {!isClosure && (
                 <div className="event-form__field">
                   <span className="ui-field__label" id="ev-address-label">
@@ -331,6 +364,11 @@ function EventForm({ basePath = '/events' }) {
                       <Button icon="search" onClick={() => setSearchOpen(true)}>
                         {form.address ? '주소 변경' : '주소 검색'}
                       </Button>
+                      {mapAvailable && (
+                        <Button icon="mapPin" onClick={() => setMapPickerOpen(true)} disabled={locating}>
+                          지도에서 고르기
+                        </Button>
+                      )}
                       {form.address && (
                         <Button variant="ghost" icon="x" onClick={clearAddress}>주소 지우기</Button>
                       )}
@@ -479,6 +517,15 @@ function EventForm({ basePath = '/events' }) {
           onClose={() => setSearchOpen(false)}
           onSelect={pickAddress}
           query={form.address ? '' : form.location}
+        />
+
+        <MapPickerDialog
+          open={mapPickerOpen}
+          onClose={() => setMapPickerOpen(false)}
+          onSelect={pickOnMap}
+          latitude={form.latitude}
+          longitude={form.longitude}
+          address={form.address}
         />
 
         <div className="event-form__actions">

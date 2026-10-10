@@ -30,13 +30,28 @@ jest.mock('../../../components/common/AddressSearchDialog', () => (props) => (pr
 jest.mock('../../../components/common/PlaceMap', () => (props) => (
   <div data-testid="map" data-lat={props.latitude} data-lng={props.longitude} />
 ));
+// 지도에서 고르기 창 — 열 때 받은 자리를 보여 주고, 누르면 경기장 앞 자리를 고른다
+jest.mock('../../../components/common/MapPickerDialog', () => (props) => (props.open ? (
+  <div role="dialog" aria-label="지도에서 고르기">
+    <span data-testid="picker-start">{`${props.latitude},${props.longitude} ${props.address}`}</span>
+    <button
+      type="button"
+      onClick={() => props.onSelect({
+        address: '서울 송파구 올림픽로 25', placeName: '서울종합운동장', latitude: 37.5153, longitude: 127.0733
+      })}
+    >
+      경기장 앞 고르기
+    </button>
+  </div>
+) : null));
 jest.mock('../../../utils/kakaoMap', () => ({
   ...jest.requireActual('../../../utils/kakaoMap'),
-  locateAddress: jest.fn()
+  locateAddress: jest.fn(),
+  getKakaoMapKey: jest.fn()
 }));
 
 import { fetchWithAuth } from '../../../utils/api';
-import { locateAddress } from '../../../utils/kakaoMap';
+import { getKakaoMapKey, locateAddress } from '../../../utils/kakaoMap';
 import EventForm from '../EventForm';
 
 const ok = (body) => Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
@@ -86,6 +101,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   fetchWithAuth.mockImplementation(() => ok({ id: 1 }));
   locateAddress.mockResolvedValue({ ok: true, latitude: 37.5203, longitude: 127.1236 });
+  getKakaoMapKey.mockResolvedValue('js-key');
 });
 
 describe('EventForm — 휴관일은 날짜만 입력한다', () => {
@@ -423,6 +439,106 @@ describe('EventForm — 주소 검색과 지도', () => {
 
     expect(locateAddress).toHaveBeenCalledWith('서울 영등포구 여의동로 330');
     expect(screen.getByTestId('map')).toHaveAttribute('data-lat', '37.5203');
+  });
+});
+
+describe('EventForm — 지도에서 고르기', () => {
+  const searchAndPick = async () => {
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '주소 검색' }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '올림픽로 424 고르기' }));
+    });
+  };
+  const pickOnMap = async () => {
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '지도에서 고르기' }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '경기장 앞 고르기' }));
+    });
+  };
+
+  it('주소 검색으로 고른 뒤 지도에서 옮기면 주소와 좌표가 그 자리로 바뀌어 저장된다 — 주소로 다시 찾지 않는다', async () => {
+    await renderForm();
+    fill('이벤트 이름', '가을 대회');
+    fill('날짜', '2026-09-12');
+    await searchAndPick();
+    expect(locateAddress).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '지도에서 고르기' }));
+    });
+    // 지금 고른 자리에서 연다
+    expect(screen.getByTestId('picker-start')).toHaveTextContent('37.5203,127.1236 서울 송파구 올림픽로 424');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '경기장 앞 고르기' }));
+    });
+
+    expect(screen.queryByRole('dialog', { name: '지도에서 고르기' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('event-address')).toHaveTextContent('서울 송파구 올림픽로 25');
+    expect(screen.getByTestId('map')).toHaveAttribute('data-lat', '37.5153');
+    expect(locateAddress).toHaveBeenCalledTimes(1);
+    // 장소 이름은 이미 채워져 있으니 그대로
+    expect(field('장소')).toHaveValue('올림픽공원');
+
+    await save();
+    expect(savedPayload()).toMatchObject({
+      location: '올림픽공원',
+      address: '서울 송파구 올림픽로 25',
+      latitude: 37.5153,
+      longitude: 127.0733
+    });
+  });
+
+  it('주소 검색 없이 지도에서 바로 고를 수 있고, 비어 있던 장소 이름은 건물명으로 채운다', async () => {
+    await renderForm();
+    fill('이벤트 이름', '가을 대회');
+    fill('날짜', '2026-09-12');
+
+    await pickOnMap();
+
+    expect(field('장소')).toHaveValue('서울종합운동장');
+    expect(locateAddress).not.toHaveBeenCalled();
+    await save();
+    expect(savedPayload()).toMatchObject({ address: '서울 송파구 올림픽로 25', latitude: 37.5153, longitude: 127.0733 });
+  });
+
+  it('주소 좌표를 찾는 동안에는 [지도에서 고르기] 가 잠기고, 못 찾으면 지도에서 직접 고르라고 안내한다', async () => {
+    let answer;
+    locateAddress.mockImplementation(() => new Promise((resolve) => { answer = resolve; }));
+    await renderForm({
+      id: 9, type: 'special', title: '가을 러닝', date: '2026-10-10', location: '한강공원',
+      address: '서울 영등포구 여의동로 330', latitude: null, longitude: null, isPublished: true, options: []
+    });
+    // 찾는 동안에는 [지도에서 고르기] 를 잠근다
+    expect(screen.getByRole('button', { name: '지도에서 고르기' })).toBeDisabled();
+
+    await act(async () => {
+      answer({ ok: false, reason: 'not_found' });
+    });
+    expect(screen.getByRole('status')).toHaveTextContent(/\[지도에서 고르기\] 로 직접 고를 수 있고/);
+
+    await pickOnMap();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    await save();
+    expect(savedPayload()).toMatchObject({ address: '서울 송파구 올림픽로 25', latitude: 37.5153, longitude: 127.0733 });
+  });
+
+  it('지도 키가 없는 서버에서는 [지도에서 고르기] 를 보이지 않는다', async () => {
+    getKakaoMapKey.mockResolvedValue(null);
+    await renderForm();
+
+    expect(screen.getByRole('button', { name: '주소 검색' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '지도에서 고르기' })).not.toBeInTheDocument();
+  });
+
+  it('휴관일에는 [지도에서 고르기] 도 없다', async () => {
+    await renderForm();
+    await pickType('휴관일');
+
+    expect(screen.queryByRole('button', { name: '지도에서 고르기' })).not.toBeInTheDocument();
   });
 });
 

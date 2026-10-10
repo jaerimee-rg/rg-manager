@@ -117,6 +117,22 @@ export const hasCoordinates = (place) =>
 
 export const LOCATE_TIMEOUT_MS = 10000;
 
+/** 지도에서 고를 때 이벤트에 아직 좌표가 없으면 여기서 시작한다 (서울시청 일대) */
+export const DEFAULT_MAP_CENTER = { latitude: 37.5666, longitude: 126.9784 };
+
+/** SDK 가 응답하지 않아도 정해진 시간 뒤에는 error 로 끝낸다 — 기다리는 화면이 영영 잠기지 않게 */
+function withTimeout(work, timeoutMs, label) {
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      console.error(`${label} 시간 초과`);
+      resolve({ ok: false, reason: 'error' });
+    }, timeoutMs);
+  });
+
+  return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
+}
+
 /**
  * 주소 → 좌표. 지도에 쓸 수 없으면 이유를 함께 돌려준다.
  * 선생님 폼은 찾는 동안 저장을 막으므로, SDK 가 응답하지 않아도 정해진 시간 뒤에는 error 로 끝낸다.
@@ -125,15 +141,44 @@ export const LOCATE_TIMEOUT_MS = 10000;
 export function locateAddress(address, { timeoutMs = LOCATE_TIMEOUT_MS } = {}) {
   if (!address) return Promise.resolve({ ok: false, reason: 'not_found' });
 
-  let timer;
-  const timeout = new Promise((resolve) => {
-    timer = setTimeout(() => {
-      console.error('주소 좌표 찾기 시간 초과:', address);
+  return withTimeout(geocode(address), timeoutMs, `주소 좌표 찾기(${address})`);
+}
+
+/**
+ * 카카오 coord2Address 결과 → 저장할 주소와 장소 이름 후보.
+ * 도로명 주소가 있으면 그것(주소 검색의 기본과 같다), 없으면(공원 한가운데·운동장처럼) 지번 주소.
+ * 건물명은 도로명 주소에만 실려 온다.
+ */
+export function pickCoordAddress(result) {
+  const first = Array.isArray(result) ? result[0] : null;
+  const road = String(first?.road_address?.address_name || '').trim();
+  const jibun = String(first?.address?.address_name || '').trim();
+
+  return {
+    address: road || jibun,
+    placeName: road ? String(first.road_address.building_name || '').trim() : ''
+  };
+}
+
+/**
+ * 좌표 → 주소 (지도에서 고를 때). 지도를 그린 kakao.maps 를 그대로 받아 묻는다.
+ * @returns {Promise<{ok:true,address:string,placeName:string}|{ok:false,reason:'not_found'|'error'}>}
+ */
+export function addressAt(maps, { latitude, longitude }, { timeoutMs = LOCATE_TIMEOUT_MS } = {}) {
+  const work = new Promise((resolve) => {
+    try {
+      new maps.services.Geocoder().coord2Address(longitude, latitude, (result, status) => {
+        const picked = status === maps.services.Status.OK ? pickCoordAddress(result) : null;
+        if (picked?.address) resolve({ ok: true, ...picked });
+        else resolve({ ok: false, reason: status === maps.services.Status.ERROR ? 'error' : 'not_found' });
+      });
+    } catch (error) {
+      console.error('좌표로 주소 찾기 실패:', error);
       resolve({ ok: false, reason: 'error' });
-    }, timeoutMs);
+    }
   });
 
-  return Promise.race([geocode(address), timeout]).finally(() => clearTimeout(timer));
+  return withTimeout(work, timeoutMs, `좌표로 주소 찾기(${latitude},${longitude})`);
 }
 
 async function geocode(address) {

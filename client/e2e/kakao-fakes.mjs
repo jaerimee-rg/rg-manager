@@ -15,6 +15,14 @@ export const FAKE_PLACE = {
   longitude: 127.1236
 };
 
+/** [지도에서 고르기] 에서 "지도를 끌어 옮긴" 곳 — 가짜 지도의 [가짜 지도 옮기기] 가 여기로 간다 */
+export const FAKE_MOVED_PLACE = {
+  address: '서울 송파구 올림픽로 25',
+  placeName: '서울종합운동장',
+  latitude: 37.5153,
+  longitude: 127.0733
+};
+
 // window.kakao / window.daum 은 진짜 스크립트처럼 같은 객체를 함께 쓴다.
 const POSTCODE_FAKE = `
 (function () {
@@ -40,27 +48,70 @@ const POSTCODE_FAKE = `
 })();
 `;
 
+// 움직이는 지도(draggable 기본값)에는 [가짜 지도 옮기기] 를 붙인다 — 누르면 FAKE_MOVED_PLACE 로 가운데를 옮기고
+// 진짜 지도처럼 idle 을 부른다. 좌표 → 주소(coord2Address)는 두 가짜 장소만 안다.
 const KAKAO_SDK_FAKE = `
 (function () {
   var k = window.kakao || window.daum || {};
   window.kakao = window.daum = k;
+  var places = ${JSON.stringify([
+    { ...FAKE_PLACE, roadAddress: FAKE_PLACE.address },
+    { ...FAKE_MOVED_PLACE, roadAddress: FAKE_MOVED_PLACE.address }
+  ])};
+  var moved = places[1];
   function LatLng(lat, lng) { this.lat = lat; this.lng = lng; }
-  function Map(el, options) {
-    var drawn = document.createElement('div');
-    drawn.className = 'e2e-fake-map';
-    drawn.textContent = '가짜 지도 ' + options.center.lat + ',' + options.center.lng;
-    el.appendChild(drawn);
+  LatLng.prototype.getLat = function () { return this.lat; };
+  LatLng.prototype.getLng = function () { return this.lng; };
+  function fire(target, type, arg) {
+    (target.listeners[type] || []).slice().forEach(function (handler) { handler(arg); });
   }
+  function Map(el, options) {
+    var self = this;
+    this.listeners = {};
+    this.drawn = document.createElement('div');
+    this.drawn.className = 'e2e-fake-map';
+    el.appendChild(this.drawn);
+    this.setCenter(options.center);
+    if (options.draggable !== false) {
+      var move = document.createElement('button');
+      move.type = 'button';
+      move.textContent = '가짜 지도 옮기기';
+      move.onclick = function () { self.panTo(new LatLng(moved.latitude, moved.longitude)); };
+      el.appendChild(move);
+    }
+  }
+  Map.prototype.getCenter = function () { return this.center; };
+  Map.prototype.setCenter = function (center) {
+    this.center = center;
+    this.drawn.textContent = '가짜 지도 ' + center.lat + ',' + center.lng;
+  };
+  Map.prototype.panTo = function (center) { this.setCenter(center); fire(this, 'idle'); };
+  Map.prototype.relayout = function () {};
+  Map.prototype.addControl = function () {};
   function Marker() {}
+  function ZoomControl() {}
   function Geocoder() {}
   Geocoder.prototype.addressSearch = function (address, callback) {
     callback([{ x: ${JSON.stringify(String(FAKE_PLACE.longitude))}, y: ${JSON.stringify(String(FAKE_PLACE.latitude))} }], 'OK');
+  };
+  Geocoder.prototype.coord2Address = function (x, y, callback) {
+    var hit = places.filter(function (p) { return p.longitude === x && p.latitude === y; })[0];
+    if (!hit) { callback([], 'ZERO_RESULT'); return; }
+    callback([{ road_address: { address_name: hit.roadAddress, building_name: hit.placeName }, address: { address_name: hit.roadAddress } }], 'OK');
   };
   k.maps = {
     load: function (callback) { callback(); },
     LatLng: LatLng,
     Map: Map,
     Marker: Marker,
+    ZoomControl: ZoomControl,
+    ControlPosition: { RIGHT: 'RIGHT' },
+    event: {
+      addListener: function (target, type, handler) { (target.listeners[type] = target.listeners[type] || []).push(handler); },
+      removeListener: function (target, type, handler) {
+        target.listeners[type] = (target.listeners[type] || []).filter(function (h) { return h !== handler; });
+      }
+    },
     services: { Geocoder: Geocoder, Status: { OK: 'OK', ZERO_RESULT: 'ZERO_RESULT', ERROR: 'ERROR' } }
   };
 })();
