@@ -414,7 +414,8 @@ Parents get their own accounts and a separate app under `/parent/*`. Design docs
   never break. Deleting an option that registrations use warns first and shows "(삭제된 옵션)".
 - **Notifications**: `EVENT_REGISTRATION` in `NOTIFICATION_EVENTS`, sent to the *teacher* via the
   existing Kakao "send to me". Parents receive no Kakao messages (decided 2026-08); anything for
-  them is in-app only.
+  them is in-app only — except the opt-in **browser notification** a teacher can send when saving an event
+  (see *New-Event Browser Notifications*).
 - **Client**: `App.jsx` returns `<ParentApp />` right after the logged-out branch when
   `user.role === 'parent'`, so the teacher tree is untouched. `/competitions` redirects to
   `/events`; its sub-routes (`/new`, `/edit`, `/manage`) stay.
@@ -782,6 +783,49 @@ an authorized redirect URI of `<APP_URL>/api/drive/callback` and the Drive API a
 are all non-sensitive → no Google review) removes both limits. Without the keys `/api/drive/account` returns
 `configured:false` and the photo screens show "관리자에게 문의" — the rest of the app is unaffected.
 
+### New-Event Browser Notifications (학부모 브라우저 알림)
+
+Parents get **no Kakao messages** (decided 2026-08), so new events reach them as **Web Push** browser
+notifications. The teacher decides per save: the event form's **[학부모에게 알림 보내기]** checkbox (공개 · 접수 card).
+
+- **Teacher side**: the checkbox starts **checked for a new event, unchecked when editing** (an edit should not re-announce
+  unless asked) and is locked off while 학부모에게 공개 is off. The form sends `notifyParents: true`; `createEvent` /
+  `updateEvent` call `services/eventPush.js:notifyParentsOfEvent` **after COMMIT and await it before responding** — Vercel
+  freezes the instance once the response is sent, so a deferred send never leaves. It never throws (5 s per push service);
+  the result rides back as `notification` (`{recipients, sent, failed, removed}` or `{skipped: 'private'|'not_configured'|…}`)
+  and `EventForm` passes `utils/pushNotifications.notifyResultMessage` to the list as router state (`EventList` shows it
+  once as a toast and clears the state). Without the checkbox the response shape is unchanged.
+- **Recipients** = parents linked to the **event's owner** (`parent_teachers`, same audience as the parent schedule) who
+  turned notifications on, one push per device (`push_subscriptions`, endpoint UNIQUE — the same browser switching parent
+  accounts moves the row). Push services answering 404/410 delete that row. `topic`/`tag` = `event-<id>`, so re-sending the
+  same event replaces rather than stacks; TTL 3 days.
+- **Parent side**: 내 정보 › **새 일정 알림** (`pages/parent/EventPushCard.jsx`), hidden when the server has no keys.
+  `utils/pushNotifications.pushEnvironment` picks what to show: a switch (`supported`), or instructions instead —
+  **KakaoTalk in-app browser** (`kakaotalk`, no push in its WebView; a [브라우저로 열기] link via
+  `kakaotalk://web/openExternal`), **iPhone/iPad Safari tab** (`ios-install`: push works only in a Home Screen web app,
+  iOS 16.4+ — hence `client/public/manifest.webmanifest`), old iOS, or anything else. The service worker is registered when
+  the card mounts so the tap itself can ask permission (iOS requires that). A device that is already on re-posts its
+  subscription on every visit (fixes an account switch on one device).
+- **Payload** is Declarative Web Push (`{web_push: 8030, notification: {title, body, navigate, tag}}`,
+  `utils/webPush.js:eventPushMessage`) — iOS 18.4+ can show it without our worker; elsewhere `client/public/sw.js` reads the
+  same `notification`, and a click focuses an open app window or opens one. **The worker only ever opens a path on its own
+  origin** (`sameOriginUrl`). It caches nothing.
+- **Endpoint allowlist** (`utils/webPush.js:isAllowedPushEndpoint`): the server POSTs to the stored endpoint, so only https
+  on the default port to Google (`*.googleapis.com`, `*.google.com` — Chrome uses `fcm.googleapis.com`, unbranded Chromium
+  `jmt17.google.com`), Apple (`*.push.apple.com`), Mozilla and Windows push hosts. A rejected host is logged
+  (`알림 구독 거절 — 목록에 없는 푸시 서비스`) — if a real browser shows up there, add it.
+- **API** (parent only): `GET /api/parent/push` → `{configured, publicKey}` · `POST /api/parent/push/subscriptions`
+  (`PushSubscription.toJSON()`; 503 without keys) · `DELETE /api/parent/push/subscriptions {endpoint}` (own rows only).
+- **Keys**: `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` (`cd server && npx web-push generate-vapid-keys`) and optional
+  `VAPID_SUBJECT` (`mailto:` or https URL, default the production URL). Changing the key pair orphans every existing
+  subscription — parents would have to turn it on again.
+- **Schema change** — `push_subscriptions` (+ `idx_push_subscriptions_user`): create it in production before merging,
+  `OWNER TO rg_app`, REVOKE the public grants on the table and `push_subscriptions_id_seq` (see *Deployment*).
+- **e2e** (`e2e/push.spec.mjs`, project `push`): Playwright's default window is incognito, where Chrome refuses push, so the
+  UI flow stubs `PushManager`; the worker is checked by delivering a push over CDP (`ServiceWorker.deliverPushMessage`,
+  needs the `chromium` channel — the default headless shell always reports notifications as denied). A real round trip
+  through Google's push service runs only with `E2E_REAL_PUSH=1`. Parent tests skip when the server has no VAPID keys.
+
 ### Event Share Link (선생님 → 학부모)
 
 이벤트 관리(`/events`, `/admin/events`)의 **[공유]** 버튼과 신청 현황 패널의 링크 아이콘이
@@ -1041,6 +1085,8 @@ cd ../client && E2E_BASE_URL=http://localhost:5055 npm run test:e2e         # 10
   (Playwright Chromium). Re-run it whenever the copy or logo changes and commit the PNG.
 - `vercel.json` has an explicit route for `logo-mark|og-image|icon-192|icon-512.png` — without it the SPA
   catch-all would serve `index.html` for those files and the preview image would break in production.
+  The same goes for `/sw.js` (served `no-cache`, or a fixed worker would linger) and `/manifest.webmanifest` — each has
+  its own route before the catch-all; an HTML `/sw.js` makes service-worker registration fail.
 
 ## Deployment (Vercel)
 
@@ -1070,6 +1116,9 @@ on every push to `main` via the GitHub integration. Render is no longer used.
 - `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` — event photo albums (Google Drive).
   Without them the album screens show "관리자에게 문의" guidance and nothing else breaks.
 - `GOOGLE_OAUTH_REDIRECT_URI` — optional; defaults to `${APP_URL}/api/drive/callback`
+- `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` (optional `VAPID_SUBJECT`) — new-event browser notifications to parents
+  (see *New-Event Browser Notifications*). Without them the parent card is hidden and a checked save answers
+  `notification: {skipped: 'not_configured'}`; nothing else changes.
 - `KAKAO_JS_KEY` — Kakao **JavaScript** key for the event location map (see *Event Location Map*).
   Optional: without it addresses are still searched and saved, only the map picture is missing.
   Not the REST key (`KAKAO_CLIENT_ID`) — the map SDK rejects it.

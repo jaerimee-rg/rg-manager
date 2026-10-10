@@ -3936,3 +3936,15 @@ button.ui-album-card__cover-slot:hover::after {
 .ui-drive-account__who { flex: 1; min-width: 0; }
 .ui-drive-account__email { word-break: break-all; }
 .ui-drive-account__usage { flex: 1; max-width: 320px; }
+
+/* 학부모 내 정보 › 새 일정 알림 (pages/parent/EventPushCard) — 이웃한 내 정보 카드들과 같은 간격·제목 크기 */
+.ui-push-card { display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-3); }
+.ui-push-card .ui-card__header { margin-bottom: 0; }
+.ui-push-card .ui-card__title { font-size: var(--display-sm); }
+.ui-push-card__steps { margin: var(--space-2) 0 0; padding-left: var(--space-5); }
+.ui-push-card__steps li + li { margin-top: 2px; }
+.ui-push-card__action { margin-top: var(--space-3); }
+.ui-push-card__notice { margin: 0; font-size: var(--text-sm); color: var(--ink-600); }
+
+/* 이벤트 폼 › 학부모에게 알림 보내기 — 체크 아래 한 줄 설명 */
+.event-form__notify-hint { margin: var(--space-1) 0 0; }

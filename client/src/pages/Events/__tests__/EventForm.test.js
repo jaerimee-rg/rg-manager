@@ -425,3 +425,81 @@ describe('EventForm — 주소 검색과 지도', () => {
     expect(screen.getByTestId('map')).toHaveAttribute('data-lat', '37.5203');
   });
 });
+
+describe('EventForm — 학부모에게 알림 보내기', () => {
+  const notifyBox = () => screen.getByLabelText('학부모에게 알림 보내기');
+  const fillNewEvent = async () => {
+    await pickType('스페셜');
+    fill('이벤트 이름', '가을 러닝');
+    fill('날짜', '2026-10-24');
+    fill('장소', '한강공원');
+  };
+  const existing = {
+    id: 9, type: 'special', title: '가을 러닝', date: '2026-10-24', location: '한강공원', isPublished: true, options: []
+  };
+
+  it('새 이벤트는 체크된 채로 시작하고, 그대로 저장하면 알림을 요청한다', async () => {
+    await renderForm();
+    expect(notifyBox()).toBeChecked();
+
+    await fillNewEvent();
+    await save();
+
+    expect(savedPayload().notifyParents).toBe(true);
+  });
+
+  it('체크를 풀고 저장하면 보내지 않는다', async () => {
+    await renderForm();
+    await fillNewEvent();
+    fireEvent.click(notifyBox());
+    await save();
+
+    expect(savedPayload().notifyParents).toBe(false);
+  });
+
+  it('공개를 끄면 체크가 잠기고 보내지 않는다 — 비공개 일정은 학부모에게 보이지 않는다', async () => {
+    await renderForm();
+    await fillNewEvent();
+    fireEvent.click(screen.getByLabelText('학부모에게 공개'));
+
+    expect(notifyBox()).toBeDisabled();
+    expect(notifyBox()).not.toBeChecked();
+    expect(screen.getByText('공개해야 알림을 보낼 수 있어요')).toBeInTheDocument();
+
+    await save();
+    expect(savedPayload().notifyParents).toBe(false);
+  });
+
+  it('수정은 체크가 꺼진 채로 시작한다 — 고칠 때마다 다시 알리지 않게', async () => {
+    await renderForm(existing);
+    expect(notifyBox()).not.toBeChecked();
+
+    await save();
+    expect(savedPayload().notifyParents).toBe(false);
+  });
+
+  it('수정에서 체크하면 다시 알린다', async () => {
+    await renderForm(existing);
+    fireEvent.click(notifyBox());
+    expect(screen.getByText('체크하고 저장하면 이 일정을 학부모에게 다시 알려요')).toBeInTheDocument();
+
+    await save();
+    expect(savedPayload().notifyParents).toBe(true);
+  });
+
+  it('보낸 결과는 이벤트 목록으로 넘겨 안내한다', async () => {
+    fetchWithAuth.mockImplementation(() => ok({ id: 1, notification: { recipients: 3, sent: 4, failed: 0, removed: 0 } }));
+    await renderForm();
+    await fillNewEvent();
+    await save();
+
+    expect(mockNavigate).toHaveBeenCalledWith('/events', { state: { toast: '학부모 3명에게 알림을 보냈어요' } });
+  });
+
+  it('알림을 요청하지 않은 저장은 예전처럼 목록으로만 간다', async () => {
+    await renderForm(existing);
+    await save();
+
+    expect(mockNavigate).toHaveBeenCalledWith('/events');
+  });
+});

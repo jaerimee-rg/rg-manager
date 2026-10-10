@@ -57,6 +57,13 @@ export default defineConfig({
       testMatch: /shop\.spec\.mjs/
     },
     {
+      // 새 일정 브라우저 알림 — 학부모 내 정보의 알림 켜기 · 서비스 워커 · 이벤트 폼의 [학부모에게 알림 보내기].
+      // 서버에 VAPID 키가 있어야 학부모 쪽이 돈다(없으면 skip). 실제 푸시 서비스 왕복은 E2E_REAL_PUSH=1 일 때만.
+      name: 'push',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: /push\.spec\.mjs/
+    },
+    {
       // 브랜드: 로고 아래 서비스명, 튀는 로고 로딩, 링크 미리보기(OG). 로그인 없이도 대부분 돈다.
       name: 'brand',
       use: { ...devices['Desktop Chrome'] },

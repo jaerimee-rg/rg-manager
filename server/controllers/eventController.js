@@ -3,6 +3,7 @@ import Event from '../models/Event.js';
 import EventRegistration from '../models/EventRegistration.js';
 import Competition from '../models/Competition.js';
 import albumService from '../services/albumService.js';
+import { notifyParentsOfEvent } from '../services/eventPush.js';
 import { isPhotoFolder } from '../utils/albumAccess.js';
 import {
   isKnownType,
@@ -69,6 +70,12 @@ const parseBody = (body, { type, previousOptions = [] }) => {
     }
   };
 };
+
+/**
+ * 선생님이 폼의 [학부모에게 알림 보내기] 를 체크하고 저장했을 때만 보낸다 — 체크하지 않은 저장은 조용하다.
+ * 결과(몇 명에게 갔는지 · 왜 안 갔는지)는 응답의 notification 으로 돌려준다. 발송 실패는 저장을 실패시키지 않는다.
+ */
+const notifyIfAsked = (body, event) => (body?.notifyParents === true ? notifyParentsOfEvent(event) : null);
 
 /* ─────────── 이벤트 CRUD ─────────── */
 
@@ -142,7 +149,8 @@ export const createEvent = async (req, res) => {
     const event = await Event.create({ ...parsed.value, userId, competitionId }, client);
     await client.query('COMMIT');
 
-    res.status(201).json(event);
+    const notification = await notifyIfAsked(req.body, event);
+    res.status(201).json(notification ? { ...event, notification } : event);
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('이벤트 처리 오류:', error);
@@ -216,7 +224,8 @@ export const updateEvent = async (req, res) => {
       await albumService.syncFolderName(existing.userId, existing, { ...existing, ...updated });
     }
 
-    res.json({ ...updated, removedOptionRegistrations });
+    const notification = await notifyIfAsked(req.body, { ...existing, ...updated });
+    res.json({ ...updated, removedOptionRegistrations, ...(notification ? { notification } : {}) });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('이벤트 처리 오류:', error);

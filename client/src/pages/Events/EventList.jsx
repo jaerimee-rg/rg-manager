@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { typeOf, formatRange, formatWhen, isPast, isAcceptingRegistration, todayString } from '../../utils/eventFormat';
@@ -35,6 +35,7 @@ function StatusBadges({ event }) {
 
 function EventList({ basePath = '/events' }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const isMobile = useIsMobile();
   const [allEvents, setAllEvents] = useState([]);
   const [filter, setFilter] = useState('all');
@@ -44,13 +45,22 @@ function EventList({ basePath = '/events' }) {
   const [toast, setToast] = useState('');
   const toastTimer = useRef(null);
 
-  const showToast = (message) => {
+  const showToast = (message, duration = 2600) => {
     setToast(message);
     clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(''), 2600);
+    toastTimer.current = setTimeout(() => setToast(''), duration);
   };
 
   useEffect(() => () => clearTimeout(toastTimer.current), []);
+
+  // 폼에서 [학부모에게 알림 보내기] 로 저장하고 돌아오면 결과를 한 번 보여 준다.
+  // 기록의 state 는 지워서 새로고침·뒤로 가기로 같은 안내가 다시 뜨지 않게 한다.
+  useEffect(() => {
+    const message = location.state?.toast;
+    if (!message) return;
+    showToast(message, 4000);
+    navigate(`${location.pathname}${location.search || ''}`, { replace: true, state: null });
+  }, []);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleRegistrations = (eventId) =>
     setOpenRegistrations((current) => (current === eventId ? null : eventId));

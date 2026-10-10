@@ -38,10 +38,15 @@ jest.unstable_mockModule('../../services/albumService.js', () => ({
   default: { syncFolderName: jest.fn().mockResolvedValue({ renamed: false }) }
 }));
 
+jest.unstable_mockModule('../../services/eventPush.js', () => ({
+  notifyParentsOfEvent: jest.fn()
+}));
+
 const Event = (await import('../../models/Event.js')).default;
 const EventRegistration = (await import('../../models/EventRegistration.js')).default;
 const Competition = (await import('../../models/Competition.js')).default;
 const albumService = (await import('../../services/albumService.js')).default;
+const { notifyParentsOfEvent } = await import('../../services/eventPush.js');
 const {
   getEvents, createEvent, updateEvent, deleteEvent,
   getRegistrations, confirmRegistration, confirmAllRegistrations, registerStudent
@@ -569,6 +574,71 @@ describe('eventController', () => {
       await registerStudent(req, res);
 
       expect(res.status).toHaveBeenCalledWith(400);
+    });
+  });
+  describe('학부모에게 알림 보내기', () => {
+    const valid = { type: 'special', title: '한강 러닝', date: '2026-08-29', location: '여의도' };
+
+    it('체크하고 등록하면 저장한 이벤트로 알림을 보내고 결과를 함께 돌려준다', async () => {
+      req.body = { ...valid, notifyParents: true };
+      Event.create.mockResolvedValue({ id: 1, userId: 7, type: 'special', isPublished: true });
+      notifyParentsOfEvent.mockResolvedValue({ recipients: 3, sent: 4, failed: 0, removed: 0 });
+
+      await createEvent(req, res);
+
+      expect(notifyParentsOfEvent).toHaveBeenCalledWith(expect.objectContaining({ id: 1, userId: 7 }));
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+        id: 1, notification: { recipients: 3, sent: 4, failed: 0, removed: 0 }
+      }));
+    });
+
+    it('체크하지 않으면 보내지 않고 응답 모양도 그대로다', async () => {
+      req.body = { ...valid };
+      Event.create.mockResolvedValue({ id: 1, userId: 7 });
+
+      await createEvent(req, res);
+
+      expect(notifyParentsOfEvent).not.toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith({ id: 1, userId: 7 });
+    });
+
+    it('"true" 같은 문자열은 체크로 보지 않는다', async () => {
+      req.body = { ...valid, notifyParents: 'true' };
+      Event.create.mockResolvedValue({ id: 1, userId: 7 });
+
+      await createEvent(req, res);
+
+      expect(notifyParentsOfEvent).not.toHaveBeenCalled();
+    });
+
+    it('수정에서 체크하면 고친 내용 + 원래 주인으로 보낸다 (관리자가 남의 이벤트를 고쳐도 그 선생님의 학부모에게)', async () => {
+      const existing = { id: 5, type: 'special', userId: 3, options: [], title: '옛 이름' };
+      req.user = { id: 1, role: 'admin' };
+      req.params.id = '5';
+      req.body = { ...valid, title: '새 이름', notifyParents: true };
+      Event.getById.mockResolvedValue(existing);
+      Event.update.mockResolvedValue({ id: 5, type: 'special', title: '새 이름', isPublished: true });
+      notifyParentsOfEvent.mockResolvedValue({ recipients: 0, sent: 0, failed: 0, removed: 0 });
+
+      await updateEvent(req, res);
+
+      expect(notifyParentsOfEvent).toHaveBeenCalledWith(expect.objectContaining({ id: 5, userId: 3, title: '새 이름' }));
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+        title: '새 이름', notification: expect.objectContaining({ recipients: 0 })
+      }));
+    });
+
+    it('수정에서 체크하지 않으면 보내지 않는다', async () => {
+      req.params.id = '5';
+      req.body = { ...valid };
+      Event.getById.mockResolvedValue({ id: 5, type: 'special', userId: 7, options: [] });
+      Event.update.mockResolvedValue({ id: 5, type: 'special', userId: 7 });
+
+      await updateEvent(req, res);
+
+      expect(notifyParentsOfEvent).not.toHaveBeenCalled();
+      expect(res.json.mock.calls[0][0]).not.toHaveProperty('notification');
     });
   });
 });

@@ -15,6 +15,7 @@ import {
 } from '../controllers/parentAlbumController.js';
 import { listShops } from '../controllers/parentShopController.js';
 import { recordView } from '../controllers/albumViewController.js';
+import { getPushConfig, saveSubscription, deleteSubscription } from '../controllers/pushController.js';
 import { verifyToken } from '../middleware/auth.js';
 import { requireRole } from '../middleware/roles.js';
 import { logAction } from '../middleware/logger.js';
@@ -54,6 +55,11 @@ router.post('/events/:id/views', recordView);
 
 // 추천 상품 탭 — 연결된 선생님의 공개 상점 (상품은 공유 링크 /shop/:publicId 화면이 보여 준다)
 router.get('/shops', listShops);
+
+// 새 일정 브라우저 알림 — 내 정보에서 켜고 끈다 (선생님이 이벤트를 저장할 때 [학부모에게 알림 보내기] 를 체크하면 간다)
+router.get('/push', getPushConfig);
+router.post('/push/subscriptions', saveSubscription);
+router.delete('/push/subscriptions', deleteSubscription);
 
 // 자녀 기준 얼굴 (등록하면 우리 아이 사진을 자동으로 모아 준다)
 router.get('/children/:childId/faces', listFaces);

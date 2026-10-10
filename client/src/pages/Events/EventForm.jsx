@@ -3,11 +3,12 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import { EVENT_TYPES, splitDeadline, joinDeadline } from '../../utils/eventFormat';
 import { hasCoordinates, locateAddress } from '../../utils/kakaoMap';
+import { notifyResultMessage } from '../../utils/pushNotifications';
 import OptionsEditor from './OptionsEditor';
 import AddressSearchDialog from '../../components/common/AddressSearchDialog';
 import PlaceMap from '../../components/common/PlaceMap';
 import {
-  Button, Callout, Card, ClearableInput, Container, Field, Icon, Input, PageHeader, Row, Spinner, SwitchField, Textarea
+  Button, Callout, Card, Checkbox, ClearableInput, Container, Field, Icon, Input, PageHeader, Row, Spinner, SwitchField, Textarea
 } from '../../components/ui';
 
 const TYPE_HINTS = {
@@ -84,6 +85,8 @@ function EventForm({ basePath = '/events' }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [locating, setLocating] = useState(false);
   const [mapNote, setMapNote] = useState(null);
+  // 저장할 때 학부모 브라우저 알림을 보낼지. 새 이벤트는 켜 두고, 수정은 꺼 둔다 — 고칠 때마다 다시 알리지 않게.
+  const [notifyParents, setNotifyParents] = useState(!editing);
   // 주소를 연달아 바꾸면 늦게 도착한 좌표가 새 주소를 덮지 않도록 요청마다 번호를 붙인다
   const locateSeq = useRef(0);
 
@@ -205,7 +208,9 @@ function EventForm({ basePath = '/events' }) {
         endDate: form.endDate || null,
         startTime: isClosure ? null : (form.startTime || null),
         registrationDeadline: joinDeadline(form.deadlineDate, form.deadlineTime),
-        options: options.map((o) => (o.id ? { id: o.id, label: o.label } : o.label))
+        options: options.map((o) => (o.id ? { id: o.id, label: o.label } : o.label)),
+        // 비공개 이벤트는 학부모에게 보이지 않으니 알림도 보내지 않는다
+        notifyParents: notifyParents && form.isPublished
       };
 
       const response = await fetchWithAuth(
@@ -226,7 +231,10 @@ function EventForm({ basePath = '/events' }) {
         alert(`옵션을 지웠습니다. ${data.removedOptionRegistrations}건의 신청에는 "(삭제된 옵션)" 으로 표시됩니다.`);
       }
 
-      navigate(basePath);
+      // 알림 결과는 이벤트 목록에서 잠깐 보여 준다 ("학부모 3명에게 알림을 보냈어요")
+      const toast = notifyResultMessage(data.notification);
+      if (toast) navigate(basePath, { state: { toast } });
+      else navigate(basePath);
     } catch (err) {
       setError('저장 중 오류가 발생했습니다.');
     } finally {
@@ -397,6 +405,23 @@ function EventForm({ basePath = '/events' }) {
                 label="학부모에게 공개"
                 description="끄면 학부모 일정에 보이지 않아요 (준비 중인 이벤트)"
               />
+
+              <div className="event-form__field">
+                <Checkbox
+                  id="ev-notify"
+                  label="학부모에게 알림 보내기"
+                  checked={notifyParents && form.isPublished}
+                  disabled={!form.isPublished}
+                  onChange={(e) => setNotifyParents(e.target.checked)}
+                />
+                <p className="ui-field__hint event-form__notify-hint">
+                  {!form.isPublished
+                    ? '공개해야 알림을 보낼 수 있어요'
+                    : editing
+                      ? '체크하고 저장하면 이 일정을 학부모에게 다시 알려요'
+                      : '저장하면 알림을 켠 학부모의 휴대폰·PC로 바로 알려요'}
+                </p>
+              </div>
 
               {!isClosure && (
                 <>

@@ -6,8 +6,10 @@ jest.mock('../../../utils/api', () => ({
 }));
 
 const mockNavigate = jest.fn();
+let mockLocation = { pathname: '/events', search: '', state: null };
 jest.mock('react-router-dom', () => ({
-  useNavigate: () => mockNavigate
+  useNavigate: () => mockNavigate,
+  useLocation: () => mockLocation
 }));
 
 // 신청 현황 패널은 자체적으로 API 를 부르므로 여기서는 자리만 잡는다.
@@ -59,6 +61,7 @@ const renderList = async (events = EVENTS) => {
 beforeEach(() => {
   jest.clearAllMocks();
   mockMobile = false;
+  mockLocation = { pathname: '/events', search: '', state: null };
   copyToClipboard.mockResolvedValue(true);
   jest.useFakeTimers().setSystemTime(new Date(`${TODAY}T09:00:00`));
 });
@@ -186,6 +189,30 @@ describe('EventList', () => {
 
     const closureRow = screen.getByText('추석 휴관').closest('tr');
     expect(within(closureRow).queryByRole('button', { name: '참가 학생' })).not.toBeInTheDocument();
+  });
+
+  // --- 학부모 알림 결과 --------------------------------------------------------
+
+  describe('학부모 알림 결과', () => {
+    it('폼에서 넘어온 결과를 한 번 보여 주고, 기록의 state 는 지운다', async () => {
+      mockLocation = { pathname: '/events', search: '', state: { toast: '학부모 3명에게 알림을 보냈어요' } };
+      await renderList();
+
+      expect(screen.getByRole('status')).toHaveTextContent('학부모 3명에게 알림을 보냈어요');
+      expect(mockNavigate).toHaveBeenCalledWith('/events', { replace: true, state: null });
+
+      await act(async () => {
+        jest.advanceTimersByTime(4000);
+      });
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+
+    it('넘어온 결과가 없으면 아무것도 띄우지 않는다', async () => {
+      await renderList();
+
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
   });
 
   // --- 공유 링크 --------------------------------------------------------------
