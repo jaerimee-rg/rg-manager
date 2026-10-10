@@ -240,6 +240,39 @@ await pool.query(
   [removeFaceMediaIds[2], students[0].id, studentFace.rows[0].id, teacher.id, now]
 );
 
+// 얼굴 목록에서 여러 사람을 한 번에 빼기 — 사진 네 장에 관계없는 사람 셋(가: 34·35, 나: 35·36, 라: 37)과 등록된 아이(다: 36).
+// 선생님이 [얼굴 빼기] 로 가·라를 골라 한 번에 빼고, 등록된 아이는 고를 수 없는지 본다. 한 사람 빼기 앨범과 따로 둔다.
+// 날짜를 앞당겨 사진 목록에서 e2e확정대회 아래에 둔다(위 doomedEventId 와 같은 이유).
+const removeManyEventId = await mkEvent(`e2e얼굴여럿빼기_${stamp}`, null, true, { type: 'special', published: false });
+await pool.query(`UPDATE events SET date = '2026-09-03' WHERE id = $1`, [removeManyEventId]);
+const removeManyMediaIds = [];
+for (const i of [34, 35, 36, 37]) {
+  removeManyMediaIds.push(await mkMedia({ i, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: removeManyEventId }));
+}
+await pool.query('UPDATE event_media SET "faceAnalyzerVersion" = 3 WHERE id = ANY($1::int[])', [removeManyMediaIds]);
+const personD = peopleVector((k) => (k % 16 < 8 ? 1 : -1));   // 가·나·다·기준 얼굴 모두와 직각
+for (const [mediaId, descriptor, box] of [
+  [removeManyMediaIds[0], personA, { x: 0.2, y: 0.2, w: 0.2, h: 0.2 }],
+  [removeManyMediaIds[1], personA, { x: 0.1, y: 0.3, w: 0.15, h: 0.15 }],
+  [removeManyMediaIds[1], personB, { x: 0.6, y: 0.3, w: 0.15, h: 0.15 }],
+  [removeManyMediaIds[2], personB, { x: 0.4, y: 0.4, w: 0.25, h: 0.25 }],
+  [removeManyMediaIds[3], personD, { x: 0.3, y: 0.2, w: 0.2, h: 0.2 }]
+]) {
+  await pool.query(
+    `INSERT INTO media_faces ("mediaId", box, score, descriptor, "createdAt") VALUES ($1,$2,0.9,$3,$4)`,
+    [mediaId, JSON.stringify(box), descriptor, now]
+  );
+}
+const removeManyChildFace = await pool.query(
+  `INSERT INTO media_faces ("mediaId", box, score, descriptor, "createdAt") VALUES ($1,$2,0.9,$3,$4) RETURNING id`,
+  [removeManyMediaIds[2], JSON.stringify({ x: 0.05, y: 0.1, w: 0.12, h: 0.12 }), personC, now]
+);
+await pool.query(
+  `INSERT INTO media_tags ("mediaId","studentId",source,"faceId","createdByUserId","createdAt","updatedAt")
+   VALUES ($1,$2,'manual',$3,$4,$5,$5)`,
+  [removeManyMediaIds[2], students[0].id, removeManyChildFace.rows[0].id, teacher.id, now]
+);
+
 // 학부모가 첫째 아이에 등록해 둔 얼굴 사진 두 장(특징값만) → 내 정보에서 한 장을 지우는 흐름을 본다.
 // 두 장이 같은 값이라 한 장을 지워도 남은 한 장과 아래 태그 사진의 얼굴이 그대로 맞는다(태그가 유지된다).
 const faceVector = Buffer.from(new Float32Array(512).fill(0.1).buffer).toString('base64');   // ArcFace 512차원
@@ -491,7 +524,7 @@ for (const [mediaId, descriptor, box] of [
 }
 
 const sessions = {
-  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, doomedFolderEventId, doomedFolderTitle, doomedEventId, doomedEventTitle, sparseEventId, sparseEventTitle, sparseMediaId, faceScanEventId, faceThumbEventId, peopleEventId, removeFaceEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
+  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, doomedFolderEventId, doomedFolderTitle, doomedEventId, doomedEventTitle, sparseEventId, sparseEventTitle, sparseMediaId, faceScanEventId, faceThumbEventId, peopleEventId, removeFaceEventId, removeManyEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
   teacher: { token: sign(teacher), user: { id: teacher.id, username: teacher.username, role: 'user' } },
   teacher2Token: sign(teacher2),
   parent: { token: sign(parent), user: { id: parent.id, username: parent.username, role: 'parent' } },

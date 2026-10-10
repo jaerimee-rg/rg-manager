@@ -103,9 +103,9 @@ const AlbumView = (await import('../../models/AlbumView.js')).default;
 const FaceExclusion = (await import('../../models/FaceExclusion.js')).default;
 const { DriveError } = await import('../../utils/googleDrive.js');
 const {
-  getAlbum, createAlbum, updateAlbum, listMedia, listPeople, deletePerson, deleteAllPerson, listAllMedia, listAllPeople, createUploads, completeUpload,
+  getAlbum, createAlbum, updateAlbum, listMedia, listPeople, deletePerson, deleteAllPerson, deletePeople, deleteAllPeople, listAllMedia, listAllPeople, createUploads, completeUpload,
   excludeAlbumPersonPhotos, restoreAlbumPersonPhotos, excludeAllPersonPhotos, restoreAllPersonPhotos,
-  bulkAction, addTag, updateMedia, deleteMedia, listUnanalyzed, saveFaces, analysisImageUrl
+  bulkAction, addTag, updateMedia, deleteMedia, listUnanalyzed, saveFaces, analysisImageUrl, MAX_REMOVE_PEOPLE
 } = await import('../albumController.js');
 
 const teacher = { id: 7, username: '이재림', role: 'user' };
@@ -1424,6 +1424,109 @@ describe('전체 사진 — 얼굴 목록에서 사람 빼기 (DELETE /api/album
     await deleteAllPerson(req, res);
 
     expect(res.status).toHaveBeenCalledWith(404);
+    expect(MediaFace.listForAlbums).not.toHaveBeenCalled();
+  });
+});
+
+describe('얼굴 목록에서 여러 사람을 한 번에 빼기 (POST .../album/people/remove · /api/albums/people/remove)', () => {
+  const axis = (i) => Float32Array.from({ length: 8 }, (_, k) => (k === i ? 1 : 0));
+  const face = (id, mediaId, descriptor) => ({
+    id, mediaId, box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 }, score: 0.9, descriptor, driveFileId: `file-${mediaId}`
+  });
+
+  beforeEach(() => {
+    Event.getById.mockResolvedValue(event());
+    // 관계없는 사람 가(p21: 사진 1·2) · 나(p41: 사진 3) · 등록된 아이(p31, 학생 9 — 사진 2)
+    MediaFace.listForAlbum.mockResolvedValue([face(21, 1, axis(0)), face(22, 2, axis(0)), face(31, 2, axis(4)), face(41, 3, axis(6))]);
+    MediaTag.listForAlbum.mockResolvedValue([{ mediaId: 2, studentId: 9, source: 'manual', faceId: 31 }]);
+    MediaTag.removeAutoTagsForFaces.mockResolvedValue(0);
+    MediaFace.deleteForAlbum.mockResolvedValue([1, 2, 3]);
+    EventMedia.refreshFaceCounts.mockResolvedValue(3);
+    mockClient.query.mockClear();
+  });
+
+  it('고른 사람들의 얼굴을 한 트랜잭션에서 함께 지운다 — 사진은 그대로', async () => {
+    req.body = { people: [{ key: 'p21', photoCount: 2 }, { key: 'p41', photoCount: 1 }] };
+
+    await deletePeople(req, res);
+
+    expect(MediaFace.listForAlbum).toHaveBeenCalledWith(3, { includeHidden: true });
+    expect(MediaFace.deleteForAlbum).toHaveBeenCalledWith([21, 22, 41], 3, mockClient);
+    expect(mockClient.query.mock.calls.map(([sql]) => sql)).toEqual(['BEGIN', 'COMMIT']);
+    expect(res.json).toHaveBeenCalledWith({ removedPeople: 2, removedFaces: 3, photos: 3, removedTags: 0 });
+  });
+
+  it('하나라도 안 되면 아무것도 지우지 않는다 — 등록된 아이 409 · 본 사진 수가 다르면 409 · 없어진 사람 404', async () => {
+    req.body = { people: [{ key: 'p21', photoCount: 2 }, { key: 'p31', photoCount: 1 }] };
+    await deletePeople(req, res);
+    expect(res.status).toHaveBeenLastCalledWith(409);
+    expect(res.json).toHaveBeenLastCalledWith(expect.objectContaining({ reason: 'student_person' }));
+
+    req.body = { people: [{ key: 'p21', photoCount: 2 }, { key: 'p41', photoCount: 7 }] };
+    await deletePeople(req, res);
+    expect(res.status).toHaveBeenLastCalledWith(409);
+    expect(res.json).toHaveBeenLastCalledWith(expect.objectContaining({ reason: 'person_changed' }));
+
+    req.body = { people: [{ key: 'p21', photoCount: 2 }, { key: 'p999', photoCount: 1 }] };
+    await deletePeople(req, res);
+    expect(res.status).toHaveBeenLastCalledWith(404);
+    expect(res.json).toHaveBeenLastCalledWith(expect.objectContaining({ personMissing: true }));
+
+    expect(mockClient.query).not.toHaveBeenCalled();
+    expect(MediaFace.deleteForAlbum).not.toHaveBeenCalled();
+  });
+
+  it('본문이 잘못되면 400 — 묶지도 않는다', async () => {
+    const tooMany = Array.from({ length: MAX_REMOVE_PEOPLE + 1 }, (_, i) => ({ key: `p${i + 1}`, photoCount: 1 }));
+    for (const body of [{}, { people: [] }, { people: 'p21' }, { people: [{ photoCount: 1 }] }, { people: [{ key: 21 }] }, { people: tooMany }]) {
+      res.status.mockClear();
+      req.body = body;
+
+      await deletePeople(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+    }
+    expect(MediaFace.listForAlbum).not.toHaveBeenCalled();
+  });
+
+  it('남의 이벤트면 404 — 아무것도 지우지 않는다', async () => {
+    Event.getById.mockResolvedValue(null);
+    req.body = { people: [{ key: 'p21', photoCount: 2 }] };
+
+    await deletePeople(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(MediaFace.listForAlbum).not.toHaveBeenCalled();
+  });
+
+  it('지우다 실패하면 되돌리고 500', async () => {
+    MediaFace.deleteForAlbum.mockRejectedValueOnce(new Error('db down'));
+    req.body = { people: [{ key: 'p21', photoCount: 2 }, { key: 'p41', photoCount: 1 }] };
+
+    await deletePeople(req, res);
+
+    expect(mockClient.query.mock.calls.map(([sql]) => sql)).toEqual(['BEGIN', 'ROLLBACK']);
+    expect(res.status).toHaveBeenCalledWith(500);
+  });
+
+  it('전체 사진: 내 앨범 전부를 함께 묶은 사람들을 모든 폴더에서 뺀다 · 앨범이 없으면 404', async () => {
+    Event.listForPhotos.mockResolvedValue([event({ id: 3 }), event({ id: 5, driveFolderId: 'folder-5' }), event({ id: 6, driveFolderId: null })]);
+    MediaFace.listForAlbums.mockResolvedValue([face(21, 1, axis(0)), face(22, 8, axis(0)), face(41, 9, axis(6))]);
+    MediaTag.listForAlbums.mockResolvedValue([]);
+    MediaFace.deleteForAlbums.mockResolvedValue([1, 8, 9]);
+    req.params = {};
+    req.body = { people: [{ key: 'p21', photoCount: 2 }, { key: 'p41', photoCount: 1 }] };
+
+    await deleteAllPeople(req, res);
+
+    expect(MediaFace.listForAlbums).toHaveBeenCalledWith([3, 5], { includeHidden: true });
+    expect(MediaFace.deleteForAlbums).toHaveBeenCalledWith([21, 22, 41], [3, 5], mockClient);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ removedPeople: 2, removedFaces: 3, photos: 3 }));
+
+    Event.listForPhotos.mockResolvedValue([]);
+    MediaFace.listForAlbums.mockClear();
+    await deleteAllPeople(req, res);
+    expect(res.status).toHaveBeenLastCalledWith(404);
     expect(MediaFace.listForAlbums).not.toHaveBeenCalled();
   });
 });

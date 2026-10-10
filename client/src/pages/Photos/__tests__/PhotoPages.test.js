@@ -989,6 +989,53 @@ describe('PhotoAlbum — 얼굴 목록으로 거르기', () => {
     await renderWithPeople({ people: [] });
     expect(screen.queryByRole('group', { name: '얼굴로 사진 찾기' })).not.toBeInTheDocument();
   });
+
+  describe('여러 얼굴 한 번에 빼기 — [얼굴 빼기] → 고르기 → [N개 빼기] → 확인', () => {
+    const bar = () => screen.getByRole('region', { name: '얼굴 빼기' });
+    const removeCalls = () => fetchWithAuth.mock.calls.filter(([url, options]) => options?.method === 'POST' && url.endsWith('/people/remove'));
+    const pickAndRemove = async (names) => {
+      await act(async () => { fireEvent.click(within(bar()).getByRole('button', { name: '얼굴 빼기' })); });
+      names.forEach((name) => fireEvent.click(screen.getByRole('button', { name })));
+      fireEvent.click(within(bar()).getByRole('button', { name: `${names.length}개 빼기` }));
+      await act(async () => { fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '빼기' })); });
+    };
+
+    it('고른 얼굴들을 본 사진 수와 함께 한 번에 보내고, 고른 사람이 빠졌으면 고른 것을 풀어 목록·사진을 다시 읽는다', async () => {
+      const calls = await renderWithPeople();
+      const base = fetchWithAuth.getMockImplementation();
+      fetchWithAuth.mockImplementation((url, options = {}) => (
+        url.endsWith('/people/remove') ? ok({ removedPeople: 2, removedFaces: 4, photos: 3, removedTags: 1 }) : base(url, options)
+      ));
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: '얼굴 1 · 사진 3장' })); });
+      expect(mediaUrls().at(-1)).toContain('person=p11');
+      const before = calls.people;
+
+      await pickAndRemove(['얼굴 1 · 사진 3장', '얼굴 2 · 사진 1장']);
+
+      expect(removeCalls()).toEqual([['/api/events/31/album/people/remove', {
+        method: 'POST', body: JSON.stringify({ people: [{ key: 'p11', photoCount: 3 }, { key: 'p21', photoCount: 1 }] })
+      }]]);
+      expect(screen.getByText('얼굴 2개를 목록에서 뺐어요 · 사진은 그대로 있어요')).toBeInTheDocument();
+      expect(calls.people).toBeGreaterThan(before);
+      expect(mediaUrls().at(-1)).not.toContain('person=');
+      expect(screen.getByRole('group', { name: '얼굴로 사진 찾기' })).toBeInTheDocument();   // 고르기가 끝났다
+    });
+
+    it('얼굴 고르기와 사진 [고르기] 는 함께 켜지지 않는다', async () => {
+      await renderWithPeople();
+
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: '고르기' })); });
+      expect(screen.getByText('0장 골랐어요')).toBeInTheDocument();
+
+      await act(async () => { fireEvent.click(within(bar()).getByRole('button', { name: '얼굴 빼기' })); });
+      expect(screen.getByRole('group', { name: '뺄 얼굴 고르기' })).toBeInTheDocument();
+      expect(screen.queryByText('0장 골랐어요')).not.toBeInTheDocument();
+
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: '고르기' })); });
+      expect(screen.getByText('0장 골랐어요')).toBeInTheDocument();
+      expect(screen.getByRole('group', { name: '얼굴로 사진 찾기' })).toBeInTheDocument();
+    });
+  });
 });
 
 describe('PhotoAlbum — 고른 얼굴에서 잘못 묶인 사진 빼기 · 다시 넣기', () => {

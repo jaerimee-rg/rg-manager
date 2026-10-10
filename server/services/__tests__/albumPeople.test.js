@@ -38,7 +38,7 @@ const MediaFace = (await import('../../models/MediaFace.js')).default;
 const MediaTag = (await import('../../models/MediaTag.js')).default;
 const EventMedia = (await import('../../models/EventMedia.js')).default;
 const FaceExclusion = (await import('../../models/FaceExclusion.js')).default;
-const { removePerson, peopleAcross, albumPeople, excludePhotos, restorePhotos } = await import('../albumPeople.js');
+const { removePerson, removePeople, peopleAcross, albumPeople, excludePhotos, restorePhotos } = await import('../albumPeople.js');
 
 const axis = (i) => Float32Array.from({ length: 8 }, (_, k) => (k === i ? 1 : 0));
 const face = (id, mediaId, descriptor) => ({
@@ -92,6 +92,79 @@ describe('removePerson — 얼굴 목록에서 사람 빼기', () => {
     await expect(removePerson(3, 'p21', { seenPhotoCount: 3 })).resolves.toEqual({ blocked: 'person_changed' });
     await expect(removePerson(3, 'p21')).resolves.toEqual({ blocked: 'person_changed' });
     expect(calls).toEqual([]);
+  });
+});
+
+describe('removePeople — 얼굴 목록에서 여러 사람을 한 번에 빼기', () => {
+  beforeEach(() => {
+    // 관계없는 사람 가(p21: 사진 1·2) · 나(p41: 사진 3) · 등록된 아이(p31, 학생 9 — 사진 2)
+    MediaFace.listForAlbum.mockResolvedValue([
+      face(21, 1, axis(0)), face(22, 2, axis(0)), face(31, 2, axis(4)), face(41, 3, axis(6))
+    ]);
+    MediaTag.listForAlbum.mockResolvedValue([
+      { mediaId: 1, studentId: 9, source: 'candidate', faceId: 21 },
+      { mediaId: 2, studentId: 9, source: 'manual', faceId: 31 }
+    ]);
+  });
+
+  it('한 번 묶은 결과로 모두 찾아 한 트랜잭션에서 함께 지운다 — 태그 → 얼굴 → 얼굴 수', async () => {
+    const result = await removePeople(3, [{ key: 'p21', seenPhotoCount: 2 }, { key: 'p41', seenPhotoCount: 1 }]);
+
+    expect(MediaFace.listForAlbum).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual(['BEGIN', 'removeTags', 'deleteFaces', 'refreshCounts', 'COMMIT']);
+    expect(MediaTag.removeAutoTagsForFaces).toHaveBeenCalledWith([21, 22, 41], mockClient);
+    expect(MediaFace.deleteForAlbum).toHaveBeenCalledWith([21, 22, 41], 3, mockClient);
+    expect(EventMedia.refreshFaceCounts).toHaveBeenCalledWith([1, 2], mockClient);   // 지운 얼굴의 사진(모의값 1·2·2)마다 한 번
+    expect(result).toEqual({ removedPeople: 2, removedFaces: 3, photos: 2, removedTags: 1 });
+  });
+
+  it('같은 사람이 두 번 오면 한 번만 뺀다', async () => {
+    const result = await removePeople(3, [{ key: 'p41', seenPhotoCount: 1 }, { key: 'p41', seenPhotoCount: 1 }]);
+
+    expect(MediaFace.deleteForAlbum).toHaveBeenCalledWith([41], 3, mockClient);
+    expect(result.removedPeople).toBe(1);
+  });
+
+  it('하나라도 없어진 사람이면 null — 다른 사람도 지우지 않는다', async () => {
+    await expect(removePeople(3, [{ key: 'p21', seenPhotoCount: 2 }, { key: 'p999', seenPhotoCount: 1 }])).resolves.toBeNull();
+    await expect(removePeople(3, [])).resolves.toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  it('등록된 아이로 묶인 사람이 섞이면 student_person — 아무도 지우지 않는다', async () => {
+    await expect(removePeople(3, [{ key: 'p21', seenPhotoCount: 2 }, { key: 'p31', seenPhotoCount: 1 }]))
+      .resolves.toEqual({ blocked: 'student_person' });
+    expect(calls).toEqual([]);
+  });
+
+  it('한 사람이라도 화면이 본 사진 수와 다르거나 없으면 person_changed — 아무도 지우지 않는다', async () => {
+    await expect(removePeople(3, [{ key: 'p21', seenPhotoCount: 2 }, { key: 'p41', seenPhotoCount: 4 }]))
+      .resolves.toEqual({ blocked: 'person_changed' });
+    await expect(removePeople(3, [{ key: 'p21', seenPhotoCount: 2 }, { key: 'p41' }]))
+      .resolves.toEqual({ blocked: 'person_changed' });
+    expect(calls).toEqual([]);
+  });
+
+  it('중간에 실패하면 되돌리고 던진다', async () => {
+    MediaFace.deleteForAlbum.mockRejectedValueOnce(new Error('boom'));
+
+    await expect(removePeople(3, [{ key: 'p21', seenPhotoCount: 2 }, { key: 'p41', seenPhotoCount: 1 }])).rejects.toThrow('boom');
+
+    expect(calls).toEqual(['BEGIN', 'removeTags', 'ROLLBACK']);
+    expect(mockClient.release).toHaveBeenCalled();
+  });
+
+  it('여러 앨범(전체 사진)이면 모든 폴더에서 지운다', async () => {
+    MediaFace.listForAlbums.mockResolvedValue([face(21, 1, axis(0)), face(51, 8, axis(2)), face(61, 9, axis(6))]);
+    MediaTag.listForAlbums.mockResolvedValue([]);
+    MediaFace.deleteForAlbums.mockImplementationOnce(async () => { calls.push('deleteFacesAcross'); return [1, 8]; });
+
+    const result = await removePeople([3, 5], [{ key: 'p21', seenPhotoCount: 1 }, { key: 'p51', seenPhotoCount: 1 }]);
+
+    expect(calls).toEqual(['BEGIN', 'removeTags', 'deleteFacesAcross', 'refreshCounts', 'COMMIT']);
+    expect(MediaFace.deleteForAlbums).toHaveBeenCalledWith([21, 51], [3, 5], mockClient);
+    expect(MediaFace.deleteForAlbum).not.toHaveBeenCalled();
+    expect(result).toEqual({ removedPeople: 2, removedFaces: 2, photos: 2, removedTags: 1 });
   });
 });
 

@@ -282,3 +282,68 @@ describe('FacePeopleStrip — 길게 눌러 얼굴 빼기 (선생님)', () => {
   });
 });
 
+
+describe('FacePeopleStrip — 여러 얼굴 빼기 고르기 (picking, 선생님)', () => {
+  const checks = () => document.querySelectorAll('.ui-face-people__check');
+
+  beforeEach(() => cropsByUrl());
+
+  it('고르는 동안에는 [전체] 가 없고, 얼굴을 누르면 사진을 거르지 않고 onPick(key) — 고른 얼굴에 체크', async () => {
+    const onSelect = jest.fn();
+    const onPick = jest.fn();
+    await act(async () => {
+      render(<FacePeopleStrip people={PEOPLE} selected="p1" onSelect={onSelect} onRemove={jest.fn()} picking picked={['p2']} onPick={onPick} />);
+    });
+
+    expect(screen.getByRole('group', { name: '뺄 얼굴 고르기' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '모든 사진' })).not.toBeInTheDocument();
+    const faces = screen.getAllByRole('button');
+    // 거르던 얼굴(p1)이 아니라 고른 얼굴(p2)이 눌린 상태
+    expect(faces.map((button) => button.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false']);
+    expect(checks()).toHaveLength(1);
+    expect(faces[1].parentElement.querySelector('.ui-face-people__check')).not.toBeNull();
+
+    fireEvent.click(faces[0]);
+    fireEvent.click(faces[1]);
+    expect(onPick.mock.calls).toEqual([['p1'], ['p2']]);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('등록된 아이로 묶인 얼굴(removable: false)은 고를 수 없다 — 누를 수 없고 이유를 알려 준다', async () => {
+    const onPick = jest.fn();
+    await act(async () => {
+      render(<FacePeopleStrip people={[{ ...PEOPLE[0], removable: false }, PEOPLE[1]]} onSelect={jest.fn()} picking picked={[]} onPick={onPick} />);
+    });
+
+    const [child, other] = screen.getAllByRole('button');
+    expect(child).toBeDisabled();
+    expect(child).toHaveAttribute('title', '등록된 아이 얼굴은 목록에서 뺄 수 없어요');
+    fireEvent.click(child);
+    expect(onPick).not.toHaveBeenCalled();
+    expect(other).toBeEnabled();
+  });
+
+  it('고르는 동안에는 오른쪽 클릭·Delete 로 X 를 띄우지 않고, 고르기를 시작하면 떠 있던 X 도 닫힌다', async () => {
+    const props = { people: PEOPLE, onSelect: jest.fn(), onRemove: jest.fn(), onPick: jest.fn(), picked: [] };
+    let view;
+    await act(async () => { view = render(<FacePeopleStrip {...props} />); });
+
+    fireEvent.contextMenu(faceButtons()[0]);
+    expect(screen.getByRole('button', { name: '얼굴 1 목록에서 빼기' })).toBeInTheDocument();
+
+    view.rerender(<FacePeopleStrip {...props} picking />);
+    expect(screen.queryByRole('button', { name: /목록에서 빼기/ })).not.toBeInTheDocument();
+
+    fireEvent.contextMenu(screen.getAllByRole('button')[1]);
+    fireEvent.keyDown(screen.getAllByRole('button')[1], { key: 'Delete' });
+    expect(screen.queryByRole('button', { name: /목록에서 빼기/ })).not.toBeInTheDocument();
+  });
+
+  it('고르기가 아니면 체크도 없다 — 학부모·평소 화면은 그대로', async () => {
+    await act(async () => { render(<FacePeopleStrip people={PEOPLE} onSelect={jest.fn()} picked={['p1']} />); });
+
+    expect(screen.getByRole('group', { name: '얼굴로 사진 찾기' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '모든 사진' })).toBeInTheDocument();
+    expect(checks()).toHaveLength(0);
+  });
+});

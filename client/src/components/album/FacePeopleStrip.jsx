@@ -58,8 +58,14 @@ const LONG_PRESS_SLOP_PX = 10;
  * X 를 누르면 관계없는 사람으로 목록에서 뺀다. 두 번 눌러야 지워지는 것이 확인 창을 대신한다.
  * X 가 떠 있는 동안 다른 얼굴·[전체]·바깥을 누르거나 Esc 면 X 만 사라진다(고르지 않는다).
  * removable === false 인 사람(등록된 아이로 묶인 사람 — 서버가 선생님에게만 알려 준다)은 길게 눌러도 X 가 없다.
+ *
+ * picking — 여러 얼굴을 한 번에 빼려고 고르는 중(선생님, pages/Photos/FacePeoplePicker). 얼굴을 누르면 사진을 거르지 않고
+ * onPick(key) 로 고르거나 풀며, 고른 얼굴(picked)에 체크가 붙는다. [전체] 와 길게 누르기 X 는 없고,
+ * removable === false 인 얼굴은 누를 수 없다.
  */
-function FacePeopleStrip({ people = [], selected = null, onSelect, onRemove, className }) {
+function FacePeopleStrip({
+  people = [], selected = null, onSelect, onRemove, picking = false, picked = [], onPick, className
+}) {
   const coverOf = useFaceCovers(people);
   const [removing, setRemoving] = useState(null);   // X 가 떠 있는 얼굴의 key
   const root = useRef(null);
@@ -86,14 +92,14 @@ function FacePeopleStrip({ people = [], selected = null, onSelect, onRemove, cla
     };
   }, [removing]);
 
-  // 묶음이 바뀌어 그 얼굴이 사라졌으면 X 도 닫는다
+  // 묶음이 바뀌어 그 얼굴이 사라졌거나 여러 얼굴 고르기를 시작하면 X 도 닫는다
   useEffect(() => {
-    if (removing && !people.some((person) => person.key === removing)) setRemoving(null);
-  }, [people, removing]);
+    if (removing && (picking || !people.some((person) => person.key === removing))) setRemoving(null);
+  }, [people, removing, picking]);
 
   if (!people.length) return null;
 
-  const pressHandlers = (person) => (onRemove && person.removable !== false ? {
+  const pressHandlers = (person) => (onRemove && !picking && person.removable !== false ? {
     onPointerDown: (event) => {
       press.current.long = false;
       cancelPress();
@@ -137,27 +143,36 @@ function FacePeopleStrip({ people = [], selected = null, onSelect, onRemove, cla
       ref={root}
       className={['ui-face-people', className].filter(Boolean).join(' ')}
       role="group"
-      aria-label="얼굴로 사진 찾기"
+      aria-label={picking ? '뺄 얼굴 고르기' : '얼굴로 사진 찾기'}
       data-removing={removing ? 'true' : undefined}
+      data-picking={picking ? 'true' : undefined}
     >
-      <div className="ui-face-people__cell">
-        <button type="button" className="ui-face-people__item" aria-pressed={!selected} onClick={clickGuard(() => onSelect?.(null))}>
-          <span className="ui-avatar ui-face-people__all" data-size="xl" aria-hidden="true">전체</span>
-          <span className="ui-face-people__label">모든 사진</span>
-        </button>
-      </div>
+      {!picking && (
+        <div className="ui-face-people__cell">
+          <button type="button" className="ui-face-people__item" aria-pressed={!selected} onClick={clickGuard(() => onSelect?.(null))}>
+            <span className="ui-avatar ui-face-people__all" data-size="xl" aria-hidden="true">전체</span>
+            <span className="ui-face-people__label">모든 사진</span>
+          </button>
+        </div>
+      )}
       {people.map((person, index) => {
         const src = coverOf(person);
         const name = person.mine ? '우리 아이' : `얼굴 ${index + 1}`;
         const label = person.mine ? '우리 아이' : `${person.photoCount}장`;
+        const isPicked = picking && picked.includes(person.key);
+        const locked = picking && person.removable === false;
         return (
           <div key={person.key} className="ui-face-people__cell">
             <button
               type="button"
               className="ui-face-people__item"
-              aria-pressed={selected === person.key}
+              aria-pressed={picking ? isPicked : selected === person.key}
               aria-label={`${name} · 사진 ${person.photoCount}장`}
-              onClick={clickGuard(() => onSelect?.(selected === person.key ? null : person.key))}
+              disabled={locked}
+              title={locked ? '등록된 아이 얼굴은 목록에서 뺄 수 없어요' : undefined}
+              onClick={picking
+                ? () => onPick?.(person.key)
+                : clickGuard(() => onSelect?.(selected === person.key ? null : person.key))}
               {...pressHandlers(person)}
             >
               {src
@@ -165,6 +180,9 @@ function FacePeopleStrip({ people = [], selected = null, onSelect, onRemove, cla
                 : <span className="ui-avatar ui-face-people__pending" data-size="xl" data-failed={src === null ? 'true' : undefined} aria-hidden="true" />}
               <span className="ui-face-people__label">{label}</span>
             </button>
+            {isPicked && (
+              <span className="ui-face-people__check" aria-hidden="true"><Icon name="check" size={14} /></span>
+            )}
             {removing === person.key && (
               <button
                 ref={removeButton}

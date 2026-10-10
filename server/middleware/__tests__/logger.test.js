@@ -65,6 +65,14 @@ describe('logAction — 누가 한 일인지 남긴다', () => {
     expect(params[3]).toBe('아이: 이쵸파');
   });
 
+  it('얼굴 목록에서 여러 사람 빼기는 뺀 사람·얼굴·사진·자동 태그 수를 남긴다', async () => {
+    const req = { user: { id: 7, username: '이재림', role: 'user' }, body: { people: [{ key: 'p21', photoCount: 2 }] }, params: { id: '3' } };
+    const [, params] = await run('REMOVE_ALBUM_PEOPLE', req, { removedPeople: 2, removedFaces: 3, photos: 3, removedTags: 1 });
+
+    expect(params[1]).toBe('REMOVE_ALBUM_PEOPLE');
+    expect(params[3]).toBe('얼굴 목록에서 2명 뺌 · 얼굴 3개 · 사진 3장 · 자동 태그 1개');
+  });
+
   it('실패 응답은 기록하지 않는다', async () => {
     const res = { statusCode: 403, json: jest.fn(), send: jest.fn() };
     logAction('IMPERSONATE')({ user: { username: 'x' } }, res, jest.fn());
