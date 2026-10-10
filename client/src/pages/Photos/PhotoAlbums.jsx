@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import UploadSheet from '../../components/album/UploadSheet';
+import { TEACHER_MAX_FILES } from '../../utils/imagePrep';
 import RetryImage from '../../components/album/RetryImage';
 import AlbumCovers from '../../components/album/AlbumCovers';
 import {
@@ -130,6 +131,7 @@ function PhotoAlbums() {
           rootFolderName={data?.drive?.rootFolderName}
           allowPublish
           audienceHint="공개하면 학부모도 볼 수 있어요"
+          maxFiles={TEACHER_MAX_FILES}
           onClose={closeUpload}
           onDone={(result) => { if (result?.eventId && result.uploaded > 0) setDoneEventId(result.eventId); }}
         />

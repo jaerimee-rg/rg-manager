@@ -5,6 +5,10 @@
 
 export const MAX_IMAGE_BYTES = 25 * 1024 * 1024;   // 사진 25MB
 export const MAX_VIDEO_BYTES = 500 * 1024 * 1024;  // 영상 500MB
+/**
+ * 업로드 세션 요청 하나에 담는 수. 세션 하나에 Drive 왕복이 약 0.5초라(운영 2026-10 측정, 30개 ≈ 14초) 요청 하나를 짧게 둔다.
+ * 고를 수 있는 수는 이것과 따로다 — 화면은 더 많이 고르면 30개씩 나눠 보낸다(client imagePrep.js MAX_FILES_PER_REQUEST).
+ */
 export const MAX_FILES_PER_UPLOAD = 30;
 /** 앨범 대표 사진(사진 목록 카드의 표지)은 몇 장까지 — 카드 표지 칸이 2×2 라 4 */
 export const MAX_ALBUM_COVERS = 4;

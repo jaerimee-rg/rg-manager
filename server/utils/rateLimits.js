@@ -31,6 +31,17 @@ export const PHOTO_VIEW_IP_MAX = 2000;
 export const isPhotoViewBeacon = (req) =>
   req?.method === 'POST' && /^\/api\/parent\/events\/\d+\/views\/?$/.test(String(req.originalUrl || '').split('?')[0]);
 
+// 사진·영상 올리기(세션 발급 · 완료 보고 · 얼굴 저장) — 파일마다 완료 보고 1번, 얼굴을 다시 찾으면 1번 더, 30개마다 세션 발급 1번이 온다.
+// 선생님은 한 번에 500개까지 고른다(client/src/utils/imagePrep.js TEACHER_MAX_FILES) — 일반 한도(200)를 같이 쓰면
+// 200장쯤에서 완료 보고가 429 로 막혀 사진은 Drive 에 올라갔는데 앨범에 안 들어간다. 그래서 일반 한도에서 빼고 이 칸만 센다.
+// [얼굴 찾기](사진마다 .../faces 1번)도 같은 칸이다. 500개 × 2 + 세션 17번 ≈ 1017 에 여유를 둔 값.
+export const UPLOAD_IP_MAX = 2000;
+
+/** 앨범 업로드 요청인지(선생님·학부모) — 일반 API 한도에서 빼고 UPLOAD_IP_MAX 로 센다 */
+export const isAlbumUploadRequest = (req) =>
+  req?.method === 'POST'
+  && /^\/api\/(parent\/)?events\/\d+\/media\/(uploads|\d+\/(complete|faces))\/?$/.test(String(req.originalUrl || '').split('?')[0]);
+
 // 클라이언트 폴링 주기와 맞물린 값이라 함께 관리한다 (client/src/pages/PublicChat.jsx).
 export const PUBLIC_CHAT_POLL_INTERVAL_MS = 12000;
 

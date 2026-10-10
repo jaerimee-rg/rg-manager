@@ -514,6 +514,15 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   in 8MB chunks with progress and resume (`utils/driveUpload.js`). `POST .../media/:id/complete`
   re-reads the file from Drive and **verifies it landed in this album's folder** before marking it
   `ready` — a leaked session URI cannot inject files elsewhere.
+- **How many at once**: teachers pick up to **500** (`imagePrep.TEACHER_MAX_FILES`, passed as `UploadSheet maxFiles` from the
+  사진 menu), parents **30** (the default). The server still takes **30 per session request** (`MAX_FILES_PER_UPLOAD`) — it
+  creates each Drive session in turn, ~0.5 s apiece (production, 2026-10), so 30 ≈ 14 s — and `UploadSheet` asks for the
+  next 30 only after the previous 30 are up (`imagePrep.batchRanges`), so abandoning midway leaves no pending rows for files
+  never started. A later batch whose session request fails marks only that batch failed; the rest carry on. Files past the
+  cap are not listed as rows — a single "나머지 N개는 빠졌어요" notice. Upload requests (sessions, `complete`, `faces`, teacher
+  and parent) skip `apiLimiter` and count against their own `uploadLimiter` (`UPLOAD_IP_MAX` 2000 / 15 min per IP,
+  `isAlbumUploadRequest`): a 500-file upload is ~1,017 requests and would otherwise hit 429 around file 190 — Drive has the
+  file but the album never gets it. Raise `UPLOAD_IP_MAX` with `TEACHER_MAX_FILES` (a unit test checks the sum).
 - **A file already in the album is skipped, not uploaded again.** "Same file" = same original name (NFC — macOS hands
   Korean names over decomposed) **and** same byte size (`mediaValidation.sameFileKey`; the client copy is
   `imagePrep.sameFileKey`) against the album's `ready` rows, hidden ones included (`EventMedia.listReadyNamesBySize`). No

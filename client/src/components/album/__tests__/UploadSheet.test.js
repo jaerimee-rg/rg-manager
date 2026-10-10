@@ -8,7 +8,11 @@ jest.mock('../../../utils/driveUpload', () => ({
 }));
 jest.mock('../../../utils/imagePrep', () => ({
   MAX_FILES: 30,
-  partitionFiles: (list) => ({ accepted: Array.from(list).map((file) => ({ file, kind: 'image' })), rejected: [] }),
+  partitionFiles: (list, max = 30) => {
+    const all = Array.from(list);
+    return { accepted: all.slice(0, max).map((file) => ({ file, kind: 'image' })), rejected: [], overflow: Math.max(0, all.length - max) };
+  },
+  batchRanges: jest.requireActual('../../../utils/imagePrep').batchRanges,
   readTakenAt: jest.fn().mockResolvedValue('2026-10-12T01:00:00Z'),
   makePreview: jest.fn().mockResolvedValue(null)
 }));
@@ -401,5 +405,127 @@ describe('UploadSheet — 앨범에 이미 있는 파일은 건너뛴다', () =>
     expect(screen.getByText(/사진 1장 올렸어요/)).toBeInTheDocument();
     expect(screen.getByText('1개는 올리지 못했어요')).toBeInTheDocument();
     expect(screen.queryByText(/건너뛰었어요/)).not.toBeInTheDocument();
+  });
+});
+
+describe('UploadSheet — 30개가 넘으면 세션을 30개씩 나눠 받는다', () => {
+  const names = (n) => Array.from({ length: n }, (_, i) => `IMG_${String(i + 1).padStart(3, '0')}.jpg`);
+  const sessionRequests = () => fetchWithAuth.mock.calls
+    .filter(([url]) => url.endsWith('/media/uploads'))
+    .map(([, options]) => JSON.parse(options.body).files.map((file) => file.name));
+
+  // 요청마다 그 요청에 담긴 파일 수만큼 세션을 준다(mediaId = 1000 + 몇 번째 파일)
+  let nextId;
+  const answerEach = (itemFor = (file, id) => ({ name: file.name, mediaId: id, sessionUri: `https://upload/${id}` })) => {
+    nextId = 1000;
+    fetchWithAuth.mockImplementation((url, options = {}) => {
+      if (url.endsWith('/media/uploads')) {
+        const { files } = JSON.parse(options.body);
+        return ok({ items: files.map((file) => itemFor(file, (nextId += 1))) });
+      }
+      if (url.includes('/complete')) return ok({ media: {} });
+      return ok({});
+    });
+  };
+
+  const pickAndUpload = async (list) => {
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('album-file-input'), {
+        target: { files: list.map((name) => new File(['x'], name, { type: 'image/jpeg' })) }
+      });
+    });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: `${list.length}개 올리기` })); });
+  };
+
+  it('65개면 30 · 30 · 5 로 세 번 받아 순서대로 다 올리고, 완료 보고는 받은 세션의 mediaId 로 한다', async () => {
+    answerEach();
+    const onDone = jest.fn();
+    render(<UploadSheet apiBase="/api/events/31" eventTitle="회장배 대회" maxFiles={500} onClose={() => {}} onDone={onDone} />);
+
+    await pickAndUpload(names(65));
+
+    expect(sessionRequests()).toEqual([names(65).slice(0, 30), names(65).slice(30, 60), names(65).slice(60)]);
+    expect(uploadToDrive).toHaveBeenCalledTimes(65);
+    expect(uploadToDrive.mock.calls.map(([file]) => file.name)).toEqual(names(65));
+    expect(uploadToDrive.mock.calls[64][1]).toBe('https://upload/1065');
+    const completes = fetchWithAuth.mock.calls.filter(([url]) => url.includes('/complete')).map(([url]) => url);
+    expect(completes).toHaveLength(65);
+    expect(completes[0]).toBe('/api/events/31/media/1001/complete');
+    expect(completes[64]).toBe('/api/events/31/media/1065/complete');
+    expect(screen.getByText(/사진 65장 올렸어요/)).toBeInTheDocument();
+    expect(onDone).toHaveBeenCalledWith({ eventId: null, uploaded: 65, published: false });
+  });
+
+  it('세션은 앞 묶음을 다 올린 뒤에 받는다 — 중간에 그만두면 다음 묶음의 빈 행이 생기지 않게', async () => {
+    answerEach();
+    let release;
+    uploadToDrive.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+    render(<UploadSheet apiBase="/api/events/31" eventTitle="회장배 대회" maxFiles={500} onClose={() => {}} />);
+
+    await pickAndUpload(names(31));
+
+    // 첫 파일이 올라가는 중 — 31번째 파일의 세션은 아직 요청하지 않았다
+    expect(sessionRequests()).toHaveLength(1);
+    await act(async () => { release({ ok: true, file: { id: 'drive-1' } }); });
+    expect(sessionRequests()).toEqual([names(31).slice(0, 30), [names(31)[30]]]);
+  });
+
+  it('뒤 묶음의 세션 발급이 실패하면 그 묶음만 실패로 남기고, 앞에서 올린 것은 "올렸어요" 로 끝낸다', async () => {
+    nextId = 1000;
+    let requests = 0;
+    fetchWithAuth.mockImplementation((url, options = {}) => {
+      if (url.endsWith('/media/uploads')) {
+        requests += 1;
+        if (requests === 2) return Promise.resolve({ ok: false, status: 502, json: () => Promise.resolve({ error: 'Drive 오류' }) });
+        const { files } = JSON.parse(options.body);
+        return ok({ items: files.map((file) => ({ name: file.name, mediaId: (nextId += 1), sessionUri: 'https://upload' })) });
+      }
+      if (url.includes('/complete')) return ok({ media: {} });
+      return ok({});
+    });
+    render(<UploadSheet apiBase="/api/events/31" eventTitle="회장배 대회" maxFiles={500} onClose={() => {}} />);
+
+    await pickAndUpload(names(65));
+
+    expect(requests).toBe(3);
+    expect(uploadToDrive).toHaveBeenCalledTimes(35);
+    expect(screen.getByRole('heading', { name: '다 올렸어요' })).toBeInTheDocument();
+    expect(screen.getByText(/사진 35장 올렸어요/)).toBeInTheDocument();
+    expect(screen.getByText('30개는 올리지 못했어요')).toBeInTheDocument();
+  });
+
+  it('뒤 묶음에서 알려 준 "이미 있는 파일" 도 건너뛰고 다 올린 뒤 함께 알려 준다', async () => {
+    answerEach((file, id) => (file.name === 'IMG_032.jpg'
+      ? { name: file.name, skipped: true, reason: 'duplicate' }
+      : { name: file.name, mediaId: id, sessionUri: 'https://upload' }));
+    render(<UploadSheet apiBase="/api/events/31" eventTitle="회장배 대회" maxFiles={500} onClose={() => {}} />);
+
+    await pickAndUpload(names(33));
+
+    expect(uploadToDrive).toHaveBeenCalledTimes(32);
+    expect(uploadToDrive.mock.calls.map(([file]) => file.name)).not.toContain('IMG_032.jpg');
+    expect(screen.getByText(/사진 32장 올렸어요/)).toBeInTheDocument();
+    expect(screen.getByText(/이미 앨범에 있는 파일 1개는 건너뛰었어요/)).toBeInTheDocument();
+    expect(screen.getByText('IMG_032.jpg')).toBeInTheDocument();
+  });
+
+  it('고를 수 있는 수는 maxFiles — 안내에 쓰고, 넘긴 파일은 빠졌다고 알려 준다', async () => {
+    render(<UploadSheet apiBase="/api/events/31" eventTitle="회장배 대회" maxFiles={40} onClose={() => {}} />);
+
+    expect(screen.getByText(/한 번에 40개/)).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('album-file-input'), {
+        target: { files: names(43).map((name) => new File(['x'], name, { type: 'image/jpeg' })) }
+      });
+    });
+
+    expect(screen.getByRole('button', { name: '40개 올리기' })).toBeEnabled();
+    expect(screen.getByText(/한 번에 40개까지 올릴 수 있어요. 나머지 3개는 빠졌어요/)).toBeInTheDocument();
+  });
+
+  it('maxFiles 를 주지 않으면(학부모) 30개 그대로', () => {
+    render(<UploadSheet apiBase="/api/parent/events/31" eventTitle="회장배 대회" onClose={() => {}} />);
+
+    expect(screen.getByText(/한 번에 30개/)).toBeInTheDocument();
   });
 });

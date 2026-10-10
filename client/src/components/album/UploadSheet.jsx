@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { fetchWithAuth } from '../../utils/api';
-import { partitionFiles, readTakenAt, makePreview, MAX_FILES } from '../../utils/imagePrep';
+import { batchRanges, partitionFiles, readTakenAt, makePreview, MAX_FILES } from '../../utils/imagePrep';
 import { uploadToDrive } from '../../utils/driveUpload';
 import { ANALYSIS_LONG_SIDE, FACE_ANALYZER_VERSION, detectFaces } from '../../utils/faceClient';
 import { analysisImageUrl, formatSize } from '../../utils/mediaUrls';
@@ -22,6 +22,8 @@ const NEW_FOLDER = 'new';
  * 흐름: (이벤트 고르기) → 파일 선택 → (형식·크기로 거르기) → 서버에서 세션 발급
  *      → 브라우저가 Drive 로 직접 전송(진행률) → 사진이면 얼굴 특징값 계산
  *      → 완료 보고 → (얼굴 계산이 실패한 사진만 한 번 더) → (선생님: "다 올리면 바로 공개" 를 골랐으면 공개).
+ *      세션은 30개(MAX_FILES_PER_REQUEST)씩 나눠 받는다 — 30개를 올리고 나서 다음 30개의 세션을 받는다.
+ *      한 번에 다 받으면 서버 요청 하나가 수백 초가 되고, 중간에 그만두면 올리지 않은 파일의 빈 행이 그만큼 남는다.
  *      얼굴 계산이 실패해도 업로드는 성공으로 끝난다 — faces 를 null 로 보내면 서버가
  *      '분석 안 됨'(skipped)으로 남긴다. [] 는 "얼굴 없음" 이라 실패에 쓰면 안 된다.
  *      실패한 사진은 다 올린 뒤 **자동으로 한 번 더** 찾아 POST .../media/:id/faces 로 저장한다 — 분석 서버가 쉬다
@@ -42,6 +44,7 @@ const NEW_FOLDER = 'new';
  *   allowPublish — "다 올리면 바로 학부모에게 공개" 체크를 보인다(FR-515). 이미 공개된 앨범이면 체크 대신 안내 한 줄.
  *   published    — targets 없이 쓸 때 그 앨범이 공개 중인지
  *   photoFolder  — targets 없이 쓸 때 그 앨범이 사진 전용 폴더인지(공개하면 보이는 곳이 사진 탭뿐이다)
+ * maxFiles — 한 번에 고를 수 있는 수. 기본은 학부모 몫(30), 선생님 화면은 TEACHER_MAX_FILES 를 넘긴다.
  * onDone({ eventId, uploaded, published }) — 다 올린 뒤 한 번 부른다.
  */
 function UploadSheet({
@@ -54,6 +57,7 @@ function UploadSheet({
   photoFolder = false,
   audienceHint = '이 앨범을 보는 학부모와 선생님이 함께 봐요',
   rootFolderName = 'RG Manager',
+  maxFiles = MAX_FILES,
   onClose,
   onDone
 }) {
@@ -78,6 +82,7 @@ function UploadSheet({
   const [publishWhenDone, setPublishWhenDone] = useState(false);
   const [accepted, setAccepted] = useState([]);
   const [rejected, setRejected] = useState([]);
+  const [overflow, setOverflow] = useState(0);      // maxFiles 를 넘겨 빠진 파일 수
   const [progress, setProgress] = useState({});     // index → 0~100
   const [failed, setFailed] = useState({});         // index → 메시지
   const [duplicates, setDuplicates] = useState({});  // index → true — 앨범에 이미 있어 건너뛴 파일
@@ -93,9 +98,10 @@ function UploadSheet({
   }, [onClose, phase]);
 
   const pick = (fileList) => {
-    const { accepted: ok, rejected: no } = partitionFiles(fileList);
+    const { accepted: ok, rejected: no, overflow: extra } = partitionFiles(fileList, maxFiles);
     setAccepted(ok);
     setRejected(no);
+    setOverflow(extra);
     setError('');
   };
 
@@ -130,91 +136,109 @@ function UploadSheet({
       const base = pickingTarget ? `/api/events/${uploadTarget.eventId}` : fixedApiBase;
       const wasPublished = pickingTarget ? Boolean(uploadTarget.hasAlbum && uploadTarget.published) : published;
 
-      // 1) 세션 발급 — 찍은 시각도 함께 보내 정렬에 쓴다.
-      const files = [];
-      for (const entry of accepted) {
-        files.push({
-          name: entry.file.name,
-          size: entry.file.size,
-          takenAt: await readTakenAt(entry.file)
-        });
-      }
-
-      const response = await fetchWithAuth(`${base}/media/uploads`, {
-        method: 'POST',
-        body: JSON.stringify({ files })
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setError(data.error || '업로드를 시작하지 못했어요.');
-        setPhase('pick');
-        return;
-      }
-
-      // 앨범에 이미 있는 파일 — 올리지 않는다. 앞 파일이 올라가는 동안에도 "이미 있어요" 가 보이게 먼저 표시한다.
-      const isDuplicate = (i) => Boolean(data.items?.[i]?.skipped);
-      const duplicateIndexes = accepted.map((_, i) => i).filter(isDuplicate);
-      const alreadyThere = duplicateIndexes.map((i) => accepted[i]);
-      setDuplicates(Object.fromEntries(duplicateIndexes.map((i) => [i, true])));
-
       // 2) 파일마다 Drive 로 직접 전송 → 3) 얼굴 계산 → 4) 완료 보고
       let uploaded = 0;
       let analyzed = 0;
       let skipped = 0;
       const uploadedKinds = { image: 0, video: 0 };
       const retry = [];   // 올라갔지만 얼굴 계산이 실패한 사진 — 다 올린 뒤 한 번 더
+      const takenAt = {};   // index → 찍은 시각 (세션 발급과 완료 보고에 같이 보낸다)
+      const duplicateIndexes = [];
+      setDuplicates({});
 
-      for (let i = 0; i < accepted.length; i += 1) {
-        const entry = accepted[i];
-        const session = data.items?.[i];
-
-        if (isDuplicate(i)) continue;
-
-        if (!session?.sessionUri) {
-          setFailed((prev) => ({ ...prev, [i]: session?.error || '올릴 수 없는 파일이에요' }));
-          continue;
+      for (const [from, to] of batchRanges(accepted.length)) {
+        // 1) 이 묶음의 세션 발급 — 찍은 시각도 함께 보내 정렬에 쓴다.
+        const files = [];
+        for (let i = from; i < to; i += 1) {
+          takenAt[i] = await readTakenAt(accepted[i].file);
+          files.push({ name: accepted[i].file.name, size: accepted[i].file.size, takenAt: takenAt[i] });
         }
 
-        const result = await uploadToDrive(entry.file, session.sessionUri, {
-          onProgress: (value) => setProgress((prev) => ({ ...prev, [i]: value }))
-        });
-
-        if (!result.ok) {
-          setFailed((prev) => ({ ...prev, [i]: result.error || '업로드가 끊겼어요' }));
-          continue;
-        }
-
-        let faces = null;
-        let unreadable = false;
-        if (entry.kind === 'image') {
-          const preview = await makePreview(entry.file, ANALYSIS_LONG_SIDE);   // HEIC 처럼 브라우저가 못 읽으면 null
-          unreadable = !preview;
-          if (preview) faces = await detectFaces(preview);  // 분석이 실패해도 null
-          if (!faces) skipped += 1;
-          else if (faces.length) analyzed += 1;
-        }
-
-        const completed = await fetchWithAuth(`${base}/media/${session.mediaId}/complete`, {
+        const response = await fetchWithAuth(`${base}/media/uploads`, {
           method: 'POST',
-          body: JSON.stringify({
-            driveFileId: result.file?.id,
-            takenAt: files[i].takenAt,
-            faces,
-            analyzerVersion: FACE_ANALYZER_VERSION
-          })
+          body: JSON.stringify({ files })
         });
-
-        if (completed.ok) {
-          uploaded += 1;
-          uploadedKinds[entry.kind] += 1;
-          if (entry.kind === 'image' && !faces) {
-            retry.push({ mediaId: session.mediaId, file: entry.file, driveFileId: result.file?.id, unreadable });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const message = data.error || '업로드를 시작하지 못했어요.';
+          // 첫 묶음이면 아무것도 안 올라갔다 — 고르기 화면으로 돌아간다
+          if (from === 0) {
+            setError(message);
+            setPhase('pick');
+            return;
           }
-        } else {
-          const body = await completed.json().catch(() => ({}));
-          setFailed((prev) => ({ ...prev, [i]: body.error || '저장하지 못했어요' }));
+          // 앞 묶음은 이미 올라갔다 — 이 묶음만 실패로 두고 다음 묶음을 이어 간다(다시 올리면 올라간 파일은 건너뛴다)
+          setFailed((prev) => {
+            const next = { ...prev };
+            for (let i = from; i < to; i += 1) next[i] = message;
+            return next;
+          });
+          continue;
+        }
+
+        // 앨범에 이미 있는 파일 — 올리지 않는다. 앞 파일이 올라가는 동안에도 "이미 있어요" 가 보이게 먼저 표시한다.
+        const sessionOf = (i) => data.items?.[i - from];
+        const isDuplicate = (i) => Boolean(sessionOf(i)?.skipped);
+        const batchDuplicates = [];
+        for (let i = from; i < to; i += 1) if (isDuplicate(i)) batchDuplicates.push(i);
+        duplicateIndexes.push(...batchDuplicates);
+        if (batchDuplicates.length) {
+          setDuplicates((prev) => ({ ...prev, ...Object.fromEntries(batchDuplicates.map((i) => [i, true])) }));
+        }
+
+        for (let i = from; i < to; i += 1) {
+          const entry = accepted[i];
+          const session = sessionOf(i);
+
+          if (isDuplicate(i)) continue;
+
+          if (!session?.sessionUri) {
+            setFailed((prev) => ({ ...prev, [i]: session?.error || '올릴 수 없는 파일이에요' }));
+            continue;
+          }
+
+          const result = await uploadToDrive(entry.file, session.sessionUri, {
+            onProgress: (value) => setProgress((prev) => ({ ...prev, [i]: value }))
+          });
+
+          if (!result.ok) {
+            setFailed((prev) => ({ ...prev, [i]: result.error || '업로드가 끊겼어요' }));
+            continue;
+          }
+
+          let faces = null;
+          let unreadable = false;
+          if (entry.kind === 'image') {
+            const preview = await makePreview(entry.file, ANALYSIS_LONG_SIDE);   // HEIC 처럼 브라우저가 못 읽으면 null
+            unreadable = !preview;
+            if (preview) faces = await detectFaces(preview);  // 분석이 실패해도 null
+            if (!faces) skipped += 1;
+            else if (faces.length) analyzed += 1;
+          }
+
+          const completed = await fetchWithAuth(`${base}/media/${session.mediaId}/complete`, {
+            method: 'POST',
+            body: JSON.stringify({
+              driveFileId: result.file?.id,
+              takenAt: takenAt[i],
+              faces,
+              analyzerVersion: FACE_ANALYZER_VERSION
+            })
+          });
+
+          if (completed.ok) {
+            uploaded += 1;
+            uploadedKinds[entry.kind] += 1;
+            if (entry.kind === 'image' && !faces) {
+              retry.push({ mediaId: session.mediaId, file: entry.file, driveFileId: result.file?.id, unreadable });
+            }
+          } else {
+            const body = await completed.json().catch(() => ({}));
+            setFailed((prev) => ({ ...prev, [i]: body.error || '저장하지 못했어요' }));
+          }
         }
       }
+      const alreadyThere = duplicateIndexes.map((i) => accepted[i]);
 
       // 4') 얼굴 계산이 실패한 사진만 한 번 더 — 그 사이 분석 서버가 깨어났다. 브라우저가 못 읽은 사진은 Drive 가 만든
       //     JPEG(lh3 =s1920)로 본다. 저장은 업로드 완료와 따로(POST .../faces) — 사진은 이미 올라가 있다.
@@ -438,7 +462,7 @@ function UploadSheet({
               {eventTitle ? `${eventTitle} 앨범에 올려요` : '앨범에 올려요'}
             </div>
             <p className="ui-dropzone__hint">
-              사진 25MB · 영상 500MB 까지, 한 번에 {MAX_FILES}개<br />
+              사진 25MB · 영상 500MB 까지, 한 번에 {maxFiles}개<br />
               {audienceHint}
             </p>
             <Button size="sm" variant="primary" onClick={() => inputRef.current?.click()}>
@@ -448,6 +472,15 @@ function UploadSheet({
 
           {/* 이벤트를 고르는 단계가 없을 때(앨범 화면)는 여기서 공개 여부를 고른다 */}
           {!pickingTarget && publishControl}
+
+          {/* 목록이 수백 줄이 될 수 있어 안내는 목록 위에 둔다 */}
+          {overflow > 0 && (
+            <Callout tone="warning">
+              한 번에 {maxFiles}개까지 올릴 수 있어요. 나머지 {overflow}개는 빠졌어요 — 다 올린 뒤 다시 골라 주세요.
+            </Callout>
+          )}
+
+          {error && <Callout tone="danger">{error}</Callout>}
 
           {(accepted.length > 0 || rejected.length > 0) && (
             <Stack gap={2}>
@@ -464,8 +497,6 @@ function UploadSheet({
               </List>
             </Stack>
           )}
-
-          {error && <Callout tone="danger">{error}</Callout>}
 
           <Callout tone="neutral">
             올린 사진은 선생님의 Google Drive 앨범 폴더에 원본 그대로 저장돼요.
@@ -550,7 +581,8 @@ const doneTitle = (summary) => (
   summary && summary.uploaded === 0 && summary.alreadyThere.length > 0 ? '이미 앨범에 있어요' : '다 올렸어요'
 );
 
-function FileRow({ name, size, kind, status, error, progress }) {
+// 수백 줄이 될 수 있다 — 진행률이 바뀐 줄만 다시 그린다(props 가 모두 원시값이라 memo 가 그대로 듣는다)
+const FileRow = React.memo(function FileRow({ name, size, kind, status, error, progress }) {
   return (
     <ListRow
       leading={
@@ -573,6 +605,6 @@ function FileRow({ name, size, kind, status, error, progress }) {
       )}
     </ListRow>
   );
-}
+});
 
 export default UploadSheet;
