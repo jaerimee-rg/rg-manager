@@ -138,7 +138,7 @@ test.describe('홈 화면에 추가 안내 — 아이폰', () => {
     await expect(sheet(page)).toHaveAttribute('data-env', 'ios');
     await expect(sheet(page).getByRole('img', { name: '공유' })).toBeVisible();
     await expect(sheet(page).getByRole('img', { name: '홈 화면에 추가' })).toBeVisible();
-    await expect(sheet(page).getByText(/홈 화면에 추가한 앱에서만 새 일정 알림/)).toBeVisible();
+    await expect(sheet(page).getByText(/홈 화면에 추가한 앱에서만 새 일정·사진 알림/)).toBeVisible();
 
     // 휴대폰에서는 아래에서 올라오는 시트다 — 화면 아래에 붙는다
     await expect(sheet(page)).toHaveAttribute('data-mode', 'sheet');

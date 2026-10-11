@@ -17,6 +17,7 @@ import {
   albumPeople, peopleAcross, findPerson, removePerson, removePeople, excludePhotos, restorePhotos, toPersonView
 } from '../services/albumPeople.js';
 import AlbumView from '../models/AlbumView.js';
+import { notifyParentsOfPhotoFolder } from '../services/eventPush.js';
 
 /**
  * 선생님의 앨범 관리. 이벤트 소유자만 들어온다.
@@ -257,7 +258,10 @@ const parseCoverCrops = (body, covers) => {
   return { crops };
 };
 
-/** PATCH /api/events/:id/album — 이름 변경 · 업로드 받기 토글 · 공개 · 공개 범위 · 대표 사진(더하기·빼기·통째로 바꾸기, 보일 부분) */
+/**
+ * PATCH /api/events/:id/album — 이름 변경 · 업로드 받기 토글 · 공개 · 공개 범위 · 대표 사진(더하기·빼기·통째로 바꾸기, 보일 부분).
+ * 사진 전용 폴더를 처음 공개하면 학부모 알림을 보내고 그 결과를 `notification` 으로 함께 돌려준다.
+ */
 export const updateAlbum = async (req, res) => {
   try {
     const event = await loadEvent(req);
@@ -303,6 +307,12 @@ export const updateAlbum = async (req, res) => {
     }
     if (coverCrops) await EventMedia.setCoverCrops(event.id, coverCrops.crops);
 
+    // 사진 전용 폴더를 처음 공개하면 학부모에게 "새 사진" 알림 — 다시 공개할 때는 처음 공개한 날이 남아 있어 보내지 않는다.
+    // 응답 전에 기다린다(Vercel 은 응답 뒤 인스턴스를 얼린다). 실패해도 공개는 그대로다
+    const notification = fields.albumPublishedAt && isPhotoFolder(updated)
+      ? await notifyParentsOfPhotoFolder(updated)
+      : undefined;
+
     res.json({
       driveFolderName: updated.driveFolderName,
       albumUploadOpen: updated.albumUploadOpen !== false,
@@ -310,7 +320,8 @@ export const updateAlbum = async (req, res) => {
       published: updated.albumPublished === true,
       audience: updated.albumAudience || 'participants',
       publishedAt: updated.albumPublishedAt || null,
-      coverMediaIds: covers ? covers.ids : await EventMedia.coverableIds(updated.id, updated.albumCoverMediaIds)
+      coverMediaIds: covers ? covers.ids : await EventMedia.coverableIds(updated.id, updated.albumCoverMediaIds),
+      ...(notification ? { notification } : {})
     });
   } catch (error) {
     driveErrorResponse(res, error, '앨범을 수정하지 못했습니다.');

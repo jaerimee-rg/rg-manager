@@ -121,4 +121,34 @@ export const eventPushMessage = (event, { appUrl }) => {
   };
 };
 
-export default { pushConfig, isAllowedPushEndpoint, normalizeSubscription, eventWhen, eventPushMessage };
+/** { images: 12, videos: 2 } → '사진 12장 · 영상 2개' (없는 쪽은 뺀다) */
+export const mediaCountLabel = ({ images = 0, videos = 0 } = {}) => [
+  images > 0 ? `사진 ${images}장` : null,
+  videos > 0 ? `영상 ${videos}개` : null
+].filter(Boolean).join(' · ');
+
+/**
+ * 사진 전용 폴더(type='folder')를 처음 공개할 때의 알림 한 통. 모양은 eventPushMessage 와 같다.
+ * 누르면 학부모 앱의 그 폴더(사진 탭의 앨범 화면)가 열린다. tag 는 이벤트 알림과 겹치지 않게 album-<id>.
+ */
+export const photoFolderPushMessage = (event, counts, { appUrl }) => {
+  const parts = [dayLabel(event.date)];
+  const what = mediaCountLabel(counts);
+  if (what) parts.push(what);
+
+  return {
+    web_push: 8030,
+    notification: {
+      title: `새 사진 · ${event.title}`,
+      body: `${parts.join(' · ')}\n사진 탭에서 볼 수 있어요`,
+      navigate: `${appUrl}/parent/photos/${event.id}`,
+      tag: `album-${event.id}`,
+      lang: 'ko',
+      dir: 'ltr'
+    }
+  };
+};
+
+export default {
+  pushConfig, isAllowedPushEndpoint, normalizeSubscription, eventWhen, eventPushMessage, mediaCountLabel, photoFolderPushMessage
+};

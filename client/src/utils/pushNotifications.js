@@ -109,6 +109,7 @@ export const notifyResultMessage = (notification) => {
   if (!notification) return '';
   if (notification.skipped === 'not_configured') return '알림 기능이 아직 준비되지 않아 학부모 알림은 보내지 못했어요';
   if (notification.skipped === 'private') return '비공개 이벤트라 학부모 알림은 보내지 않았어요';
+  if (notification.skipped === 'empty') return '보이는 사진이 없어 학부모 알림은 보내지 않았어요';
   if (notification.skipped) return '학부모 알림을 보내지 못했어요';
   if (notification.recipients > 0) return `학부모 ${notification.recipients}명에게 알림을 보냈어요`;
   if (notification.failed > 0) return '학부모 알림을 보내지 못했어요 · 잠시 뒤 다시 해 주세요';

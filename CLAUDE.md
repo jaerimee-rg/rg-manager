@@ -832,7 +832,7 @@ Sequence diagrams (subscribe → send → deliver → click, keys, environment b
   turned notifications on, one push per device (`push_subscriptions`, endpoint UNIQUE — the same browser switching parent
   accounts moves the row). Push services answering 404/410 delete that row. `topic`/`tag` = `event-<id>`, so re-sending the
   same event replaces rather than stacks; TTL 3 days.
-- **Parent side**: 내 정보 › **새 일정 알림** (`pages/parent/EventPushCard.jsx`), hidden when the server has no keys.
+- **Parent side**: 내 정보 › **새 일정·사진 알림** (`pages/parent/EventPushCard.jsx`), hidden when the server has no keys.
   `utils/pushNotifications.pushEnvironment` picks what to show: a switch (`supported`), or instructions instead —
   **KakaoTalk in-app browser** (`kakaotalk`, no push in its WebView; a [브라우저로 열기] link via
   `kakaotalk://web/openExternal`), **iPhone/iPad Safari tab** (`ios-install`: push works only in a Home Screen web app,
@@ -854,6 +854,14 @@ Sequence diagrams (subscribe → send → deliver → click, keys, environment b
   subscription — parents would have to turn it on again.
 - **Schema change** — `push_subscriptions` (+ `idx_push_subscriptions_user`): create it in production before merging,
   `OWNER TO rg_app`, REVOKE the public grants on the table and `push_subscriptions_id_seq` (see *Deployment*).
+- **New-photo push for photo folders** (2026-10-11): `albumController.updateAlbum` calls
+  `services/eventPush.js:notifyParentsOfPhotoFolder` when a **`type='folder'` album is published for the first time** — i.e. the
+  request sets `albumPublishedAt` (re-publishing after 비공개로 전환 keeps the old date, so no second push). Event albums never send it.
+  Same recipients and send loop as event pushes (`sendToTeacherParents`); skipped when no visible (ready, not hidden) photo/video
+  (`skipped:'empty'`). Payload `photoFolderPushMessage` — title `새 사진 · <폴더>`, opens `/parent/photos/<id>`, tag/topic `album-<id>`.
+  Awaited before responding; the result rides back as `notification` on the PATCH response, and the upload sheet's done screen
+  and the album page toast show `notifyResultMessage`. Never-published folders get a hint next to the publish control
+  (`albumState.publishNotifiesParents`; upload targets now carry `publishedAt`). The parent card is titled **새 일정·사진 알림**.
 - **e2e** (`e2e/push.spec.mjs`, project `push`): Playwright's default window is incognito, where Chrome refuses push, so the
   UI flow stubs `PushManager`; the worker is checked by delivering a push over CDP (`ServiceWorker.deliverPushMessage`,
   needs the `chromium` channel — the default headless shell always reports notifications as denied). A real round trip

@@ -182,7 +182,7 @@ describe('HomeScreenPrompt', () => {
     expect(dialog()).toHaveAttribute('data-env', 'ios');
     expect(screen.getByRole('img', { name: '공유' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '홈 화면에 추가' })).toBeInTheDocument();
-    expect(screen.getByText(/새 일정 알림/)).toBeInTheDocument();
+    expect(screen.getByText(/새 일정·사진 알림/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '홈 화면에 추가' })).not.toBeInTheDocument();
   });
 

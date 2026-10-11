@@ -28,7 +28,7 @@ function IosSteps() {
         <li><b>홈 화면에 추가</b> <Key icon="plusSquare" label="홈 화면에 추가" /> 를 고른 뒤</li>
         <li>오른쪽 위 <b>추가</b>를 누르면 끝이에요</li>
       </ol>
-      <p className="ui-a2hs__note">아이폰은 홈 화면에 추가한 앱에서만 새 일정 알림을 받을 수 있어요.</p>
+      <p className="ui-a2hs__note">아이폰은 홈 화면에 추가한 앱에서만 새 일정·사진 알림을 받을 수 있어요.</p>
     </>
   );
 }

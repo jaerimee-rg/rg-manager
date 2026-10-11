@@ -145,6 +145,18 @@ describe('GET /api/albums — 선생님 사진 목록 (docs/photo-menu 5.1)', ()
     ]);
   });
 
+  it('[사진 올리기] 목록은 처음 공개한 날도 준다 — 사진 폴더는 처음 공개할 때만 학부모에게 알림이 간다', async () => {
+    Event.listForPhotos.mockResolvedValue([
+      event({ id: 51, type: 'folder', driveFolderId: 'f-51', albumPublished: false, albumPublishedAt: '2026-10-11T01:00:00Z' }),
+      event({ id: 52, type: 'folder', driveFolderId: 'f-52', albumPublished: false })
+    ]);
+
+    await listAlbums(req, res);
+
+    const { targets } = res.json.mock.calls[0][0];
+    expect(targets.map((t) => [t.eventId, t.publishedAt])).toEqual([[51, '2026-10-11T01:00:00Z'], [52, null]]);
+  });
+
   it('지난 이벤트는 upcoming=false', async () => {
     Event.listForPhotos.mockResolvedValue([event({ date: '2026-08-30' })]);
 

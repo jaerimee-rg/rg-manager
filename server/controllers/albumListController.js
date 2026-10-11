@@ -53,6 +53,8 @@ const toTarget = (event, summary, today) => ({
   upcoming: String(event.date || '') > today,
   hasAlbum: Boolean(event.driveFolderId),
   published: event.albumPublished === true,
+  // 한 번이라도 공개한 적이 있는지 — 사진 폴더는 처음 공개할 때만 학부모에게 알림이 가서, 시트가 그 안내를 정한다
+  publishedAt: event.albumPublishedAt || null,
   count: summary ? (summary.images || 0) + (summary.videos || 0) : 0,
   folderName: event.driveFolderName || folderNameFromEvent(event)
 });

@@ -108,6 +108,30 @@ const folderRow = await pool.query(
 );
 const folderEventId = folderRow.rows[0].id;
 
+// 처음 공개할 때 학부모 알림이 가는지 보는 사진 폴더 (push.spec) — 한 번도 공개한 적 없다("albumPublishedAt" 비어 있음).
+// 다른 테스트가 공개하는 폴더(folderEventId)와 따로 둬야 "처음" 이 테스트 순서에 흔들리지 않는다.
+// 날짜는 다른 앨범보다 이르게 — 앨범 목록은 날짜 순이라, 늦으면 휴대폰 표지 테스트의 카드(e2e확정대회, 09-12)를 화면 밖으로 밀어낸다.
+const pushFolderTitle = `e2e알림폴더_${stamp}`;
+const pushFolderRow = await pool.query(
+  `INSERT INTO events ("userId", type, title, date, options, "isPublished", "registrationOpen",
+                       "driveFolderId", "driveFolderName", "albumStatus", "albumUploadOpen", "albumCreatedAt",
+                       "albumPublished", "albumAudience", "createdAt", "updatedAt")
+   VALUES ($1,'folder',$2,'2026-08-20','[]',TRUE,FALSE,$3,$4,'ready',TRUE,$5,FALSE,'all',$5,$5)
+   RETURNING id`,
+  [teacher.id, pushFolderTitle, `e2e-push-folder-${stamp}`, `2026-08-20 ${pushFolderTitle}`, now]
+);
+const pushFolderEventId = pushFolderRow.rows[0].id;
+// 같은 모양 하나 더 — 실제 푸시 서비스 왕복(E2E_REAL_PUSH=1)이 처음 공개해 진짜 알림이 뜨는지 본다
+const realPushFolderTitle = `e2e실제알림폴더_${stamp}`;
+const realPushFolderEventId = (await pool.query(
+  `INSERT INTO events ("userId", type, title, date, options, "isPublished", "registrationOpen",
+                       "driveFolderId", "driveFolderName", "albumStatus", "albumUploadOpen", "albumCreatedAt",
+                       "albumPublished", "albumAudience", "createdAt", "updatedAt")
+   VALUES ($1,'folder',$2,'2026-08-20','[]',TRUE,FALSE,$3,$4,'ready',TRUE,$5,FALSE,'all',$5,$5)
+   RETURNING id`,
+  [teacher.id, realPushFolderTitle, `e2e-real-push-folder-${stamp}`, `2026-08-20 ${realPushFolderTitle}`, now]
+)).rows[0].id;
+
 // 지우기 테스트용 사진 폴더 (FR-519) — 사진이 한 장 들어 있다. 선생님 테스트가 화면에서 지운다.
 const doomedFolderTitle = `e2e지울폴더_${stamp}`;
 const doomedRow = await pool.query(
@@ -176,6 +200,10 @@ await pool.query(
 );
 // 사진 전용 폴더에도 한 장
 await mkMedia({ i: 7, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: folderEventId });
+// 알림 폴더에는 사진 한 장 · 영상 하나 — 보이는 사진이 있어야 "새 사진" 알림을 보낸다
+await mkMedia({ i: 61, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: pushFolderEventId });
+await mkMedia({ i: 62, kind: 'video', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: pushFolderEventId });
+await mkMedia({ i: 63, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: realPushFolderEventId });
 // 예전 방식(버전 기록 없음)으로 "얼굴 없음" 이 된 사진 두 장 — 선생님 [얼굴 찾기] 가 다시 찾아 저장하는지 본다
 const faceScanEventId = await mkEvent(`e2e얼굴찾기_${stamp}`, null, true, { type: 'special', published: false });
 await mkMedia({ i: 8, kind: 'image', uploaderRole: 'teacher', uploaderUserId: teacher.id, eventId: faceScanEventId, faceStatus: 'none' });
@@ -524,7 +552,7 @@ for (const [mediaId, descriptor, box] of [
 }
 
 const sessions = {
-  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, doomedFolderEventId, doomedFolderTitle, doomedEventId, doomedEventTitle, sparseEventId, sparseEventTitle, sparseMediaId, faceScanEventId, faceThumbEventId, peopleEventId, removeFaceEventId, removeManyEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
+  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, pushFolderEventId, pushFolderTitle, realPushFolderEventId, realPushFolderTitle, doomedFolderEventId, doomedFolderTitle, doomedEventId, doomedEventTitle, sparseEventId, sparseEventTitle, sparseMediaId, faceScanEventId, faceThumbEventId, peopleEventId, removeFaceEventId, removeManyEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
   teacher: { token: sign(teacher), user: { id: teacher.id, username: teacher.username, role: 'user' } },
   teacher2Token: sign(teacher2),
   parent: { token: sign(parent), user: { id: parent.id, username: parent.username, role: 'parent' } },

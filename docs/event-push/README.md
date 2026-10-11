@@ -3,10 +3,13 @@
 > **상태: 배포 완료 — 2026-10-10, PR #72** (운영 표 `push_subscriptions` · Vercel `VAPID_*` 키 포함).
 > 요청: "이벤트가 열렸을 때 학부모에게 브라우저 알림" → 선생님이 이벤트를 저장할 때 **[학부모에게 알림 보내기]** 를 체크하면 보낸다.
 > 학부모에게 카카오 메시지는 보내지 않는다는 결정(2026-08)은 그대로다 — 이 알림은 **학부모가 기기마다 직접 켜야** 온다.
+>
+> **2026-10-11 추가 — 새 사진 알림.** 요청: "선생님이 새로운 폴더 생성해서 사진 올리면 push 알림" → 사진 메뉴의
+> **사진 전용 폴더(`type='folder'`)를 처음 공개할 때** 같은 길로 보낸다(아래 [새 사진 알림](#새-사진-알림-사진-전용-폴더)). 표·키 추가 없음.
 
 ## 한 줄 요약
 
-학부모는 **내 정보 › 새 일정 알림** 에서 이 기기의 알림을 켠다. 선생님이 이벤트를 저장하며 체크하면, 서버가 그 선생님과
+학부모는 **내 정보 › 새 일정·사진 알림** 에서 이 기기의 알림을 켠다. 선생님이 이벤트를 저장하며 체크하면, 서버가 그 선생님과
 연결된 학부모의 기기마다 **암호화한 알림을 브라우저 회사의 푸시 서버(구글 FCM · 애플 APNs · 모질라 · 마이크로소프트)** 에 맡기고,
 푸시 서버가 기기를 깨워 **서비스 워커(`sw.js`)** 가 알림을 띄운다. 누르면 그 이벤트 상세가 열린다.
 
@@ -33,7 +36,7 @@ flowchart TB
     PS[("푸시 서버<br/>FCM · APNs · Mozilla · WNS")]
   end
   subgraph device["학부모 기기"]
-    Card["내 정보 › 새 일정 알림<br/>EventPushCard"]
+    Card["내 정보 › 새 일정·사진 알림<br/>EventPushCard"]
     SW["서비스 워커<br/>sw.js"]
     OS["휴대폰 · PC 알림"]
   end
@@ -63,9 +66,27 @@ flowchart TB
 | 구독 API | `server/controllers/pushController.js` · `server/routes/parent.js` | `GET /api/parent/push` · `POST/DELETE /api/parent/push/subscriptions` (학부모만) |
 | 구독 저장 | `server/models/PushSubscription.js` · 표 `push_subscriptions` | 기기마다 한 줄 (endpoint UNIQUE) |
 | 학부모 카드 | `client/src/pages/parent/EventPushCard.jsx` · `client/src/utils/pushNotifications.js` | 켜기 · 끄기 스위치, 안 되는 환경이면 안내 |
+| 새 사진 알림 | `server/controllers/albumController.js:updateAlbum` · `services/eventPush.js:notifyParentsOfPhotoFolder` · `utils/webPush.js:photoFolderPushMessage` | 사진 전용 폴더를 처음 공개할 때 보낸다 (아래) |
 | 서비스 워커 | `client/public/sw.js` | 푸시를 받아 알림을 띄우고, 누르면 이 앱 안의 이벤트 주소만 연다. 캐시는 하지 않는다 |
 | 홈 화면 앱 | `client/public/manifest.webmanifest` · `client/index.html` | 아이폰은 홈 화면에 추가한 앱에서만 웹 푸시를 받는다 |
 | Vercel 라우트 | `vercel.json` | `/sw.js`(no-cache) · `/manifest.webmanifest` 를 SPA 캐치올보다 앞에서 파일 그대로 내준다 |
+
+## 새 사진 알림 (사진 전용 폴더)
+
+선생님이 사진 메뉴 [사진 올리기] 에서 **새 폴더 만들기** 로 올린 사진 전용 폴더(`events.type='folder'`, docs/photo-menu FR-517)는
+비공개로 시작한다. 학부모가 열 수 없는 동안 알려 봐야 눌러도 열리지 않으므로, 알림은 **폴더를 처음 공개하는 순간** 에 간다.
+
+- **언제**: `PATCH /api/events/:id/album {published:true}` 가 `albumPublishedAt` 을 처음 채울 때(= 처음 공개) **그리고** 그 행이 사진
+  전용 폴더일 때. 업로드 시트의 "다 올리면 바로 학부모에게 공개" 와 앨범 화면의 [학부모에게 공개] 가 모두 이 요청이다.
+  체크박스는 따로 없다 — 공개가 곧 알림이다(이벤트는 수정 저장이 잦아 체크로 고르지만, 폴더 공개는 한 번뿐이다).
+- **보내지 않는 때**: 비공개로 돌렸다가 다시 공개(처음 공개한 날이 남아 있다) · 이벤트 앨범(대회 · 스페셜)을 공개 · 공개 범위나
+  업로드 받기만 바꿀 때 · 학부모에게 보이는 사진·영상이 하나도 없을 때(`skipped:'empty'`, 숨긴 것만 있는 폴더).
+- **받는 사람**: 이벤트 알림과 같다 — 폴더 주인 선생님과 연결된 학부모 중 알림을 켠 기기. 사진 폴더는 언제나 '모든 학부모' 공개라 볼 수 있는 사람과 같다.
+- **내용**: 제목 `새 사진 · <폴더 이름>`, 본문 `10월 11일(일) · 사진 12장 · 영상 2개` + `사진 탭에서 볼 수 있어요`. 누르면
+  `/parent/photos/<id>`(학부모 사진 탭의 그 폴더). `tag`·`topic` 은 `album-<id>` — 이벤트 알림(`event-<id>`)과 겹치지 않는다.
+- **선생님 화면**: 아직 한 번도 공개하지 않은 사진 폴더면 공개 체크 아래 · 공개 버튼 옆에 "처음 공개하면 알림을 켠 학부모에게 새 사진 알림이 가요"
+  를 붙이고, 공개한 뒤 결과("학부모 3명에게 알림을 보냈어요" 등, `notifyResultMessage`)를 업로드 완료 화면 · 앨범 화면 알림 줄에 보인다.
+- 이벤트 알림처럼 **응답 전에 끝까지 기다리고**(Vercel 은 응답 뒤 인스턴스를 얼린다) 어떤 실패도 공개를 실패시키지 않는다.
 
 ## 열쇠 — 누가 무엇을 갖고 있나
 
@@ -91,10 +112,13 @@ flowchart TB
 
 ## 확인하는 법
 
-- 단위 테스트: `server` — `webPush` · `eventPush` · `pushController` · `eventController`, `client` — `pushNotifications` · `EventPushCard` · `serviceWorker`.
+- 단위 테스트: `server` — `webPush` · `eventPush` · `pushController` · `eventController` · `albumController`(새 사진 알림),
+  `client` — `pushNotifications` · `EventPushCard` · `serviceWorker` · `UploadSheet` · `PhotoPages` · `albumState`.
 - e2e: `client/e2e/push.spec.mjs` (프로젝트 `push`). Playwright 기본 창은 시크릿 모드라 크롬이 실제 구독을 막아서 화면 흐름은
   `PushManager` 를 흉내 내고, 서비스 워커는 CDP `ServiceWorker.deliverPushMessage` 로 푸시를 넣어 본다.
-  **실제 푸시 서버 왕복**은 `E2E_REAL_PUSH=1` 일 때만 (프로필이 있는 Chromium 창으로 구글 푸시 서버를 실제로 거친다).
+  **실제 푸시 서버 왕복**은 `E2E_REAL_PUSH=1` 일 때만 (프로필이 있는 Chromium 창으로 구글 푸시 서버를 실제로 거친다) —
+  새 일정 알림과 새 사진 알림(픽스처 폴더를 처음 공개) 둘 다. 새 프로필은 전달이 늦기도 해서, 둘을 이어 돌리면 가끔 60초 안에 안 온다
+  (하나씩 돌리면 통과, 2026-10-11).
 
 ## 한계
 

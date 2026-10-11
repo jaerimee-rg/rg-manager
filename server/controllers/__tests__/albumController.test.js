@@ -91,6 +91,10 @@ jest.unstable_mockModule('../../models/AlbumView.js', () => ({
   }
 }));
 
+jest.unstable_mockModule('../../services/eventPush.js', () => ({
+  notifyParentsOfPhotoFolder: jest.fn()
+}));
+
 const Event = (await import('../../models/Event.js')).default;
 const EventMedia = (await import('../../models/EventMedia.js')).default;
 const MediaTag = (await import('../../models/MediaTag.js')).default;
@@ -100,6 +104,7 @@ const GoogleDriveAccount = (await import('../../models/GoogleDriveAccount.js')).
 const ParentInvite = (await import('../../models/ParentInvite.js')).default;
 const albumService = (await import('../../services/albumService.js')).default;
 const AlbumView = (await import('../../models/AlbumView.js')).default;
+const { notifyParentsOfPhotoFolder } = await import('../../services/eventPush.js');
 const FaceExclusion = (await import('../../models/FaceExclusion.js')).default;
 const { DriveError } = await import('../../utils/googleDrive.js');
 const {
@@ -450,6 +455,74 @@ describe('updateAlbum', () => {
 
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json.mock.calls[0][0].reason).toBe('album_missing');
+  });
+});
+
+describe('updateAlbum — 사진 전용 폴더를 처음 공개하면 학부모에게 알린다', () => {
+  const folder = (overrides = {}) => event({ type: 'folder', title: '가을 소풍', albumAudience: 'all', ...overrides });
+  const sent = { recipients: 3, sent: 4, failed: 0, removed: 0 };
+
+  beforeEach(() => {
+    notifyParentsOfPhotoFolder.mockResolvedValue(sent);
+    Event.updateAlbum.mockImplementation(async (id, fields) => folder(fields));
+  });
+
+  it('처음 공개하면 응답 전에 알림을 보내고 결과를 notification 으로 돌려준다', async () => {
+    Event.getById.mockResolvedValue(folder());
+    req.body = { published: true };
+
+    await updateAlbum(req, res);
+
+    expect(notifyParentsOfPhotoFolder).toHaveBeenCalledTimes(1);
+    expect(notifyParentsOfPhotoFolder.mock.calls[0][0]).toMatchObject({ id: 3, type: 'folder', albumPublished: true });
+    expect(res.json.mock.calls[0][0]).toMatchObject({ published: true, notification: sent });
+  });
+
+  it('비공개로 돌렸다가 다시 공개하면 보내지 않는다 — 처음 공개한 날이 남아 있다', async () => {
+    Event.getById.mockResolvedValue(folder({ albumPublishedAt: '2026-10-11T01:00:00Z' }));
+    req.body = { published: true };
+
+    await updateAlbum(req, res);
+
+    expect(notifyParentsOfPhotoFolder).not.toHaveBeenCalled();
+    expect(res.json.mock.calls[0][0]).not.toHaveProperty('notification');
+  });
+
+  it('비공개로 돌리거나 다른 설정을 바꿀 때는 보내지 않는다', async () => {
+    Event.getById.mockResolvedValue(folder({ albumPublished: true, albumPublishedAt: '2026-10-11T01:00:00Z' }));
+    for (const body of [{ published: false }, { albumUploadOpen: false }, { audience: 'all' }]) {
+      req.body = body;
+      await updateAlbum(req, res);
+    }
+    // 아직 한 번도 공개하지 않은 폴더라도 공개가 아닌 변경이면 보내지 않는다
+    Event.getById.mockResolvedValue(folder());
+    req.body = { albumUploadOpen: false };
+    await updateAlbum(req, res);
+
+    expect(notifyParentsOfPhotoFolder).not.toHaveBeenCalled();
+    expect(res.json.mock.calls.every(([payload]) => !('notification' in payload))).toBe(true);
+  });
+
+  it('이벤트 앨범(대회·스페셜)을 처음 공개할 때는 보내지 않는다 — 사진 전용 폴더만', async () => {
+    Event.getById.mockResolvedValue(event());
+    Event.updateAlbum.mockImplementation(async (id, fields) => event(fields));
+    req.body = { published: true };
+
+    await updateAlbum(req, res);
+
+    expect(notifyParentsOfPhotoFolder).not.toHaveBeenCalled();
+    expect(res.json.mock.calls[0][0]).not.toHaveProperty('notification');
+  });
+
+  it('알림이 안 나가도 공개는 그대로 성공한다', async () => {
+    Event.getById.mockResolvedValue(folder());
+    notifyParentsOfPhotoFolder.mockResolvedValue({ skipped: 'not_configured' });
+    req.body = { published: true };
+
+    await updateAlbum(req, res);
+
+    expect(res.status).not.toHaveBeenCalled();
+    expect(res.json.mock.calls[0][0]).toMatchObject({ published: true, notification: { skipped: 'not_configured' } });
   });
 });
 

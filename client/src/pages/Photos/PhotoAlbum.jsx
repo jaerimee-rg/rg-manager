@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import { formatSize } from '../../utils/mediaUrls';
+import { notifyResultMessage } from '../../utils/pushNotifications';
 import { copyToClipboard } from '../../utils/copyToClipboard';
 import { albumShareUrl, albumShareToast, canShareAlbum, ALBUM_SHARE_DISABLED_HINT } from '../../utils/albumShare';
 import UploadSheet from '../../components/album/UploadSheet';
@@ -221,7 +222,9 @@ function PhotoAlbum() {
       const response = await fetchWithAuth(`${apiBase}/album`, { method: 'PATCH', body: JSON.stringify(body) });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) { showToast(payload.error || '바꾸지 못했어요.'); return false; }
-      if (message) showToast(message);
+      // 사진 폴더를 처음 공개하면 서버가 학부모 알림을 보내고 그 결과를 같이 준다
+      const notice = notifyResultMessage(payload.notification);
+      if (message) showToast(notice ? `${message} · ${notice}` : message);
       await loadAlbum();
       return true;
     } catch (patchError) {
@@ -711,6 +714,7 @@ function PhotoAlbum() {
           eventTitle={album.eventTitle}
           allowPublish
           published={album.published}
+          publishedAt={album.publishedAt}
           photoFolder={album.eventType === 'folder'}
           audienceHint="공개하면 학부모도 볼 수 있어요"
           maxFiles={TEACHER_MAX_FILES}

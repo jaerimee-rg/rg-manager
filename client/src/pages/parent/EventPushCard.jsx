@@ -6,10 +6,10 @@ import {
 import { Button, Callout, Card, CardHeader, SwitchField } from '../../components/ui';
 
 /**
- * 새 일정 알림 카드 (내 정보 화면).
+ * 새 일정·사진 알림 카드 (내 정보 화면).
  *
- * 이 기기(브라우저)의 알림을 켜고 끈다. 선생님이 이벤트를 저장하며 [학부모에게 알림 보내기] 를 체크하면
- * 알림을 켠 기기로 간다. 알림이 안 되는 곳(카카오톡 안, 아이폰 사파리 탭 …)에서는 스위치 대신 받는 방법을 안내한다.
+ * 이 기기(브라우저)의 알림을 켜고 끈다. 선생님이 이벤트를 저장하며 [학부모에게 알림 보내기] 를 체크하거나,
+ * 사진 폴더를 처음 공개하면 알림을 켠 기기로 간다. 알림이 안 되는 곳(카카오톡 안, 아이폰 사파리 탭 …)에서는 스위치 대신 받는 방법을 안내한다.
  * 서버에 알림 키가 없으면 카드를 그리지 않는다.
  */
 function EventPushCard() {
@@ -62,7 +62,7 @@ function EventPushCard() {
         setPermission(result);
         if (result === 'granted') {
           setSubscribed(true);
-          setNotice('알림을 켰어요. 선생님이 새 일정을 열면 이 기기로 알려 드려요.');
+          setNotice('알림을 켰어요. 선생님이 새 일정이나 사진을 올리면 이 기기로 알려 드려요.');
         }
       } else {
         await disablePush({ registration });
@@ -80,7 +80,7 @@ function EventPushCard() {
 
   return (
     <Card padding="md" className="ui-push-card" data-testid="event-push-card">
-      <CardHeader title="새 일정 알림" description="선생님이 새 일정을 열면 휴대폰·PC 알림으로 알려 드려요." />
+      <CardHeader title="새 일정·사진 알림" description="선생님이 새 일정이나 사진 폴더를 열면 휴대폰·PC 알림으로 알려 드려요." />
 
       {env === 'kakaotalk' && (
         <Callout tone="warning">
@@ -119,7 +119,7 @@ function EventPushCard() {
         <>
           <SwitchField
             id="event-push-toggle"
-            label="이 기기로 새 일정 알림 받기"
+            label="이 기기로 새 일정·사진 알림 받기"
             checked={subscribed}
             onChange={toggle}
             disabled={busy || !registration || denied}

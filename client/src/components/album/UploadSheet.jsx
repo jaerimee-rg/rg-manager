@@ -5,9 +5,10 @@ import { uploadToDrive } from '../../utils/driveUpload';
 import { ANALYSIS_LONG_SIDE, FACE_ANALYZER_VERSION, detectFaces } from '../../utils/faceClient';
 import { analysisImageUrl, formatSize } from '../../utils/mediaUrls';
 import { todayString } from '../../utils/eventFormat';
+import { notifyResultMessage } from '../../utils/pushNotifications';
 import {
-  folderNameFrom, formatShortDate, isPhotoFolder, newFolderProblem, publishPlaces, targetState, uploadPublishNote,
-  NEW_FOLDER_TITLE_MAX, PHOTO_FOLDER_TYPE
+  folderNameFrom, formatShortDate, isPhotoFolder, newFolderProblem, publishNotifiesParents, publishPlaces, targetState,
+  uploadPublishNote, NEW_FOLDER_TITLE_MAX, PHOTO_FOLDER_TYPE, PUBLISH_PUSH_HINT
 } from '../../pages/Photos/albumState';
 import {
   Badge, Button, Callout, Checkbox, DateField, Field, Icon, Input, List, ListRow, Modal, Progress, Stack
@@ -43,7 +44,10 @@ const NEW_FOLDER = 'new';
  *                  (파일을 고르다 그만두면 빈 폴더가 남지 않게).
  *   allowPublish — "다 올리면 바로 학부모에게 공개" 체크를 보인다(FR-515). 이미 공개된 앨범이면 체크 대신 안내 한 줄.
  *   published    — targets 없이 쓸 때 그 앨범이 공개 중인지
+ *   publishedAt  — targets 없이 쓸 때 그 앨범을 처음 공개한 날(없으면 한 번도 공개 안 함)
  *   photoFolder  — targets 없이 쓸 때 그 앨범이 사진 전용 폴더인지(공개하면 보이는 곳이 사진 탭뿐이다)
+ *                  사진 폴더를 처음 공개하면 서버가 학부모에게 "새 사진" 알림을 보낸다 — 체크 아래에 그 안내를,
+ *                  다 올린 뒤에는 알림 결과(몇 명에게 보냈는지)를 보인다.
  * maxFiles — 한 번에 고를 수 있는 수. 기본은 학부모 몫(30), 선생님 화면은 TEACHER_MAX_FILES 를 넘긴다.
  * onDone({ eventId, uploaded, published }) — 다 올린 뒤 한 번 부른다.
  */
@@ -54,6 +58,7 @@ function UploadSheet({
   initialEventId = null,
   allowPublish = false,
   published = false,
+  publishedAt = null,
   photoFolder = false,
   audienceHint = '이 앨범을 보는 학부모와 선생님이 함께 봐요',
   rootFolderName = 'RG Manager',
@@ -77,6 +82,7 @@ function UploadSheet({
   const eventTitle = pickingTarget ? target?.title : fixedTitle;
   const alreadyPublished = pickingTarget ? Boolean(target?.hasAlbum && target?.published) : published;
   const albumType = pickingTarget ? target?.type : (photoFolder ? PHOTO_FOLDER_TYPE : null);
+  const publishPushes = publishNotifiesParents({ type: albumType, publishedAt: pickingTarget ? target?.publishedAt : publishedAt });
 
   const [phase, setPhase] = useState(pickingTarget ? 'target' : 'pick');   // target | pick | busy | done
   const [publishWhenDone, setPublishWhenDone] = useState(false);
@@ -267,8 +273,10 @@ function UploadSheet({
 
       // 5) "다 올리면 바로 공개" — 하나도 못 올렸으면 공개하지 않는다(빈 앨범을 공개하지 않게).
       //    공개 요청이 실패하면 사진은 올라갔지만 비공개 그대로이므로, 완료 화면에서 따로 알린다.
+      //    사진 폴더를 처음 공개했으면 서버가 학부모 알림까지 보내고 결과(notification)를 같이 준다.
       let publishedNow = false;
       let publishFailed = false;
+      let notifyMessage = '';
       if (allowPublish && publishWhenDone && !wasPublished && uploaded > 0) {
         const patched = await fetchWithAuth(`${base}/album`, {
           method: 'PATCH',
@@ -276,6 +284,7 @@ function UploadSheet({
         }).catch(() => null);
         publishedNow = Boolean(patched?.ok);
         publishFailed = !publishedNow;
+        if (publishedNow) notifyMessage = notifyResultMessage((await patched.json().catch(() => ({})))?.notification);
       }
 
       setSummary({
@@ -284,6 +293,7 @@ function UploadSheet({
         skipped,
         publishedNow,
         publishFailed,
+        notifyMessage,
         images: uploadedKinds.image,
         videos: uploadedKinds.video,
         alreadyThere
@@ -313,11 +323,18 @@ function UploadSheet({
       {uploadPublishNote({ hasAlbum: true, published: true, type: albumType }).text}
     </p>
   ) : (
-    <Checkbox
-      label={<>다 올리면 바로 학부모에게 공개 <span className="ui-text-muted ui-text-sm">({publishPlaces(albumType)})</span></>}
-      checked={publishWhenDone}
-      onChange={(event) => setPublishWhenDone(event.target.checked)}
-    />
+    <div>
+      <Checkbox
+        label={<>다 올리면 바로 학부모에게 공개 <span className="ui-text-muted ui-text-sm">({publishPlaces(albumType)})</span></>}
+        checked={publishWhenDone}
+        onChange={(event) => setPublishWhenDone(event.target.checked)}
+      />
+      {publishPushes && (
+        <p className="ui-text-sm ui-text-muted ui-row" data-gap="1">
+          <Icon name="bell" size={14} />{PUBLISH_PUSH_HINT}
+        </p>
+      )}
+    </div>
   ));
 
   const footer = (
@@ -561,6 +578,11 @@ function UploadSheet({
             </Callout>
           )}
           <Stack gap={2} className="ui-text-sm ui-text-muted">
+            {summary.notifyMessage && (
+              <div className="ui-row" data-gap="1" data-testid="upload-notify-result">
+                <Icon name="bell" size={14} />{summary.notifyMessage}
+              </div>
+            )}
             {summary.analyzed > 0 && <div>얼굴 분석 {summary.analyzed}장 완료 — 우리 아이 사진에 자동으로 모아드려요</div>}
             {summary.skipped > 0 && <div>{summary.skipped}장은 아직 얼굴을 찾지 못했어요 — 선생님 앨범에서 자동으로 다시 찾아요</div>}
             {summary.videos > 0 && <div>영상은 얼굴을 찾지 않아요</div>}

@@ -319,7 +319,7 @@ function ParentSettings({ onChildrenChanged }) {
         )}
       </div>
 
-      {/* 선생님이 새 일정을 열면 이 기기로 알림 (서버에 알림 키가 없으면 그리지 않는다) */}
+      {/* 선생님이 새 일정이나 사진 폴더를 열면 이 기기로 알림 (서버에 알림 키가 없으면 그리지 않는다) */}
       <EventPushCard />
 
       <ChildFaceCard children={me?.children || []} onChanged={load} />

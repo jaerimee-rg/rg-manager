@@ -2,7 +2,7 @@ import {
   publishSummary, zeroAudienceWarning, driveNotice, canUploadWith, albumProblem, filterChips,
   targetState, uploadPublishNote, formatPublishedDate, formatEventDate, formatShortDate, toViewerItem, toAllPhotosViewerItem, publishLocked,
   folderNameFrom, newFolderProblem, typeLabel, isPhotoFolder, publishPlaces, folderDeleteMessage, folderDeleteTitle,
-  folderDeletedToast
+  folderDeletedToast, publishNotifiesParents
 } from '../albumState';
 
 describe('publishSummary (docs/photo-menu FR-521)', () => {
@@ -171,5 +171,19 @@ describe('folderDeleteTitle · folderDeletedToast — 사진 폴더 / 이벤트 
     expect(folderDeletedToast({ deleted: true, driveFolderKept: true })).toBe('폴더를 지웠어요 · Google Drive 의 폴더는 그대로 있어요');
     expect(folderDeletedToast({ deleted: true, driveFolderKept: false })).toBe('폴더를 지웠어요');
     expect(folderDeletedToast(null)).toBe('폴더를 지웠어요');
+  });
+});
+
+describe('publishNotifiesParents — 공개하면 학부모에게 "새 사진" 알림이 가는지', () => {
+  it('사진 전용 폴더를 처음 공개할 때만', () => {
+    expect(publishNotifiesParents({ type: 'folder', publishedAt: null })).toBe(true);
+    expect(publishNotifiesParents({ type: 'folder' })).toBe(true);
+  });
+
+  it('한 번 공개했던 폴더, 이벤트 앨범은 아니다', () => {
+    expect(publishNotifiesParents({ type: 'folder', publishedAt: '2026-10-01T01:00:00Z' })).toBe(false);
+    expect(publishNotifiesParents({ type: 'competition', publishedAt: null })).toBe(false);
+    expect(publishNotifiesParents({ type: 'special' })).toBe(false);
+    expect(publishNotifiesParents()).toBe(false);
   });
 });
