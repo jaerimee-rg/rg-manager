@@ -166,6 +166,22 @@ describe('getAlbum', () => {
     expect(payload.drive).toMatchObject({ connected: true, status: 'connected' });
   });
 
+  it('며칠짜리 이벤트는 종료일을 함께 준다 — [이름 · 날짜 수정] 창이 기간째 옮긴다고 알린다', async () => {
+    Event.getById.mockResolvedValue(event({ type: 'special', endDate: '2026-09-13' }));
+
+    await getAlbum(req, res);
+
+    expect(res.json.mock.calls[0][0]).toMatchObject({ eventDate: '2026-09-12', eventEndDate: '2026-09-13' });
+  });
+
+  it('종료일이 없으면 eventEndDate 는 null', async () => {
+    Event.getById.mockResolvedValue(event());
+
+    await getAlbum(req, res);
+
+    expect(res.json.mock.calls[0][0].eventEndDate).toBeNull();
+  });
+
   it('선생님이 Google 계정을 바꿨으면 이전 앨범임을 알려준다', async () => {
     Event.getById.mockResolvedValue(event({ driveAccountId: 9 }));
     GoogleDriveAccount.getByUserId.mockResolvedValue({ id: 11, status: 'connected' });

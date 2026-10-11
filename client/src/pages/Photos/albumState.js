@@ -3,6 +3,8 @@
  * 컴포넌트는 서버 응답을 그대로 넘기고, 무엇을 보여 줄지는 여기서 정한다.
  */
 
+import { addDays } from '../../utils/calendar';
+
 export const AUDIENCE_LABELS = {
   participants: '참가 확정 학부모',
   all: '모든 학부모'
@@ -150,18 +152,48 @@ export const newFolderProblem = ({ title, date } = {}) => {
   return null;
 };
 
-/**
- * 사진 전용 폴더를 지울 때 확인 문구 (FR-519) — 무엇이 사라지고 무엇이 남는지.
- * 앱의 폴더와 사진 기록은 사라지고(학부모 화면에서도), Google Drive 의 폴더와 원본은 남는다.
- */
 /** 이벤트(대회·스페셜)에 딸린 앨범인지 — 지워도 이벤트는 남는다. eventType 이 없으면 사진 폴더로 친다 */
 const isEventAlbum = (album) => Boolean(album?.eventType) && !isPhotoFolder(album.eventType);
+
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const dayNumber = (iso) => Date.parse(`${iso}T00:00:00Z`) / 86400000;
+
+/**
+ * 며칠짜리 이벤트의 시작일을 옮겼을 때의 새 종료일 — 같은 날 수만큼 옮긴다(서버 albumListController.movedEndDate 와 같은 규칙).
+ * 종료일이 없거나 날짜를 읽을 수 없으면 null.
+ */
+export const movedEndDate = ({ eventDate, eventEndDate } = {}, date) => {
+  if (![eventDate, eventEndDate, date].every((day) => ISO_DAY.test(String(day || '')))) return null;
+  return addDays(eventEndDate, Math.round(dayNumber(date) - dayNumber(eventDate)));
+};
+
+/**
+ * [이름 · 날짜 수정] 창 아래 안내 (FR-519). 이벤트 앨범은 폴더 이름이 이벤트에서 나오므로 **이벤트의 이름·날짜가 함께 바뀐다** —
+ * 그 사실을 미리 알린다. 며칠짜리 이벤트는 날짜를 옮기면 종료일도 따라 옮겨진다고 덧붙인다. 사진 전용 폴더는 안내가 없다(null).
+ */
+export const folderEditNote = (album, draft = {}) => {
+  if (!isEventAlbum(album)) return null;
+  const what = album.eventType === 'competition' ? '대회' : '이벤트';
+  const base = `${what}의 이름·날짜도 함께 바뀌어요 — 이벤트 관리와 학부모 일정에도 바뀐 이름으로 보여요.`;
+  const end = draft.date && draft.date !== album.eventDate ? movedEndDate(album, draft.date) : null;
+  return end ? `${base} 기간이 있는 이벤트라 종료일도 ${end} 로 함께 옮겨져요.` : base;
+};
+
+/** 이름·날짜를 저장한 뒤 알림 (PATCH /api/albums/:id 응답) */
+export const folderSavedToast = (result) => {
+  if (result?.driveRenamed === false) return '이름·날짜를 바꿨어요 · Drive 폴더 이름은 [폴더 이름 맞추기] 로 맞춰 주세요';
+  return result?.eventUpdated ? '이벤트와 폴더의 이름·날짜를 바꿨어요' : '폴더 이름·날짜를 바꿨어요';
+};
 
 /** [폴더 삭제] 확인 창 제목 — 이벤트 앨범은 이벤트를 지우는 것으로 읽히지 않게 "사진 폴더" 라고 쓴다 */
 export const folderDeleteTitle = (album) => (
   `‘${album?.eventTitle || ''}’ ${isEventAlbum(album) ? '사진 폴더' : '폴더'}를 지울까요?`
 );
 
+/**
+ * 사진 폴더를 지울 때 확인 문구 (FR-519) — 무엇이 사라지고 무엇이 남는지.
+ * 앱의 폴더와 사진 기록은 사라지고(학부모 화면에서도), Google Drive 의 폴더와 원본은 남는다.
+ */
 export const folderDeleteMessage = (album) => {
   const counts = album?.counts || {};
   const event = isEventAlbum(album);
@@ -249,6 +281,9 @@ export default {
   folderDeleteTitle,
   folderDeleteMessage,
   folderDeletedToast,
+  folderEditNote,
+  folderSavedToast,
+  movedEndDate,
   folderNameFrom,
   newFolderProblem,
   uploadPublishNote,

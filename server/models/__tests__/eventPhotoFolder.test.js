@@ -44,6 +44,73 @@ describe('Event.updateFolder — 사진 폴더의 이름·날짜 (FR-519)', () =
   });
 });
 
+describe('Event.updateAlbumEvent — 이벤트 앨범의 이름·날짜 (FR-519, 2026-10-11)', () => {
+  let client;
+  const sqls = () => client.query.mock.calls.map(([sql]) => sql);
+  const eventRow = (overrides = {}) => ({ id: 4, type: 'competition', title: '제13회 샤인컵', date: '2026-04-06', competitionId: 6, options: '[]', ...overrides });
+
+  beforeEach(() => {
+    client = { query: jest.fn(), release: jest.fn() };
+    pool.connect.mockReset();
+    pool.connect.mockResolvedValue(client);
+    client.query.mockImplementation(async (sql) => (/^UPDATE events/.test(sql.trim()) ? { rows: [eventRow()] } : { rows: [] }));
+  });
+
+  it('한 트랜잭션에서 이벤트의 제목·날짜·종료일과 대회 행의 이름·날짜를 함께 고친다', async () => {
+    const result = await Event.updateAlbumEvent(4, { title: '제13회 샤인컵', date: '2026-04-06', endDate: null });
+
+    expect(sqls()[0]).toBe('BEGIN');
+    expect(sqls().at(-1)).toBe('COMMIT');
+    const [eventSql, eventParams] = client.query.mock.calls.find(([sql]) => /UPDATE events/.test(sql));
+    expect(eventSql).toMatch(/SET title = \$1, date = \$2, "endDate" = \$3, "updatedAt" = \$4/);
+    // 사진 전용 폴더·휴관일은 건드리지 못한다
+    expect(eventSql).toMatch(/WHERE id = \$5 AND type IN \('competition', 'special'\)/);
+    // 장소·옵션·신청·공개 여부는 그대로다
+    expect(eventSql).not.toMatch(/location|options|isPublished|registration/);
+    expect(eventParams).toEqual(['제13회 샤인컵', '2026-04-06', null, expect.any(String), 4]);
+
+    const [compSql, compParams] = client.query.mock.calls.find(([sql]) => /UPDATE competitions/.test(sql));
+    expect(compSql).toMatch(/SET name = \$1, date = \$2 WHERE id = \$3/);
+    expect(compSql).not.toMatch(/location/);
+    expect(compParams).toEqual(['제13회 샤인컵', '2026-04-06', 6]);
+    expect(result).toMatchObject({ id: 4, title: '제13회 샤인컵', options: [] });
+    expect(client.release).toHaveBeenCalled();
+  });
+
+  it('대회 행이 없는 스페셜은 이벤트만 고친다', async () => {
+    client.query.mockImplementation(async (sql) => (/^UPDATE events/.test(sql.trim())
+      ? { rows: [eventRow({ type: 'special', competitionId: null })] } : { rows: [] }));
+
+    await Event.updateAlbumEvent(4, { title: '봄 캠프', date: '2026-05-30', endDate: '2026-06-01' });
+
+    expect(sqls().some((sql) => /competitions/.test(sql))).toBe(false);
+    expect(client.query.mock.calls.find(([sql]) => /UPDATE events/.test(sql))[1].slice(0, 3)).toEqual(['봄 캠프', '2026-05-30', '2026-06-01']);
+    expect(sqls().at(-1)).toBe('COMMIT');
+  });
+
+  it('고칠 이벤트 앨범이 없으면(사진 폴더 · 휴관일 · 없는 id) 되돌리고 null', async () => {
+    client.query.mockImplementation(async () => ({ rows: [] }));
+
+    expect(await Event.updateAlbumEvent(50, { title: 'x', date: '2026-10-03' })).toBeNull();
+    expect(sqls()).toContain('ROLLBACK');
+    expect(sqls().some((sql) => /competitions/.test(sql))).toBe(false);
+    expect(client.release).toHaveBeenCalled();
+  });
+
+  it('대회 행을 고치다 실패하면 이벤트도 되돌리고 던진다', async () => {
+    client.query.mockImplementation(async (sql) => {
+      if (/^UPDATE competitions/.test(sql.trim())) throw new Error('boom');
+      if (/^UPDATE events/.test(sql.trim())) return { rows: [eventRow()] };
+      return { rows: [] };
+    });
+
+    await expect(Event.updateAlbumEvent(4, { title: 'x', date: '2026-10-03' })).rejects.toThrow('boom');
+    expect(sqls()).toContain('ROLLBACK');
+    expect(sqls()).not.toContain('COMMIT');
+    expect(client.release).toHaveBeenCalled();
+  });
+});
+
 describe('사진 폴더는 이벤트 화면에 나오지 않는다', () => {
   it('선생님 이벤트 관리 목록(getAll)에서 뺀다 — 종류 필터가 있어도 없어도', async () => {
     await Event.getAll(7, 'user', { includePast: true });

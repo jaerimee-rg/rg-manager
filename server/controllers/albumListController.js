@@ -140,49 +140,62 @@ export const createPhotoFolder = async (req, res) => {
   }
 };
 
-const NOT_A_FOLDER = {
-  error: '이벤트 앨범이에요. 이름·날짜는 이벤트 관리에서 고쳐 주세요.',
-  reason: 'not_photo_folder'
-};
-
 /**
- * 고치거나 지울 **사진 전용 폴더**를 읽는다. 앨범 화면과 같은 범위다(선생님 = 자기 것, 관리자 = 전부).
- * 이벤트 앨범의 이름·날짜는 여기서 고치지 않는다 — 이벤트 폼이 대회 행 동기화까지 맡는다.
- * 지우기는 이벤트 앨범도 받는다(`eventAlbums`) — 이벤트는 두고 앨범만 비운다(deletePhotoFolder).
+ * 고치거나 지울 사진 폴더를 읽는다 — 사진 전용 폴더와 이벤트 앨범(대회·스페셜) 둘 다. 앨범 화면과 같은 범위다
+ * (선생님 = 자기 것, 관리자 = 전부). 이벤트 앨범은 앨범이 있어야 한다 — 앨범이 없는 이벤트(휴관일 포함)는 고치거나 지울
+ * 사진 폴더가 없다(404 `no_album`).
  * → { event } | { status, body }
  */
-const loadFolder = async (req, { eventAlbums = false } = {}) => {
+const loadFolder = async (req) => {
   const id = parseInt(req.params.id, 10);
   const event = Number.isNaN(id) ? null : await Event.getById(id, req.user.id, req.user.role);
   if (!event) return { status: 404, body: { error: '사진 폴더를 찾을 수 없습니다.' } };
-  if (!isPhotoFolder(event) && !eventAlbums) return { status: 400, body: NOT_A_FOLDER };
+  if (!isPhotoFolder(event) && !event.driveFolderId) {
+    return { status: 404, body: { error: '이 이벤트에는 사진 폴더가 없어요.', reason: 'no_album' } };
+  }
   return { event };
 };
 
+// 기간이 있는 이벤트(며칠짜리 스페셜)는 시작일을 옮기면 종료일도 같은 날 수만큼 옮긴다 — 기간 길이는 그대로, 종료일이 시작일보다
+// 앞서는 일은 없다. 기간이 없으면 null 그대로.
+const movedEndDate = (before, date) => {
+  if (!before.endDate || !isRealDate(before.endDate) || !isRealDate(before.date)) return before.endDate || null;
+  const days = Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${before.date}T00:00:00Z`)) / 86400000);
+  return new Date(Date.parse(`${before.endDate}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
+};
+
 /**
- * PATCH /api/albums/:id — 사진 전용 폴더의 이름·날짜를 고친다 (docs/photo-menu FR-519).
+ * PATCH /api/albums/:id — 사진 폴더의 이름·날짜를 고친다 (docs/photo-menu FR-519). 모든 폴더가 된다(2026-10-11 요청).
+ * - 사진 전용 폴더: 그 행의 이름·날짜. 같은 이름·날짜의 다른 **폴더**가 있으면 409 (새 폴더 만들기가 "같은 이름·날짜 = 같은
+ *   폴더" 로 찾기 때문에).
+ * - 이벤트 앨범(대회·스페셜): 폴더 이름이 이벤트 제목·날짜에서 나오므로 **이벤트의 제목·날짜를 고친다**(Event.updateAlbumEvent —
+ *   대회 행도 함께, 기간이 있으면 종료일도 같이 옮긴다). 이벤트 관리·학부모 일정에도 바뀐 이름으로 보인다. 장소·옵션·신청은 그대로.
  * Drive 폴더가 있으면 이름("날짜 이름")도 따라 바꾼다. Drive 쪽이 실패해도 저장은 끝난 것이다 —
  * `driveRenamed:false` 로 알리고, 앨범 화면의 [폴더 이름 맞추기] 로 나중에 맞춘다.
- * 같은 이름·날짜의 다른 폴더가 있으면 409 (새 폴더 만들기가 "같은 이름·날짜 = 같은 폴더" 로 찾기 때문에).
  */
 export const updatePhotoFolder = async (req, res) => {
   try {
     const found = await loadFolder(req);
     if (!found.event) return res.status(found.status).json(found.body);
     const before = found.event;
+    const photoFolder = isPhotoFolder(before);
 
     const input = parseFolderInput(req.body);
     if (input.error) return res.status(400).json({ error: input.error });
     const { title, date } = input;
 
-    const siblings = await Event.listForPhotos(before.userId);
-    const clash = siblings.some((event) => event.id !== before.id && isPhotoFolder(event)
-      && event.title === title && event.date === date);
-    if (clash) {
-      return res.status(409).json({ error: '같은 이름·날짜의 사진 폴더가 이미 있어요.', reason: 'folder_exists' });
+    if (photoFolder) {
+      const siblings = await Event.listForPhotos(before.userId);
+      const clash = siblings.some((event) => event.id !== before.id && isPhotoFolder(event)
+        && event.title === title && event.date === date);
+      if (clash) {
+        return res.status(409).json({ error: '같은 이름·날짜의 사진 폴더가 이미 있어요.', reason: 'folder_exists' });
+      }
     }
 
-    const updated = await Event.updateFolder(before.id, { title, date });
+    const updated = photoFolder
+      ? await Event.updateFolder(before.id, { title, date })
+      : await Event.updateAlbumEvent(before.id, { title, date, endDate: movedEndDate(before, date) });
     if (!updated) return res.status(404).json({ error: '사진 폴더를 찾을 수 없습니다.' });
 
     const sync = await albumService.syncFolderName(before.userId, before, updated);
@@ -192,6 +205,9 @@ export const updatePhotoFolder = async (req, res) => {
       eventId: updated.id,
       title: updated.title,
       date: updated.date,
+      endDate: updated.endDate || null,
+      // 이벤트 앨범이면 이벤트의 이름·날짜도 바뀌었다 — 화면이 그렇게 알린다
+      eventUpdated: !photoFolder,
       expectedFolderName,
       driveFolderName: sync.renamed ? sync.name : (updated.driveFolderName || null),
       // Drive 폴더가 아직 없거나(첫 업로드 전) 이름이 그대로면 바꿀 것이 없다 — 그것도 "맞음" 이다
@@ -213,15 +229,11 @@ export const updatePhotoFolder = async (req, res) => {
  */
 export const deletePhotoFolder = async (req, res) => {
   try {
-    const found = await loadFolder(req, { eventAlbums: true });
+    const found = await loadFolder(req);
     if (!found.event) return res.status(found.status).json(found.body);
 
     if (!isPhotoFolder(found.event)) {
       const target = found.event;
-      // 앨범이 없는 이벤트(휴관일 포함)는 지울 사진 폴더가 없다
-      if (!target.driveFolderId) {
-        return res.status(404).json({ error: '이 이벤트에는 사진 폴더가 없어요.', reason: 'no_album' });
-      }
       const removed = await Event.removeAlbum(target.id);
       if (!removed) return res.status(404).json({ error: '사진 폴더를 찾을 수 없습니다.' });
       return res.json({

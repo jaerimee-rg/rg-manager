@@ -152,6 +152,17 @@ const doomedEventId = await mkEvent(doomedEventTitle, null, true, { type: 'speci
 // e2e확정대회 카드를 화면 밖(lazy 이미지가 안 뜬다)으로 밀어낸다
 await pool.query(`UPDATE events SET date = '2026-09-05' WHERE id = $1`, [doomedEventId]);
 
+// 이름·날짜를 고칠 대회 앨범 (FR-519, 2026-10-11 — 모든 폴더를 고칠 수 있어야 한다). 대회 행이 있어 이벤트 폼처럼 함께 바뀌는지 본다.
+// 날짜를 앞당기는 이유는 위와 같다(사진 목록에서 e2e확정대회 아래에 두려고)
+const renameEventTitle = `e2e고칠대회앨범_${stamp}`;
+const renameComp = await pool.query(
+  `INSERT INTO competitions (name, date, location, "userId", "createdAt") VALUES ($1,'2026-09-02','올림픽공원',$2,$3) RETURNING id`,
+  [renameEventTitle, teacher.id, now]
+);
+const renameCompetitionId = renameComp.rows[0].id;
+const renameEventId = await mkEvent(renameEventTitle, renameCompetitionId, true, { published: false });
+await pool.query(`UPDATE events SET date = '2026-09-02' WHERE id = $1`, [renameEventId]);
+
 // 모든 학부모에게 공개된 스페셜 앨범, 사진 한 장 — 학부모 테스트가 그 한 장을 숨겨 "보일 사진이 없는 앨범은 사진 탭에서 빠진다" 를 본다.
 // 날짜를 앞당기는 이유는 위와 같다(사진 목록에서 e2e확정대회 아래에 두려고)
 const sparseEventTitle = `e2e한장앨범_${stamp}`;
@@ -552,7 +563,7 @@ for (const [mediaId, descriptor, box] of [
 }
 
 const sessions = {
-  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, pushFolderEventId, pushFolderTitle, realPushFolderEventId, realPushFolderTitle, doomedFolderEventId, doomedFolderTitle, doomedEventId, doomedEventTitle, sparseEventId, sparseEventTitle, sparseMediaId, faceScanEventId, faceThumbEventId, peopleEventId, removeFaceEventId, removeManyEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
+  album: { eventId: albumEventId, lockedEventId, privateEventId, privateTitle, folderEventId, folderTitle, pushFolderEventId, pushFolderTitle, realPushFolderEventId, realPushFolderTitle, doomedFolderEventId, doomedFolderTitle, doomedEventId, doomedEventTitle, renameEventId, renameEventTitle, renameCompetitionId, sparseEventId, sparseEventTitle, sparseMediaId, faceScanEventId, faceThumbEventId, peopleEventId, removeFaceEventId, removeManyEventId, staleEventId, mediaIds, taggedCount: 2, totalCount: 4 },
   teacher: { token: sign(teacher), user: { id: teacher.id, username: teacher.username, role: 'user' } },
   teacher2Token: sign(teacher2),
   parent: { token: sign(parent), user: { id: parent.id, username: parent.username, role: 'parent' } },

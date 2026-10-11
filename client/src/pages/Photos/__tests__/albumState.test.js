@@ -2,7 +2,7 @@ import {
   publishSummary, zeroAudienceWarning, driveNotice, canUploadWith, albumProblem, filterChips,
   targetState, uploadPublishNote, formatPublishedDate, formatEventDate, formatShortDate, toViewerItem, toAllPhotosViewerItem, publishLocked,
   folderNameFrom, newFolderProblem, typeLabel, isPhotoFolder, publishPlaces, folderDeleteMessage, folderDeleteTitle,
-  folderDeletedToast, publishNotifiesParents
+  folderDeletedToast, publishNotifiesParents, folderEditNote, folderSavedToast, movedEndDate
 } from '../albumState';
 
 describe('publishSummary (docs/photo-menu FR-521)', () => {
@@ -185,5 +185,44 @@ describe('publishNotifiesParents — 공개하면 학부모에게 "새 사진" �
     expect(publishNotifiesParents({ type: 'competition', publishedAt: null })).toBe(false);
     expect(publishNotifiesParents({ type: 'special' })).toBe(false);
     expect(publishNotifiesParents()).toBe(false);
+  });
+});
+
+describe('folderEditNote · movedEndDate · folderSavedToast — 이름·날짜 수정 (FR-519, 이벤트 앨범 포함)', () => {
+  const SHINE = { eventType: 'competition', eventTitle: '13회 샤인컵', eventDate: '2026-04-05', eventEndDate: null };
+  const CAMP = { eventType: 'special', eventTitle: '봄 캠프', eventDate: '2026-04-05', eventEndDate: '2026-04-07' };
+
+  it('사진 전용 폴더는 안내가 없다', () => {
+    expect(folderEditNote({ eventType: 'folder', eventDate: '2026-09-27' }, { date: '2026-10-03' })).toBeNull();
+    expect(folderEditNote(null)).toBeNull();
+  });
+
+  it('이벤트 앨범은 이벤트의 이름·날짜도 함께 바뀐다고 알린다 — 대회는 "대회"', () => {
+    expect(folderEditNote(SHINE, { date: '2026-04-05' }))
+      .toBe('대회의 이름·날짜도 함께 바뀌어요 — 이벤트 관리와 학부모 일정에도 바뀐 이름으로 보여요.');
+    expect(folderEditNote({ ...CAMP, eventEndDate: null }, { date: '2026-05-01' }))
+      .toBe('이벤트의 이름·날짜도 함께 바뀌어요 — 이벤트 관리와 학부모 일정에도 바뀐 이름으로 보여요.');
+  });
+
+  it('며칠짜리 이벤트의 날짜를 옮기면 종료일도 같은 날 수만큼 옮겨진다고 덧붙인다', () => {
+    expect(folderEditNote(CAMP, { date: '2026-05-30' })).toMatch(/종료일도 2026-06-01 로 함께 옮겨져요\.$/);
+    // 날짜를 그대로 두면 덧붙이지 않는다
+    expect(folderEditNote(CAMP, { date: '2026-04-05' })).not.toMatch(/종료일/);
+  });
+
+  it('movedEndDate — 서버와 같은 규칙(날 수로, 달·해가 바뀌어도)', () => {
+    expect(movedEndDate(CAMP, '2026-05-30')).toBe('2026-06-01');
+    expect(movedEndDate({ eventDate: '2026-03-01', eventEndDate: '2026-03-02' }, '2026-02-28')).toBe('2026-03-01');
+    expect(movedEndDate({ eventDate: '2026-12-31', eventEndDate: '2027-01-01' }, '2027-01-02')).toBe('2027-01-03');
+    expect(movedEndDate(SHINE, '2026-04-06')).toBeNull();
+    expect(movedEndDate(CAMP, '')).toBeNull();
+  });
+
+  it('저장 뒤 알림 — 이벤트도 바뀌었는지, Drive 이름을 맞췄는지에 따라', () => {
+    expect(folderSavedToast({ eventUpdated: true, driveRenamed: true })).toBe('이벤트와 폴더의 이름·날짜를 바꿨어요');
+    expect(folderSavedToast({ eventUpdated: false, driveRenamed: true })).toBe('폴더 이름·날짜를 바꿨어요');
+    expect(folderSavedToast({ eventUpdated: true, driveRenamed: false }))
+      .toBe('이름·날짜를 바꿨어요 · Drive 폴더 이름은 [폴더 이름 맞추기] 로 맞춰 주세요');
+    expect(folderSavedToast(null)).toBe('폴더 이름·날짜를 바꿨어요');
   });
 });

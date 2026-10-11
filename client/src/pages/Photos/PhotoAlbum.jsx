@@ -24,7 +24,7 @@ import PersonPhotosBar from './PersonPhotosBar';
 import { saveMediaCaption } from './mediaCaptionSave';
 import { editPersonPhotos, excludeBlock, personPhotosToast } from './personPhotos';
 import {
-  albumProblem, filterChips, folderDeleteMessage, folderDeletedToast, folderDeleteTitle, formatEventDate, isPhotoFolder,
+  albumProblem, filterChips, folderDeleteMessage, folderDeletedToast, folderDeleteTitle, folderSavedToast, formatEventDate, isPhotoFolder,
   publishLocked, typeLabel, toViewerItem, PROBLEM_MESSAGES
 } from './albumState';
 
@@ -59,7 +59,7 @@ function PhotoAlbum() {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState([]);
   const [confirmDelete, setConfirmDelete] = useState(null);   // 지울 id 배열
-  // 폴더 관리 (FR-519): 이름·날짜 수정 창(사진 전용 폴더만) · 폴더 삭제 확인
+  // 폴더 관리 (FR-519): 이름·날짜 수정 창 · 폴더 삭제 확인
   const [editingFolder, setEditingFolder] = useState(false);
   const [confirmFolderDelete, setConfirmFolderDelete] = useState(false);
   const [deletingFolder, setDeletingFolder] = useState(false);
@@ -365,17 +365,15 @@ function PhotoAlbum() {
     const ok = await copyToClipboard(url);
     showToast(ok ? albumShareToast(album) : url);
   };
-  /* 사진 전용 폴더는 여기서 이름·날짜를 고치고 지운다 (FR-519). 이벤트 앨범은 [폴더 삭제] 만 — 사진 폴더(앨범)만 지우고
-     이벤트는 남긴다. 이벤트의 이름·날짜와 이벤트 자체의 삭제는 이벤트 관리가 맡는다(신청·참가 학생이 걸려 있다). */
-  const folder = isPhotoFolder(album.eventType);
-  const canDeleteFolder = folder || hasAlbum;
+  /* 모든 사진 폴더는 여기서 이름·날짜를 고치고 지운다 (FR-519). 이벤트 앨범(대회·스페셜)의 이름·날짜를 고치면 이벤트의 것이
+     함께 바뀐다(폴더 이름이 이벤트에서 나온다). [폴더 삭제] 는 사진 폴더(앨범)만 지우고 이벤트는 남긴다 — 이벤트 자체의 삭제는
+     이벤트 관리가 맡는다(신청·참가 학생이 걸려 있다). 앨범이 아직 없는 이벤트에는 고치거나 지울 폴더가 없다. */
+  const canManageFolder = isPhotoFolder(album.eventType) || hasAlbum;
 
   const folderSaved = async (result) => {
     setEditingFolder(false);
     await loadAlbum();
-    showToast(result?.driveRenamed === false
-      ? '이름·날짜를 바꿨어요 · Drive 폴더 이름은 [폴더 이름 맞추기] 로 맞춰 주세요'
-      : '폴더 이름·날짜를 바꿨어요');
+    showToast(folderSavedToast(result));
   };
 
   const deleteFolder = async () => {
@@ -400,10 +398,10 @@ function PhotoAlbum() {
 
   const headerActions = (
     <>
-      {canDeleteFolder && (
+      {canManageFolder && (
         <span className="ui-page-header__icon-action">
           <Menu label="폴더 관리" trigger={(props) => <IconButton icon="more" label="폴더 관리" {...props} />}>
-            {folder && <MenuItem icon="edit" onClick={() => setEditingFolder(true)}>이름 · 날짜 수정</MenuItem>}
+            <MenuItem icon="edit" onClick={() => setEditingFolder(true)}>이름 · 날짜 수정</MenuItem>
             <MenuItem icon="trash" tone="danger" onClick={() => setConfirmFolderDelete(true)}>폴더 삭제</MenuItem>
           </Menu>
         </span>

@@ -81,6 +81,8 @@ export const getAlbum = async (req, res) => {
       eventType: event.type,
       eventTitle: event.title,
       eventDate: event.date,
+      // 며칠짜리 이벤트의 종료일 — [이름 · 날짜 수정] 이 날짜를 옮기면 기간째 옮긴다고 알린다 (FR-519)
+      eventEndDate: event.endDate || null,
       albumStatus: event.driveFolderId ? event.albumStatus : 'none',
       driveFolderId: event.driveFolderId || null,
       driveFolderName: event.driveFolderName || null,

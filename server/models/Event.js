@@ -344,7 +344,7 @@ class Event {
 
   /**
    * 사진 전용 폴더의 이름·날짜를 고친다 (docs/photo-menu FR-519). **type='folder' 행만** 건드린다 —
-   * 이벤트의 제목·날짜는 이벤트 폼(update)이 대회 행 동기화까지 함께 맡는다.
+   * 이벤트 앨범은 updateAlbumEvent 가 대회 행 동기화까지 함께 맡는다.
    */
   static async updateFolder(id, { title, date }) {
     const result = await pool.query(
@@ -354,6 +354,41 @@ class Event {
       [title, date, new Date().toISOString(), id]
     );
     return result.rows.length > 0 ? hydrate(result.rows[0]) : null;
+  }
+
+  /**
+   * 이벤트 앨범(대회·스페셜)의 이름·날짜를 사진 메뉴에서 고친다 (photo-menu FR-519, 2026-10-11 — 모든 폴더를 고칠 수 있어야 한다).
+   * 앨범 폴더 이름은 이벤트 제목·날짜에서 나오므로 **이벤트의 제목·날짜를 고친다** — 이벤트 관리·학부모 일정에도 바뀐 이름으로 보인다.
+   * 대회형은 이벤트 폼처럼 대회 행(competitions)의 이름·날짜도 한 트랜잭션에서 맞춘다. 장소·옵션·신청은 건드리지 않는다.
+   * 사진 전용 폴더는 updateFolder 가, 휴관일은 앨범이 없어 여기서 다루지 않는다.
+   * → 고친 이벤트 | null(그런 이벤트 없음)
+   */
+  static async updateAlbumEvent(id, { title, date, endDate = null }) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const updated = await client.query(
+        `UPDATE events SET title = $1, date = $2, "endDate" = $3, "updatedAt" = $4
+          WHERE id = $5 AND type IN ('competition', 'special')
+          RETURNING *`,
+        [title, date, endDate, new Date().toISOString(), id]
+      );
+      if (!updated.rows.length) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      const event = updated.rows[0];
+      if (event.competitionId) {
+        await client.query('UPDATE competitions SET name = $1, date = $2 WHERE id = $3', [title, date, event.competitionId]);
+      }
+      await client.query('COMMIT');
+      return hydrate(event);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   /**

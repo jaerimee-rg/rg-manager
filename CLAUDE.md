@@ -490,16 +490,21 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   `parentAwareDisplayNameSql('u','pa')` (parent name → `users.displayName` → username) and
   `mediaSerializer.uploaderNameOf` drops placeholder ids (falls back to 학부모/선생님). Parents still never get
   uploader names (`toParentMedia` whitelist).
-- **Photo folders are renamed and deleted from the 사진 menu only** (docs/photo-menu FR-519): `PATCH
-  /api/albums/:id` (`updatePhotoFolder`) works on `type='folder'` rows only and answers 400 `not_photo_folder` for a
-  real event — an event's title/date belong to the event form (competition mirror). Rename also renames the Drive folder
-  via `syncFolderName` (a Drive failure never fails the save; `driveRenamed:false`). `DELETE /api/albums/:id`
+- **Photo folders are renamed and deleted from the 사진 menu only** (docs/photo-menu FR-519) — **every folder, event
+  albums included** (owner's call 2026-10-11: "모든 폴더는 수정할 수 있어야", after 13회 샤인컵 showed no edit item). `PATCH
+  /api/albums/:id` (`updatePhotoFolder`): a `type='folder'` row → `Event.updateFolder` (409 `folder_exists` on a same
+  title+date folder); a competition/special **album** → `Event.updateAlbumEvent`, which renames **the event itself** (the
+  folder name comes from it) and, in the same transaction, the competition mirror's `name`/`date` — location, options and
+  registrations stay. A multi-day event's `endDate` moves by the same number of days (`movedEndDate`, mirrored in the
+  client's `albumState.movedEndDate`); the dialog says both up front (`folderEditNote`). An event with no album → 404
+  `no_album`. Rename also renames the Drive folder via `syncFolderName` (a Drive failure never fails the save;
+  `driveRenamed:false`); the response carries `eventUpdated` for the toast. `DELETE /api/albums/:id`
   (`deletePhotoFolder`) takes both: a photo folder **removes the row** and its media/tags/faces (CASCADE); an **event
   album** (competition/special, 2026-10-09) **keeps the event** — `Event.removeAlbum` deletes its `event_media` rows and
   resets the album columns to "no album yet" (private, `participants`, upload open, no covers/match rules) in one
   transaction, so registrations, participants and the competition row stay (`{eventKept:true}`; an event with no album →
-  404 `no_album`). The event itself is still deleted only in 이벤트 관리. On an event album the [⋯ 폴더 관리] menu has only
-  [폴더 삭제]. **Neither touches Drive** — same rule as deleting an event; the confirm dialog says so (re-uploading later
+  404 `no_album`). The event itself is still deleted only in 이벤트 관리. The [⋯ 폴더 관리] menu shows [이름 · 날짜 수정] and
+  [폴더 삭제] on every folder and every event album (not on an event with no album yet). **Neither touches Drive** — same rule as deleting an event; the confirm dialog says so (re-uploading later
   makes a new Drive folder of the same name). `Menu` positions itself in CSS
   (`.ui-menu[data-align]`), never inline, or the mobile bottom-sheet rule loses.
 - **Album share link** (docs/photo-menu FR-518) = the parent album URL **plus the album owner's parent-invite
