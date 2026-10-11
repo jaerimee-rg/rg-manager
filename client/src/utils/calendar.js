@@ -45,6 +45,17 @@ export const monthOf = (iso) => {
 export const compareMonth = (a, b) => (a.year - b.year) * 12 + (a.month - b.month);
 
 /**
+ * 보이는 달에서 n 달 넘긴 달 — min·max('YYYY-MM-DD' 또는 비움)가 있는 달 밖으로는 나가지 않는다.
+ * 한 해(12달)씩 넘길 때 범위 끝을 넘으면 그 끝 달에 멈춘다.
+ */
+export const shiftMonth = (view, n, min, max) => {
+  const next = addMonths(view, n);
+  if (min && compareMonth(next, monthOf(min)) < 0) return monthOf(min);
+  if (max && compareMonth(next, monthOf(max)) > 0) return monthOf(max);
+  return next;
+};
+
+/**
  * 한 달을 일요일부터 시작하는 주 단위로. 달 밖의 칸은 null.
  * 줄 수가 달마다 달라 넘길 때 화면이 들썩이지 않도록 늘 6주를 채운다.
  */

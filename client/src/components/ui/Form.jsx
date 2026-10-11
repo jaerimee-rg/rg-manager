@@ -94,6 +94,7 @@ export function ClearableInput({ value, onClear, clearLabel = '지우기', disab
 
 /**
  * 날짜 하나를 고르는 칸 — 누르면 바로 아래에 앱의 달력(Calendar)이 펼쳐지고, 날을 누르면 닫힌다.
+ * 달력에는 한 해씩 넘기는 버튼(« »)도 있다 — 지난해 사진 폴더 날짜를 열두 번 넘기지 않고 고르게.
  *
  * <input type="date"> 대신 쓴다. iPad Safari 의 기본 피커는 연·월 바퀴만 보이는 상태로 떠
  * 날을 고를 수 없는 일이 있었다(2026-10). 브라우저 피커에 기대지 않으니 어디서나 같은 달력이다.
@@ -151,6 +152,7 @@ export function DateField({
         <Calendar
           id={`${id}-calendar`}
           className="ui-date-field__calendar"
+          yearNav
           value={value}
           min={min}
           max={max}

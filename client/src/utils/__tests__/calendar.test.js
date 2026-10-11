@@ -1,5 +1,6 @@
 import {
-  addDays, addMonths, clampIso, compareMonth, formatIsoDate, isWithin, monthOf, monthWeeks, parseIso, toIso, todayIso, weekdayOf
+  addDays, addMonths, clampIso, compareMonth, formatIsoDate, isWithin, monthOf, monthWeeks, parseIso, shiftMonth, toIso, todayIso,
+  weekdayOf
 } from '../calendar';
 
 describe('calendar — 날짜는 YYYY-MM-DD 문자열로만', () => {
@@ -24,6 +25,16 @@ describe('calendar — 날짜는 YYYY-MM-DD 문자열로만', () => {
     expect(addDays('2027-01-01', -1)).toBe('2026-12-31');
     expect(addMonths({ year: 2026, month: 11 }, 1)).toEqual({ year: 2027, month: 0 });
     expect(addMonths({ year: 2026, month: 0 }, -1)).toEqual({ year: 2025, month: 11 });
+  });
+
+  it('shiftMonth — 한 해씩 넘기다 범위 끝을 넘으면 그 끝 달에 멈춘다', () => {
+    const oct2026 = { year: 2026, month: 9 };
+    expect(shiftMonth(oct2026, -12)).toEqual({ year: 2025, month: 9 });
+    expect(shiftMonth(oct2026, 12)).toEqual({ year: 2027, month: 9 });
+    expect(shiftMonth(oct2026, -1, '2026-03-15', '2027-02-01')).toEqual({ year: 2026, month: 8 });
+    expect(shiftMonth(oct2026, -12, '2026-03-15', '2027-02-01')).toEqual({ year: 2026, month: 2 });
+    expect(shiftMonth(oct2026, 12, '2026-03-15', '2027-02-01')).toEqual({ year: 2027, month: 1 });
+    expect(shiftMonth(oct2026, -12, '2025-10-31')).toEqual({ year: 2025, month: 9 }); // 끝 달 안이면 그대로
   });
 
   it('weekdayOf — 0 이 일요일', () => {
