@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { fetchWithAuth } from '../../utils/api';
 import ParentSchedule from '../../pages/parent/ParentSchedule';
 import ParentEventDetail from '../../pages/parent/ParentEventDetail';
@@ -11,6 +11,7 @@ import ParentShop from '../../pages/parent/ParentShop';
 import ParentOnboarding from '../../pages/parent/ParentOnboarding';
 import InviteLanding from '../../pages/parent/InviteLanding';
 import RememberReturnTo from '../common/RememberReturnTo';
+import HomeScreenPrompt from './HomeScreenPrompt';
 import { Spinner } from '../ui';
 
 /**
@@ -20,6 +21,7 @@ import { Spinner } from '../ui';
 function ParentApp() {
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { pathname } = useLocation();
 
   const loadMe = useCallback(async () => {
     try {
@@ -46,36 +48,41 @@ function ParentApp() {
   const needsOnboarding = me && (me.children || []).length === 0;
   // 학부모가 여러 선생님과 연결될 수 있어 온보딩이 선생님을 고를 수 있어야 한다
   const teachers = me?.teachers || [];
+  // 홈 화면에 추가 안내는 가입(아이 등록)을 마친 뒤 학부모 화면에서만 — 초대 · 온보딩 중에는 띄우지 않는다
+  const offerHomeScreen = !needsOnboarding && pathname.startsWith('/parent/') && pathname !== '/parent/onboarding';
 
   return (
-    <Routes>
-      <Route path="/invite/:token" element={<InviteLanding />} />
-      {/* 아이를 저장한 뒤 내 정보를 다시 읽어야 아래 가드가 일정 화면을 열어 준다.
-          (읽지 않으면 저장에 성공하고도 온보딩으로 되돌아온다) */}
-      <Route
-        path="/parent/onboarding"
-        element={<ParentOnboarding teachers={teachers} onDone={loadMe} currentName={me?.user?.displayName || ''} />}
-      />
-      {needsOnboarding ? (
-        /* 공유 링크로 들어왔다면 아이를 등록한 뒤 그 이벤트로 돌아가야 한다 */
-        <Route path="*" element={<RememberReturnTo to="/parent/onboarding" />} />
-      ) : (
-        <>
-          <Route path="/parent/schedule" element={<ParentSchedule />} />
-          {/* 이벤트 상세 — 일정 카드를 누르거나 선생님이 공유한 링크를 열면 이 전체 화면이 뜬다 */}
-          <Route path="/parent/events/:eventId" element={<ParentEventDetail />} />
-          <Route path="/parent/photos" element={<ParentAlbumList />} />
-          {/* 전체 사진(모든 앨범) — 정적 경로라 아래 :eventId 보다 먼저 맞는다 */}
-          <Route path="/parent/photos/all" element={<ParentAllPhotos />} />
-          <Route path="/parent/photos/:eventId" element={<ParentAlbum />} />
-          {/* 추천 상품 — 공유 링크 /shop/:publicId 의 전체 화면으로 보낸다 (상점이 여럿이면 여기서 고른다) */}
-          <Route path="/parent/shop" element={<ParentShop />} />
-          {/* 마지막 아이를 지우면 내 정보를 다시 읽어 위 가드가 온보딩으로 보낸다 */}
-          <Route path="/parent/settings" element={<ParentSettings onChildrenChanged={loadMe} />} />
-          <Route path="*" element={<Navigate to="/parent/schedule" replace />} />
-        </>
-      )}
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/invite/:token" element={<InviteLanding />} />
+        {/* 아이를 저장한 뒤 내 정보를 다시 읽어야 아래 가드가 일정 화면을 열어 준다.
+            (읽지 않으면 저장에 성공하고도 온보딩으로 되돌아온다) */}
+        <Route
+          path="/parent/onboarding"
+          element={<ParentOnboarding teachers={teachers} onDone={loadMe} currentName={me?.user?.displayName || ''} />}
+        />
+        {needsOnboarding ? (
+          /* 공유 링크로 들어왔다면 아이를 등록한 뒤 그 이벤트로 돌아가야 한다 */
+          <Route path="*" element={<RememberReturnTo to="/parent/onboarding" />} />
+        ) : (
+          <>
+            <Route path="/parent/schedule" element={<ParentSchedule />} />
+            {/* 이벤트 상세 — 일정 카드를 누르거나 선생님이 공유한 링크를 열면 이 전체 화면이 뜬다 */}
+            <Route path="/parent/events/:eventId" element={<ParentEventDetail />} />
+            <Route path="/parent/photos" element={<ParentAlbumList />} />
+            {/* 전체 사진(모든 앨범) — 정적 경로라 아래 :eventId 보다 먼저 맞는다 */}
+            <Route path="/parent/photos/all" element={<ParentAllPhotos />} />
+            <Route path="/parent/photos/:eventId" element={<ParentAlbum />} />
+            {/* 추천 상품 — 공유 링크 /shop/:publicId 의 전체 화면으로 보낸다 (상점이 여럿이면 여기서 고른다) */}
+            <Route path="/parent/shop" element={<ParentShop />} />
+            {/* 마지막 아이를 지우면 내 정보를 다시 읽어 위 가드가 온보딩으로 보낸다 */}
+            <Route path="/parent/settings" element={<ParentSettings onChildrenChanged={loadMe} />} />
+            <Route path="*" element={<Navigate to="/parent/schedule" replace />} />
+          </>
+        )}
+      </Routes>
+      {offerHomeScreen && <HomeScreenPrompt />}
+    </>
   );
 }
 

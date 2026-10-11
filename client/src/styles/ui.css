@@ -4033,5 +4033,27 @@ button.ui-album-card__cover-slot:hover::after {
 .ui-push-card__action { margin-top: var(--space-3); }
 .ui-push-card__notice { margin: 0; font-size: var(--text-sm); color: var(--ink-600); }
 
+/* 학부모 › 홈 화면에 추가 안내 (components/parent/HomeScreenPrompt) — 휴대폰에서는 바텀시트 */
+.ui-a2hs .ui-overlay__body { display: flex; flex-direction: column; gap: var(--space-3); }
+.ui-a2hs__lead { margin: 0; line-height: var(--leading-base); }
+.ui-a2hs__steps { margin: 0; padding-left: var(--space-5); display: flex; flex-direction: column; gap: var(--space-2); line-height: 1.9; }
+.ui-a2hs__hint { display: block; font-family: var(--font-hand); font-size: var(--hand-sm); line-height: 1.25; letter-spacing: var(--tracking-hand); color: var(--ink-600); }
+.ui-a2hs__steps .ui-a2hs__hint .ui-a2hs__key { width: 22px; height: 22px; }
+/* 안내 문장 속 버튼 모양 — 화면에서 찾을 버튼을 그대로 보여 준다 */
+.ui-a2hs__key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px; height: 26px;
+  margin: 0 2px;
+  vertical-align: middle;
+  background: var(--field);
+  border: var(--stroke-width-thin) solid var(--ink);
+  border-radius: var(--shape-tag);
+}
+.ui-a2hs__note { margin: 0; font-size: var(--text-sm); color: var(--ink-600); }
+.ui-a2hs__dont { display: flex; flex-direction: column; gap: 2px; padding-top: var(--space-3); border-top: 1px dashed var(--rule); }
+.ui-a2hs__dont .ui-a2hs__hint { padding-left: 26px; }
+
 /* 이벤트 폼 › 학부모에게 알림 보내기 — 체크 아래 한 줄 설명 */
 .event-form__notify-hint { margin: var(--space-1) 0 0; }
