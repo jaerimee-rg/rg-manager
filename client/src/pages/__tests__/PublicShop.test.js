@@ -110,15 +110,15 @@ describe('PublicShop — 로그인 없이 보는 추천 상품', () => {
     fireEvent.click(screen.getByRole('link', { name: '사사키 리본 6m 자세히 보기' }));
     expect(trackClick).toHaveBeenCalledTimes(1);
 
-    const button = screen.getByRole('link', { name: 'coupang.com에서 보기' });
+    const button = screen.getByRole('link', { name: '상품보러가기' });
     button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     button.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, button: 1 }));
     expect(trackClick).toHaveBeenCalledTimes(1);
   });
 
-  it('주소(?p=)로 바로 들어온 상세의 [쇼핑몰에서 보기] 는 새 창 링크이고, 누르면 클릭을 기록한다 (가운데 버튼도)', async () => {
+  it('주소(?p=)로 바로 들어온 상세의 [상품보러가기] 는 새 창 링크이고, 누르면 클릭을 기록한다 (가운데 버튼도)', async () => {
     await renderShop('/shop/pub123?p=12');
-    const button = screen.getByRole('link', { name: 'coupang.com에서 보기' });
+    const button = screen.getByRole('link', { name: '상품보러가기' });
     expect(button).toHaveAttribute('href', 'https://www.coupang.com/vp/products/1');
     expect(button).toHaveAttribute('target', '_blank');
     expect(button).toHaveAttribute('rel', 'noopener noreferrer');
@@ -150,7 +150,7 @@ describe('PublicShop — 로그인 없이 보는 추천 상품', () => {
   it('주소로 바로 들어온 상세는 닫으면 ?p= 만 빠지고 상점이 남는다', async () => {
     await renderShop('/shop/pub123?c=3&p=5');
     expect(screen.getByRole('dialog', { name: '곤봉' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /에서 보기/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '상품보러가기' })).not.toBeInTheDocument();
     expect(screen.getByText(/쇼핑몰 링크가 없는 상품이에요/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '닫기' }));
@@ -294,7 +294,7 @@ describe('PublicShop — 상품 예약 (05-reservations.md)', () => {
   it('상세 아래에 [예약하기] — 쇼핑몰 링크가 있으면 둘 다, 링크 없음 안내는 숨긴다', async () => {
     await renderShop('/shop/pub123?p=12');
     expect(screen.getByRole('button', { name: '예약하기' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'coupang.com에서 보기' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '상품보러가기' })).toBeInTheDocument();
     cleanupAll();
 
     await renderShop('/shop/pub123?p=21');

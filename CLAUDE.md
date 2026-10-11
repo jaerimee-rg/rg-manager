@@ -983,7 +983,7 @@ open **one public link `/shop/<publicId>` without logging in**; the teacher sees
   `publicId` return the **same 404**.
 - **Click/visit tracking**: **pressing a product card in the list is the click** (2026-10-05 — it used to
   be only the detail's mall button). `PublicShop` passes `onOpen` to `ProductCard`; the detail's
-  **[○○에서 보기]** (a plain `<a target="_blank">`) counts only when the detail was opened straight from a
+  **[상품보러가기]** (a plain `<a target="_blank">`) counts only when the detail was opened straight from a
   `?p=` link (no `state.shopDetail`), so one card → mall-button visit is one click, not two. Either way
   `utils/shopTracking.js` fires `navigator.sendBeacon` (fallback `fetch keepalive`) — **values in the
   query string only, no body** — so navigation never waits. The server counts a click only for a visible

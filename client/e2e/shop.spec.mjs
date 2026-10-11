@@ -118,7 +118,7 @@ test.describe('추천 상품', () => {
     await expect(page).toHaveURL(/[?&]p=\d+/);
 
     // 상세의 쇼핑몰 버튼은 새 창 — 카드로 연 상세라 같은 관심을 두 번 세지 않는다
-    const cta = page.getByRole('dialog').getByRole('link', { name: /에서 보기$/ });
+    const cta = page.getByRole('dialog').getByRole('link', { name: '상품보러가기' });
     await expect(cta).toHaveAttribute('target', '_blank');
     const [popup] = await Promise.all([context.waitForEvent('page'), cta.click()]);
     await popup.waitForLoadState();
@@ -380,7 +380,7 @@ test.describe('추천 상품', () => {
     await detail.locator('.shop-gallery__track').evaluate((track) => track.scrollTo({ left: track.clientWidth, behavior: 'instant' }));
     await expect(detail.getByText('2 / 3')).toBeVisible();
     await expect(detail.getByRole('button', { name: '2번째 사진' })).toHaveAttribute('aria-current', 'true');
-    await expect(detail.getByRole('link', { name: /에서 보기$/ })).toBeInViewport();
+    await expect(detail.getByRole('link', { name: '상품보러가기' })).toBeInViewport();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 
     // 진짜 손가락으로 사진을 옆으로 밀면 다음 사진 — 끌어내려 닫기가 가로 넘기기를 가로채지 않는다

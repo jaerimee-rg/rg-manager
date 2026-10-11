@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Button, IconButton, Modal } from '../ui';
-import { formatPrice, hostnameOf, safeHref } from '../../utils/shopFormat';
+import { formatPrice, safeHref } from '../../utils/shopFormat';
 import ProductGallery from './ProductGallery';
 import ReservationForm, { ReservationDone } from './ReservationForm';
 
@@ -8,7 +8,7 @@ const EMPTY_DRAFT = { name: '', phone: '', date: '' };
 
 /**
  * 공개 상점의 상품 상세 — 모바일은 바텀시트(끌어내려 닫는다), 데스크톱은 가운데 넓은 모달.
- * 사진(캐러셀) · 카테고리 · 타이틀 · 상세 설명 · 가격 · [예약하기] · [쇼핑몰에서 보기].
+ * 사진(캐러셀) · 카테고리 · 타이틀 · 상세 설명 · 가격 · [예약하기] · [상품보러가기].
  * 쇼핑몰 버튼을 누르면 onOpenLink 를 부른다 — 클릭으로 셀지는 부르는 쪽이 정한다(목록에서 눌러 연 상세면 이미 셌다).
  * onOpenLink 는 이동을 막지 않는다.
  *
@@ -82,7 +82,7 @@ function ProductDetail({ product, categoryName, publicId, onClose, onOpenLink })
                 // 가운데 버튼으로 새 탭에 여는 것은 click 이 아니라 auxclick 이다
                 onAuxClick={(e) => { if (e.button === 1) onOpenLink?.(product); }}
               >
-                {hostnameOf(href)}에서 보기
+                상품보러가기
               </Button>
             )}
             <p className="shop-detail__cta-hint">
