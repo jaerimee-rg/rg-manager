@@ -419,6 +419,19 @@ Parents get their own accounts and a separate app under `/parent/*`. Design docs
 - **Client**: `App.jsx` returns `<ParentApp />` right after the logged-out branch when
   `user.role === 'parent'`, so the teacher tree is untouched. `/competitions` redirects to
   `/events`; its sub-routes (`/new`, `/edit`, `/manage`) stay.
+- **Add-to-home-screen prompt** (`docs/home-screen-prompt/`, `components/parent/HomeScreenPrompt.jsx`): a bottom sheet
+  ParentApp shows 1.2 s after a `/parent/*` screen opens — later if another `[role="dialog"]` (photo viewer, sheet, menu)
+  is up, so it never stacks on one (never during onboarding/invite, never while impersonating) on
+  phones that did not open the app from the home screen. `utils/homeScreen.js:homeScreenEnvironment` decides what to show —
+  Android: a one-tap **[홈 화면에 추가]** when Chrome handed us `beforeinstallprompt`, else menu steps; iPhone/iPad: Share →
+  홈 화면에 추가 steps (no API exists); KakaoTalk: **[브라우저로 열기]**; other in-app browsers and PCs: nothing.
+  **다시 보지 않기** checked + any close → `localStorage homeScreenPrompt.hidden`; unchecked → `sessionStorage
+  homeScreenPrompt.shown` (once per tab). `homeScreenPrompt.installed` is set by `appinstalled`, an accepted install prompt,
+  or any standalone launch (Android shares storage with the Chrome tab; iOS does not). Per device, no server/DB.
+  `index.jsx` attaches the `beforeinstallprompt` listener before React renders (it fires once, early) and calls
+  `preventDefault()` only when the stored user is a parent, so teachers keep Chrome's own mini-infobar. e2e:
+  `e2e/home-screen.spec.mjs` runs in the `parent` project with phone UAs — the project's default desktop UA never shows
+  the sheet, so the other parent tests are unaffected.
 
 **Local development uses a local Postgres**, not the shared Supabase database — creating parent
 accounts against production data would let pre-guard code treat them as teachers:

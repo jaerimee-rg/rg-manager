@@ -42,7 +42,8 @@ export default defineConfig({
         isMobile: false,
         hasTouch: true
       },
-      testMatch: /parent\.spec\.mjs/
+      // home-screen: 홈 화면에 추가 안내 — 스펙 안에서 휴대폰 UA(안드로이드 · 아이폰 · 카카오톡)로 바꿔 돈다
+      testMatch: /(parent|home-screen)\.spec\.mjs/
     },
     {
       // 계정·역할·초대 (docs/accounts-roles). 카카오 인가 화면은 자동화하지 않는다.
