@@ -1,7 +1,7 @@
 jest.mock('../api', () => ({ fetchWithAuth: jest.fn() }));
 
 import {
-  homeScreenEnvironment, shouldOfferHomeScreen, hideHomeScreenPrompt, isHomeScreenHidden,
+  homeScreenEnvironment, shouldOfferHomeScreen, isAnotherOverlayOpen, hideHomeScreenPrompt, isHomeScreenHidden,
   markInstalled, isMarkedInstalled, markShownThisSession, wasShownThisSession,
   listenForInstallPrompt, getInstallPrompt, subscribeInstallPrompt, forgetInstallPrompt, promptInstall,
   HIDDEN_KEY, INSTALLED_KEY, SHOWN_KEY
@@ -120,6 +120,21 @@ describe('shouldOfferHomeScreen', () => {
     expect(() => hideHomeScreenPrompt()).not.toThrow();
     expect(() => markShownThisSession()).not.toThrow();
     expect(shouldOfferHomeScreen({ env: 'android' })).toBe(true);
+  });
+});
+
+describe('isAnotherOverlayOpen', () => {
+  it('role=dialog 가 있으면 다른 창이 떠 있는 것이다', () => {
+    expect(isAnotherOverlayOpen(document)).toBe(false);
+    const sheet = document.createElement('div');
+    sheet.setAttribute('role', 'dialog');
+    document.body.appendChild(sheet);
+    expect(isAnotherOverlayOpen(document)).toBe(true);
+    sheet.remove();
+  });
+
+  it('document 가 없어도 던지지 않는다', () => {
+    expect(isAnotherOverlayOpen(undefined)).toBe(false);
   });
 });
 

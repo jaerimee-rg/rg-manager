@@ -212,6 +212,22 @@ describe('HomeScreenPrompt', () => {
     expect(dialog()).not.toBeInTheDocument();
   });
 
+  it('다른 창(사진 뷰어 · 시트)이 떠 있으면 겹치지 않고, 그 창이 닫힌 뒤에 띄운다', () => {
+    const viewer = document.createElement('div');
+    viewer.setAttribute('role', 'dialog');
+    document.body.appendChild(viewer);
+
+    renderPrompt();
+    waitForDelay();
+    waitForDelay();
+    expect(dialog()).not.toBeInTheDocument();
+    expect(sessionStorage.getItem(SHOWN_KEY)).toBeNull();
+
+    viewer.remove();
+    waitForDelay();
+    expect(dialog()).toBeInTheDocument();
+  });
+
   it('기다리는 사이 다른 탭에서 다시 보지 않기를 눌렀으면 띄우지 않는다', () => {
     renderPrompt();
     localStorage.setItem(HIDDEN_KEY, '1');

@@ -71,6 +71,12 @@ export const wasShownThisSession = () => readFlag('sessionStorage', SHOWN_KEY);
 /** 이번 탭에서는 보여 줬다 — 닫고 나서 화면을 옮기거나 새로고침해도 다시 뜨지 않는다 */
 export const markShownThisSession = () => writeFlag('sessionStorage', SHOWN_KEY);
 
+/**
+ * 다른 창(사진 뷰어 · 시트 · 메뉴 …)이 떠 있는지. 그 위에 겹쳐 띄우면 뷰어 뒤에 숨거나,
+ * 닫는 순서에 따라 Modal 의 스크롤 잠금이 풀리지 않을 수 있어 그동안은 기다린다.
+ */
+export const isAnotherOverlayOpen = (doc = globalThis.document) => Boolean(doc?.querySelector?.('[role="dialog"]'));
+
 /** 지금 이 기기에 안내 팝업을 띄울지 */
 export const shouldOfferHomeScreen = ({ env, impersonating = false } = {}) =>
   OFFERED.has(env)

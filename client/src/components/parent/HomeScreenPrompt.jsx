@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  homeScreenEnvironment, shouldOfferHomeScreen, markShownThisSession, hideHomeScreenPrompt,
+  homeScreenEnvironment, shouldOfferHomeScreen, isAnotherOverlayOpen, markShownThisSession, hideHomeScreenPrompt,
   getInstallPrompt, subscribeInstallPrompt, promptInstall, PROMPT_DELAY_MS
 } from '../../utils/homeScreen';
 import { openExternalUrl } from '../../utils/pushNotifications';
@@ -49,7 +49,8 @@ function AndroidSteps() {
 /**
  * 홈 화면에 추가 안내 (학부모 앱, docs/home-screen-prompt).
  *
- * 홈 화면 아이콘으로 열지 않은 휴대폰에서, 앱이 뜨고 잠시 뒤 바텀시트로 한 번 띄운다.
+ * 홈 화면 아이콘으로 열지 않은 휴대폰에서, 앱이 뜨고 잠시 뒤 바텀시트로 한 번 띄운다
+ * (다른 창이 떠 있으면 그 창이 닫힌 뒤에).
  * [다시 보지 않기] 를 체크한 채 닫으면(닫기 · X · 바깥 · Esc · 버튼 어느 것이든) 이 기기에서는 다시 띄우지 않고,
  * 체크하지 않고 닫으면 이번 탭에서만 다시 안 띄운다(다음에 앱을 열면 또 뜬다).
  * 안드로이드에서 브라우저가 설치 창을 허락하면 [홈 화면에 추가] 한 번으로 설치 창을 연다.
@@ -68,12 +69,19 @@ function HomeScreenPrompt({ delayMs = PROMPT_DELAY_MS }) {
     const offer = () => shouldOfferHomeScreen({ env, impersonating: Boolean(getImpersonator()) });
     if (!offer()) return undefined;
 
-    const timer = setTimeout(() => {
+    let timer;
+    const tryOpen = () => {
       // 기다리는 사이 다른 탭에서 다시 보지 않기를 눌렀을 수도 있다
       if (!offer()) return;
+      // 공유 링크로 연 사진 뷰어처럼 다른 창이 떠 있으면 닫힐 때까지 기다렸다가 띄운다
+      if (isAnotherOverlayOpen()) {
+        timer = setTimeout(tryOpen, delayMs);
+        return;
+      }
       markShownThisSession();
       setOpen(true);
-    }, delayMs);
+    };
+    timer = setTimeout(tryOpen, delayMs);
     return () => clearTimeout(timer);
   }, [env, delayMs]);
 

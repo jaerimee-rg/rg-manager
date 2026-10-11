@@ -420,7 +420,8 @@ Parents get their own accounts and a separate app under `/parent/*`. Design docs
   `user.role === 'parent'`, so the teacher tree is untouched. `/competitions` redirects to
   `/events`; its sub-routes (`/new`, `/edit`, `/manage`) stay.
 - **Add-to-home-screen prompt** (`docs/home-screen-prompt/`, `components/parent/HomeScreenPrompt.jsx`): a bottom sheet
-  ParentApp shows 1.2 s after a `/parent/*` screen opens (never during onboarding/invite, never while impersonating) on
+  ParentApp shows 1.2 s after a `/parent/*` screen opens — later if another `[role="dialog"]` (photo viewer, sheet, menu)
+  is up, so it never stacks on one (never during onboarding/invite, never while impersonating) on
   phones that did not open the app from the home screen. `utils/homeScreen.js:homeScreenEnvironment` decides what to show —
   Android: a one-tap **[홈 화면에 추가]** when Chrome handed us `beforeinstallprompt`, else menu steps; iPhone/iPad: Share →
   홈 화면에 추가 steps (no API exists); KakaoTalk: **[브라우저로 열기]**; other in-app browsers and PCs: nothing.
