@@ -80,6 +80,23 @@ describe('DateField — 누르면 그 자리에 앱 달력이 펼쳐지는 날�
     expect(field()).toHaveAccessibleName('날짜 2025년 12월 24일 (수)');
   });
 
+  it('한 해씩 넘기는 버튼으로 지난해 같은 달로 바로 간다 — 사진 폴더 날짜', async () => {
+    const onChange = jest.fn();
+    render(<Harness initial="2026-10-10" onChange={onChange} />);
+
+    await act(async () => { fireEvent.click(field()); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '이전 해' })); });
+    expect(screen.getByText('2025년 10월')).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '다음 해' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '이전 해' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '이전 해' })); });
+    expect(screen.getByText('2024년 10월')).toBeInTheDocument();
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /^10월 5일 / })); });
+    expect(onChange).toHaveBeenCalledWith('2024-10-05');
+    expect(field()).toHaveAccessibleName('날짜 2024년 10월 5일 (토)');
+  });
+
   it('다시 누르면 고르지 않고 닫힌다', async () => {
     const onChange = jest.fn();
     render(<Harness initial="2026-10-10" onChange={onChange} />);

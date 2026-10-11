@@ -1122,6 +1122,56 @@ test.describe('선생님 — 사진 메뉴 (docs/photo-menu)', () => {
     }
   });
 
+  // 지난해 사진으로 폴더를 만들 때 달 버튼을 열두 번씩 누르지 않게 — 달력 양 끝에 한 해씩 넘기는 « » 버튼 (2026-10)
+  test('휴대폰에서 새 폴더 날짜를 한 해씩 넘겨 지난해 날짜로 고른다', async ({ browser, baseURL }) => {
+    const phone = await browser.newContext({ baseURL, hasTouch: true, isMobile: true, viewport: { width: 375, height: 812 } });
+    try {
+      const page = await phone.newPage();
+      await loginAs(page, sessions.teacher);
+      await page.route('**/api/albums', async (route) => {
+        if (route.request().method() !== 'GET') return route.fallback();
+        const response = await route.fetch();
+        const body = await response.json();
+        await route.fulfill({ response, json: { ...body, drive: { ...body.drive, configured: true, connected: true, status: 'connected' } } });
+      });
+
+      await page.goto('/photos');
+      await page.getByRole('button', { name: '사진 올리기' }).first().tap();
+      const sheet = page.getByRole('dialog');
+      await sheet.getByRole('radio', { name: /새 폴더 만들기/ }).tap();
+      const title = `e2e 지난해 ${run}`;
+      await sheet.getByLabel('이름').fill(title);
+
+      const field = sheet.getByRole('button', { name: /^날짜/ });
+      await field.tap();
+      const calendar = sheet.locator(`[id="${await field.getAttribute('aria-controls')}"]`);
+      const heading = calendar.locator('.ui-calendar__title');
+      const [, year, month] = (await heading.textContent()).match(/(\d+)년 (\d+)월/).map(Number);
+      const nav = (name) => calendar.getByRole('button', { name, exact: true });
+
+      // 375px 에서도 « ‹ 제목 › » 가 한 줄에, 화면 안에 있다
+      for (const name of ['이전 해', '이전 달', '다음 달', '다음 해']) await expect(nav(name)).toBeInViewport();
+      const [prevYear, nextYear, headingBox] = await Promise.all([nav('이전 해').boundingBox(), nav('다음 해').boundingBox(), heading.boundingBox()]);
+      expect(Math.abs(prevYear.y - nextYear.y)).toBeLessThan(1);
+      expect(headingBox.x).toBeGreaterThan(prevYear.x + prevYear.width);
+      expect(headingBox.x + headingBox.width).toBeLessThan(nextYear.x);
+
+      await nav('이전 해').tap();
+      await expect(heading).toHaveText(`${year - 1}년 ${month}월`);
+      await nav('이전 해').tap();
+      await expect(heading).toHaveText(`${year - 2}년 ${month}월`);
+      await nav('다음 해').tap();
+      await expect(heading).toHaveText(`${year - 1}년 ${month}월`);
+
+      await calendar.getByRole('button', { name: new RegExp(`^${month}월 15일 `) }).tap();
+      await expect(field).toHaveAttribute('aria-expanded', 'false');
+      await expect(field).toHaveAccessibleName(new RegExp(`^날짜 ${year - 1}년 ${month}월 15일 `));
+      await expect(sheet.getByText(`${year - 1}-${String(month).padStart(2, '0')}-15 ${title}`)).toBeVisible();
+    } finally {
+      await phone.close();
+    }
+  });
+
   // FR-517 — 맞는 이벤트가 없으면 올리는 시트에서 이름·날짜로 **사진 전용 폴더**를 만든다 (이벤트는 생기지 않는다)
   test('사진을 올릴 때 이벤트가 없어도 새 폴더를 만든다 — 이벤트 관리·학부모 일정에는 나오지 않는다', async ({ page, request }) => {
     const title = `e2e 새폴더 ${run}`;

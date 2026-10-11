@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { Calendar } from '..';
 
-function Harness({ initial = '', min, max, unavailable, onChange = () => {} }) {
+function Harness({ initial = '', min, max, unavailable, yearNav, onChange = () => {} }) {
   const [value, setValue] = useState(initial);
   return (
     <Calendar
@@ -10,6 +10,7 @@ function Harness({ initial = '', min, max, unavailable, onChange = () => {} }) {
       value={value}
       min={min}
       max={max}
+      yearNav={yearNav}
       unavailable={unavailable}
       unavailableLabel="예약 불가"
       onChange={(iso) => {
@@ -52,6 +53,51 @@ describe('Calendar — 그 자리에 펼쳐지는 한 달 달력', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '이전 달' }));
     expect(screen.getByText('2026년 10월')).toBeInTheDocument();
+  });
+
+  it('yearNav 면 한 해씩도 넘긴다 — 같은 달의 지난해·다음 해로 가서 고른다', () => {
+    const onChange = jest.fn();
+    render(<Harness initial="2026-10-10" yearNav onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '이전 해' }));
+    expect(screen.getByText('2025년 10월')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '이전 해' }));
+    expect(screen.getByText('2024년 10월')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '다음 달' }));
+    expect(screen.getByText('2024년 11월')).toBeInTheDocument();
+    fireEvent.click(day('11월 3일 일요일'));
+    expect(onChange).toHaveBeenCalledWith('2024-11-03');
+
+    fireEvent.click(screen.getByRole('button', { name: '다음 해' }));
+    expect(screen.getByText('2025년 11월')).toBeInTheDocument();
+  });
+
+  it('한 해 넘기기는 범위 끝 달에서 멈추고, 그 끝 달이면 잠긴다', () => {
+    render(<Harness initial="2026-10-10" min="2026-03-15" max="2027-02-01" yearNav />);
+
+    fireEvent.click(screen.getByRole('button', { name: '이전 해' }));
+    expect(screen.getByText('2026년 3월')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '이전 해' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '이전 달' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: '다음 해' }));
+    expect(screen.getByText('2027년 2월')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '다음 해' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '다음 달' })).toBeDisabled();
+  });
+
+  it('yearNav 를 켜지 않으면(예약 달력) 한 해 넘기기 버튼이 없다', () => {
+    render(<Harness initial="2026-10-10" />);
+    expect(screen.queryByRole('button', { name: '이전 해' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '다음 해' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '이전 달' })).toBeInTheDocument();
+  });
+
+  it('넘긴 해의 그 달 1일에 Tab 이 멈춘다', () => {
+    render(<Harness initial="2026-10-10" yearNav />);
+    fireEvent.click(screen.getByRole('button', { name: '이전 해' }));
+    const focusable = screen.getAllByRole('button').filter((b) => b.dataset.iso && b.tabIndex === 0);
+    expect(focusable.map((b) => b.dataset.iso)).toEqual(['2025-10-01']);
   });
 
   it('값이 없으면 오늘이 있는 달을 보여 주고 오늘에 표시가 있다', () => {

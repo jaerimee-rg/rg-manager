@@ -12,6 +12,8 @@ const paths = {
   chevronUp: 'M18 15l-6-6-6 6',
   chevronRight: 'M9 18l6-6-6-6',
   chevronLeft: 'M15 18l-6-6 6-6',
+  chevronsRight: 'M13 17l5-5-5-5M6 17l5-5-5-5',
+  chevronsLeft: 'M11 17l-5-5 5-5M18 17l-5-5 5-5',
   arrowLeft: 'M19 12H5M12 19l-7-7 7-7',
   arrowRight: 'M5 12h14M12 5l7 7-7 7',
   search: 'M11 19a8 8 0 100-16 8 8 0 000 16zM21 21l-4.35-4.35',

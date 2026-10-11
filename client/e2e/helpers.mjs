@@ -98,6 +98,7 @@ export const pinchTouch = async (page, center, fromGap, toGap, { steps = 8 } = {
 /**
  * DateField(앱 달력 날짜 칸)에서 iso('YYYY-MM-DD') 를 고른다 — 칸을 열고, 그 달까지 넘긴 뒤 그 날을 누른다.
  * 처음 보이는 달은 지금 값(보통 오늘)이라 몇 달을 넘길지는 달력 제목을 읽어 정한다. name 은 칸 이름의 앞부분(예: '날짜').
+ * 열두 달 이상 남았으면 한 해 넘기기 버튼(« »)으로 넘긴다.
  */
 export const pickDate = async (scope, name, iso) => {
   const field = scope.getByRole('button', { name: new RegExp(`^${name}`) });
@@ -108,7 +109,8 @@ export const pickDate = async (scope, name, iso) => {
     const [, shownYear, shownMonth] = (await calendar.locator('.ui-calendar__title').textContent()).match(/(\d+)년 (\d+)월/).map(Number);
     const diff = (year - shownYear) * 12 + (month - shownMonth);
     if (diff === 0) break;
-    await calendar.getByRole('button', { name: diff < 0 ? '이전 달' : '다음 달' }).click();
+    const step = Math.abs(diff) >= 12 ? (diff < 0 ? '이전 해' : '다음 해') : (diff < 0 ? '이전 달' : '다음 달');
+    await calendar.getByRole('button', { name: step, exact: true }).click();
     await expect(calendar.locator('.ui-calendar__title')).not.toHaveText(`${shownYear}년 ${shownMonth}월`);
   }
   await calendar.getByRole('button', { name: new RegExp(`^${month}월 ${day}일 `) }).click();
