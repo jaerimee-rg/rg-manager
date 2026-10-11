@@ -23,7 +23,7 @@ const renderCard = async () => {
     render(<EventPushCard />);
   });
 };
-const toggle = () => screen.getByRole('switch', { name: '이 기기로 새 일정 알림 받기' });
+const toggle = () => screen.getByRole('switch', { name: '이 기기로 새 일정·사진 알림 받기' });
 
 beforeEach(() => {
   jest.clearAllMocks();

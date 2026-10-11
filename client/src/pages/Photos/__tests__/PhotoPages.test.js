@@ -124,11 +124,11 @@ const MEDIA = [
   { id: 3, kind: 'image', thumbnailUrl: 'https://t/3', uploaderRole: 'teacher', isHidden: true }
 ];
 
-const renderAlbum = async (album = ALBUM, media = MEDIA) => {
+const renderAlbum = async (album = ALBUM, media = MEDIA, { patch = { published: true } } = {}) => {
   fetchWithAuth.mockImplementation((url, options = {}) => {
     if (url === '/api/events/31/album' && !options.method) return ok(album);
     if (url.startsWith('/api/events/31/media?')) return ok({ items: media, nextCursor: null });
-    if (options.method === 'PATCH') return ok({ published: true });
+    if (options.method === 'PATCH') return ok(patch);
     if (url.endsWith('/media/bulk')) return ok({ affected: 2 });
     return ok({});
   });
@@ -211,7 +211,8 @@ describe('PhotoAlbum — 앨범 (docs/photo-menu FR-520~529)', () => {
     expect(within(panel).queryByText(/참가 확정 학부모/)).not.toBeInTheDocument();
     expect(within(panel).getByText('학부모 ‘사진’ 탭')).toBeInTheDocument();
     expect(within(panel).queryByText(/이벤트 상세/)).not.toBeInTheDocument();
-    expect(within(panel).getByText('누르면 사진 탭에 바로 나타나요.')).toBeInTheDocument();
+    // 한 번도 공개하지 않은 폴더 — 처음 공개하면 학부모에게 "새 사진" 알림이 간다
+    expect(within(panel).getByText('누르면 사진 탭에 바로 나타나요. 알림을 켠 학부모에게 새 사진 알림도 가요.')).toBeInTheDocument();
     // 참가 확정 0명 경고는 폴더에는 해당 없다
     expect(screen.queryByText(/확정된 학생이 없어요/)).not.toBeInTheDocument();
     expect(screen.getByText(/사진 폴더$/)).toBeInTheDocument();
@@ -260,6 +261,35 @@ describe('PhotoAlbum — 앨범 (docs/photo-menu FR-520~529)', () => {
     await renderAlbum();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '학부모에게 공개' })); });
     expect(fetchWithAuth).toHaveBeenCalledWith('/api/events/31/album', { method: 'PATCH', body: JSON.stringify({ published: true }) });
+  });
+
+  it('사진 폴더를 처음 공개하면 서버가 보낸 학부모 알림 결과를 알림 줄에 함께 보인다', async () => {
+    await renderAlbum(
+      { ...ALBUM, eventType: 'folder', eventTitle: '가을 소풍', audience: 'all' },
+      MEDIA,
+      { patch: { published: true, notification: { recipients: 3, sent: 4, failed: 0, removed: 0 } } }
+    );
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '학부모에게 공개' })); });
+
+    expect(screen.getByText('학부모에게 공개했어요 · 학부모 3명에게 알림을 보냈어요')).toBeInTheDocument();
+  });
+
+  it('알림 결과가 없으면(이벤트 앨범·다시 공개) 공개했다는 말만', async () => {
+    await renderAlbum();
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '학부모에게 공개' })); });
+
+    expect(screen.getByText('학부모에게 공개했어요')).toBeInTheDocument();
+  });
+
+  it('한 번 공개했던 사진 폴더는 다시 공개해도 알림이 없어 그 안내를 붙이지 않는다', async () => {
+    await renderAlbum({
+      ...ALBUM, eventType: 'folder', eventTitle: '가을 소풍', audience: 'all', publishedAt: '2026-10-01T01:00:00Z'
+    });
+
+    const panel = screen.getByLabelText('학부모 공개');
+    expect(within(panel).getByText('누르면 사진 탭에 바로 나타나요.')).toBeInTheDocument();
   });
 
   it('공개 범위를 바꾸면 PATCH {audience}', async () => {

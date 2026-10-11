@@ -187,6 +187,14 @@ export const folderDeletedToast = (result) => {
 /** 공개하면 학부모에게 보이는 곳 — 사진 전용 폴더는 이벤트 상세가 없다 (FR-515, 517) */
 export const publishPlaces = (type) => (isPhotoFolder(type) ? '사진 탭' : '사진 탭 · 이 이벤트 상세');
 
+/**
+ * 공개하면 학부모에게 "새 사진" 알림이 가는지 — 사진 전용 폴더를 **처음** 공개할 때만 간다
+ * (서버 albumController.updateAlbum → services/eventPush.notifyParentsOfPhotoFolder).
+ * 이벤트 앨범이나, 한 번 공개했다가 비공개로 돌린 폴더는 다시 공개해도 알리지 않는다.
+ */
+export const publishNotifiesParents = ({ type, publishedAt } = {}) => isPhotoFolder(type) && !publishedAt;
+export const PUBLISH_PUSH_HINT = '처음 공개하면 알림을 켠 학부모에게 새 사진 알림이 가요';
+
 /** 고른 이벤트(폴더)의 앨범으로 올렸을 때 학부모에게 바로 보이는지 (FR-515) */
 export const uploadPublishNote = (target) => {
   if (target?.hasAlbum && target.published) {

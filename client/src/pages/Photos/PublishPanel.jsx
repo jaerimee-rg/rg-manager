@@ -1,6 +1,6 @@
 import React from 'react';
 import { Badge, Button, Callout, Card, Icon, Switch } from '../../components/ui';
-import { AUDIENCE_LABELS, isPhotoFolder, publishSummary, zeroAudienceWarning } from './albumState';
+import { AUDIENCE_LABELS, isPhotoFolder, publishNotifiesParents, publishSummary, zeroAudienceWarning } from './albumState';
 
 /**
  * 앨범 화면 위쪽의 "학부모 공개" 패널 (docs/photo-menu FR-521~522, 526, 529).
@@ -8,7 +8,7 @@ import { AUDIENCE_LABELS, isPhotoFolder, publishSummary, zeroAudienceWarning } f
  * 앨범은 비공개로 시작한다. 공개하면 학부모 사진 탭과 그 이벤트 상세 두 곳에 보이고,
  * 공개 범위는 참가 확정 학부모(기본) / 모든 학부모 중에 고른다.
  * 사진 전용 폴더(FR-517)는 이벤트가 아니라서 사진 탭 한 곳에만 보이고, 신청한 학생이 없으니
- * 공개 범위는 고르지 않는다 — 언제나 모든 학부모다.
+ * 공개 범위는 고르지 않는다 — 언제나 모든 학부모다. 사진 폴더를 처음 공개하면 알림을 켠 학부모에게 "새 사진" 알림이 간다.
  */
 function PublishPanel({ album, locked = false, busy = false, onPublish, onAudience, onUploadOpen }) {
   const summary = publishSummary(album);
@@ -17,6 +17,7 @@ function PublishPanel({ album, locked = false, busy = false, onPublish, onAudien
   const showZero = !summary.on && zeroAudienceWarning(album);
   const disabled = locked || busy;
   const folder = isPhotoFolder(album.eventType);
+  const pushes = !summary.on && publishNotifiesParents({ type: album.eventType, publishedAt: album.publishedAt });
 
   const option = (key, hint) => {
     const selected = audience === key;
@@ -90,7 +91,9 @@ function PublishPanel({ album, locked = false, busy = false, onPublish, onAudien
           )}
           <span className="ui-text-sm ui-text-muted">
             {folder
-              ? (summary.on ? '비공개로 돌리면 사진 탭에서 바로 사라져요.' : '누르면 사진 탭에 바로 나타나요.')
+              ? (summary.on
+                ? '비공개로 돌리면 사진 탭에서 바로 사라져요.'
+                : `누르면 사진 탭에 바로 나타나요.${pushes ? ' 알림을 켠 학부모에게 새 사진 알림도 가요.' : ''}`)
               : (summary.on ? '비공개로 돌리면 두 곳 모두에서 바로 사라져요.' : '누르면 위 두 곳에 바로 나타나요.')}
           </span>
         </div>

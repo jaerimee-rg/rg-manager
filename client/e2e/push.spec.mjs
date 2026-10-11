@@ -5,7 +5,8 @@ import path from 'path';
 import { loginAs, api } from './helpers.mjs';
 
 /**
- * 새 일정 브라우저 알림 (학부모 내 정보 › 새 일정 알림 · 이벤트 폼 › 학부모에게 알림 보내기).
+ * 새 일정·사진 브라우저 알림 (학부모 내 정보 › 새 일정·사진 알림 · 이벤트 폼 › 학부모에게 알림 보내기 ·
+ * 사진 폴더를 처음 공개할 때).
  *
  * - 서버에 VAPID 키가 없으면(`VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`) 학부모 카드가 없으므로 그 테스트는 skip 한다.
  *   키는 `cd server && npx web-push generate-vapid-keys` 로 만들어 서버를 띄울 때 넘긴다.
@@ -15,7 +16,7 @@ import { loginAs, api } from './helpers.mjs';
  */
 const sessions = JSON.parse(readFileSync(new URL('./.sessions.json', import.meta.url)));
 const run = `${sessions.stamp}-${Math.random().toString(36).slice(2, 7)}`;
-const SWITCH_LABEL = '이 기기로 새 일정 알림 받기';
+const SWITCH_LABEL = '이 기기로 새 일정·사진 알림 받기';
 
 const pushConfigured = async (request) =>
   (await api(request, sessions.parentMulti, 'GET', '/api/parent/push')).body?.configured === true;
@@ -28,6 +29,40 @@ const fakeSubscription = () => {
     keys: { p256dh: `B${'A'.repeat(86)}`, auth: 'k'.repeat(22) }
   };
 };
+
+/**
+ * 실제 푸시 서비스 왕복용 — 프로필이 있는 크롬(시크릿 창은 크롬이 구독을 막는다)에서 학부모로 알림을 켜고 run(page) 을 돌린 뒤 끈다.
+ * run 이 돌려준 값을 그대로 돌려준다.
+ */
+const withRealPushParent = async (baseURL, run) => {
+  const profile = mkdtempSync(path.join(tmpdir(), 'rg-push-'));
+  const context = await chromium.launchPersistentContext(profile, { channel: 'chromium', baseURL });
+  try {
+    await context.grantPermissions(['notifications'], { origin: new URL(baseURL).origin });
+    const page = context.pages()[0] || await context.newPage();
+    await loginAs(page, sessions.parentMulti);
+    await page.goto('/parent/settings');
+
+    const card = page.getByTestId('event-push-card');
+    await expect(card.getByRole('switch', { name: SWITCH_LABEL })).toBeEnabled();
+    await card.getByText(SWITCH_LABEL).click();
+    await expect(card.getByRole('switch', { name: SWITCH_LABEL })).toBeChecked({ timeout: 20_000 });
+
+    await run(page);
+
+    await card.getByText(SWITCH_LABEL).click();
+    await expect(card.getByRole('switch', { name: SWITCH_LABEL })).not.toBeChecked();
+  } finally {
+    await context.close();
+    rmSync(profile, { recursive: true, force: true });
+  }
+};
+
+/** 이 브라우저의 서비스 워커가 띄운 알림들 — { title, url } */
+const shownNotifications = (page) => page.evaluate(async () => {
+  const registration = await navigator.serviceWorker.ready;
+  return (await registration.getNotifications()).map((n) => ({ title: n.title, url: n.data && n.data.url }));
+});
 
 const stubPushManager = (page, subscription) => page.addInitScript((sub) => {
   let current = null;
@@ -66,7 +101,7 @@ test.describe('새 일정 알림 — 학부모', () => {
     await page.goto('/parent/settings');
 
     const card = page.getByTestId('event-push-card');
-    await expect(card.getByRole('heading', { name: '새 일정 알림' })).toBeVisible();
+    await expect(card.getByRole('heading', { name: '새 일정·사진 알림' })).toBeVisible();
     const toggle = card.getByRole('switch', { name: SWITCH_LABEL });
     await expect(toggle).toBeEnabled();
     await expect(toggle).not.toBeChecked();
@@ -163,20 +198,7 @@ test.describe('새 일정 알림 — 학부모', () => {
     // 새 프로필이 처음 푸시 서비스에 붙을 때는 전달이 수십 초 늦기도 한다
     test.setTimeout(90_000);
 
-    // 시크릿 창은 크롬이 구독을 막으므로 프로필이 있는 창으로 연다
-    const profile = mkdtempSync(path.join(tmpdir(), 'rg-push-'));
-    const context = await chromium.launchPersistentContext(profile, { channel: 'chromium', baseURL });
-    try {
-      await context.grantPermissions(['notifications'], { origin: new URL(baseURL).origin });
-      const page = context.pages()[0] || await context.newPage();
-      await loginAs(page, sessions.parentMulti);
-      await page.goto('/parent/settings');
-
-      const card = page.getByTestId('event-push-card');
-      await expect(card.getByRole('switch', { name: SWITCH_LABEL })).toBeEnabled();
-      await card.getByText(SWITCH_LABEL).click();
-      await expect(card.getByRole('switch', { name: SWITCH_LABEL })).toBeChecked({ timeout: 20_000 });
-
+    await withRealPushParent(baseURL, async (page) => {
       const title = `e2e 실제 푸시 ${run}`;
       const created = await api(request, sessions.teacher, 'POST', '/api/events', {
         type: 'special', title, date: '2026-11-07', startTime: '10:00', location: '한강공원', notifyParents: true
@@ -184,17 +206,9 @@ test.describe('새 일정 알림 — 학부모', () => {
       expect(created.status).toBe(201);
       expect(created.body.notification.sent).toBeGreaterThanOrEqual(1);
 
-      await expect.poll(async () => page.evaluate(async () => {
-        const registration = await navigator.serviceWorker.ready;
-        return (await registration.getNotifications()).map((n) => n.title);
-      }), { timeout: 60_000 }).toContain(`새 일정 · ${title}`);
-
-      await card.getByText(SWITCH_LABEL).click();
-      await expect(card.getByRole('switch', { name: SWITCH_LABEL })).not.toBeChecked();
-    } finally {
-      await context.close();
-      rmSync(profile, { recursive: true, force: true });
-    }
+      await expect.poll(async () => (await shownNotifications(page)).map((n) => n.title), { timeout: 60_000 })
+        .toContain(`새 일정 · ${title}`);
+    });
   });
 });
 
@@ -254,5 +268,59 @@ test.describe('새 일정 알림 — 선생님', () => {
     expect(JSON.parse(response.request().postData()).notifyParents).toBe(false);
     expect((await response.json()).notification).toBeUndefined();
     await expect(page).toHaveURL(/\/events$/);
+  });
+});
+
+test.describe('새 사진 알림 — 선생님이 사진 폴더를 처음 공개할 때', () => {
+  // 서버 설정·구독 수에 따라 문구가 다르다 — 어느 경우든 알림 결과를 공개 알림 줄에 함께 보인다
+  const NOTIFY_RESULT = /명에게 알림을 보냈어요|알림을 켠 학부모가 아직 없어요|알림을 보내지 못했어요|알림 기능이 아직 준비되지 않아/;
+
+  test('처음 공개하면 학부모 알림을 요청하고 결과를 알려 준다 — 비공개로 돌렸다가 다시 공개하면 보내지 않는다', async ({ page }) => {
+    await loginAs(page, sessions.teacher);
+    await page.goto(`/photos/${sessions.album.pushFolderEventId}`);
+
+    const panel = page.getByLabel('학부모 공개');
+    await expect(panel.locator('.ui-publish__state')).toHaveText('비공개');
+    await expect(panel.getByText('누르면 사진 탭에 바로 나타나요. 알림을 켠 학부모에게 새 사진 알림도 가요.')).toBeVisible();
+
+    const isPatch = (r) => r.url().endsWith(`/api/events/${sessions.album.pushFolderEventId}/album`) && r.request().method() === 'PATCH';
+    let saved = page.waitForResponse(isPatch);
+    await panel.getByRole('button', { name: '학부모에게 공개' }).click();
+    const first = await (await saved).json();
+    expect(first.published).toBe(true);
+    expect(first.notification).toBeTruthy();
+    await expect(page.locator('.ui-toast')).toContainText('학부모에게 공개했어요 · ');
+    await expect(page.locator('.ui-toast')).toHaveText(NOTIFY_RESULT);
+    await expect(panel.locator('.ui-publish__state')).toHaveText('공개 중');
+
+    // 비공개로 돌리면 — 이미 한 번 공개했으니 알림 안내가 사라진다
+    await panel.getByRole('button', { name: '비공개로 전환' }).click();
+    await expect(panel.locator('.ui-publish__state')).toHaveText('비공개');
+    await expect(panel.getByText('누르면 사진 탭에 바로 나타나요.', { exact: true })).toBeVisible();
+
+    saved = page.waitForResponse(isPatch);
+    await panel.getByRole('button', { name: '학부모에게 공개' }).click();
+    const again = await (await saved).json();
+    expect(again.published).toBe(true);
+    expect(again.notification).toBeUndefined();
+    await expect(page.locator('.ui-toast')).toHaveText('학부모에게 공개했어요');
+  });
+
+  test('실제 푸시 서비스 왕복 — 사진 폴더를 처음 공개하면 이 브라우저에 "새 사진" 알림이 뜨고, 누르면 그 폴더가 열린다', async ({ baseURL, request }) => {
+    test.skip(process.env.E2E_REAL_PUSH !== '1', '구글 푸시 서비스를 거치므로 E2E_REAL_PUSH=1 일 때만');
+    test.skip(!(await pushConfigured(request)), '서버에 VAPID 키가 없다');
+    test.setTimeout(90_000);
+    const id = sessions.album.realPushFolderEventId;
+
+    await withRealPushParent(baseURL, async (page) => {
+      const published = await api(request, sessions.teacher, 'PATCH', `/api/events/${id}/album`, { published: true });
+      expect(published.status).toBe(200);
+      expect(published.body.notification.sent).toBeGreaterThanOrEqual(1);
+
+      await expect.poll(async () => shownNotifications(page), { timeout: 60_000 }).toContainEqual({
+        title: `새 사진 · ${sessions.album.realPushFolderTitle}`,
+        url: `${baseURL}/parent/photos/${id}`
+      });
+    });
   });
 });

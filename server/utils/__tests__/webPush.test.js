@@ -1,5 +1,6 @@
 import {
-  pushConfig, isAllowedPushEndpoint, normalizeSubscription, eventWhen, eventPushMessage, ENDPOINT_MAX
+  pushConfig, isAllowedPushEndpoint, normalizeSubscription, eventWhen, eventPushMessage, ENDPOINT_MAX,
+  mediaCountLabel, photoFolderPushMessage
 } from '../webPush.js';
 
 const P256DH = 'B' + 'A'.repeat(86);          // 65바이트 공개키의 base64url 길이(87자)
@@ -140,5 +141,37 @@ describe('eventPushMessage', () => {
     );
     expect(notification.title).toBe('휴관 안내 · 추석 휴관');
     expect(notification.body).toBe('10월 3일(토) ~ 10월 5일(월)');
+  });
+});
+
+describe('mediaCountLabel', () => {
+  it('사진·영상 수를 한 줄로 — 없는 쪽은 뺀다', () => {
+    expect(mediaCountLabel({ images: 12, videos: 2 })).toBe('사진 12장 · 영상 2개');
+    expect(mediaCountLabel({ images: 3, videos: 0 })).toBe('사진 3장');
+    expect(mediaCountLabel({ images: 0, videos: 1 })).toBe('영상 1개');
+    expect(mediaCountLabel({})).toBe('');
+  });
+});
+
+describe('photoFolderPushMessage — 사진 전용 폴더를 처음 공개할 때', () => {
+  const appUrl = 'https://rg-manager.vercel.app';
+  const folder = { id: 51, type: 'folder', title: '가을 소풍', date: '2026-10-11' };
+
+  it('누르면 학부모 사진 탭의 그 폴더가 열리고, tag 는 이벤트 알림과 겹치지 않는다', () => {
+    const message = photoFolderPushMessage(folder, { images: 12, videos: 2 }, { appUrl });
+    expect(message.web_push).toBe(8030);
+    expect(message.notification).toEqual({
+      title: '새 사진 · 가을 소풍',
+      body: '10월 11일(일) · 사진 12장 · 영상 2개\n사진 탭에서 볼 수 있어요',
+      navigate: 'https://rg-manager.vercel.app/parent/photos/51',
+      tag: 'album-51',
+      lang: 'ko',
+      dir: 'ltr'
+    });
+  });
+
+  it('영상만 있으면 영상 수만', () => {
+    const { notification } = photoFolderPushMessage(folder, { images: 0, videos: 3 }, { appUrl });
+    expect(notification.body).toBe('10월 11일(일) · 영상 3개\n사진 탭에서 볼 수 있어요');
   });
 });

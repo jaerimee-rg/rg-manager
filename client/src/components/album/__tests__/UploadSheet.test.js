@@ -272,6 +272,47 @@ describe('UploadSheet — 새 폴더 만들기 · 사진 전용 폴더 (docs/pho
     expect(onDone).toHaveBeenCalledWith({ eventId: 50, uploaded: 1, published: false });
   });
 
+  it('새 폴더는 처음 공개할 때 학부모에게 알림이 간다고 체크 아래에 알린다 — 이벤트 앨범에는 없다', async () => {
+    render(<UploadSheet targets={TARGETS} allowPublish onClose={() => {}} />);
+    const hint = '처음 공개하면 알림을 켠 학부모에게 새 사진 알림이 가요';
+
+    // 처음 골라진 것은 이벤트(전국 꿈나무 대회) — 이벤트 앨범을 공개해도 알림은 없다
+    expect(screen.queryByText(hint)).not.toBeInTheDocument();
+
+    await fillNewFolder();
+
+    expect(screen.getByText(hint)).toBeInTheDocument();
+  });
+
+  it('다 올리고 공개하면 서버가 보낸 학부모 알림 결과를 완료 화면에 보인다', async () => {
+    fetchWithAuth.mockImplementation((url, options = {}) => {
+      if (url === '/api/albums') return ok({ created: true, target: CREATED });
+      if (url.endsWith('/media/uploads')) return ok({ items: [{ name: 'a.jpg', mediaId: 9, sessionUri: 'https://upload' }] });
+      if (url.includes('/complete')) return ok({ media: {} });
+      if (options.method === 'PATCH') return ok({ published: true, notification: { recipients: 3, sent: 4, failed: 0, removed: 0 } });
+      return ok({});
+    });
+    render(<UploadSheet targets={TARGETS} allowPublish onClose={() => {}} />);
+
+    await fillNewFolder();
+    await act(async () => { fireEvent.click(screen.getByRole('checkbox', { name: /다 올리면 바로 학부모에게 공개/ })); });
+    await uploadOne();
+
+    expect(screen.getByText(/학부모에게 공개했어요/)).toBeInTheDocument();
+    expect(screen.getByTestId('upload-notify-result')).toHaveTextContent('학부모 3명에게 알림을 보냈어요');
+  });
+
+  it('공개하지 않으면 알림 결과 줄도 없다', async () => {
+    mockServer();
+    render(<UploadSheet targets={TARGETS} allowPublish onClose={() => {}} />);
+
+    await fillNewFolder();
+    await uploadOne();
+
+    expect(screen.getByText('다 올렸어요')).toBeInTheDocument();
+    expect(screen.queryByTestId('upload-notify-result')).not.toBeInTheDocument();
+  });
+
   it('만든 폴더는 다시 고르기 목록 맨 위에 골라진 채로 있다', async () => {
     mockServer({ uploads: () => Promise.resolve({ ok: false, status: 400, json: () => Promise.resolve({ error: '실패' }) }) });
     render(<UploadSheet targets={TARGETS} allowPublish onClose={() => {}} />);
@@ -306,6 +347,29 @@ describe('UploadSheet — 이미 있는 사진 폴더에 올리기 (FR-517)', ()
     render(<UploadSheet apiBase="/api/events/51" eventTitle="가을 소풍" allowPublish photoFolder onClose={() => {}} />);
 
     expect(screen.getByRole('checkbox', { name: /다 올리면 바로 학부모에게 공개 \(사진 탭\)$/ })).toBeInTheDocument();
+  });
+
+  it('한 번 공개했다가 비공개로 돌린 폴더는 다시 공개해도 알림이 없어 안내도 없다', async () => {
+    const once = { ...FOLDER, eventId: 52, title: '봄 소풍', published: false, publishedAt: '2026-10-01T01:00:00Z' };
+    const never = { ...FOLDER, eventId: 53, title: '겨울 캠프', published: false, publishedAt: null };
+    render(<UploadSheet targets={[once, never]} allowPublish onClose={() => {}} />);
+    const hint = '처음 공개하면 알림을 켠 학부모에게 새 사진 알림이 가요';
+
+    expect(screen.queryByText(hint)).not.toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /겨울 캠프/ })); });
+    expect(screen.getByText(hint)).toBeInTheDocument();
+  });
+
+  it('앨범 화면에서도 처음 공개하는 사진 폴더에만 알림 안내를 붙인다', () => {
+    const hint = '처음 공개하면 알림을 켠 학부모에게 새 사진 알림이 가요';
+    const { unmount } = render(<UploadSheet apiBase="/api/events/51" eventTitle="가을 소풍" allowPublish photoFolder onClose={() => {}} />);
+    expect(screen.getByText(hint)).toBeInTheDocument();
+    unmount();
+
+    render(
+      <UploadSheet apiBase="/api/events/51" eventTitle="가을 소풍" allowPublish photoFolder publishedAt="2026-10-01T01:00:00Z" onClose={() => {}} />
+    );
+    expect(screen.queryByText(hint)).not.toBeInTheDocument();
   });
 
   it('이벤트 앨범은 그대로 사진 탭 · 이 이벤트 상세', () => {

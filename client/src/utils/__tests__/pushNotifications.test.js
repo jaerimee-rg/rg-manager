@@ -179,6 +179,7 @@ describe('notifyResultMessage', () => {
     [{ recipients: 0, sent: 0, failed: 2 }, '학부모 알림을 보내지 못했어요 · 잠시 뒤 다시 해 주세요'],
     [{ skipped: 'not_configured' }, '알림 기능이 아직 준비되지 않아 학부모 알림은 보내지 못했어요'],
     [{ skipped: 'private' }, '비공개 이벤트라 학부모 알림은 보내지 않았어요'],
+    [{ skipped: 'empty' }, '보이는 사진이 없어 학부모 알림은 보내지 않았어요'],
     [{ skipped: 'error' }, '학부모 알림을 보내지 못했어요']
   ])('%j → %s', (notification, message) => {
     expect(notifyResultMessage(notification)).toBe(message);
