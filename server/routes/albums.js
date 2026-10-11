@@ -20,7 +20,7 @@ router.delete('/people/:key', verifyToken, logAction('REMOVE_ALBUM_PERSON'), del
 router.post('/people/remove', verifyToken, logAction('REMOVE_ALBUM_PEOPLE'), deleteAllPeople);
 router.post('/people/:key/exclude', verifyToken, logAction('EXCLUDE_PERSON_PHOTOS'), excludeAllPersonPhotos);
 router.post('/people/:key/restore', verifyToken, logAction('RESTORE_PERSON_PHOTOS'), restoreAllPersonPhotos);
-// 이름·날짜는 사진 전용 폴더(type='folder')만 — 이벤트 앨범은 이벤트 관리가 맡는다. 삭제는 이벤트 앨범도 받는다(이벤트는 남는다) (FR-519)
+// 이름·날짜 수정과 삭제 모두 사진 전용 폴더와 이벤트 앨범을 받는다 (FR-519) — 이벤트 앨범을 고치면 이벤트(·대회 행)의 이름·날짜가 바뀌고, 지우면 앨범만 비우고 이벤트는 남는다
 router.patch('/:id', verifyToken, logAction('UPDATE_PHOTO_FOLDER'), updatePhotoFolder);
 router.delete('/:id', verifyToken, logAction('DELETE_PHOTO_FOLDER'), deletePhotoFolder);
 
