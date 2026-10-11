@@ -1172,11 +1172,51 @@ describe('PhotoAlbum — 사진 폴더 관리 (FR-519)', () => {
     expect(screen.getByRole('menuitem', { name: /폴더 삭제/ })).toBeInTheDocument();
   });
 
-  it('이벤트 앨범의 [폴더 관리] 에는 폴더 삭제만 있다 — 이름·날짜는 이벤트 관리에서 고친다', async () => {
+  it('이벤트 앨범(대회)의 [폴더 관리] 에도 이름·날짜 수정과 폴더 삭제가 있다 — 모든 폴더는 고칠 수 있다', async () => {
     await renderFolder({ album: ALBUM });
     await openMenu();
+    expect(screen.getByRole('menuitem', { name: /이름 · 날짜 수정/ })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /폴더 삭제/ })).toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: /이름 · 날짜 수정/ })).not.toBeInTheDocument();
+  });
+
+  it('이벤트 앨범의 수정 창은 대회 이름·날짜도 함께 바뀐다고 미리 알리고, 저장하면 같은 PATCH 로 보낸다', async () => {
+    await renderFolder({
+      album: ALBUM,
+      patch: () => ok({ eventId: 31, title: '제5회 회장배 대회', date: '2026-10-12', eventUpdated: true, driveRenamed: true })
+    });
+    await openEdit();
+
+    const dialog = screen.getByRole('dialog', { name: '폴더 이름 · 날짜 수정' });
+    expect(within(dialog).getByLabelText(/이름/)).toHaveValue('회장배 대회');
+    expect(dialog).toHaveTextContent('대회의 이름·날짜도 함께 바뀌어요 — 이벤트 관리와 학부모 일정에도 바뀐 이름으로 보여요.');
+
+    await act(async () => { fireEvent.change(within(dialog).getByLabelText(/이름/), { target: { value: '제5회 회장배 대회' } }); });
+    expect(within(dialog).getByText('2026-10-12 제5회 회장배 대회')).toBeInTheDocument();
+    await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: '저장' })); });
+
+    expect(fetchWithAuth).toHaveBeenCalledWith('/api/albums/31', {
+      method: 'PATCH', body: JSON.stringify({ title: '제5회 회장배 대회', date: '2026-10-12' })
+    });
+    expect(screen.getByText('이벤트와 폴더의 이름·날짜를 바꿨어요')).toBeInTheDocument();
+  });
+
+  it('며칠짜리 이벤트의 날짜를 옮기면 종료일도 함께 옮겨진다고 창에 보여 준다', async () => {
+    await renderFolder({ album: { ...ALBUM, eventType: 'special', eventDate: '2026-10-12', eventEndDate: '2026-10-13' } });
+    await openEdit();
+    const dialog = screen.getByRole('dialog', { name: '폴더 이름 · 날짜 수정' });
+    expect(dialog).not.toHaveTextContent('종료일');
+
+    await pickDate(within(dialog), /^날짜/, '2026-10-17');
+
+    expect(dialog).toHaveTextContent('이벤트의 이름·날짜도 함께 바뀌어요');
+    expect(dialog).toHaveTextContent('종료일도 2026-10-18 로 함께 옮겨져요.');
+  });
+
+  it('사진 전용 폴더의 수정 창에는 이벤트 안내가 없다', async () => {
+    await renderFolder();
+    await openEdit();
+    const dialog = screen.getByRole('dialog', { name: '폴더 이름 · 날짜 수정' });
+    expect(dialog).not.toHaveTextContent('함께 바뀌어요');
   });
 
   it('앨범(Drive 폴더)이 아직 없는 이벤트에는 [폴더 관리] 가 없다 — 지울 것이 없다', async () => {

@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { fetchWithAuth } from '../../utils/api';
 import { Button, Callout, DateField, Field, Icon, Input, Modal, Stack } from '../../components/ui';
-import { folderNameFrom, newFolderProblem, NEW_FOLDER_TITLE_MAX } from './albumState';
+import { folderEditNote, folderNameFrom, newFolderProblem, NEW_FOLDER_TITLE_MAX } from './albumState';
 
 /**
- * 사진 전용 폴더의 이름·날짜 고치기 (docs/photo-menu FR-519).
+ * 사진 폴더의 이름·날짜 고치기 (docs/photo-menu FR-519) — 사진 전용 폴더도, 이벤트 앨범(대회·스페셜)도.
  *
  * 저장하면 Drive 폴더 이름("날짜 이름")도 따라 바뀐다 — 아래에 바뀔 이름을 미리 보여 준다.
- * 이벤트 앨범에는 쓰지 않는다(이벤트의 이름·날짜는 이벤트 관리에서 고친다).
- * onSaved(result) — 서버 응답 그대로({ title, date, driveRenamed, … }).
+ * 이벤트 앨범은 폴더 이름이 이벤트에서 나오므로 이벤트의 이름·날짜가 함께 바뀐다 — 창이 미리 알린다(folderEditNote).
+ * onSaved(result) — 서버 응답 그대로({ title, date, eventUpdated, driveRenamed, … }).
  */
 function FolderEditDialog({ album, onClose, onSaved }) {
   const [draft, setDraft] = useState({ title: album.eventTitle || '', date: album.eventDate || '' });
@@ -18,6 +18,7 @@ function FolderEditDialog({ album, onClose, onSaved }) {
   const problem = newFolderProblem(draft);
   const unchanged = draft.title.trim() === (album.eventTitle || '') && draft.date === (album.eventDate || '');
   const hasDriveFolder = Boolean(album.driveFolderId);
+  const note = folderEditNote(album, draft);
 
   const save = async () => {
     if (problem || saving) return;
@@ -80,6 +81,8 @@ function FolderEditDialog({ album, onClose, onSaved }) {
             </span>
           </div>
         </div>
+
+        {note && <Callout tone="neutral">{note}</Callout>}
 
         {error && <Callout tone="danger">{error}</Callout>}
       </Stack>

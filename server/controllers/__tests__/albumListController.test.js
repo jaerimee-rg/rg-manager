@@ -3,7 +3,7 @@ import { jest } from '@jest/globals';
 jest.unstable_mockModule('../../models/Event.js', () => ({
   default: {
     listForPhotos: jest.fn(), createForPhotos: jest.fn(),
-    getById: jest.fn(), updateFolder: jest.fn(), delete: jest.fn(), removeAlbum: jest.fn()
+    getById: jest.fn(), updateFolder: jest.fn(), updateAlbumEvent: jest.fn(), delete: jest.fn(), removeAlbum: jest.fn()
   }
 }));
 jest.unstable_mockModule('../../services/albumService.js', () => ({
@@ -321,7 +321,8 @@ describe('PATCH /api/albums/:id — 사진 폴더 이름·날짜 고치기 (FR-5
       expect.objectContaining({ title: '가을 운동회', date: '2026-10-03', driveFolderId: 'f-50' })
     );
     expect(res.json).toHaveBeenCalledWith({
-      eventId: 50, title: '가을 운동회', date: '2026-10-03',
+      eventId: 50, title: '가을 운동회', date: '2026-10-03', endDate: null,
+      eventUpdated: false,
       expectedFolderName: '2026-10-03 가을 운동회',
       driveFolderName: '2026-10-03 가을 운동회',
       driveRenamed: true
@@ -385,15 +386,125 @@ describe('PATCH /api/albums/:id — 사진 폴더 이름·날짜 고치기 (FR-5
     expect(Event.updateFolder).toHaveBeenCalled();
   });
 
-  it('이벤트 앨범은 고치지 않는다 — 이벤트 관리가 맡는다', async () => {
-    Event.getById.mockResolvedValue(event({ id: 31, type: 'competition' }));
-    req.params = { id: '31' };
+  describe('이벤트 앨범(대회·스페셜)도 고친다 — 모든 폴더는 고칠 수 있어야 한다 (2026-10-11)', () => {
+    const eventAlbum = (overrides = {}) => event({
+      id: 4, type: 'competition', title: '13회 샤인컵', date: '2026-04-05', competitionId: 6,
+      driveFolderId: 'f-4', driveFolderName: '2026-04-05 13회 샤인컵', albumStatus: 'ready', albumPublished: true,
+      ...overrides
+    });
 
-    await updatePhotoFolder(req, res);
+    beforeEach(() => {
+      req.params = { id: '4' };
+      req.body = { title: '제13회 샤인컵', date: '2026-04-06' };
+      Event.getById.mockResolvedValue(eventAlbum());
+      Event.updateAlbumEvent.mockImplementation(async (id, { title, date, endDate }) => eventAlbum({ id, title, date, endDate }));
+      albumService.syncFolderName.mockResolvedValue({ renamed: true, name: '2026-04-06 제13회 샤인컵' });
+    });
 
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json.mock.calls[0][0].reason).toBe('not_photo_folder');
-    expect(Event.updateFolder).not.toHaveBeenCalled();
+    it('이벤트의 이름·날짜를 고치고(대회 행은 모델이 함께) Drive 폴더 이름도 따라 바꾼다', async () => {
+      await updatePhotoFolder(req, res);
+
+      expect(Event.getById).toHaveBeenCalledWith(4, 7, 'user');
+      expect(Event.updateAlbumEvent).toHaveBeenCalledWith(4, { title: '제13회 샤인컵', date: '2026-04-06', endDate: null });
+      expect(Event.updateFolder).not.toHaveBeenCalled();
+      expect(albumService.syncFolderName).toHaveBeenCalledWith(
+        7,
+        expect.objectContaining({ title: '13회 샤인컵', date: '2026-04-05' }),
+        expect.objectContaining({ title: '제13회 샤인컵', date: '2026-04-06', driveFolderId: 'f-4' })
+      );
+      expect(res.status).not.toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith({
+        eventId: 4, title: '제13회 샤인컵', date: '2026-04-06', endDate: null,
+        eventUpdated: true,
+        expectedFolderName: '2026-04-06 제13회 샤인컵',
+        driveFolderName: '2026-04-06 제13회 샤인컵',
+        driveRenamed: true
+      });
+    });
+
+    it('스페셜 앨범도 된다', async () => {
+      Event.getById.mockResolvedValue(eventAlbum({ type: 'special', competitionId: null }));
+
+      await updatePhotoFolder(req, res);
+
+      expect(Event.updateAlbumEvent).toHaveBeenCalled();
+      expect(res.json.mock.calls[0][0]).toMatchObject({ eventUpdated: true, title: '제13회 샤인컵' });
+    });
+
+    it('며칠짜리 이벤트는 시작일을 옮긴 만큼 종료일도 옮긴다 — 기간 길이는 그대로', async () => {
+      Event.getById.mockResolvedValue(eventAlbum({ type: 'special', date: '2026-04-05', endDate: '2026-04-07' }));
+      req.body = { title: '봄 캠프', date: '2026-05-30' };
+
+      await updatePhotoFolder(req, res);
+
+      // 4/5~4/7(3일) → 5/30~6/1 — 달이 바뀌어도 날 수로 센다
+      expect(Event.updateAlbumEvent).toHaveBeenCalledWith(4, { title: '봄 캠프', date: '2026-05-30', endDate: '2026-06-01' });
+    });
+
+    it('날짜를 앞으로 당겨도 기간째 옮긴다', async () => {
+      Event.getById.mockResolvedValue(eventAlbum({ type: 'special', date: '2026-03-01', endDate: '2026-03-02' }));
+      req.body = { title: '봄 캠프', date: '2026-02-28' };
+
+      await updatePhotoFolder(req, res);
+
+      expect(Event.updateAlbumEvent).toHaveBeenCalledWith(4, { title: '봄 캠프', date: '2026-02-28', endDate: '2026-03-01' });
+    });
+
+    it('이름만 바꾸면 종료일은 그대로다', async () => {
+      Event.getById.mockResolvedValue(eventAlbum({ type: 'special', endDate: '2026-04-07' }));
+      req.body = { title: '봄 캠프', date: '2026-04-05' };
+
+      await updatePhotoFolder(req, res);
+
+      expect(Event.updateAlbumEvent).toHaveBeenCalledWith(4, { title: '봄 캠프', date: '2026-04-05', endDate: '2026-04-07' });
+    });
+
+    it('같은 이름·날짜의 사진 폴더가 있어도 된다 — 새 폴더 만들기는 이벤트에 붙지 않는다', async () => {
+      Event.listForPhotos.mockResolvedValue([eventAlbum(), folder({ id: 51, title: '제13회 샤인컵', date: '2026-04-06' })]);
+
+      await updatePhotoFolder(req, res);
+
+      expect(res.status).not.toHaveBeenCalledWith(409);
+      expect(Event.updateAlbumEvent).toHaveBeenCalled();
+    });
+
+    it('앨범이 없는 이벤트(휴관일 포함)는 고칠 사진 폴더가 없다 — 404 no_album', async () => {
+      Event.getById.mockResolvedValue(eventAlbum({ driveFolderId: null, driveFolderName: null, albumStatus: 'none' }));
+
+      await updatePhotoFolder(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json.mock.calls[0][0].reason).toBe('no_album');
+      expect(Event.updateAlbumEvent).not.toHaveBeenCalled();
+    });
+
+    it('Drive 이름 바꾸기가 실패해도 이벤트 저장은 끝났다 — driveRenamed:false', async () => {
+      albumService.syncFolderName.mockResolvedValue({ renamed: false, error: 'invalid_grant' });
+
+      await updatePhotoFolder(req, res);
+
+      expect(res.json.mock.calls[0][0]).toMatchObject({
+        eventUpdated: true, driveRenamed: false, driveFolderName: '2026-04-05 13회 샤인컵'
+      });
+    });
+
+    it('검증은 사진 폴더와 같다 — 이름이 없으면 400, 이벤트는 그대로', async () => {
+      req.body = { title: ' ', date: '2026-04-06' };
+
+      await updatePhotoFolder(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(Event.updateAlbumEvent).not.toHaveBeenCalled();
+    });
+
+    it('고칠 행이 사라졌으면(그 사이 지워짐) 404', async () => {
+      Event.updateAlbumEvent.mockResolvedValue(null);
+
+      await updatePhotoFolder(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(albumService.syncFolderName).not.toHaveBeenCalled();
+    });
   });
 
   it('남의 폴더·없는 폴더는 404', async () => {
