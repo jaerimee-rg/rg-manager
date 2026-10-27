@@ -142,7 +142,7 @@ import { Button, Card, DataTable, Modal, PageHeader } from '../components/ui';
 
 ### 표시
 `Card` `Badge` `Tag` `Avatar` `AvatarGroup` `Stat` `IconTile` `DataTable`
-`List`/`ListRow` `DescriptionList` `Breadcrumb` `PageHeader` `Icon`
+`List`/`ListRow`/`CheckRow` `DescriptionList` `Breadcrumb` `PageHeader` `Icon`
 
 - `Badge tone`: `neutral` 종이 · `brand` 옅은 별 · `success` 별(활동 중) · `warning` 옅은 별 + 점선(확인 필요) ·
   `danger` 빨강 · `solid` 잉크(확정) · `muted` 연필 점선(대기 · 비활성)
@@ -151,7 +151,11 @@ import { Button, Card, DataTable, Modal, PageHeader } from '../components/ui';
 
 ### 입력
 `Field` `Input` `Textarea` `Select` `InputGroup` `Checkbox` `Radio`
-`Switch` `SwitchField` `Choice` `SearchInput`
+`Switch` `SwitchField` `Choice` `SearchInput` `MultiSelect`
+
+- `MultiSelect`: 여러 개를 고르는 검색칸 + 드롭다운 체크 목록(한 개만 고르면 `Select`). 체크해도 닫히지 않고,
+  바깥 누르기 · Esc · [완료] 로 닫는다. 고른 것은 화면이 아래에 따로 목록으로 그린다(예: 보강 출석 추가).
+  시트·모달 안에서는 열 때 검색칸을 위로 올리고 목록 높이를 남는 자리에 맞춰, 버튼 줄에 가리지 않는다.
 
 ### 피드백
 `Callout` `PromoCard` `EmptyState` `Modal` `ConfirmDialog`

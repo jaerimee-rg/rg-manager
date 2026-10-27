@@ -1526,6 +1526,67 @@ html { font-synthesis: none; }
 }
 
 /* ---------------------------------------------------------------- *
+ * MultiSelect — 검색칸 + 드롭다운 체크 목록 (components/ui/MultiSelect)
+ * 펼친 목록은 떠 있지 않고 검색칸 아래 자리를 차지한다 — 시트·모달 본문은 스크롤 상자라
+ * 떠 있는 목록은 본문 끝에서 잘린다. 대신 열 때 검색칸을 위로 올리고 목록 높이를 남는 자리에 맞춘다.
+ * ---------------------------------------------------------------- */
+.ui-multiselect__field { padding-right: var(--space-1); }
+/* 지우기는 우리 ✕ 하나 — 브라우저 기본 ✕ 가 옆에 또 뜨지 않게 */
+.ui-multiselect__field input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; display: none; }
+.ui-multiselect__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 32px;
+  flex-shrink: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-pill);
+  color: var(--ink-600);
+  cursor: pointer;
+}
+.ui-multiselect__toggle:hover { color: var(--ink-900); background: var(--ink-100); }
+.ui-multiselect__toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ui-multiselect__toggle svg { transition: transform var(--duration-fast) var(--ease); }
+.ui-multiselect[data-open="true"] .ui-multiselect__toggle svg { transform: rotate(180deg); }
+.ui-multiselect__panel {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+  background: var(--surface);
+  border: var(--stroke);
+  border-radius: var(--shape-box);
+  box-shadow: var(--shadow-popover);
+  overflow: hidden;
+}
+.ui-multiselect__options {
+  /* --ui-multiselect-room: 열 때 MultiSelect 가 잰 남는 높이(스크롤 상자 안일 때) */
+  max-height: min(360px, var(--ui-multiselect-room, 55vh));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.ui-multiselect__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+  border-top: 1px dashed var(--rule);
+}
+.ui-multiselect__summary { font-size: var(--text-sm); font-weight: var(--weight-bold); color: var(--ink-900); }
+.ui-multiselect__empty {
+  margin: 0;
+  padding: var(--space-5) var(--space-4);
+  text-align: center;
+  font-family: var(--font-hand);
+  font-size: var(--hand-sm);
+  letter-spacing: var(--tracking-hand);
+  color: var(--ink-600);
+}
+
+/* ---------------------------------------------------------------- *
  * Menu / Dropdown
  * ---------------------------------------------------------------- */
 
@@ -4076,18 +4137,19 @@ button.ui-album-card__cover-slot:hover::after {
 /* 이벤트 폼 › 학부모에게 알림 보내기 — 체크 아래 한 줄 설명 */
 .event-form__notify-hint { margin: var(--space-1) 0 0; }
 
-/* 출석 체크 › 보강 출석 추가 (components/Attendance/MakeupAttendanceDialog) — 학생 여러 명을 골라 한 번에 */
+/* 출석 체크 › 보강 출석 추가 (components/Attendance/MakeupAttendanceDialog) — 검색 드롭다운으로 고르고, 고른 학생은 아래 목록에 */
 .ui-makeup .ui-overlay__body { display: flex; flex-direction: column; gap: var(--space-4); }
-.ui-makeup__picked { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.ui-makeup__picked { display: flex; flex-direction: column; gap: var(--space-2); }
+.ui-makeup__picked-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: var(--control-sm); }
 .ui-makeup__picked-count { font-size: var(--text-sm); font-weight: var(--weight-bold); color: var(--ink-900); }
-/* 학생이 많아도 검색칸·고른 학생이 밀려 올라가지 않게 목록만 스크롤한다 */
-.ui-makeup__list { max-height: min(320px, 45vh); overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .ui-makeup__empty {
   margin: 0;
-  padding: var(--space-5) var(--space-4);
+  padding: var(--space-4);
   text-align: center;
   font-family: var(--font-hand);
   font-size: var(--hand-sm);
   letter-spacing: var(--tracking-hand);
   color: var(--ink-600);
+  border: 1px dashed var(--rule);
+  border-radius: var(--shape-box);
 }

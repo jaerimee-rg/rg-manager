@@ -1951,20 +1951,36 @@ test.describe('선생님 — 보강 출석 여러 명 한 번에', () => {
     await expect(dialog).toBeVisible();
 
     const classSelect = dialog.getByRole('combobox', { name: /수업/ });
-    const firstBox = dialog.getByRole('checkbox', { name: first.name, exact: true });
-    const secondBox = dialog.getByRole('checkbox', { name: second.name, exact: true });
+    const search = dialog.getByRole('searchbox', { name: /학생/ });
+    const list = dialog.getByRole('group', { name: '학생 목록' });
+    const firstBox = list.getByRole('checkbox', { name: first.name, exact: true });
+    const secondBox = list.getByRole('checkbox', { name: second.name, exact: true });
+    const picked = dialog.getByRole('group', { name: '고른 학생' });
+
+    // 학생 목록은 검색칸을 누르기 전에는 접혀 있다
+    await expect(list).toHaveCount(0);
+    await expect(picked).toContainText('선택한 학생 0명');
 
     await classSelect.selectOption(String(already.id));
+    await search.click();
+    await expect(list).toBeVisible();
     await expect(firstBox).toBeDisabled();
     await expect(firstBox).toHaveAccessibleDescription(/이미 출석/);
 
     await classSelect.selectOption(String(target.id));
+    await search.click();
     await expect(firstBox).toBeEnabled();
     await firstBox.check();
-    await secondBox.check();
 
-    const picked = dialog.getByRole('group', { name: '고른 학생' });
-    await expect(picked).toContainText('2명 선택');
+    // 검색으로 좁혀도 이미 고른 학생은 아래 목록에 남는다
+    await search.fill(second.name);
+    await expect(firstBox).toHaveCount(0);
+    await secondBox.check();
+    await expect(list).toContainText('2명 선택');
+
+    await list.getByRole('button', { name: '완료' }).click();
+    await expect(list).toHaveCount(0);
+    await expect(picked).toContainText('선택한 학생 2명');
     await expect(picked).toContainText(first.name);
     await expect(picked).toContainText(second.name);
 
@@ -1984,9 +2000,82 @@ test.describe('선생님 — 보강 출석 여러 명 한 번에', () => {
     // 다시 열면 방금 넣은 두 명은 "이미 출석" 이라 고를 수 없다
     await page.getByRole('button', { name: '+ 보강 출석 추가' }).click();
     await dialog.getByRole('combobox', { name: /수업/ }).selectOption(String(target.id));
+    await search.click();
     await expect(firstBox).toBeDisabled();
     await expect(secondBox).toBeDisabled();
     await expect(dialog.getByRole('button', { name: '추가', exact: true })).toBeDisabled();
+  });
+});
+
+/**
+ * 데스크톱 모달은 가운데 정렬이라 목록이 닫히면 모달이 줄며 버튼 줄이 올라간다.
+ * 목록을 펼친 채 [N명 추가] 를 한 번 누르면 그 한 번으로 추가돼야 한다(누르는 순간 닫으면 클릭이 사라졌다).
+ */
+test.describe('선생님 — 보강 출석 드롭다운을 펼친 채 바로 추가', () => {
+  test('목록을 닫지 않고 [1명 추가] 를 한 번 눌러도 추가된다 · 검색어가 있을 때 Esc 는 목록만 닫는다', async ({ page, request }) => {
+    await loginAs(page, sessions.teacher);
+    const cls = await api(request, sessions.teacher, 'POST', '/api/classes', {
+      name: `e2e 보강 바로반 ${run}`, schedule: '토 11:00', duration: '60분', instructor: 'e2e 선생님'
+    });
+    expect(cls.status).toBe(201);
+    const student = sessions.students[1];
+
+    await page.goto('/attendance');
+    await page.getByRole('button', { name: '+ 보강 출석 추가' }).click();
+    const dialog = page.getByRole('dialog', { name: '보강 출석 추가' });
+    await dialog.getByRole('combobox', { name: /수업/ }).selectOption(String(cls.body.id));
+
+    const search = dialog.getByRole('searchbox', { name: /학생/ });
+    const list = dialog.getByRole('group', { name: '학생 목록' });
+    await search.click();
+    await search.fill(student.name);
+    await page.keyboard.press('Escape');
+    await expect(list).toHaveCount(0);
+    await expect(search).toHaveValue(student.name); // 검색어는 남고 모달도 그대로
+    await expect(dialog).toBeVisible();
+
+    await search.click();
+    await list.getByRole('checkbox', { name: student.name, exact: true }).check();
+    await expect(list).toBeVisible();
+
+    const button = dialog.getByRole('button', { name: '1명 추가' });
+    const box = await button.boundingBox();
+    const [response] = await Promise.all([
+      page.waitForResponse((r) => r.url().endsWith('/api/attendance/makeup') && r.request().method() === 'POST'),
+      page.mouse.click(box.x + box.width / 2, box.y + box.height / 2) // 실제 마우스 한 번 — 다시 찾아 누르지 않는다
+    ]);
+    expect(response.status()).toBe(201);
+    await expect(dialog).toHaveCount(0);
+  });
+});
+
+/** 휴대폰 시트에서 학생 드롭다운을 펼치면 목록이 [N명 추가] 줄에 가리지 않고 다 보인다 */
+test.describe('선생님 — 좁은 화면의 보강 출석 학생 드롭다운', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('검색칸을 누르면 검색칸과 펼친 목록이 둘 다 버튼 줄 위에 보인다', async ({ page }) => {
+    await loginAs(page, sessions.teacher);
+    await page.goto('/attendance');
+    await page.getByRole('button', { name: '+ 보강 출석 추가' }).click();
+    const dialog = page.getByRole('dialog', { name: '보강 출석 추가' });
+    await dialog.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+
+    await dialog.getByRole('searchbox', { name: /학생/ }).click();
+    const list = dialog.getByRole('group', { name: '학생 목록' });
+    await expect(list.getByRole('button', { name: '완료' })).toBeVisible();
+
+    // 펼칠 때 검색칸을 본문 위로 올리고 목록 높이를 남는 자리에 맞춘다 — 스크롤이 멈출 때까지 기다린 뒤 잰다
+    const body = dialog.locator('.ui-overlay__body');
+    const bodyTop = await body.evaluate((el) => el.getBoundingClientRect().top);
+    const footerTop = await dialog.locator('.ui-overlay__footer').evaluate((el) => el.getBoundingClientRect().top);
+    await expect.poll(async () => {
+      const b = await list.boundingBox();
+      return b.y + b.height;
+    }).toBeLessThanOrEqual(footerTop + 1);
+    const searchBox = await dialog.getByRole('searchbox', { name: /학생/ }).boundingBox();
+    expect(searchBox.y).toBeGreaterThanOrEqual(bodyTop - 1); // 검색칸이 위로 밀려 가리지 않는다
+    const box = await list.boundingBox();
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
   });
 });
 
