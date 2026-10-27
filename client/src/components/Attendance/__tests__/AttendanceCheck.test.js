@@ -133,16 +133,47 @@ describe('AttendanceCheck - 보강 출석 여러 명 한 번에 추가', () => {
     fireEvent.change(within(dialog).getByRole('combobox', { name: /수업/ }), { target: { value: String(classId) } });
   };
 
-  it('학생을 여러 명 골라 요청 한 번으로 추가하고 결과를 알려 준다', async () => {
+  const searchBox = (dialog) => within(dialog).getByRole('searchbox', { name: /학생/ });
+
+  /** 검색칸을 누르면 학생 드롭다운이 펼쳐진다 */
+  const openStudentList = (dialog) => {
+    fireEvent.focus(searchBox(dialog));
+    return within(dialog).getByRole('group', { name: '학생 목록' });
+  };
+
+  const pickedGroup = (dialog) => within(dialog).getByRole('group', { name: '고른 학생' });
+
+  it('학생 목록은 검색칸을 누르기 전에는 접혀 있다', async () => {
+    render(<AttendanceCheck />);
+    await screen.findByRole('option', { name: /초급반/ });
+    const dialog = await openDialog();
+
+    expect(within(dialog).queryByRole('group', { name: '학생 목록' })).not.toBeInTheDocument();
+    expect(within(dialog).queryAllByRole('checkbox')).toHaveLength(0);
+    expect(pickedGroup(dialog)).toHaveTextContent('선택한 학생 0명');
+
+    const list = openStudentList(dialog);
+    expect(within(list).getAllByRole('checkbox')).toHaveLength(3);
+  });
+
+  it('드롭다운에서 여러 명을 체크하면 아래 목록에 쌓이고, 요청 한 번으로 추가한다', async () => {
     render(<AttendanceCheck />);
     await screen.findByRole('option', { name: /초급반/ });
     const dialog = await openDialog();
 
     chooseClass(dialog, 1);
-    fireEvent.click(within(dialog).getByRole('checkbox', { name: '박구름' }));
-    fireEvent.click(within(dialog).getByRole('checkbox', { name: '김하늘' }));
+    const list = openStudentList(dialog);
+    fireEvent.click(within(list).getByRole('checkbox', { name: '박구름' }));
+    fireEvent.click(within(list).getByRole('checkbox', { name: '김하늘' }));
 
-    expect(within(dialog).getByText('2명 선택')).toBeInTheDocument();
+    // 체크해도 드롭다운은 닫히지 않는다
+    expect(within(dialog).getByRole('group', { name: '학생 목록' })).toHaveTextContent('2명 선택');
+
+    const picked = pickedGroup(dialog);
+    expect(picked).toHaveTextContent('선택한 학생 2명');
+    const rows = picked.querySelectorAll('.ui-list-row__title');
+    expect([...rows].map((r) => r.textContent)).toEqual(['박구름', '김하늘']); // 고른 순서
+
     fireEvent.click(within(dialog).getByRole('button', { name: '2명 추가' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -150,9 +181,23 @@ describe('AttendanceCheck - 보강 출석 여러 명 한 번에 추가', () => {
     expect(posted[0]).toEqual({
       date: new Date().toISOString().split('T')[0],
       classId: 1,
-      studentIds: [3, 1], // 고른 순서
+      studentIds: [3, 1],
     });
     expect(await screen.findByRole('status')).toHaveTextContent('보강 출석 2명을 추가했어요.');
+  });
+
+  it('[완료] 를 누르면 드롭다운이 닫히고, 고른 학생은 목록에 남는다', async () => {
+    render(<AttendanceCheck />);
+    await screen.findByRole('option', { name: /초급반/ });
+    const dialog = await openDialog();
+    const list = openStudentList(dialog);
+    fireEvent.click(within(list).getByRole('checkbox', { name: '이바다' }));
+
+    fireEvent.click(within(list).getByRole('button', { name: '완료' }));
+
+    expect(within(dialog).queryByRole('group', { name: '학생 목록' })).not.toBeInTheDocument();
+    expect(pickedGroup(dialog)).toHaveTextContent('이바다');
+    expect(screen.getByRole('dialog', { name: '보강 출석 추가' })).toBeInTheDocument();
   });
 
   it('수업과 학생을 고르기 전에는 추가 버튼이 잠겨 있다', async () => {
@@ -161,7 +206,7 @@ describe('AttendanceCheck - 보강 출석 여러 명 한 번에 추가', () => {
     const dialog = await openDialog();
 
     expect(within(dialog).getByRole('button', { name: '추가' })).toBeDisabled();
-    fireEvent.click(within(dialog).getByRole('checkbox', { name: '김하늘' }));
+    fireEvent.click(within(openStudentList(dialog)).getByRole('checkbox', { name: '김하늘' }));
     expect(within(dialog).getByRole('button', { name: '1명 추가' })).toBeDisabled(); // 수업이 아직 없다
 
     chooseClass(dialog, 2);
@@ -183,7 +228,8 @@ describe('AttendanceCheck - 보강 출석 여러 명 한 번에 추가', () => {
     await screen.findByRole('option', { name: /초급반/ });
     const dialog = await openDialog();
 
-    const 이바다 = within(dialog).getByRole('checkbox', { name: '이바다' });
+    const list = openStudentList(dialog);
+    const 이바다 = within(list).getByRole('checkbox', { name: '이바다' });
     await waitFor(() => expect(이바다).toBeEnabled()); // 수업을 안 골랐으면 막지 않는다
 
     chooseClass(dialog, 2);
@@ -195,32 +241,37 @@ describe('AttendanceCheck - 보강 출석 여러 명 한 번에 추가', () => {
     expect(이바다).toBeEnabled();
   });
 
-  it('검색해도 고른 학생은 남아 있고, 태그의 X 로 뺄 수 있다', async () => {
+  it('검색으로 좁혀도 고른 학생은 남아 있고, 목록의 X 로 뺄 수 있다', async () => {
     render(<AttendanceCheck />);
     await screen.findByRole('option', { name: /초급반/ });
     const dialog = await openDialog();
     chooseClass(dialog, 1);
 
-    fireEvent.click(within(dialog).getByRole('checkbox', { name: '김하늘' }));
-    fireEvent.change(within(dialog).getByRole('searchbox', { name: /학생/ }), { target: { value: '구름' } });
+    const list = openStudentList(dialog);
+    fireEvent.click(within(list).getByRole('checkbox', { name: '김하늘' }));
+    fireEvent.change(searchBox(dialog), { target: { value: 'ㅂㄱ' } }); // 초성 검색
 
-    expect(within(dialog).queryByRole('checkbox', { name: '김하늘' })).not.toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole('checkbox', { name: '박구름' }));
+    expect(within(list).queryByRole('checkbox', { name: '김하늘' })).not.toBeInTheDocument();
+    fireEvent.click(within(list).getByRole('checkbox', { name: '박구름' }));
 
-    const picked = within(dialog).getByRole('group', { name: '고른 학생' });
-    expect(picked).toHaveTextContent('2명 선택');
+    const picked = pickedGroup(dialog);
+    expect(picked).toHaveTextContent('선택한 학생 2명');
     expect(picked).toHaveTextContent('김하늘');
 
-    fireEvent.click(within(dialog).getByRole('button', { name: '김하늘 빼기' }));
-    expect(within(dialog).getByRole('button', { name: '1명 추가' })).toBeEnabled();
+    fireEvent.click(within(picked).getByRole('button', { name: '김하늘 빼기' }));
+    expect(picked).toHaveTextContent('선택한 학생 1명');
     expect(picked).not.toHaveTextContent('김하늘');
+    expect(within(dialog).getByRole('button', { name: '1명 추가' })).toBeEnabled();
+
+    fireEvent.click(within(picked).getByRole('button', { name: '모두 빼기' }));
+    expect(picked).toHaveTextContent('선택한 학생 0명');
   });
 
   it('검색 결과가 없으면 그렇게 알려 준다', async () => {
     render(<AttendanceCheck />);
     await screen.findByRole('option', { name: /초급반/ });
     const dialog = await openDialog();
-    fireEvent.change(within(dialog).getByRole('searchbox', { name: /학생/ }), { target: { value: '없는이름' } });
+    fireEvent.change(searchBox(dialog), { target: { value: '없는이름' } });
     expect(within(dialog).getByText('검색 결과가 없어요')).toBeInTheDocument();
   });
 
@@ -230,14 +281,14 @@ describe('AttendanceCheck - 보강 출석 여러 명 한 번에 추가', () => {
     await screen.findByRole('option', { name: /초급반/ });
     const dialog = await openDialog();
     chooseClass(dialog, 1);
-    fireEvent.click(within(dialog).getByRole('checkbox', { name: '김하늘' }));
+    fireEvent.click(within(openStudentList(dialog)).getByRole('checkbox', { name: '김하늘' }));
     jest.spyOn(console, 'error').mockImplementation(() => {});
 
     fireEvent.click(within(dialog).getByRole('button', { name: '1명 추가' }));
 
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('학생을 찾을 수 없습니다.');
     expect(screen.getByRole('dialog', { name: '보강 출석 추가' })).toBeInTheDocument();
-    expect(within(dialog).getByRole('checkbox', { name: '김하늘' })).toBeChecked();
+    expect(pickedGroup(dialog)).toHaveTextContent('김하늘');
     console.error.mockRestore();
   });
 
@@ -249,7 +300,7 @@ describe('AttendanceCheck - 보강 출석 여러 명 한 번에 추가', () => {
     expect(screen.getByText('변경사항 있음')).toBeInTheDocument();
 
     const dialog = await openDialog();
-    fireEvent.click(within(dialog).getByRole('checkbox', { name: '박구름' }));
+    fireEvent.click(within(openStudentList(dialog)).getByRole('checkbox', { name: '박구름' }));
     fireEvent.click(within(dialog).getByRole('button', { name: '1명 추가' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
@@ -265,8 +316,9 @@ describe('AttendanceCheck - 보강 출석 여러 명 한 번에 추가', () => {
     await screen.findByRole('option', { name: /초급반/ });
     const dialog = await openDialog();
     chooseClass(dialog, 1);
-    fireEvent.click(within(dialog).getByRole('checkbox', { name: '김하늘' }));
-    fireEvent.click(within(dialog).getByRole('checkbox', { name: '박구름' }));
+    const list = openStudentList(dialog);
+    fireEvent.click(within(list).getByRole('checkbox', { name: '김하늘' }));
+    fireEvent.click(within(list).getByRole('checkbox', { name: '박구름' }));
     fireEvent.click(within(dialog).getByRole('button', { name: '2명 추가' }));
 
     expect(await screen.findByRole('status')).toHaveTextContent('보강 출석 1명을 추가했어요. 이미 출석한 1명은 건너뛰었어요.');

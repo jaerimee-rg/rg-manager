@@ -3,7 +3,6 @@ import {
   attendedStudentIds,
   makeupResultMessage,
   pendingStudentIds,
-  searchStudents,
   toggleId
 } from '../makeupAttendance';
 
@@ -35,20 +34,6 @@ describe('toggleId — 고른 학생 넣고 빼기', () => {
 describe('pendingStudentIds — 실제로 추가할 학생', () => {
   it('이미 출석한 학생은 빼고 고른 순서를 지킨다', () => {
     expect(pendingStudentIds([5, 2, 7], new Set([2]))).toEqual([5, 7]);
-  });
-});
-
-describe('searchStudents — 이름 검색', () => {
-  const students = [{ id: 1, name: '김하늘' }, { id: 2, name: '이바다' }];
-
-  it('검색어가 없거나 공백뿐이면 전부', () => {
-    expect(searchStudents(students, '')).toBe(students);
-    expect(searchStudents(students, '  ')).toBe(students);
-  });
-
-  it('이름 일부와 초성으로 찾는다', () => {
-    expect(searchStudents(students, '하늘').map((s) => s.id)).toEqual([1]);
-    expect(searchStudents(students, 'ㅇㅂ').map((s) => s.id)).toEqual([2]);
   });
 });
 

@@ -1,24 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchWithAuth } from '../../utils/api';
 import { calculateAge } from '../../utils/dateHelpers';
-import { Badge, Button, Callout, CheckRow, DateField, Field, List, Modal, SearchInput, Select, Tag } from '../ui';
-import {
-  addButtonLabel,
-  attendedStudentIds,
-  pendingStudentIds,
-  searchStudents,
-  toggleId
-} from './makeupAttendance';
+import { matchKoreanSearch } from '../../utils/koreanSearch';
+import { Badge, Button, Callout, DateField, Field, IconButton, List, ListRow, Modal, MultiSelect, Select } from '../ui';
+import { addButtonLabel, attendedStudentIds, pendingStudentIds, toggleId } from './makeupAttendance';
+
+const ageLine = (student) => `${student?.birthdate || '-'} (${calculateAge(student?.birthdate)}세)`;
+const nameMatches = (option, query) => matchKoreanSearch(query, option.label);
 
 /**
  * 보강 출석 추가 — 날짜·수업을 고르고 학생을 여러 명 골라 한 번에 넣는다.
- * 그 수업에 이미 출석한 학생은 목록에서 고를 수 없고, 서버도 한 번 더 걸러 낸다(POST /api/attendance/makeup).
+ * 학생은 검색 드롭다운(MultiSelect)에서 체크하고, 체크한 학생은 그 아래 "선택한 학생" 목록에 한 줄씩 쌓인다.
+ * 그 수업에 이미 출석한 학생은 고를 수 없고, 서버도 한 번 더 걸러 낸다(POST /api/attendance/makeup).
  * 열 때마다 새로 그려지므로(부모가 열 때만 렌더) 상태는 initialDate·initialClassId 에서 시작한다.
  */
 function MakeupAttendanceDialog({ students, classes, initialDate, initialClassId = '', onClose, onAdded }) {
   const [date, setDate] = useState(initialDate);
   const [classId, setClassId] = useState(initialClassId);
-  const [query, setQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState([]);
   const [records, setRecords] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -43,8 +41,22 @@ function MakeupAttendanceDialog({ students, classes, initialDate, initialClassId
 
   const attended = useMemo(() => attendedStudentIds(records, classId), [records, classId]);
   const pendingIds = pendingStudentIds(selectedIds, attended);
-  const visibleStudents = useMemo(() => searchStudents(students, query), [students, query]);
   const studentById = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
+  const options = useMemo(
+    () =>
+      students.map((s) => {
+        const done = attended.has(s.id);
+        return {
+          value: s.id,
+          label: s.name,
+          description: ageLine(s),
+          trailing: done ? <Badge tone="muted">이미 출석</Badge> : null,
+          disabled: done || submitting
+        };
+      }),
+    [students, attended, submitting]
+  );
+  const remove = (id) => setSelectedIds((ids) => ids.filter((x) => x !== id));
 
   const canSubmit = Boolean(date && classId && pendingIds.length > 0) && !submitting;
 
@@ -100,56 +112,52 @@ function MakeupAttendanceDialog({ students, classes, initialDate, initialClassId
         )}
       </Field>
 
-      <Field label="학생" required hint="여러 명을 고를 수 있어요. 그 수업에 이미 출석한 학생은 고를 수 없어요.">
+      <Field label="학생" required>
         {(props) => (
-          <SearchInput
+          <MultiSelect
             {...props}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onClear={() => setQuery('')}
+            options={options}
+            value={pendingIds}
+            onToggle={(id) => setSelectedIds((ids) => toggleId(ids, id))}
+            filter={nameMatches}
             placeholder="학생 이름 검색"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck="false"
+            listLabel="학생 목록"
+            emptyText={students.length === 0 ? '등록된 학생이 없어요' : '검색 결과가 없어요'}
+            summary={`${pendingIds.length}명 선택`}
           />
         )}
       </Field>
 
-      {pendingIds.length > 0 && (
-        <div className="ui-makeup__picked" role="group" aria-label="고른 학생">
-          <span className="ui-makeup__picked-count">{pendingIds.length}명 선택</span>
-          {pendingIds.map((id) => {
-            const name = studentById.get(id)?.name ?? '';
-            return (
-              <Tag key={id} onRemove={() => setSelectedIds((ids) => ids.filter((x) => x !== id))} removeLabel={`${name} 빼기`}>
-                {name}
-              </Tag>
-            );
-          })}
+      <div className="ui-makeup__picked" role="group" aria-label="고른 학생">
+        <div className="ui-makeup__picked-head">
+          <span className="ui-makeup__picked-count">선택한 학생 {pendingIds.length}명</span>
+          {pendingIds.length > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => setSelectedIds([])} disabled={submitting}>
+              모두 빼기
+            </Button>
+          )}
         </div>
-      )}
-
-      <List className="ui-makeup__list" role="group" aria-label="학생 목록">
-        {visibleStudents.length === 0 ? (
-          <p className="ui-makeup__empty">{students.length === 0 ? '등록된 학생이 없어요' : '검색 결과가 없어요'}</p>
+        {pendingIds.length === 0 ? (
+          <p className="ui-makeup__empty">위 검색칸을 눌러 학생을 골라 주세요</p>
         ) : (
-          visibleStudents.map((s) => {
-            const done = attended.has(s.id);
-            return (
-              <CheckRow
-                key={s.id}
-                title={s.name}
-                subtitle={`${s.birthdate || '-'} (${calculateAge(s.birthdate)}세)`}
-                trailing={done ? <Badge tone="muted">이미 출석</Badge> : null}
-                checked={!done && selectedIds.includes(s.id)}
-                disabled={done || submitting}
-                onChange={() => setSelectedIds((ids) => toggleId(ids, s.id))}
-              />
-            );
-          })
+          <List>
+            {pendingIds.map((id) => {
+              const student = studentById.get(id);
+              const name = student?.name ?? '';
+              return (
+                <ListRow
+                  key={id}
+                  title={name}
+                  subtitle={ageLine(student)}
+                  trailing={
+                    <IconButton icon="x" size="sm" variant="plain" label={`${name} 빼기`} onClick={() => remove(id)} disabled={submitting} />
+                  }
+                />
+              );
+            })}
+          </List>
         )}
-      </List>
+      </div>
 
       {error && <Callout tone="danger">{error}</Callout>}
     </Modal>

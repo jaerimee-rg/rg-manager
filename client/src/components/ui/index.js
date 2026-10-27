@@ -15,6 +15,7 @@ export { default as Card, CardHeader, CardFooter } from './Card';
 export { default as Badge, Tag } from './Badge';
 export { default as Avatar, AvatarGroup } from './Avatar';
 export { Field, Input, ClearableInput, DateField, Textarea, Select, InputGroup, Checkbox, Radio, Choice, Switch, SwitchField, SearchInput } from './Form';
+export { default as MultiSelect } from './MultiSelect';
 export { default as PageHeader, Breadcrumb } from './PageHeader';
 export { default as EmptyState } from './EmptyState';
 export { default as Callout, PromoCard } from './Callout';
