@@ -2007,6 +2007,48 @@ test.describe('선생님 — 보강 출석 여러 명 한 번에', () => {
   });
 });
 
+/**
+ * 데스크톱 모달은 가운데 정렬이라 목록이 닫히면 모달이 줄며 버튼 줄이 올라간다.
+ * 목록을 펼친 채 [N명 추가] 를 한 번 누르면 그 한 번으로 추가돼야 한다(누르는 순간 닫으면 클릭이 사라졌다).
+ */
+test.describe('선생님 — 보강 출석 드롭다운을 펼친 채 바로 추가', () => {
+  test('목록을 닫지 않고 [1명 추가] 를 한 번 눌러도 추가된다 · 검색어가 있을 때 Esc 는 목록만 닫는다', async ({ page, request }) => {
+    await loginAs(page, sessions.teacher);
+    const cls = await api(request, sessions.teacher, 'POST', '/api/classes', {
+      name: `e2e 보강 바로반 ${run}`, schedule: '토 11:00', duration: '60분', instructor: 'e2e 선생님'
+    });
+    expect(cls.status).toBe(201);
+    const student = sessions.students[1];
+
+    await page.goto('/attendance');
+    await page.getByRole('button', { name: '+ 보강 출석 추가' }).click();
+    const dialog = page.getByRole('dialog', { name: '보강 출석 추가' });
+    await dialog.getByRole('combobox', { name: /수업/ }).selectOption(String(cls.body.id));
+
+    const search = dialog.getByRole('searchbox', { name: /학생/ });
+    const list = dialog.getByRole('group', { name: '학생 목록' });
+    await search.click();
+    await search.fill(student.name);
+    await page.keyboard.press('Escape');
+    await expect(list).toHaveCount(0);
+    await expect(search).toHaveValue(student.name); // 검색어는 남고 모달도 그대로
+    await expect(dialog).toBeVisible();
+
+    await search.click();
+    await list.getByRole('checkbox', { name: student.name, exact: true }).check();
+    await expect(list).toBeVisible();
+
+    const button = dialog.getByRole('button', { name: '1명 추가' });
+    const box = await button.boundingBox();
+    const [response] = await Promise.all([
+      page.waitForResponse((r) => r.url().endsWith('/api/attendance/makeup') && r.request().method() === 'POST'),
+      page.mouse.click(box.x + box.width / 2, box.y + box.height / 2) // 실제 마우스 한 번 — 다시 찾아 누르지 않는다
+    ]);
+    expect(response.status()).toBe(201);
+    await expect(dialog).toHaveCount(0);
+  });
+});
+
 /** 휴대폰 시트에서 학생 드롭다운을 펼치면 목록이 [N명 추가] 줄에 가리지 않고 다 보인다 */
 test.describe('선생님 — 좁은 화면의 보강 출석 학생 드롭다운', () => {
   test.use({ viewport: { width: 390, height: 844 } });

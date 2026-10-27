@@ -42,7 +42,7 @@ function fitPanel(root, field, panel, options) {
 /**
  * 검색칸 + 드롭다운 체크 목록 — 여러 개를 골라야 할 때 쓴다(한 개만 고르면 Select).
  * 검색칸을 누르거나 입력하면 바로 아래에 목록이 펼쳐지고, 체크해도 닫히지 않는다.
- * 바깥을 누르거나 Esc · [완료] 로 닫는다. 고른 것을 보여 주는 자리는 화면이 따로 그린다.
+ * 바깥을 누르거나(클릭이 끝난 뒤) Esc · [완료] 로 닫는다. 고른 것을 보여 주는 자리는 화면이 따로 그린다.
  *
  * options: [{ value, label, description, trailing, disabled }]
  * value: 고른 value 배열 · onToggle(value): 하나 넣고 빼기
@@ -82,18 +82,16 @@ export function MultiSelect({
   const text = query.trim();
   const visible = text ? options.filter((option) => filter(option, text)) : options;
 
-  // 바깥(시트의 다른 칸 포함)을 누르면 닫는다
+  // 바깥(시트의 다른 칸 포함)을 누르면 닫는다 — mousedown 이 아니라 click 이 끝난 뒤에.
+  // 누르는 순간 닫으면 목록 높이만큼 모달이 줄어 [N명 추가] 가 손가락·마우스 밑에서 빠져나가고, 그 클릭은 사라진다.
+  // (본문을 끌어 스크롤해도 click 이 아니라 닫히지 않는다)
   useEffect(() => {
     if (!open) return undefined;
-    const onPointerDown = (event) => {
+    const onClick = (event) => {
       if (rootRef.current && !rootRef.current.contains(event.target)) setOpen(false);
     };
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('touchstart', onPointerDown);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('touchstart', onPointerDown);
-    };
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
   }, [open]);
 
   // 시트·모달 본문은 스크롤 상자라 아래쪽에서 열면 목록이 버튼 줄에 가린다 — 열 때 맞춰 둔다
@@ -125,9 +123,18 @@ export function MultiSelect({
 
   const onKeyDown = (event) => {
     if (event.key === 'Escape' && open) {
-      // 목록만 닫는다 — 시트·모달까지 닫히지 않게
+      // 목록만 닫는다 — 시트·모달까지 닫히지 않게. 검색칸의 기본 동작(검색어 지우기 → 입력 이벤트로 다시 열림)도 막는다
       event.stopPropagation();
+      event.preventDefault();
       close(inputRef);
+      return;
+    }
+    if (event.key === 'Tab') {
+      // Tab 으로 바깥 칸에 가면 닫는다 — 포커스가 옮겨 간 뒤에 본다. blur 로 닫으면 마우스로 [N명 추가] 를
+      // 누르는 순간(포커스가 옮겨 갈 때) 닫혀 버튼이 밀려나 클릭이 사라진다. 마우스는 바깥 click 이 맡는다.
+      setTimeout(() => {
+        if (rootRef.current && !rootRef.current.contains(document.activeElement)) setOpen(false);
+      }, 0);
       return;
     }
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
@@ -152,19 +159,12 @@ export function MultiSelect({
     else boxes[at - 1].focus();
   };
 
-  // Tab 으로 바깥 칸에 가면 닫는다. 누른 곳이 포커스를 안 받는 자리(relatedTarget 없음)면 바깥 누르기가 맡는다.
-  const onBlur = (event) => {
-    const next = event.relatedTarget;
-    if (next && rootRef.current && !rootRef.current.contains(next)) setOpen(false);
-  };
-
   return (
     <div
       ref={rootRef}
       className={cx('ui-multiselect', className)}
       data-open={open || undefined}
       onKeyDown={onKeyDown}
-      onBlur={onBlur}
     >
       <div ref={fieldRef} className="ui-search ui-multiselect__field">
         <Icon name="search" size={16} />

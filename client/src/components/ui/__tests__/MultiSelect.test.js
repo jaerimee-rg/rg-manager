@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { render, screen, fireEvent, within, act } from '@testing-library/react';
+import { render, screen, fireEvent, within, act, waitFor } from '@testing-library/react';
 import { Field, Modal, MultiSelect } from '../index';
 
 const options = [
@@ -72,7 +72,8 @@ describe('MultiSelect — 검색칸 + 드롭다운 체크 목록', () => {
     render(<Harness onModalClose={onModalClose} />);
     act(() => search().focus());
 
-    fireEvent.keyDown(search(), { key: 'Escape' });
+    const notPrevented = fireEvent.keyDown(search(), { key: 'Escape' });
+    expect(notPrevented).toBe(false); // 검색칸 기본 동작(검색어 지우기)도 막는다
     expect(panel()).not.toBeInTheDocument();
     expect(onModalClose).not.toHaveBeenCalled();
     expect(search()).toHaveFocus();
@@ -81,11 +82,20 @@ describe('MultiSelect — 검색칸 + 드롭다운 체크 목록', () => {
     expect(onModalClose).toHaveBeenCalledTimes(1);
   });
 
-  it('바깥을 누르거나 [완료] 를 누르면 닫힌다', () => {
+  it('바깥을 누르면 클릭이 끝난 뒤에 닫힌다 — 누르는 순간(mousedown)에는 그대로', () => {
     render(<Harness />);
     fireEvent.focus(search());
-    fireEvent.mouseDown(screen.getByRole('button', { name: '바깥 버튼' }));
+    const outside = screen.getByRole('button', { name: '바깥 버튼' });
+
+    fireEvent.mouseDown(outside);
+    expect(panel()).toBeInTheDocument(); // 닫히며 버튼 줄이 밀려 클릭을 놓치지 않게
+
+    fireEvent.click(outside);
     expect(panel()).not.toBeInTheDocument();
+  });
+
+  it('[완료] 를 누르면 닫힌다', () => {
+    render(<Harness />);
 
     fireEvent.click(search());
     fireEvent.click(within(panel()).getByRole('button', { name: '완료' }));
@@ -101,11 +111,29 @@ describe('MultiSelect — 검색칸 + 드롭다운 체크 목록', () => {
     expect(panel()).toBeInTheDocument();
   });
 
-  it('Tab 으로 바깥 칸에 가면 닫힌다', () => {
+  it('Tab 으로 바깥 칸에 가면 닫힌다', async () => {
     render(<Harness />);
-    fireEvent.focus(search());
-    fireEvent.blur(search(), { relatedTarget: screen.getByRole('button', { name: '바깥 버튼' }) });
-    expect(panel()).not.toBeInTheDocument();
+    act(() => search().focus());
+    fireEvent.keyDown(search(), { key: 'Tab' });
+    act(() => screen.getByRole('button', { name: '바깥 버튼' }).focus());
+    await waitFor(() => expect(panel()).not.toBeInTheDocument());
+  });
+
+  it('Tab 으로 목록 안 칸에 가면 열린 채다', async () => {
+    render(<Harness />);
+    act(() => search().focus());
+    fireEvent.keyDown(search(), { key: 'Tab' });
+    act(() => within(panel()).getByRole('checkbox', { name: '김하늘' }).focus());
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(panel()).toBeInTheDocument();
+  });
+
+  it('마우스로 바깥 버튼에 포커스가 옮겨 가는 것만으로는 닫히지 않는다(클릭이 끝나야 닫힌다)', async () => {
+    render(<Harness />);
+    act(() => search().focus());
+    act(() => screen.getByRole('button', { name: '바깥 버튼' }).focus()); // mousedown 이 포커스를 옮긴 상태
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(panel()).toBeInTheDocument();
   });
 
   it('↓ 로 첫 항목에 가고, ↑↓ 로 잠긴 항목을 건너뛰며 오간다', () => {
