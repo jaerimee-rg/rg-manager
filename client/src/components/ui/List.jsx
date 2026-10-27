@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import Icon from './Icon';
 
 const cx = (...parts) => parts.filter(Boolean).join(' ');
@@ -38,6 +38,38 @@ export function ListRow({ leading, title, subtitle, trailing, onClick, chevron, 
         </div>
       )}
     </As>
+  );
+}
+
+/**
+ * 체크박스가 달린 목록 한 줄 — 줄 어디를 눌러도 체크가 바뀐다. 여러 개를 고르는 목록에 쓴다.
+ * 체크박스의 이름은 title 이고, subtitle·trailing 은 설명으로 읽힌다.
+ */
+export function CheckRow({ title, subtitle, trailing, checked = false, onChange, disabled = false, className = '', ...rest }) {
+  const id = useId();
+  const describedBy = [subtitle && `${id}-sub`, trailing && `${id}-trail`].filter(Boolean).join(' ') || undefined;
+  return (
+    <label
+      className={cx('ui-list-row', 'ui-check-row', className)}
+      data-clickable={disabled ? undefined : 'true'}
+      data-checked={checked || undefined}
+      data-disabled={disabled || undefined}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onChange}
+        disabled={disabled}
+        aria-labelledby={`${id}-title`}
+        aria-describedby={describedBy}
+        {...rest}
+      />
+      <span className="ui-list-row__body">
+        <span className="ui-list-row__title" id={`${id}-title`}>{title}</span>
+        {subtitle && <span className="ui-list-row__subtitle" id={`${id}-sub`}>{subtitle}</span>}
+      </span>
+      {trailing && <span className="ui-list-row__trailing" id={`${id}-trail`}>{trailing}</span>}
+    </label>
   );
 }
 

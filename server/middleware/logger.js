@@ -60,6 +60,8 @@ const saveLog = async (req, action, target, responseData) => {
       details = `ID: ${target}`;
     } else if (action === 'CREATE_ATTENDANCE' && req.body) {
       details = `날짜: ${req.body.date}`;
+    } else if (action === 'CREATE_MAKEUP_ATTENDANCE' && req.body && responseData?.added) {
+      details = `날짜: ${req.body.date} · ${responseData.added.length}명`;
     } else if (action === 'DELETE_ATTENDANCE' && target) {
       details = `ID: ${target}`;
     } else if (action === 'LOGIN') {
