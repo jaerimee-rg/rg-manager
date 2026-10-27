@@ -1917,6 +1917,79 @@ test.describe('선생님 — 좁은 화면의 출석 학생 목록', () => {
   });
 });
 
+/**
+ * 출석 체크 › 보강 출석 추가 — 학생을 여러 명 골라 한 번에 넣는다.
+ * 학생 명단 정렬 테스트가 이 선생님의 학생 수를 세므로 학생은 새로 만들지 않고 픽스처 두 명을 쓴다.
+ */
+test.describe('선생님 — 보강 출석 여러 명 한 번에', () => {
+  test.beforeEach(async ({ page }) => {
+    await loginAs(page, sessions.teacher);
+  });
+
+  test('학생 두 명을 골라 한 번에 추가하고, 이미 출석한 학생은 고를 수 없다', async ({ page, request }) => {
+    const today = new Date().toISOString().split('T')[0];
+    const makeClass = async (name) => {
+      const res = await api(request, sessions.teacher, 'POST', '/api/classes', {
+        name, schedule: '일 10:00', duration: '60분', instructor: 'e2e 선생님'
+      });
+      expect(res.status).toBe(201);
+      return res.body;
+    };
+    const already = await makeClass(`e2e 보강 이미반 ${run}`);
+    const target = await makeClass(`e2e 보강반 ${run}`);
+    const [first, second] = sessions.students;
+
+    // 첫 학생은 "이미반" 에 오늘 이미 출석해 있다
+    const pre = await api(request, sessions.teacher, 'POST', '/api/attendance', {
+      studentId: first.id, classId: already.id, date: today
+    });
+    expect(pre.status).toBe(201);
+
+    await page.goto('/attendance');
+    await page.getByRole('button', { name: '+ 보강 출석 추가' }).click();
+    const dialog = page.getByRole('dialog', { name: '보강 출석 추가' });
+    await expect(dialog).toBeVisible();
+
+    const classSelect = dialog.getByRole('combobox', { name: /수업/ });
+    const firstBox = dialog.getByRole('checkbox', { name: first.name, exact: true });
+    const secondBox = dialog.getByRole('checkbox', { name: second.name, exact: true });
+
+    await classSelect.selectOption(String(already.id));
+    await expect(firstBox).toBeDisabled();
+    await expect(firstBox).toHaveAccessibleDescription(/이미 출석/);
+
+    await classSelect.selectOption(String(target.id));
+    await expect(firstBox).toBeEnabled();
+    await firstBox.check();
+    await secondBox.check();
+
+    const picked = dialog.getByRole('group', { name: '고른 학생' });
+    await expect(picked).toContainText('2명 선택');
+    await expect(picked).toContainText(first.name);
+    await expect(picked).toContainText(second.name);
+
+    const [response] = await Promise.all([
+      page.waitForResponse((r) => r.url().endsWith('/api/attendance/makeup') && r.request().method() === 'POST'),
+      dialog.getByRole('button', { name: '2명 추가' }).click()
+    ]);
+    expect(response.status()).toBe(201);
+
+    await expect(dialog).toHaveCount(0);
+    await expect(page.locator('.ui-toast')).toContainText('보강 출석 2명을 추가했어요.');
+
+    const records = await api(request, sessions.teacher, 'GET', `/api/attendance/date/${today}`);
+    const inTarget = records.body.filter((r) => r.classId === target.id).map((r) => r.studentId).sort();
+    expect(inTarget).toEqual([first.id, second.id].sort());
+
+    // 다시 열면 방금 넣은 두 명은 "이미 출석" 이라 고를 수 없다
+    await page.getByRole('button', { name: '+ 보강 출석 추가' }).click();
+    await dialog.getByRole('combobox', { name: /수업/ }).selectOption(String(target.id));
+    await expect(firstBox).toBeDisabled();
+    await expect(secondBox).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: '추가', exact: true })).toBeDisabled();
+  });
+});
+
 test.describe('선생님 — 전체 사진 (모든 폴더)', () => {
   // 따로 된 선생님: 대회 앨범(사진 51·52) + 사진 전용 폴더(53·54). 아이 가는 51·52·53, 나는 52 에만
   const all = sessions.allPhotos;

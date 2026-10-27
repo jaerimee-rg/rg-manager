@@ -1078,6 +1078,22 @@ html { font-synthesis: none; }
   color: var(--ink-600);
 }
 
+/* 체크박스 줄(CheckRow) — 여러 개를 고르는 목록. 줄 전체가 label 이라 어디를 눌러도 체크가 바뀐다 */
+.ui-check-row { cursor: pointer; }
+.ui-check-row input {
+  width: 18px; height: 18px;
+  margin: 0;
+  accent-color: var(--ink);
+  flex-shrink: 0;
+  cursor: inherit;
+}
+.ui-check-row .ui-list-row__title,
+.ui-check-row .ui-list-row__subtitle { display: block; }
+.ui-check-row[data-checked="true"],
+.ui-check-row[data-checked="true"]:hover { background: var(--star-soft); }
+.ui-check-row[data-disabled="true"] { cursor: not-allowed; opacity: 0.55; }
+.ui-check-row:has(input:focus-visible) { box-shadow: inset 0 0 0 2px var(--ink), inset 0 0 0 5px var(--star); }
+
 /* ---------------------------------------------------------------- *
  * Stat — 숫자 요약 타일 (숫자는 제목 서체)
  *   variant: star(지금 중요한 숫자) · ink(합계) · alert(바로 처리할 것)
@@ -4059,3 +4075,19 @@ button.ui-album-card__cover-slot:hover::after {
 
 /* 이벤트 폼 › 학부모에게 알림 보내기 — 체크 아래 한 줄 설명 */
 .event-form__notify-hint { margin: var(--space-1) 0 0; }
+
+/* 출석 체크 › 보강 출석 추가 (components/Attendance/MakeupAttendanceDialog) — 학생 여러 명을 골라 한 번에 */
+.ui-makeup .ui-overlay__body { display: flex; flex-direction: column; gap: var(--space-4); }
+.ui-makeup__picked { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.ui-makeup__picked-count { font-size: var(--text-sm); font-weight: var(--weight-bold); color: var(--ink-900); }
+/* 학생이 많아도 검색칸·고른 학생이 밀려 올라가지 않게 목록만 스크롤한다 */
+.ui-makeup__list { max-height: min(320px, 45vh); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.ui-makeup__empty {
+  margin: 0;
+  padding: var(--space-5) var(--space-4);
+  text-align: center;
+  font-family: var(--font-hand);
+  font-size: var(--hand-sm);
+  letter-spacing: var(--tracking-hand);
+  color: var(--ink-600);
+}

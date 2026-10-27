@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { fetchWithAuth } from "../../utils/api";
 import { useAuth } from "../../context/AuthContext";
-import { matchKoreanSearch } from "../../utils/koreanSearch";
 import { calculateAge } from "../../utils/dateHelpers";
 import { useIsMobile } from "../../hooks/useMediaQuery";
+import { Toast } from "../ui";
+import MakeupAttendanceDialog from "./MakeupAttendanceDialog";
+import { makeupResultMessage } from "./makeupAttendance";
 
 function AttendanceCheck() {
   const { user } = useAuth();
@@ -17,14 +19,18 @@ function AttendanceCheck() {
   const [hasChanges, setHasChanges] = useState(false);
   const isMobile = useIsMobile();
 
-  // 보강 수업 추가 모달 상태
+  // 보강 출석 추가 대화상자
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addFormStudent, setAddFormStudent] = useState('');
-  const [addFormClass, setAddFormClass] = useState('');
-  const [addFormDate, setAddFormDate] = useState(new Date().toISOString().split('T')[0]);
-  const [studentSearchText, setStudentSearchText] = useState('');
-  const [showStudentDropdown, setShowStudentDropdown] = useState(false);
-  const [dropdownTouchStartY, setDropdownTouchStartY] = useState(null);
+  const [toast, setToast] = useState('');
+  const toastTimer = useRef(null);
+
+  const showToast = (message, duration = 3000) => {
+    setToast(message);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(''), duration);
+  };
+
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -121,78 +127,15 @@ function AttendanceCheck() {
     }
   };
 
-  const handleAddAttendance = async () => {
-    if (!addFormStudent || !addFormClass || !addFormDate) {
-      alert('학생, 수업, 날짜를 모두 선택해주세요.');
-      return;
+  // 보강 출석을 넣고 나면 보고 있는 날·수업의 출석 수에 더한다.
+  // 다시 불러오지 않는 건 저장하지 않은 체크를 지우지 않으려는 것 — 넣은 학생은 이미 저장돼 있다.
+  const handleMakeupAdded = (result, { date, classId }) => {
+    setShowAddModal(false);
+    showToast(makeupResultMessage(result));
+    const sameView = date === selectedDate && (!selectedClass || classId === parseInt(selectedClass));
+    if (sameView && result.added?.length) {
+      setCheckedStudents((prev) => new Set([...prev, ...result.added]));
     }
-
-    try {
-      // 중복 체크
-      const checkResponse = await fetchWithAuth(`/api/attendance/date/${addFormDate}`);
-      const existingRecords = await checkResponse.json();
-
-      const duplicate = existingRecords.find(
-        r => r.studentId === parseInt(addFormStudent) &&
-             r.classId === parseInt(addFormClass)
-      );
-
-      if (duplicate) {
-        alert('이미 해당 날짜에 동일한 출석 기록이 있습니다.');
-        return;
-      }
-
-      const response = await fetchWithAuth('/api/attendance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentId: parseInt(addFormStudent),
-          classId: parseInt(addFormClass),
-          date: addFormDate
-        })
-      });
-
-      if (response.ok) {
-        await loadAttendance();
-        setShowAddModal(false);
-        setAddFormStudent('');
-        setAddFormClass('');
-        setAddFormDate(new Date().toISOString().split('T')[0]);
-        alert('보강 출석이 추가되었습니다.');
-      }
-    } catch (error) {
-      console.error('출석 추가 실패:', error);
-      alert('출석 추가에 실패했습니다.');
-    }
-  };
-
-  const openAddModal = () => {
-    setAddFormStudent('');
-    setAddFormClass('');
-    setAddFormDate(selectedDate);
-    setStudentSearchText('');
-    setShowStudentDropdown(false);
-    setShowAddModal(true);
-  };
-
-  const getFilteredStudentsForModal = () => {
-    if (!studentSearchText) return students;
-    return students.filter(s =>
-      matchKoreanSearch(studentSearchText, s.name)
-    );
-  };
-
-  const getSelectedStudentName = () => {
-    if (!addFormStudent) return '';
-    const student = students.find(s => s.id === parseInt(addFormStudent));
-    return student ? student.name : '';
-  };
-
-  const handleSelectStudent = (studentId) => {
-    setAddFormStudent(studentId.toString());
-    const student = students.find(s => s.id === studentId);
-    setStudentSearchText(student ? student.name : '');
-    setShowStudentDropdown(false);
   };
 
   const filteredStudents = useMemo(() => {
@@ -233,182 +176,20 @@ function AttendanceCheck() {
       {/* Page Header */}
       <div className="page-header">
         <h2 className="page-title">출석 체크</h2>
-        <button className="btn btn-primary" onClick={openAddModal}>
+        <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
           + 보강 출석 추가
         </button>
       </div>
 
-      {/* Add Attendance Modal */}
       {showAddModal && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'var(--overlay-scrim)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: 'var(--spacing-lg)'
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowAddModal(false);
-          }}
-        >
-          <div
-            className="card"
-            style={{
-              width: '100%',
-              maxWidth: '400px',
-              maxHeight: '90vh',
-              overflow: 'visible'
-            }}
-          >
-            <div className="card-header">
-              <h3 className="card-title">보강 출석 추가</h3>
-              <button
-                onClick={() => setShowAddModal(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '1.5rem',
-                  cursor: 'pointer',
-                  color: 'var(--color-gray-500)',
-                  padding: '0',
-                  lineHeight: 1
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div style={{ marginTop: 'var(--spacing-lg)', overflow: 'visible' }} onClick={() => setShowStudentDropdown(false)}>
-              <div className="form-group">
-                <label className="form-label">날짜 *</label>
-                <input
-                  type="date"
-                  value={addFormDate}
-                  onChange={(e) => setAddFormDate(e.target.value)}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">수업 *</label>
-                <select
-                  value={addFormClass}
-                  onChange={(e) => setAddFormClass(e.target.value)}
-                >
-                  <option value="">수업을 선택하세요</option>
-                  {classes.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group" style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
-                <label className="form-label">학생 *</label>
-                <input
-                  type="text"
-                  placeholder="학생 이름을 검색하세요"
-                  value={studentSearchText}
-                  onChange={(e) => {
-                    setStudentSearchText(e.target.value);
-                    setAddFormStudent('');
-                    setShowStudentDropdown(true);
-                  }}
-                  onFocus={() => setShowStudentDropdown(true)}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck="false"
-                />
-                {showStudentDropdown && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '100%',
-                      left: 0,
-                      right: 0,
-                      maxHeight: '200px',
-                      overflowY: 'auto',
-                      backgroundColor: 'var(--surface)',
-                      border: 'var(--stroke-thin)',
-                      borderRadius: 'var(--shape-box)',
-                      boxShadow: 'var(--shadow-popover)',
-                      zIndex: 9999,
-                      WebkitOverflowScrolling: 'touch'
-                    }}
-                  >
-                    {getFilteredStudentsForModal().length > 0 ? (
-                      getFilteredStudentsForModal().map(s => (
-                        <div
-                          key={s.id}
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            handleSelectStudent(s.id);
-                          }}
-                          onTouchStart={(e) => {
-                            e.stopPropagation();
-                            setDropdownTouchStartY(e.touches[0].clientY);
-                          }}
-                          onTouchEnd={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            const touchEndY = e.changedTouches[0].clientY;
-                            const distance = Math.abs(touchEndY - dropdownTouchStartY);
-                            // 10px 이상 이동했으면 스크롤로 판단하여 선택하지 않음
-                            if (distance < 10) {
-                              handleSelectStudent(s.id);
-                            }
-                          }}
-                          style={{
-                            padding: 'var(--spacing-md)',
-                            cursor: 'pointer',
-                            backgroundColor: addFormStudent === s.id.toString() ? 'var(--color-primary-bg)' : 'transparent',
-                            borderBottom: '1px solid var(--color-gray-100)'
-                          }}
-                        >
-                          <div style={{ fontWeight: 500, pointerEvents: 'none' }}>{s.name}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--color-gray-500)', pointerEvents: 'none' }}>
-                            {s.birthdate || '-'} ({calculateAge(s.birthdate)}세)
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div style={{ padding: 'var(--spacing-md)', color: 'var(--color-gray-500)', textAlign: 'center' }}>
-                        검색 결과가 없습니다
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div style={{
-                display: 'flex',
-                gap: 'var(--spacing-sm)',
-                marginTop: 'var(--spacing-xl)'
-              }}>
-                <button
-                  className="btn btn-secondary"
-                  style={{ flex: 1 }}
-                  onClick={() => setShowAddModal(false)}
-                >
-                  취소
-                </button>
-                <button
-                  className="btn btn-primary"
-                  style={{ flex: 1 }}
-                  onClick={handleAddAttendance}
-                >
-                  추가
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <MakeupAttendanceDialog
+          students={students}
+          classes={classes}
+          initialDate={selectedDate}
+          initialClassId={selectedClass}
+          onClose={() => setShowAddModal(false)}
+          onAdded={handleMakeupAdded}
+        />
       )}
 
       {/* Date & Class Selection */}
@@ -571,6 +352,8 @@ function AttendanceCheck() {
           )}
         </div>
       )}
+
+      <Toast>{toast}</Toast>
     </div>
   );
 }

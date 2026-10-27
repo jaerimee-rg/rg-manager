@@ -69,6 +69,7 @@ function Logs() {
       'DELETE_CLASS': '수업 삭제',
       'REORDER_CLASSES': '수업 순서 변경',
       'CREATE_ATTENDANCE': '출석 체크',
+      'CREATE_MAKEUP_ATTENDANCE': '보강 출석 추가',
       'DELETE_ATTENDANCE': '출석 삭제',
       'DELETE_ATTENDANCE_BULK': '출석 일괄 삭제',
       'UPDATE_USER': '사용자 수정',

@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, within, cleanup } from '@testing-library/react';
 import {
   Badge, Button, Callout, ClearableInput, DataTable, EmptyState, Field, IconButton, Input,
-  Menu, MenuItem, Modal, Pagination, Progress, Switch, SwitchField, Tabs, Chip
+  Menu, MenuItem, Modal, Pagination, Progress, Switch, SwitchField, Tabs, Chip, CheckRow
 } from '../index';
 
 describe('Button', () => {
@@ -480,5 +480,31 @@ describe('Switch', () => {
     render(<SwitchField label="AI 답변" description="FAQ 를 근거로 답합니다." checked onChange={() => {}} />);
     expect(screen.getByRole('switch', { name: 'AI 답변' })).toBeChecked();
     expect(screen.getByText('FAQ 를 근거로 답합니다.')).toBeInTheDocument();
+  });
+});
+
+describe('CheckRow', () => {
+  it('줄 어디를 눌러도 체크가 바뀌고, 이름은 제목·설명은 부제와 trailing 이다', () => {
+    const onChange = jest.fn();
+    render(<CheckRow title="김하늘" subtitle="2015-01-01 (11세)" trailing={<span>이미 출석</span>} onChange={onChange} />);
+
+    const box = screen.getByRole('checkbox', { name: '김하늘' });
+    expect(box).toHaveAccessibleDescription('2015-01-01 (11세) 이미 출석');
+
+    fireEvent.click(screen.getByText('2015-01-01 (11세)'));
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('checked · disabled 를 data 속성으로도 넘겨 줄 모양을 CSS 가 정한다', () => {
+    const { container, rerender } = render(<CheckRow title="이바다" checked onChange={() => {}} />);
+    const row = container.querySelector('.ui-check-row');
+    expect(row).toHaveAttribute('data-checked', 'true');
+    expect(row).toHaveAttribute('data-clickable', 'true');
+
+    rerender(<CheckRow title="이바다" disabled onChange={() => {}} />);
+    expect(row).not.toHaveAttribute('data-checked');
+    expect(row).not.toHaveAttribute('data-clickable');
+    expect(row).toHaveAttribute('data-disabled', 'true');
+    expect(screen.getByRole('checkbox', { name: '이바다' })).toBeDisabled();
   });
 });

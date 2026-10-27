@@ -194,7 +194,9 @@ differs, not layout.
 **API Endpoints**:
 - `/api/students` - CRUD for students
 - `/api/classes` - CRUD for classes
-- `/api/attendance` - Attendance records (supports bulk operations)
+- `/api/attendance` - Attendance records (supports bulk operations). `POST /api/attendance/makeup` `{date, classId, studentIds}`
+  is 출석 체크 › 보강 출석 추가: several students in one request, the class's other records untouched (unlike `/bulk`),
+  students already in that class on that date skipped (`{added, skipped}`); class and students must be the caller's (404)
 - `/api/auth` - Login, signup, user management
 
 ### FAQ Chatbot AI Provider

@@ -22,7 +22,7 @@ export { default as Modal, ConfirmDialog } from './Modal';
 export { default as Menu, MenuItem, MenuSeparator, MenuLabel, Popover, OptionRow } from './Menu';
 export { default as Tooltip, InfoHint } from './Tooltip';
 export { default as DataTable } from './Table';
-export { default as List, ListRow, DescriptionList } from './List';
+export { default as List, ListRow, CheckRow, DescriptionList } from './List';
 export { default as Stat, IconTile } from './Stat';
 export { default as Tabs, Segmented } from './Tabs';
 export { default as Toolbar, Chip } from './Toolbar';
