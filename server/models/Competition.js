@@ -1,5 +1,15 @@
 import pool from '../database.js';
 import { safeJsonParse } from '../utils/safeJsonParse.js';
+import { parseOptions, resolveOptions } from '../services/eventService.js';
+
+// competition_students 의 납부 여부 칸. SQL 칸 이름으로도 쓰이므로 요청 값을 그대로 쓰지 말고 이 목록으로 거른다.
+export const PAYMENT_FIELDS = ['paid', 'coachFeePaid', 'photoFeePaid', 'videoFeePaid', 'costumeFeePaid'];
+
+/** 요청 본문에서 납부 칸의 참/거짓 값만 고른다 */
+export const pickPaymentChanges = (body) =>
+  Object.fromEntries(
+    PAYMENT_FIELDS.filter((field) => typeof body?.[field] === 'boolean').map((field) => [field, body[field]])
+  );
 
 class Competition {
   static async getAll(userId, role) {
@@ -147,8 +157,12 @@ class Competition {
 
   static async getStudentsWithEvents(competitionId, userId, role) {
     let query = `
-      SELECT s.*, cs.events, cs.paid, cs."coachFeePaid" FROM students s
+      SELECT s.*, cs.events, cs.paid, cs."coachFeePaid", cs."photoFeePaid", cs."videoFeePaid", cs."costumeFeePaid",
+             e.options AS "eventOptions", r."optionIds" AS "registrationOptionIds", r.status AS "registrationStatus"
+      FROM students s
       INNER JOIN competition_students cs ON s.id = cs."studentId"
+      LEFT JOIN events e ON e."competitionId" = cs."competitionId"
+      LEFT JOIN event_registrations r ON r."eventId" = e.id AND r."studentId" = cs."studentId"
       WHERE cs."competitionId" = $1
     `;
     let params = [competitionId];
@@ -160,18 +174,27 @@ class Competition {
 
     query += ' ORDER BY s.name ASC, s.id ASC';
     const result = await pool.query(query, params);
-    return result.rows.map(row => ({
+    return result.rows.map(({ eventOptions, registrationOptionIds, registrationStatus, ...row }) => ({
       ...row,
+      ...Object.fromEntries(PAYMENT_FIELDS.map((field) => [field, row[field] || false])),
       events: safeJsonParse(row.events, []),
-      paid: row.paid || false,
-      coachFeePaid: row.coachFeePaid || false
+      // 학부모가 신청할 때 고른 항목. 직접 등록한 학생은 신청이 없어 빈 배열이다.
+      registrationOptions: resolveOptions(parseOptions(registrationOptionIds), parseOptions(eventOptions)),
+      // 확정 후 취소해도 참가 학생에서 자동으로 빠지지 않는다(FR-56)
+      registrationCancelled: registrationStatus === 'cancelled'
     }));
   }
 
-  static async updateStudentPaid(competitionId, studentId, paid, coachFeePaid) {
+  /** 넘어온 칸만 바꾼다 — 칸마다 따로 저장하므로 연달아 눌러도 서로의 값을 덮어쓰지 않는다 */
+  static async updateStudentPaid(competitionId, studentId, changes) {
+    const fields = Object.keys(pickPaymentChanges(changes));
+    if (fields.length === 0) return null;
+
+    const assignments = fields.map((field, index) => `"${field}" = $${index + 1}`).join(', ');
     const result = await pool.query(
-      `UPDATE competition_students SET paid = $1, "coachFeePaid" = $2 WHERE "competitionId" = $3 AND "studentId" = $4 RETURNING *`,
-      [paid, coachFeePaid, competitionId, studentId]
+      `UPDATE competition_students SET ${assignments}
+       WHERE "competitionId" = $${fields.length + 1} AND "studentId" = $${fields.length + 2} RETURNING *`,
+      [...fields.map((field) => changes[field]), competitionId, studentId]
     );
     return result.rows.length > 0 ? result.rows[0] : null;
   }

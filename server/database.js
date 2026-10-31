@@ -187,6 +187,14 @@ const initDatabase = async () => {
       ADD COLUMN IF NOT EXISTS "coachFeePaid" BOOLEAN DEFAULT FALSE
     `);
 
+    // competition_students 테이블에 사진비·영상비·의상대여비 납부 여부 컬럼 추가
+    await client.query(`
+      ALTER TABLE competition_students
+      ADD COLUMN IF NOT EXISTS "photoFeePaid" BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS "videoFeePaid" BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS "costumeFeePaid" BOOLEAN DEFAULT FALSE
+    `);
+
     // users 테이블에 카카오 로그인 관련 컬럼 추가
     await client.query(`
       ALTER TABLE users

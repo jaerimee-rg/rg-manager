@@ -10,6 +10,7 @@ import {
   normalizeOptions,
   todayKst,
   parseOptions,
+  resolveOptions,
   parsePlace,
   placeAfterLocationChange
 } from '../services/eventService.js';
@@ -262,12 +263,8 @@ export const getRegistrations = async (req, res) => {
     if (!event) return notFound(res);
 
     const registrations = await EventRegistration.listByEvent(event.id);
-    const labelById = new Map(event.options.map((o) => [o.id, o.label]));
 
-    const rows = registrations.map((r) => ({
-      ...r,
-      options: r.optionIds.map((id) => ({ id, label: labelById.get(id) || '(삭제된 옵션)' }))
-    }));
+    const rows = registrations.map((r) => ({ ...r, options: resolveOptions(r.optionIds, event.options) }));
 
     // 옵션별 인원 (취소는 빼고 센다)
     const counts = new Map(event.options.map((o) => [o.id, 0]));

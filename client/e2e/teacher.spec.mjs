@@ -1794,6 +1794,89 @@ test.describe('선생님 — 학생 명단 정렬', () => {
   });
 });
 
+test.describe('선생님 — 대회 참가 학생의 납부 체크와 신청 항목', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('확정한 학생 카드에 고른 항목이 보이고, 다섯 납부 체크가 화면 안에 들어오고 저장된다', async ({ page, request }) => {
+    const title = `e2e 납부 ${run}`;
+    const created = await api(request, sessions.teacher, 'POST', '/api/events', {
+      type: 'competition',
+      title,
+      date: '2026-12-19',
+      location: 'e2e 체육관',
+      options: ['볼', '의상 대여', '헤어 메이크업'],
+      isPublished: true,
+      registrationOpen: true
+    });
+    expect(created.status).toBe(201);
+    const { id: eventId, options, competitionId } = created.body;
+
+    const student = sessions.students[0];
+    const registered = await api(
+      request, sessions.teacher, 'PUT',
+      `/api/events/${eventId}/registrations/student/${student.id}`,
+      { optionIds: [options[0].id, options[1].id] }
+    );
+    expect(registered.status).toBeLessThan(300);
+    expect((await api(request, sessions.teacher, 'POST', `/api/events/${eventId}/registrations/confirm-all`)).status).toBe(200);
+
+    await loginAs(page, sessions.teacher);
+    await page.goto('/events');
+    await page.locator('tr', { hasText: title }).first().getByRole('button', { name: '참가 학생' }).click();
+    await expect(page.getByRole('heading', { name: `${title} - 참가 학생` })).toBeVisible();
+
+    const card = page.locator('.swipeable-card', { hasText: student.name });
+    await expect(card).toContainText('신청');
+    await expect(card.getByText('볼', { exact: true })).toBeVisible();
+    await expect(card.getByText('의상 대여', { exact: true })).toBeVisible();
+    await expect(card.getByText('헤어 메이크업', { exact: true })).toHaveCount(0);
+
+    const checks = card.getByRole('checkbox');
+    await expect(checks).toHaveCount(5);
+
+    // 휴대폰 폭에서도 다섯 칸 모두 카드 밖으로 나가지 않는다
+    const cardBox = await card.boundingBox();
+    for (const check of await checks.all()) {
+      const box = await check.boundingBox();
+      expect(box.x).toBeGreaterThanOrEqual(cardBox.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(cardBox.x + cardBox.width);
+    }
+
+    // 앞 칸을 저장하는 중에 다음 칸을 눌러도 두 칸 모두 저장되고, 눌러도 종목 모달은 열리지 않는다.
+    // 응답을 늦춰 두 요청이 겹치게 만든다 (Promise.all 로 동시에 누르면 가상 마우스가 하나라 클릭이 한쪽으로 몰린다)
+    const paidUrl = '**/api/competitions/*/students/*/paid';
+    await page.route(paidUrl, async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      await route.continue();
+    });
+    const photo = card.getByRole('checkbox', { name: `${student.name} 사진비` });
+    const costume = card.getByRole('checkbox', { name: `${student.name} 의상대여비` });
+    await photo.click();
+    await costume.click();
+    await expect(photo).toHaveAttribute('aria-checked', 'true');
+    await expect(costume).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByText('종목 및 수상 기록')).toHaveCount(0);
+    await page.unroute(paidUrl);
+
+    await page.reload();
+    await expect(photo).toHaveAttribute('aria-checked', 'true');
+    await expect(costume).toHaveAttribute('aria-checked', 'true');
+    await expect(card.getByRole('checkbox', { name: `${student.name} 영상비` })).toHaveAttribute('aria-checked', 'false');
+    await expect(card.getByRole('checkbox', { name: `${student.name} 참가비` })).toHaveAttribute('aria-checked', 'false');
+
+    // 체크 말고 카드를 누르면 지금처럼 종목 모달이 열린다
+    await card.getByText(student.name, { exact: true }).click();
+    await expect(page.getByText('종목 및 수상 기록')).toBeVisible();
+
+    const other = await api(
+      request, { token: sessions.teacher2Token }, 'PUT',
+      `/api/competitions/${competitionId}/students/${student.id}/paid`,
+      { paid: true }
+    );
+    expect(other.status).toBe(404);
+  });
+});
+
 test.describe('선생님 — 이벤트 공유 링크와 신청 명단', () => {
   test.beforeEach(async ({ page, context }) => {
     await loginAs(page, sessions.teacher);
