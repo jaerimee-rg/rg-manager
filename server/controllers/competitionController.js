@@ -1,4 +1,4 @@
-import Competition from '../models/Competition.js';
+import Competition, { pickPaymentChanges } from '../models/Competition.js';
 import { mirrorFromCompetition, syncCompetitionMirror } from '../services/competitionMirror.js';
 import EventRegistration from '../models/EventRegistration.js';
 
@@ -205,8 +205,21 @@ export const getCompetitionStudentIds = async (req, res) => {
 export const updateStudentPaid = async (req, res) => {
   try {
     const { id, studentId } = req.params;
-    const { paid, coachFeePaid } = req.body;
-    const result = await Competition.updateStudentPaid(id, studentId, paid, coachFeePaid);
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    // 대회 소유권 확인
+    const competition = await Competition.getById(id, userId, role);
+    if (!competition) {
+      return res.status(404).json({ error: '대회를 찾을 수 없습니다.' });
+    }
+
+    const changes = pickPaymentChanges(req.body);
+    if (Object.keys(changes).length === 0) {
+      return res.status(400).json({ error: '변경할 납부 항목이 없습니다.' });
+    }
+
+    const result = await Competition.updateStudentPaid(id, studentId, changes);
     if (!result) {
       return res.status(404).json({ error: '등록 정보를 찾을 수 없습니다.' });
     }

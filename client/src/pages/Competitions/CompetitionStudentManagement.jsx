@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { matchKoreanSearch } from '../../utils/koreanSearch';
 import { calculateAge } from '../../utils/dateHelpers';
 import { useIsMobile } from '../../hooks/useMediaQuery';
+import { PaymentChecks, RegistrationOptions } from './ParticipantCardParts';
 
 const APPARATUS_LIST = [
   { id: 'freehand', name: '맨손', hasLevel: true },
@@ -305,14 +306,13 @@ function CompetitionStudentManagement() {
     }
   };
 
-  // 납부 상태 토글 (type: 'paid' 또는 'coachFeePaid')
-  const togglePayment = async (studentId, type, e) => {
+  // 납부 상태 토글. 누른 칸만 보내야 연달아 눌러도 다른 칸을 옛 값으로 덮어쓰지 않는다.
+  const togglePayment = async (studentId, field, e) => {
     e.stopPropagation();
     const student = participantsWithEvents.find(p => p.id === studentId);
     if (!student) return;
 
-    const newPaid = type === 'paid' ? !student.paid : student.paid;
-    const newCoachFeePaid = type === 'coachFeePaid' ? !student.coachFeePaid : student.coachFeePaid;
+    const value = !student[field];
 
     try {
       const response = await fetchWithAuth(
@@ -320,15 +320,13 @@ function CompetitionStudentManagement() {
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paid: newPaid, coachFeePaid: newCoachFeePaid })
+          body: JSON.stringify({ [field]: value })
         }
       );
       if (response.ok) {
         // 로컬 상태 업데이트
         setParticipantsWithEvents(prev =>
-          prev.map(p =>
-            p.id === studentId ? { ...p, paid: newPaid, coachFeePaid: newCoachFeePaid } : p
-          )
+          prev.map(p => (p.id === studentId ? { ...p, [field]: value } : p))
         );
       }
     } catch (error) {
@@ -480,88 +478,12 @@ function CompetitionStudentManagement() {
                     onClick={() => handleCardClick(student)}
                   >
                     <div style={{ padding: 'var(--spacing-md)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div>
-                          <div style={{ fontWeight: 600, color: 'var(--color-gray-900)' }}>{student.name}</div>
-                          <div style={{ fontSize: '0.875rem', color: 'var(--color-gray-500)' }}>
-                            {student.birthdate} ({calculateAge(student.birthdate)}세)
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <div
-                            onClick={(e) => togglePayment(student.id, 'paid', e)}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              padding: '4px 8px',
-                              borderRadius: 'var(--shape-btn)',
-                              backgroundColor: student.paid ? 'var(--color-success-bg)' : 'var(--color-gray-100)',
-                              cursor: 'pointer',
-                              border: 'var(--stroke-thin)'
-                            }}
-                          >
-                            <span style={{
-                              width: '14px',
-                              height: '14px',
-                              borderRadius: '3px',
-                              border: student.paid ? '2px solid var(--color-success)' : '2px solid var(--color-gray-400)',
-                              backgroundColor: student.paid ? 'var(--color-success)' : 'var(--field)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: 'var(--paper)',
-                              fontSize: '9px',
-                              fontWeight: 'bold'
-                            }}>
-                              {student.paid && '✓'}
-                            </span>
-                            <span style={{
-                              fontSize: '0.6875rem',
-                              fontWeight: 500,
-                              color: student.paid ? 'var(--color-success)' : 'var(--color-gray-500)'
-                            }}>
-                              참가비
-                            </span>
-                          </div>
-                          <div
-                            onClick={(e) => togglePayment(student.id, 'coachFeePaid', e)}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              padding: '4px 8px',
-                              borderRadius: 'var(--shape-btn)',
-                              backgroundColor: student.coachFeePaid ? 'var(--color-primary-bg)' : 'var(--color-gray-100)',
-                              cursor: 'pointer',
-                              border: 'var(--stroke-thin)'
-                            }}
-                          >
-                            <span style={{
-                              width: '14px',
-                              height: '14px',
-                              borderRadius: '3px',
-                              border: student.coachFeePaid ? '2px solid var(--color-primary)' : '2px solid var(--color-gray-400)',
-                              backgroundColor: student.coachFeePaid ? 'var(--color-primary)' : 'var(--field)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: 'var(--paper)',
-                              fontSize: '9px',
-                              fontWeight: 'bold'
-                            }}>
-                              {student.coachFeePaid && '✓'}
-                            </span>
-                            <span style={{
-                              fontSize: '0.6875rem',
-                              fontWeight: 500,
-                              color: student.coachFeePaid ? 'var(--color-primary)' : 'var(--color-gray-500)'
-                            }}>
-                              출강비
-                            </span>
-                          </div>
-                        </div>
+                      <div style={{ fontWeight: 600, color: 'var(--color-gray-900)' }}>{student.name}</div>
+                      <div style={{ fontSize: '0.875rem', color: 'var(--color-gray-500)' }}>
+                        {student.birthdate} ({calculateAge(student.birthdate)}세)
                       </div>
+                      <PaymentChecks student={student} onToggle={togglePayment} />
+                      <RegistrationOptions student={student} />
                       {student.events && student.events.length > 0 && (
                         <div style={{
                           marginTop: 'var(--spacing-sm)',

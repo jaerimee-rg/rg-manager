@@ -69,6 +69,12 @@ export const parseOptions = (value) => {
   }
 };
 
+/** 신청에 저장된 옵션 id 를 지금 이벤트의 라벨로 바꾼다. 신청 뒤에 지워진 옵션은 표시만 바꿔 남긴다. */
+export const resolveOptions = (optionIds, options) => {
+  const labelById = new Map(options.map((o) => [o.id, o.label]));
+  return optionIds.map((id) => ({ id, label: labelById.get(id) || '(삭제된 옵션)' }));
+};
+
 /**
  * 학부모가 지금 이 이벤트에 신청할 수 있는지.
  * 사유는 화면 문구를 고르는 데 쓴다.
@@ -143,6 +149,7 @@ export default {
   eventEndMs,
   normalizeOptions,
   parseOptions,
+  resolveOptions,
   parsePlace,
   placeAfterLocationChange,
   canRegister,
