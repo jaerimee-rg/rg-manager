@@ -100,7 +100,7 @@ export const getAlbum = async (req, res) => {
         id: row.id,
         kind: row.kind,
         driveFileId: row.driveFileId,
-        thumbnailUrl: thumbnailUrl(row.driveFileId, 400),
+        thumbnailUrl: thumbnailUrl(row.driveFileId),
         crop: row.coverCrop || null
       })),
       maxCovers: MAX_ALBUM_COVERS,

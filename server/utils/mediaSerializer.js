@@ -19,11 +19,24 @@ const IMAGE_BASE = 'https://lh3.googleusercontent.com/d';
 const FILE_BASE = 'https://drive.google.com/file/d';
 
 /**
+ * lh3 에 달라고 할 수 있는 가장 작은 크기(긴 변, px). **이보다 작게 달라고 하면 사진이 누워서 올 수 있다.**
+ * 긴 변 640 이하는 Drive 가 파일을 받을 때 만들어 둔 썸네일을 그대로 주는데, 그 썸네일이 EXIF 회전(세로로 찍은 아이폰
+ * 사진 = Orientation 6)을 빠뜨린 채 만들어지기도 한다. 641 부터는 원본에서 새로 그려 회전을 적용한다.
+ * 실측(2026-11-12, Kisa 앨범): 10-28 에 올린 세로 사진 107장 전부 =s640·=w400-h400-c-rw 는 90° 누움, =s641 부터 바로 섬.
+ * 같은 휴대폰·같은 iOS 로 찍어 10-13 에 올린 사진은 640 이하도 멀쩡해서, 어느 파일이 그럴지 미리 알 수 없다 — 그래서 전부 이 크기 이상.
+ * 같은 값: client/src/utils/mediaUrls.js.
+ */
+export const MIN_IMAGE_SIZE = 641;
+
+/**
  * 갤러리 칸용 정사각형 썸네일(WebP). 썸네일을 그리는 칸은 모두 정사각형이거나 그보다 납작하고 object-fit: cover 라
  * 가운데를 잘라 받아도 보이는 부분이 같다 — 세로 사진을 통째로 받을 때보다 바이트가 절반쯤이다.
+ * 칸은 화면에서 400px 도 안 되지만 MIN_IMAGE_SIZE 로 받는다(한 장 25KB → 64KB) — 작게 받으면 누운 사진이 온다.
  */
-export const thumbnailUrl = (driveFileId, size = 400) =>
-  (driveFileId ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=w${size}-h${size}-c-rw` : null);
+export const thumbnailUrl = (driveFileId) =>
+  (driveFileId
+    ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=w${MIN_IMAGE_SIZE}-h${MIN_IMAGE_SIZE}-c-rw`
+    : null);
 
 /**
  * 앨범 카드 표지의 대표 사진 — **자르지 않고** 원래 비율로 받는다(WebP). 어느 부분이 보일지는 화면이 정한다
@@ -62,11 +75,12 @@ export const largeImageUrl = (driveFileId, width = 1600) =>
  * 얼굴 목록 표지용 사진 — 브라우저가 얼굴을 잘라 쓴다(client utils/faceCrops.js). 원래 비율 그대로(=sN, 긴 변 N)라
  * 얼굴 상자(0~1)가 그대로 맞고, lh3 는 CORS 를 허락해 캔버스로 자를 수 있다. 얼굴이 작을수록 큰 사진이 필요하다:
  * 얼굴 긴 변이 60px(잘라 낸 96px ÷ 여백 1.6) 이상 되게, 100 단위로 올려 같은 사진은 브라우저 캐시를 나눠 쓴다.
+ * 얼굴이 커도 MIN_IMAGE_SIZE 아래로는 받지 않는다(그래서 최소 700) — 누운 사진에 바로 선 사진의 상자를 대면 빈 벽이 잘린다.
  */
 export const faceCoverUrl = (driveFileId, box) => {
   if (!driveFileId) return null;
   const side = Math.max(Number(box?.w) || 0, Number(box?.h) || 0) || 0.05;
-  const size = Math.min(1920, Math.max(200, Math.ceil(60 / side / 100) * 100));
+  const size = Math.min(1920, Math.ceil(Math.max(MIN_IMAGE_SIZE, 60 / side) / 100) * 100);
   return `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=s${size}`;
 };
 
@@ -104,7 +118,7 @@ export const toParentMedia = (media, { myStudentIds = [], myUserId = null } = {}
   return {
     id: media.id,
     kind: media.kind,
-    thumbnailUrl: thumbnailUrl(media.driveFileId, 400),
+    thumbnailUrl: thumbnailUrl(media.driveFileId),
     largeUrl: largeImageUrl(media.driveFileId),
     originalUrl: originalUrl(media.driveFileId),
     previewUrl: media.kind === 'video' ? previewUrl(media.driveFileId) : null,
@@ -138,7 +152,7 @@ export const toParentAlbum = (event, counts = {}) => ({
     videos: counts.videos || 0,
     mine: counts.mine || 0
   },
-  previews: (counts.previews || []).map((id) => thumbnailUrl(id, 400)),
+  previews: (counts.previews || []).map((id) => thumbnailUrl(id)),
   // 선생님이 고른 대표 사진들 — 있으면 카드가 이것만 보여 준다(학부모에게 보이는 사진만 남는다: EventMedia previewRows)
   covers: coverUrls(counts.covers || []),
   // 같은 순서로 각 대표 사진의 보일 부분(선생님이 고른 것, 없으면 null) — 위치·확대 숫자뿐이다
@@ -160,7 +174,7 @@ export const toTeacherMedia = (media, { studentNames = {} } = {}) => ({
   id: media.id,
   kind: media.kind,
   driveFileId: media.driveFileId,
-  thumbnailUrl: thumbnailUrl(media.driveFileId, 400),
+  thumbnailUrl: thumbnailUrl(media.driveFileId),
   largeUrl: largeImageUrl(media.driveFileId),
   originalUrl: originalUrl(media.driveFileId),
   previewUrl: media.kind === 'video' ? previewUrl(media.driveFileId) : null,

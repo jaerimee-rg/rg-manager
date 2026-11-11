@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import RetryImage from '../RetryImage';
 
-const SRC = 'https://lh3.googleusercontent.com/d/f1=w400-h400-c-rw';
+const SRC = 'https://lh3.googleusercontent.com/d/f1=w641-h641-c-rw';
 const imgOf = (container) => container.querySelector('img');
 
 describe('RetryImage — 못 뜬 썸네일을 다시 부른다', () => {
@@ -52,12 +52,12 @@ describe('RetryImage — 못 뜬 썸네일을 다시 부른다', () => {
     const { container, rerender } = render(<RetryImage src={SRC} />);
     fireEvent.error(imgOf(container));
 
-    rerender(<RetryImage src="https://lh3.googleusercontent.com/d/f2=w400-h400-c-rw" />);
-    expect(imgOf(container)).toHaveAttribute('src', 'https://lh3.googleusercontent.com/d/f2=w400-h400-c-rw');
+    rerender(<RetryImage src="https://lh3.googleusercontent.com/d/f2=w641-h641-c-rw" />);
+    expect(imgOf(container)).toHaveAttribute('src', 'https://lh3.googleusercontent.com/d/f2=w641-h641-c-rw');
     expect(imgOf(container).style.visibility).toBe('');
     // 앞 주소의 기다림이 새 주소를 건드리지 않는다
     act(() => { jest.advanceTimersByTime(10000); });
-    expect(imgOf(container)).toHaveAttribute('src', 'https://lh3.googleusercontent.com/d/f2=w400-h400-c-rw');
+    expect(imgOf(container)).toHaveAttribute('src', 'https://lh3.googleusercontent.com/d/f2=w641-h641-c-rw');
   });
 
   it('주소가 없으면 아무것도 그리지 않는다', () => {

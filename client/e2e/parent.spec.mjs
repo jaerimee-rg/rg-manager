@@ -579,7 +579,7 @@ test.describe('학부모 — 사진', () => {
     const thumbs = page.getByRole('button', { name: /사진 열기|영상 열기/ }).locator('img');
     await expect(thumbs).toHaveCount(sessions.album.totalCount);
     for (const thumb of await thumbs.all()) {
-      await expect(thumb).toHaveAttribute('src', /^https:\/\/lh3\.googleusercontent\.com\/d\/e2e-file-.+=w400-h400-c-rw$/);
+      await expect(thumb).toHaveAttribute('src', /^https:\/\/lh3\.googleusercontent\.com\/d\/e2e-file-.+=w641-h641-c-rw$/);
       await expect.poll(() => thumb.evaluate((img) => img.naturalWidth)).toBeGreaterThan(0);
     }
 

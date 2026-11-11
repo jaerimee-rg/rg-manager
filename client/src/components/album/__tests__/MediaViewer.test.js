@@ -341,7 +341,7 @@ describe('MediaViewer — 옆으로 밀어 넘기기 (휴대폰)', () => {
   const photo = (id) => media({
     id,
     fileName: `IMG_${id}.jpg`,
-    thumbnailUrl: `https://lh3.googleusercontent.com/d/f${id}=w400-h400-c-rw`,
+    thumbnailUrl: `https://lh3.googleusercontent.com/d/f${id}=w641-h641-c-rw`,
     largeUrl: `https://lh3.googleusercontent.com/d/f${id}=w1600`
   });
   const clip = (id) => video(id, { largeUrl: `https://lh3.googleusercontent.com/d/v${id}=w1600` });

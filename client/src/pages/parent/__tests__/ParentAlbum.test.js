@@ -364,7 +364,7 @@ describe('ParentAlbum — 학부모도 공유 링크를 복사한다 (docs/photo
 });
 
 describe('ParentAlbum — 맨 위 얼굴 목록 (앨범의 사람마다 얼굴 하나)', () => {
-  const cover = { url: 'https://lh3.googleusercontent.com/d/f1=s600', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } };
+  const cover = { url: 'https://lh3.googleusercontent.com/d/f1=s700', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } };
   const PEOPLE = [
     { key: 'p21', photoCount: 2, mine: true, cover },
     { key: 'p11', photoCount: 3, mine: false, cover }

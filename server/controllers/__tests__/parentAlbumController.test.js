@@ -290,8 +290,8 @@ describe('얼굴 목록 (앨범의 사람마다 얼굴 하나)', () => {
       { key: 'p11', mine: false, photoCount: 3 }
     ]);
     // 표지 = 가장 큰 얼굴, 얼굴이 작을수록 큰 사진(긴 변 N)을 받는다
-    expect(people[1].cover).toEqual({ url: 'https://lh3.googleusercontent.com/d/file-1=s300', box: { x: 0.2, y: 0.3, w: 0.2, h: 0.2 } });
-    expect(people[0].cover.url).toBe('https://lh3.googleusercontent.com/d/file-2=s600');
+    expect(people[1].cover).toEqual({ url: 'https://lh3.googleusercontent.com/d/file-1=s700', box: { x: 0.2, y: 0.3, w: 0.2, h: 0.2 } });
+    expect(people[0].cover.url).toBe('https://lh3.googleusercontent.com/d/file-2=s700');
   });
 
   it('나가는 값은 화이트리스트 — 다른 아이의 이름·학생 id·특징값·사진 id 목록이 없다', async () => {

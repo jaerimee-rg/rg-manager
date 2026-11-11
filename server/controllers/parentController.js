@@ -419,7 +419,7 @@ export const getEvent = async (req, res) => {
               { ...row, tags: tagsByMedia[row.id] || [] },
               { myStudentIds: studentIds, myUserId: req.user.id }
             )),
-            previews: (counts.previews || []).map((id) => thumbnailUrl(id, 400)),
+            previews: (counts.previews || []).map((id) => thumbnailUrl(id)),
             uploadOpen: event.albumUploadOpen !== false
           };
         }

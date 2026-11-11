@@ -16,7 +16,7 @@ import AllPhotos from '../AllPhotos';
 
 const ok = (body, status = 200) => Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) });
 
-const cover = { url: 'https://lh3.googleusercontent.com/d/f1=s600', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } };
+const cover = { url: 'https://lh3.googleusercontent.com/d/f1=s700', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } };
 const PEOPLE = [{ key: 'p11', photoCount: 2, cover }, { key: 'p42', photoCount: 1, cover }];
 const album = (eventId, title) => ({ eventId, title, date: '2026-10-12', type: 'competition' });
 // 두 폴더(31 회장배 대회 · 29 여름 합숙)의 사진이 한 목록에

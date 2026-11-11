@@ -8,7 +8,7 @@ import { fetchWithAuth } from '../../../utils/api';
 import FacePeoplePicker from '../FacePeoplePicker';
 
 const respond = (body, status = 200) => Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) });
-const cover = { url: 'https://lh3.googleusercontent.com/d/f1=s600', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } };
+const cover = { url: 'https://lh3.googleusercontent.com/d/f1=s700', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } };
 // 등록된 아이(p11 — 뺄 수 없다) · 관계없는 사람 둘
 const PEOPLE = [
   { key: 'p11', photoCount: 3, cover, removable: false },
