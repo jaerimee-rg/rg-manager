@@ -65,7 +65,7 @@ export const listPhotoViewLog = async (req, res) => {
         fileName: row.originalName || null,
         // 사진을 지웠으면 기록만 남는다(mediaId NULL)
         mediaDeleted: row.kind === 'media' && !row.mediaId,
-        thumbnailUrl: row.driveFileId ? thumbnailUrl(row.driveFileId, 200) : null
+        thumbnailUrl: row.driveFileId ? thumbnailUrl(row.driveFileId) : null
       }))
     });
   } catch (error) {

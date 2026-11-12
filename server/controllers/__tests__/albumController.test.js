@@ -719,8 +719,8 @@ describe('updateAlbum — 대표 사진 (사진 목록 카드의 표지, 최대 
     expect(res.json.mock.calls[0][0]).toMatchObject({
       coverMediaIds: [7, 41],
       covers: [
-        { id: 7, kind: 'video', driveFileId: 'v-7', thumbnailUrl: 'https://lh3.googleusercontent.com/d/v-7=w400-h400-c-rw', crop: { x: 20, y: 30, zoom: 2 } },
-        { id: 41, kind: 'image', driveFileId: 'd-41', thumbnailUrl: 'https://lh3.googleusercontent.com/d/d-41=w400-h400-c-rw', crop: null }
+        { id: 7, kind: 'video', driveFileId: 'v-7', thumbnailUrl: 'https://lh3.googleusercontent.com/d/v-7=w641-h641-c-rw', crop: { x: 20, y: 30, zoom: 2 } },
+        { id: 41, kind: 'image', driveFileId: 'd-41', thumbnailUrl: 'https://lh3.googleusercontent.com/d/d-41=w641-h641-c-rw', crop: null }
       ],
       maxCovers: 4
     });
@@ -1235,8 +1235,8 @@ describe('얼굴 목록 (앨범의 사람마다 얼굴 하나)', () => {
     expect(MediaFace.listForAlbum).toHaveBeenCalledWith(3, { includeHidden: true });
     expect(res.json.mock.calls[0][0].people).toEqual([
       // removable · removedCount 는 선생님에게만 — 등록된 아이(학생 9 태그)로 묶인 사람은 뺄 수 없다
-      { key: 'p11', photoCount: 2, removable: false, removedCount: 0, cover: { url: 'https://lh3.googleusercontent.com/d/file-1=s600', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } } },
-      { key: 'p21', photoCount: 1, removable: true, removedCount: 0, cover: { url: 'https://lh3.googleusercontent.com/d/file-2=s600', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } } }
+      { key: 'p11', photoCount: 2, removable: false, removedCount: 0, cover: { url: 'https://lh3.googleusercontent.com/d/file-1=s700', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } } },
+      { key: 'p21', photoCount: 1, removable: true, removedCount: 0, cover: { url: 'https://lh3.googleusercontent.com/d/file-2=s700', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } } }
     ]);
   });
 

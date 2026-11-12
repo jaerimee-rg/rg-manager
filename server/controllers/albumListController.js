@@ -34,7 +34,7 @@ const toAlbum = (event, summary = {}, views = {}) => ({
     hidden: summary.hidden || 0,
     fromParents: summary.fromParents || 0
   },
-  previews: (summary.previews || []).map((id) => thumbnailUrl(id, 400)),
+  previews: (summary.previews || []).map((id) => thumbnailUrl(id)),
   // 선생님이 고른 대표 사진·영상(고른 순서, 최대 4장) — 있으면 카드 표지는 이것들만 (숨겼거나 지운 것은 빠지고, 다 빠지면 빈 목록이라
   // 최근 4장으로 돌아간다). 영상이면 Drive 가 만든 한 장면이 사진처럼 뜬다(재생 표시는 붙이지 않는다 — 사용자 결정 2026-10-09)
   covers: coverUrls(summary.covers || []),

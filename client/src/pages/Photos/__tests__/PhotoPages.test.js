@@ -891,7 +891,7 @@ describe('PhotoAlbum — 대표 사진 고르기 (4장까지)', () => {
 
 // ───────── 사진 전용 폴더 관리: 이름·날짜 수정 · 폴더 삭제 (docs/photo-menu FR-519) ─────────
 describe('PhotoAlbum — 얼굴 목록으로 거르기', () => {
-  const cover = { url: 'https://lh3.googleusercontent.com/d/f1=s600', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } };
+  const cover = { url: 'https://lh3.googleusercontent.com/d/f1=s700', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } };
   const PEOPLE = [{ key: 'p11', photoCount: 3, cover }, { key: 'p21', photoCount: 1, cover }];
 
   const renderWithPeople = async ({ people = PEOPLE, missing = null, removeFails = null } = {}) => {
@@ -1069,7 +1069,7 @@ describe('PhotoAlbum — 얼굴 목록으로 거르기', () => {
 });
 
 describe('PhotoAlbum — 고른 얼굴에서 잘못 묶인 사진 빼기 · 다시 넣기', () => {
-  const cover = { url: 'https://lh3.googleusercontent.com/d/f1=s600', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } };
+  const cover = { url: 'https://lh3.googleusercontent.com/d/f1=s700', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } };
   const PEOPLE = [{ key: 'p11', photoCount: 2, removedCount: 1, removable: true, cover }, { key: 'p21', photoCount: 1, removedCount: 0, removable: true, cover }];
 
   const renderAlbumWithFaces = async (editResponse = () => ok({ removed: 1, key: 'p11' })) => {

@@ -9,8 +9,8 @@ import FacePeopleStrip, { LONG_PRESS_MS } from '../FacePeopleStrip';
 const box = (x) => ({ x, y: 0.2, w: 0.1, h: 0.1 });
 const person = (key, url, x, overrides = {}) => ({ key, photoCount: 3, cover: { url, box: box(x) }, ...overrides });
 const PEOPLE = [
-  person('p1', 'https://lh3.googleusercontent.com/d/a=s600', 0.1, { photoCount: 5 }),
-  person('p2', 'https://lh3.googleusercontent.com/d/a=s600', 0.5, { photoCount: 2 }),   // 같은 사진의 다른 얼굴
+  person('p1', 'https://lh3.googleusercontent.com/d/a=s700', 0.1, { photoCount: 5 }),
+  person('p2', 'https://lh3.googleusercontent.com/d/a=s700', 0.5, { photoCount: 2 }),   // 같은 사진의 다른 얼굴
   person('p3', 'https://lh3.googleusercontent.com/d/b=s900', 0.3, { photoCount: 1 })
 ];
 
@@ -41,8 +41,8 @@ describe('FacePeopleStrip — 앨범 위 얼굴 목록', () => {
       .toEqual(['얼굴 1 · 사진 5장', '얼굴 2 · 사진 2장', '얼굴 3 · 사진 1장']);
 
     expect(cropFaces).toHaveBeenCalledTimes(2);
-    expect(cropFaces).toHaveBeenCalledWith('https://lh3.googleusercontent.com/d/a=s600', [PEOPLE[0].cover, PEOPLE[1].cover]);
-    expect(faceButtons().map(shownSrc)).toEqual(['data:a=s600@0.1', 'data:a=s600@0.5', 'data:b=s900@0.3']);
+    expect(cropFaces).toHaveBeenCalledWith('https://lh3.googleusercontent.com/d/a=s700', [PEOPLE[0].cover, PEOPLE[1].cover]);
+    expect(faceButtons().map(shownSrc)).toEqual(['data:a=s700@0.1', 'data:a=s700@0.5', 'data:b=s900@0.3']);
     expect(screen.getByText('5장')).toBeInTheDocument();
   });
 
@@ -96,12 +96,12 @@ describe('FacePeopleStrip — 앨범 위 얼굴 목록', () => {
     await act(async () => {});
     expect(cropFaces).toHaveBeenCalledTimes(2);
 
-    const extra = person('p4', 'https://lh3.googleusercontent.com/d/c=s400', 0.7);
+    const extra = person('p4', 'https://lh3.googleusercontent.com/d/c=s800', 0.7);
     await act(async () => { rerender(<FacePeopleStrip people={[...PEOPLE.map((one) => ({ ...one })), extra]} onSelect={jest.fn()} />); });
 
     expect(cropFaces).toHaveBeenCalledTimes(3);
-    expect(cropFaces).toHaveBeenLastCalledWith('https://lh3.googleusercontent.com/d/c=s400', [extra.cover]);
-    expect(faceButtons().map(shownSrc)).toEqual(['data:a=s600@0.1', 'data:a=s600@0.5', 'data:b=s900@0.3', 'data:c=s400@0.7']);
+    expect(cropFaces).toHaveBeenLastCalledWith('https://lh3.googleusercontent.com/d/c=s800', [extra.cover]);
+    expect(faceButtons().map(shownSrc)).toEqual(['data:a=s700@0.1', 'data:a=s700@0.5', 'data:b=s900@0.3', 'data:c=s800@0.7']);
   });
 
   it('자르는 중에 목록이 다시 와도 그 얼굴은 끝내 그려진다', async () => {

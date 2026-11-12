@@ -15,7 +15,7 @@ import { fetchWithAuth } from '../../../utils/api';
 import ParentAllPhotos, { toParentAllPhotosViewerItem } from '../ParentAllPhotos';
 
 const ok = (body, status = 200) => Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) });
-const cover = { url: 'https://lh3.googleusercontent.com/d/f1=s600', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } };
+const cover = { url: 'https://lh3.googleusercontent.com/d/f1=s700', box: { x: 0.1, y: 0.1, w: 0.1, h: 0.1 } };
 // 우리 아이(p11, 두 앨범에 2장) 가 맨 앞
 const PEOPLE = [{ key: 'p11', photoCount: 2, mine: true, cover }, { key: 'p42', photoCount: 1, mine: false, cover }];
 const album = (eventId, title) => ({ eventId, title, date: '2026-10-12', type: 'competition' });

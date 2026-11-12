@@ -1,5 +1,6 @@
 import {
-  toParentMedia, toTeacherMedia, toParentAlbum, thumbnailUrl, coverImageUrl, coverUrls, coverCropsOf, largeImageUrl, downloadUrl
+  toParentMedia, toTeacherMedia, toParentAlbum, thumbnailUrl, coverImageUrl, coverUrls, coverCropsOf, largeImageUrl, downloadUrl,
+  faceCoverUrl, MIN_IMAGE_SIZE
 } from '../mediaSerializer.js';
 
 const media = {
@@ -190,8 +191,45 @@ describe('URL 만들기', () => {
   });
 
   it('썸네일은 lh3 를 바로 부른다 — drive.google.com/thumbnail 의 302 를 한 번 덜 오간다. 정사각형으로 잘라 WebP 로', () => {
-    expect(thumbnailUrl('f1')).toBe('https://lh3.googleusercontent.com/d/f1=w400-h400-c-rw');
-    expect(thumbnailUrl('f1', 200)).toBe('https://lh3.googleusercontent.com/d/f1=w200-h200-c-rw');
+    expect(thumbnailUrl('f1')).toBe('https://lh3.googleusercontent.com/d/f1=w641-h641-c-rw');
+  });
+
+  it('썸네일은 641 보다 작게 받지 않는다 — 640 이하는 Drive 가 미리 만든 썸네일이라 세로 사진이 누워서 온다(Kisa 2026-11)', () => {
+    expect(MIN_IMAGE_SIZE).toBe(641);
+    // 예전 호출처럼 크기를 넘겨도 작아지지 않는다
+    expect(thumbnailUrl('f1', 200)).toBe(thumbnailUrl('f1'));
+  });
+
+  it('얼굴 목록 표지 사진: 얼굴이 작을수록 크게(100 단위, 1920 까지), 얼굴이 커도 700 아래로는 받지 않는다', () => {
+    // 얼굴 긴 변 0.1 → 60px 이 되려면 600 이지만, 600 은 누운 사진이 올 수 있어 700
+    expect(faceCoverUrl('f1', { x: 0.1, y: 0.1, w: 0.1, h: 0.1 })).toBe('https://lh3.googleusercontent.com/d/f1=s700');
+    expect(faceCoverUrl('f1', { x: 0, y: 0, w: 0.5, h: 0.4 })).toBe('https://lh3.googleusercontent.com/d/f1=s700');
+    expect(faceCoverUrl('f1', { x: 0, y: 0, w: 0.05, h: 0.04 })).toBe('https://lh3.googleusercontent.com/d/f1=s1200');
+    expect(faceCoverUrl('f1', { x: 0, y: 0, w: 0.01, h: 0.01 })).toBe('https://lh3.googleusercontent.com/d/f1=s1920');
+    expect(faceCoverUrl('f1', null)).toBe('https://lh3.googleusercontent.com/d/f1=s1200');
+    expect(faceCoverUrl('a b', { w: 0.1, h: 0.1 })).toContain('/d/a%20b=');
+    expect(faceCoverUrl(null, { w: 0.1, h: 0.1 })).toBeNull();
+  });
+
+  it('사진 주소는 어느 것도 긴 변 640 이하를 달라고 하지 않는다 — 그 크기는 EXIF 회전이 빠질 수 있다', () => {
+    // =wN-hN / =wN / =sN 에서 요청 크기들을 뽑는다
+    const sizesOf = (url) => url.split('=').pop().split('-')
+      .filter((part) => /^[wsh]\d+$/.test(part)).map((part) => Number(part.slice(1)));
+    const urls = [
+      thumbnailUrl('f1'),
+      thumbnailUrl('f1', 200),
+      largeImageUrl('f1'),
+      coverImageUrl('f1'),
+      coverImageUrl('f1', { single: false }),
+      coverImageUrl('f1', { single: false, zoom: 3 }),
+      ...[0.5, 0.2, 0.1, 0.0938, 0.05, 0.01, 0].map((w) => faceCoverUrl('f1', { w, h: w }))
+    ];
+    for (const url of urls) {
+      const sizes = sizesOf(url);
+      expect(sizes.length).toBeGreaterThan(0);
+      // 정사각형 자르기(wN-hN)는 둘 다, 한쪽만 주는 주소는 그 값이 긴 변 이상이어야 한다
+      for (const size of sizes) expect(size).toBeGreaterThan(640);
+    }
   });
 
   it('앨범 카드의 대표 사진은 자르지 않고 받는다 — 보일 부분은 화면이 정한다. 한 장이면 폭 1000, 여러 장이면 긴 변 800', () => {

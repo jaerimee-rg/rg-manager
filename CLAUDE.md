@@ -460,8 +460,14 @@ upload-time event linking, the parent event-detail photos, HTML mockups, Google 
   (anyone with the link, reader)** — the gallery uses Drive thumbnail URLs directly, so without
   sharing nothing renders.
   Thumbnails and the viewer's large photo come straight from `lh3.googleusercontent.com/d/<id>=…`
-  (`mediaSerializer.thumbnailUrl` = `=w400-h400-c-rw`, a square WebP crop — every thumbnail box is square or
-  wider with `object-fit: cover`; `largeImageUrl` = `=w1600`). `drive.google.com/thumbnail` only 302s there:
+  (`mediaSerializer.thumbnailUrl` = `=w641-h641-c-rw`, a square WebP crop — every thumbnail box is square or
+  wider with `object-fit: cover`; `largeImageUrl` = `=w1600`). **Never ask lh3 for a long side ≤ 640**
+  (`MIN_IMAGE_SIZE`, client twin `utils/mediaUrls.js`): up to 640 lh3 serves the thumbnail Drive stored at upload time, and
+  for some files that thumbnail was made **without the EXIF rotation** — every portrait iPhone photo (Orientation 6) uploaded to
+  Kisa on 2026-10-28 came back lying on its side at `=s640`/`=w400-h400-c-rw` and upright from `=s641` up, while photos from the
+  same phone and iOS uploaded on 10-13 were fine, so it cannot be predicted per file. `faceCoverUrl` therefore starts at `=s700`
+  (an unrotated image under an upright face box crops a blank wall); a unit test checks every builder stays above 640.
+  `drive.google.com/thumbnail` only 302s there:
   80 real thumbnails took 2.4–3.5 s through it vs 0.9–1.1 s direct (2026-10-09, phone Chrome). lh3 answers
   **429 to a `localhost` referer** — strip the referer (Playwright `route.continue`) to see real photos locally.
   Every thumbnail `<img>` is `components/album/RetryImage` — on error it retries after 1 s · 3 s · 8 s with

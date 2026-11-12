@@ -8,9 +8,17 @@
 const IMAGE_BASE = 'https://lh3.googleusercontent.com/d';
 const FILE_BASE = 'https://drive.google.com/file/d';
 
-/** 갤러리 칸용 정사각형 썸네일(WebP) */
-export const thumbnailUrl = (driveFileId, size = 400) =>
-  (driveFileId ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=w${size}-h${size}-c-rw` : null);
+/**
+ * lh3 에 달라고 할 수 있는 가장 작은 크기(긴 변, px) — 640 이하는 Drive 가 미리 만든 썸네일이라 EXIF 회전이 빠져
+ * 세로 사진이 누워서 오기도 한다. 이유와 실측은 서버 utils/mediaSerializer.js MIN_IMAGE_SIZE (같은 값).
+ */
+export const MIN_IMAGE_SIZE = 641;
+
+/** 갤러리 칸용 정사각형 썸네일(WebP) — 칸이 작아도 MIN_IMAGE_SIZE 로 받는다 */
+export const thumbnailUrl = (driveFileId) =>
+  (driveFileId
+    ? `${IMAGE_BASE}/${encodeURIComponent(driveFileId)}=w${MIN_IMAGE_SIZE}-h${MIN_IMAGE_SIZE}-c-rw`
+    : null);
 
 /**
  * 얼굴 분석용 사진 — 긴 변 1920, Drive 가 만든 JPEG(HEIC 도 JPEG 로 준다), CORS 허락(서버 albumController.analysisImageUrl 과 같은 주소).
